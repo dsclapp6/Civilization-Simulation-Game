@@ -1,0 +1,17 @@
+{
+  "treeBroad":   { "name": "Broadleaf tree", "item": "wood",    "job": "woodcutter", "max": 30, "perHarvest": 5, "gatherTime": 7,  "tree": true, "matureDays": 20, "fellWood": 30 },
+  "treeConifer": { "name": "Conifer",        "item": "wood",    "job": "woodcutter", "max": 26, "perHarvest": 5, "gatherTime": 7,  "tree": true, "matureDays": 24, "fellWood": 26 },
+  "treeJungle":  { "name": "Jungle tree",    "item": "wood",    "job": "woodcutter", "max": 34, "perHarvest": 5, "gatherTime": 9,  "tree": true, "matureDays": 14, "fellWood": 34 },
+  "treeAcacia":  { "name": "Acacia",         "item": "wood",    "job": "woodcutter", "max": 18, "perHarvest": 4, "gatherTime": 7,  "tree": true, "matureDays": 28, "fellWood": 18 },
+  "treePalm":    { "name": "Palm",           "item": "wood",    "job": "woodcutter", "max": 16, "perHarvest": 4, "gatherTime": 6,  "tree": true, "matureDays": 18, "fellWood": 16 },
+  "nutTree":     { "name": "Nut tree",       "item": "nuts",    "job": "forager",    "max": 14, "perHarvest": 4, "gatherTime": 5,  "tree": true, "matureDays": 30, "fellWood": 22, "seasons": [0, 0.1, 1, 0], "regrowPerDay": 2.4 },
+  "berry":       { "name": "Berry bush",     "item": "berries", "job": "forager",    "max": 12, "perHarvest": 4, "gatherTime": 4,  "seasons": [0.45, 1, 0.7, 0], "regrowPerDay": 2.6 },
+  "roots":       { "name": "Wild tubers",    "item": "roots",   "job": "forager",    "max": 10, "perHarvest": 3, "gatherTime": 6,  "seasons": [0.6, 0.8, 1, 0.45], "regrowPerDay": 1.1 },
+  "wildGrain":   { "name": "Wild grain",     "item": "grain",   "job": "forager",    "max": 12, "perHarvest": 4, "gatherTime": 5,  "seasons": [0.1, 1, 0.8, 0], "regrowPerDay": 2.0, "tech": "wildGrain" },
+  "herbs":       { "name": "Herbs",          "item": "herbs",   "job": "forager",    "max": 6,  "perHarvest": 2, "gatherTime": 5,  "seasons": [0.8, 1, 0.6, 0.1], "regrowPerDay": 0.9, "tech": "herbalism" },
+  "fiber":       { "name": "Reeds & fibre",  "item": "fiber",   "job": "forager",    "max": 10, "perHarvest": 4, "gatherTime": 4,  "seasons": [0.7, 1, 0.8, 0.15], "regrowPerDay": 1.6, "tech": "cordage" },
+  "stone":       { "name": "Stone outcrop",  "item": "stone",   "job": "miner",      "max": 140, "perHarvest": 4, "gatherTime": 7, "adjacent": true },
+  "flint":       { "name": "Flint nodules",  "item": "flint",   "job": "miner",      "max": 60,  "perHarvest": 2, "gatherTime": 8, "adjacent": true },
+  "clay":        { "name": "Clay bank",      "item": "clay",    "job": "miner",      "max": 90,  "perHarvest": 4, "gatherTime": 6, "adjacent": true, "regrowPerDay": 0.3, "seasons": [1, 1, 1, 0.3], "tech": "pottery" },
+  "copper":      { "name": "Copper vein",    "item": "ore",     "job": "miner",      "max": 80,  "perHarvest": 2, "gatherTime": 10, "adjacent": true, "tech": "prospecting" }
+}
