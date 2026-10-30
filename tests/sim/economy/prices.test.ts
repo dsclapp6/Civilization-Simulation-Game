@@ -59,7 +59,8 @@ describe('prices over a hundred years', () => {
     for (const h of sim.state.households.values()) {
       expect(Number.isFinite(h.purse)).toBe(true);
       expect(h.purse).toBeGreaterThanOrEqual(0);
-      expect(h.purse).toBeLessThan(5_000_000);
+      // the crown starts with some 21 million pence and its fortune passes whole to an heir: no purse grows past that
+      expect(h.purse).toBeLessThan(25_000_000);
     }
   });
 });

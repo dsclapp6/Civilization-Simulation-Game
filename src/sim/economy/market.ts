@@ -34,7 +34,7 @@ export const DEALER_SPREAD = 0.14;
 
 /** Days of the hinterland's use a market keeps in stock. */
 const COVER: Record<string, number> = {
-  wheat: 14, rye: 14, barley: 14, oats: 14, peas: 14, beans: 14, bread: 1.5, ale: 3, vegetables: 3, cheese: 10,
+  wheat: 8, rye: 8, barley: 8, oats: 8, peas: 8, beans: 8, bread: 1.5, ale: 3, vegetables: 3, cheese: 10,
   eggs: 4, meat: 4, fish: 3, firewood: 6,
 };
 /** Daily pull of the stock towards its target (trade with the wider world beyond the modelled markets). */
@@ -172,12 +172,8 @@ function glutFactor(E: Econ, sid: number, good: string): number {
 /** How much the market of a settlement can absorb of one manufactured good before prices sag (pence). */
 function depthOf(E: Econ, sid: number): number {
   const s = E.settlementById.get(sid);
-  switch (s?.kind) {
-    case 'city': return 900;
-    case 'town': return 320;
-    case 'village': return 70;
-    default: return 40;
-  }
+  const base = s?.kind === 'city' ? 900 : s?.kind === 'town' ? 320 : s?.kind === 'village' ? 70 : 40;
+  return base * (1 + E.techBonus(sid, 'market.depth'));
 }
 
 /** Daily upkeep of one market: spoilage, imports and exports, the glut of sold goods fading. */
@@ -216,6 +212,29 @@ function marketEdges(E: Econ): Array<[number, number, number]> {
       edges.set(`${lo}:${hi}`, [lo, hi, n.d]);
     }
   }
+  // three-nearest links leave clusters of neighbouring markets cut off from the rest (a region short of land can then
+  // starve while its neighbours' barns overflow): join the components with the shortest roads between them
+  const parent = new Map<number, number>();
+  const find = (x: number): number => { let r = x; while ((parent.get(r) ?? r) !== r) r = parent.get(r) as number; return r; };
+  for (const a of E.marketIds) parent.set(a, a);
+  for (const [a, b] of edges.values()) parent.set(find(a), find(b));
+  for (;;) {
+    let best: [number, number, number] | null = null, bestKey = Infinity;
+    for (const a of E.marketIds) {
+      const sa = E.settlementById.get(a);
+      if (!sa) continue;
+      for (const b of E.marketIds) {
+        if (b <= a || find(a) === find(b)) continue;
+        const sb = E.settlementById.get(b) as Settlement;
+        const d = Math.hypot(sa.x - sb.x, sa.z - sb.z);
+        const key = d * (sb.kingdom === sa.kingdom ? 1 : 2.5);
+        if (key < bestKey) { bestKey = key; best = [a, b, d]; }
+      }
+    }
+    if (!best) break;
+    edges.set(`${best[0]}:${best[1]}`, best);
+    parent.set(find(best[0]), find(best[1]));
+  }
   E.edges = [...edges.values()].sort((x, y) => x[0] - y[0] || x[1] - y[1]);
   return E.edges;
 }
@@ -240,7 +259,50 @@ export function marketFlowsDay(E: Econ): void {
       to.s[i] = Math.round((to.s[i] + q * (1 - loss)) * 100) / 100;
     }
   }
+  reliefCarts(E);
   E.touchMarkets();
+}
+
+/**
+ * Where a market runs short of staples (a city on poor land, a town with no fields in its hinterland) the long-distance
+ * grain merchants bring a cartload from the market with the biggest surplus nearby; neighbour-to-neighbour flows alone
+ * cannot carry enough through the small markets in between.
+ */
+function reliefCarts(E: Econ): void {
+  const ids = E.marketIds;
+  for (const g of CARRIED) {
+    const i = MACRO_INDEX[g];
+    if (i === undefined || g === 'cheese' || g === 'fish' || g === 'firewood') continue;
+    for (const b of ids) {
+      const rb = marketRec(E, b);
+      const tb = marketTargets(E, b)[i];
+      const fb = rb.s[i] / tb;
+      if (fb >= 0.55) continue;
+      const sb = E.settlementById.get(b) as Settlement;
+      let best = -1, bestScore = 0, bestDist = 0;
+      for (const a of ids) {
+        if (a === b) continue;
+        const ra = marketRec(E, a);
+        const ta = marketTargets(E, a)[i];
+        const spare = ra.s[i] - 1.1 * ta;
+        if (spare < 0.5) continue;
+        const sa = E.settlementById.get(a) as Settlement;
+        // carts cross a border only for a bad year's worst gaps and carry less: a kingdom's famine is mostly its own
+        if (sa.kingdom !== sb.kingdom && fb > 0.2) continue;
+        const d = Math.hypot(sa.x - sb.x, sa.z - sb.z) * (sa.kingdom === sb.kingdom ? 1 : 2);
+        const score = spare / (1 + d / 4000);
+        if (score > bestScore) { bestScore = score; best = a; bestDist = d; }
+      }
+      if (best < 0) continue;
+      const ra = marketRec(E, best);
+      const ta = marketTargets(E, best)[i];
+      const q = Math.min((1 - fb) * tb * 0.5, ra.s[i] - 1.1 * ta);
+      if (q < 0.3) continue;
+      const loss = 0.03 + Math.min(0.12, bestDist / 120000);
+      ra.s[i] = Math.round((ra.s[i] - q) * 100) / 100;
+      rb.s[i] = Math.round((rb.s[i] + q * (1 - loss)) * 100) / 100;
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -258,7 +320,7 @@ export function beginTick(E: Econ, sid: number): void {
   const per = (g: string): number => buy[MACRO_INDEX[g]] / RATION[g];
   const order = STAPLE_GRAINS.slice().sort((a, b) => per(a) - per(b));
   const orderBread = [...order, 'bread'].sort((a, b) => per(a) - per(b));
-  E.tick = { sid, buy, sell, order, orderBread };
+  E.tick = { sid, buy, sell, order, orderBread, besieged: !!E.sim.services.military?.siegeAt?.(sid) };
 }
 
 export function endTick(E: Econ): void { E.tick = null; }
@@ -274,7 +336,7 @@ export function tickPrice(E: Econ, sid: number, good: string, side: 'buy' | 'sel
 /** A household buys up to `qty` of a macro good for at most `budget` pence at its market. Returns what it got and paid. */
 export function marketBuy(E: Econ, sid: number, good: string, qty: number, budget: number): { qty: number; cost: number } {
   const mid = E.marketFor(sid);
-  if (mid < 0 || qty <= 0 || budget <= 0) return { qty: 0, cost: 0 };
+  if (mid < 0 || qty <= 0 || budget <= 0 || E.tick?.besieged) return { qty: 0, cost: 0 };
   const stock = stockOf(E, mid, good);
   const unit = tickPrice(E, sid, good, 'buy');
   if (unit <= 0) return { qty: 0, cost: 0 };
@@ -288,7 +350,7 @@ export function marketBuy(E: Econ, sid: number, good: string, qty: number, budge
 /** A household sells `qty` of a macro good into its market; returns the money received. */
 export function marketSell(E: Econ, sid: number, good: string, qty: number): number {
   const mid = E.marketFor(sid);
-  if (mid < 0 || qty <= 0) return 0;
+  if (mid < 0 || qty <= 0 || E.tick?.besieged) return 0;
   const unit = tickPrice(E, sid, good, 'sell');
   addStock(E, mid, good, qty);
   E.probe?.(`sell:${good}`, 0, qty * unit);
@@ -436,6 +498,12 @@ function edgeOf(E: Econ, actor: Person, v: Venue, side: 'buy' | 'sell', goodId: 
   let e = 0.006 * tr + 0.004 * (actor.trained.cha - 10) + opinion / 1500;
   e += perkSum(actor, 'trade', side) + perkSum(actor, 'persuasion', side);
   if (side === 'sell') e += perkSum(actor, skillOfGood(goodId), 'sell');
+  // the town's trading techniques: letters of credit, accounts, the wool trade and the fulling mill
+  e += E.techBonus(v.settlement, 'trade.margin');
+  if (side === 'sell') {
+    if (goodId === 'wool') e += E.techBonus(v.settlement, 'wool.price');
+    else if (goodId === 'cloth') e += E.techBonus(v.settlement, 'cloth.value');
+  }
   return Math.max(-0.1, Math.min(v.spread * 0.92, e));
 }
 

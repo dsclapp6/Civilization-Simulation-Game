@@ -26,7 +26,12 @@ export function fortifications(M: Mil, sid: number): BuildingState[] {
 export function fortBonus(M: Mil, sid: number): number {
   let bonus = 0;
   for (const b of fortifications(M, sid)) bonus += DEFENCE_WEIGHT[b.kind] * (b.kind === 'wall' || b.kind === 'palisade' ? Math.min(1.4, 0.6 + b.level * 0.35) : 1 + (b.level - 1) * 0.15) * (1 - Math.min(1, b.damage));
-  return Math.min(3.2, 1 + Math.min(2.2, bonus / 3.2 * 2.2 + (bonus > 0 ? 0.25 : 0)));
+  const base = Math.min(3.2, 1 + Math.min(2.2, bonus / 3.2 * 2.2 + (bonus > 0 ? 0.25 : 0)));
+  if (bonus <= 0) return base;
+  // the lord's masons: a stone keep, curtain walls and the concentric plan (advancement `defence.*`) make the same stones count for more
+  const h = M.realm.holderOf(sid);
+  const tech = 0.1 * M.techBonus(h, 'defence.keep') + 0.14 * M.techBonus(h, 'defence.walls') + 0.18 * M.techBonus(h, 'defence.concentric');
+  return Math.min(3.9, base * (1 + tech));
 }
 
 /** 0..1: how much of the walls and keeps still stand. */
@@ -162,7 +167,7 @@ export class SiegeSystem {
     rec.food = Math.max(0, rec.food - eaten);
     const starving = rec.food <= 0;
     const ss = M.state.settlementState(sid);
-    if (ss) { ss.prosperity = Math.max(0.3, ss.prosperity - (starving ? 0.08 : 0.02)); M.state.touchSettlement(ss); }
+    if (ss) { ss.prosperity = Math.max(0.3, ss.prosperity - (starving ? 0.04 : 0.006)); M.state.touchSettlement(ss); }
     rec.morale = Math.max(0, Math.min(1, rec.morale - (starving ? 0.06 : 0.012) + (men < 20 ? 0.02 : 0)));
     if (starving) this.famine(sid);
 
@@ -173,7 +178,9 @@ export class SiegeSystem {
     if (rec.rams < 1 && age >= CFG.siege.ramDays && works && wallIntegrity(M, sid) > 0) rec.rams = 1;
     if (rec.rams === 1 && age >= CFG.siege.ramDays * 3 && men >= 120) rec.rams = 2;
     const adv = M.advancement;
-    if (adv && adv.houseHas(a.house, 'trebuchet') && age >= CFG.siege.trebuchetDays && men >= 60) rec.trebuchets = Math.min(3, 1 + Math.floor(men / 160));
+    if (adv && (M.techBonus(a.house, 'siege.trebuchet') > 0 || adv.houseHas(a.house, 'trebuchet')) && age >= CFG.siege.trebuchetDays && men >= 60) {
+      rec.trebuchets = Math.min(3, 1 + Math.floor(men / 160));
+    }
     // mining needs men who know stone: masons and miners among the troops
     if (rec.mine < 1 && age >= 2) {
       let miners = 0;
@@ -188,7 +195,9 @@ export class SiegeSystem {
     const fort = fortifications(M, sid);
     if (rec.trebuchets > 0 && fort.length) {
       const rng = M.rng('military.siege');
-      for (let i = 0; i < rec.trebuchets * 2; i++) damageBuilding(M, fort[Math.floor(rng.next() * fort.length)], 0.03 + rng.next() * 0.05);
+      // bombards (advancement `siege.bombard`) break the walls faster than the throwing engines
+      const power = 1 + 0.8 * M.techBonus(a.house, 'siege.bombard');
+      for (let i = 0; i < rec.trebuchets * 2; i++) damageBuilding(M, fort[Math.floor(rng.next() * fort.length)], (0.03 + rng.next() * 0.05) * power);
     }
     if (rec.rams > 0) for (const b of fort) if (b.kind === 'gatehouse') damageBuilding(M, b, 0.03 * rec.rams);
     M.touch();

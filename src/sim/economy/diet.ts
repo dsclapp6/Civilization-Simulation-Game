@@ -85,4 +85,4 @@ export function dailyUse(good: string, tier: number, urban: boolean): number {
 }
 
 /** Grain gallons a consumer unit needs per day in total (all staple rations as grain). */
-export const GRAIN_PER_UNIT_DAY = 0.215;
+export const GRAIN_PER_UNIT_DAY = 0.265;

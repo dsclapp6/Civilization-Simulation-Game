@@ -56,6 +56,15 @@ drifts towards what its rank would hold. The hunger left over is tallied for the
 `prosperity` (read by `life.ts` for births and deaths). Each year the yield scale of a settlement drifts by at most
 3% towards the level at which wheat sells at its usual price, so a shrinking population does not sit on a glut.
 
+Wave 4 calibration: a unit eats 0.265 gallons of grain a day in all (staple rations plus the barley brewed at home), markets
+hold half a year of grain (cover 8 days), and merchants' relief carts bring staples from the markets with the biggest surplus
+to any market below 0.55 of its target (across a kingdom border only for the worst gaps). A year's yield scale answers the
+hunger and the price of corn of the whole market hinterland (a dead band: more land when hungry or dear, less when the price
+sags), so a bad harvest shows as a few hungry years in one kingdom, not a constant famine. Advancement bonuses are read
+(`farm.yield`, `mill.speed`, `craft.quality`, `trade.margin`, `wool.price`, `cloth.value`, `market.depth`), and so is the
+manor policy of politics (rent and week-work). A besieged place trades nothing. Big settlements settle their day in slices
+over consecutive hours (`partsOf`). Livestock work is offered at the building that keeps the beasts (`STOCK_SITES`).
+
 A household the player heads is not sold from behind its back: grain, wool and ale are sold only if a member has
 the `market` task. The player eats at the household table (below).
 

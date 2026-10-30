@@ -1,5 +1,6 @@
 // Festivals, fairs, tournaments, progresses and the gatherings of the player's village.
 import { describe, expect, it } from 'vitest';
+import { autoSuccessor } from '../helpers';
 import { mkPerson } from '../builders';
 import { advSim } from '../advancement/helpers';
 
@@ -88,6 +89,7 @@ describe('tournaments and progresses', () => {
 
   it('the king makes a royal progress to a town of his realm each year', () => {
     const a = advSim({ seed: 'progress' });
+    autoSuccessor(a.sim); // a long run must not stop when the random player dies
     const seen: number[] = [];
     a.sim.events.on('happening', (e) => { if (e.phase === 'start' && e.kind === 'progress') seen.push(e.settlement); });
     a.sim.advanceDays(16 * 2);

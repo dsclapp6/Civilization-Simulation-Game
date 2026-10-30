@@ -97,7 +97,7 @@
       "ask": [
         "I am short of {good}, {name}. Could you bring me {qty}? I will pay you well.",
         "My family has run out of {good}. If you could spare {qty}, I would make it worth your while.",
-        "{name}, you are always about. Fetch me {qty} of {good} and there is silver in it for you."
+        "{name}, you are always about. Fetch me {qty}, and there is silver in it for you."
       ],
       "thanks": ["That will do nicely, {name}. Here is your silver.", "God bless you, {name}. We shall not forget this."]
     },

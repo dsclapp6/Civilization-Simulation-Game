@@ -4,7 +4,9 @@
 import { dist } from '../../core/math';
 import { arrivalOf } from './arrive';
 import { disband, giveOrder, marchHour, nearestSettlementId, raise, settlementPoint } from './armies';
+import { defendersOf } from './battle';
 import { UNIT_POWER } from './config';
+import { fortBonus, fortifications } from './siege';
 import type { Mil } from './store';
 import { CHAR_UNIT, type Army } from './types';
 
@@ -71,14 +73,14 @@ export function dailyCampaign(M: Mil): void {
       if (data.wars[w.id] === undefined) {
         data.wars[w.id] = dayNo;
         M.touch();
-        M.realm.invalidate();
+        M.realm.invalidateEnmity();
         warBegins(M, w.id, w.attackers, w.defenders);
       } else if ((dayNo - data.wars[w.id]) % 6 === 0) {
         // keep up the effort: a side with no army in the field raises one again
         for (const h of [...w.attackers, ...w.defenders]) reinforce(M, h, w.id);
       }
     }
-    for (const k of Object.keys(data.wars)) if (!live.has(Number(k))) { delete data.wars[k]; M.realm.invalidate(); }
+    for (const k of Object.keys(data.wars)) if (!live.has(Number(k))) { delete data.wars[k]; M.realm.invalidateEnmity(); }
   }
   // armies of a war that has ended go home
   for (const a of M.allArmies().slice()) {
@@ -89,18 +91,27 @@ export function dailyCampaign(M: Mil): void {
       else M.notify('The war is over. Your army may go home.', 'info');
     }
   }
-  for (const a of M.allArmies().slice()) {
-    if (!M.armyById.has(a.id) || a.task === 'muster' || a.engaged) continue;
-    if (playerCommanded(M, a)) continue;
-    M.time('think', () => think(M, a));
-  }
-  M.time('defend', () => defend(M, dayNo));
-  M.time('queue', () => runQueue(M));
+  // each army thinks once a day, in the hour of its own number (see `thinkHour`); the defence and the muster queue have hours of their own
   // expire feuds and lapsed occupations
   for (const k of Object.keys(data.occupied)) if (data.occupied[k].until <= now) { delete data.occupied[k]; M.touch(); }
   const feuds = data.feuds.filter((f) => f.until >= now);
   if (feuds.length !== data.feuds.length) { data.feuds = feuds; M.touch(); }
 }
+
+/** The armies whose hour it is decide what to do next: one slice of the day's thinking, so no frame pays for every army at once. */
+export function thinkHour(M: Mil, hour: number): void {
+  for (const a of M.allArmies().slice()) {
+    if (a.id % 24 !== hour) continue;
+    if (!M.armyById.has(a.id) || a.task === 'muster' || a.engaged) continue;
+    if (playerCommanded(M, a)) continue;
+    M.time('think', () => think(M, a));
+  }
+}
+
+/** The day's defence call-ups (an enemy near our land and none of ours in the field): its own hour of the day. */
+export function defendHour(M: Mil): void { M.time('defend', () => defend(M, Math.floor(M.day))); }
+/** Raises the queued armies: its own hour of the day. */
+export function queueHour(M: Mil): void { M.time('queue', () => runQueue(M)); }
 
 function warBegins(M: Mil, war: number, attackers: readonly number[], defenders: readonly number[]): void {
   const all = [...attackers, ...defenders];
@@ -241,6 +252,22 @@ function garrisonAt(M: Mil, sid: number): number {
 const garrisonCache = new Map<number, number>();
 let garrisonDay = -1;
 
+function fortified(M: Mil, sid: number): boolean { return fortifications(M, sid).length > 0; }
+
+const defenceCache = new Map<number, number>();
+let defenceDay = -1;
+/** Fighting weight of a strong place's defenders times its walls, cached for the day (the assault would meet exactly this). */
+function defenceOf(M: Mil, sid: number, lord: number): number {
+  const day = Math.floor(M.day);
+  if (defenceDay !== day) { defenceCache.clear(); defenceDay = day; }
+  let v = defenceCache.get(sid);
+  if (v === undefined) {
+    v = Math.max(6, defendersOf(M, sid, lord).total * fortBonus(M, sid));
+    defenceCache.set(sid, v);
+  }
+  return v;
+}
+
 /** The most rewarding enemy place we can take or ravage: value over distance, weaker and hungrier first. */
 function pickTarget(M: Mil, a: Army): { id: number; how: 'siege' | 'raid' } | null {
   const size = a.men.length;
@@ -267,14 +294,19 @@ function pickTarget(M: Mil, a: Army): { id: number; how: 'siege' | 'raid' } | nu
     if (ss) { score *= 1 + Math.max(0, 1 - ss.prosperity) * 1.5 + ss.epidemic * 0.5; }
     const happ = M.sim.services.happenings;
     if (happ && happ.activeAt(s.id).length > 0) score *= 1.25;
-    const defenders = Math.max(4, garrisonAt(M, s.id) * 0.8 + (strong ? 18 : 4) + (ss ? ss.target * 0.03 : 0));
-    const odds = power / (defenders * (strong ? 2.2 : 1));
+    // what the walls hold: the real garrison, retinue and militia (as the assault would meet them) behind the fortifications
+    const defenders = strong ? defenceOf(M, s.id, lord) : Math.max(4, garrisonAt(M, s.id) * 0.8 + 4 + (ss ? ss.target * 0.03 : 0));
+    const odds = power / defenders;
     let how: 'siege' | 'raid' = 'raid';
     if (strong) {
-      if (odds < 1.0 || size < 60) continue;
+      if (odds < 0.75 || size < 25) continue;
       how = 'siege';
     } else {
-      how = size < 90 || pol === undefined ? 'raid' : (odds > 2.5 && s.kind !== 'hamlet' ? 'siege' : 'raid');
+      // a manor house is taken (not just ravaged) when it is the enemy's seat or has earthworks and the host is clearly stronger
+      const seat = M.state.houses.get(lord)?.seat === s.id;
+      const earthworks = seat || fortified(M, s.id);
+      how = pol === undefined || s.kind === 'hamlet' || size < 25 ? 'raid'
+        : earthworks && odds > 1.3 ? 'siege' : size >= 90 && odds > 2.5 ? 'siege' : 'raid';
     }
     score *= 0.9 + rng.next() * 0.2;
     if (!best || score > best.score) best = { id: s.id, how, score };

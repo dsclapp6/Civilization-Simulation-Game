@@ -51,12 +51,18 @@ const stochastic = (x: number, u: number): number => Math.floor(x) + (u < x - Ma
 // The settlement's day
 // ---------------------------------------------------------------------------------------------
 
-export function settlementDay(E: Econ, s: Settlement): void {
+/** Hours a settlement's day is spread over: a city's households are settled in four slices, a village's in one (static, so a load resumes the same). */
+export function partsOf(s: Settlement): number {
+  return s.population >= 700 ? 4 : s.population >= 320 ? 3 : s.population >= 150 ? 2 : 1;
+}
+
+/** One slice (`part` of `parts`) of the settlement's day; the market and the livestock go with slice 0, strips and households are dealt out. */
+export function settlementDay(E: Econ, s: Settlement, part = 0, parts = 1): void {
   const state = E.state;
   const ss = state.settlements.get(s.id);
   if (!ss) return;
-  if (s.market) marketDay(E, s.id);
-  farmDay(E, s);
+  if (part === 0 && s.market) marketDay(E, s.id);
+  farmDay(E, s, part, parts);
   const hhs = state.householdList(s.id);
   if (hhs.length === 0) return;
   const urban = marketBuyShare(s.kind) > 0.5;
@@ -65,12 +71,13 @@ export function settlementDay(E: Econ, s: Settlement): void {
   const dayNo = Math.floor(E.day);
   beginTick(E, s.id);
   for (const hh of hhs) {
-    // households settle their accounts once a week (a four-day season), each on its own day
+    // households settle their accounts once a week (a four-day season), each on its own day and in its own slice
+    if (parts > 1 && hh.id % parts !== part) continue;
     if ((dayNo + hh.id) % PERIOD !== 0) continue;
     householdDay(E, s, ss, hh, tally, urban, lord?.household, PERIOD);
   }
   endTick(E);
-  if (dayNo % DAYS_PER_YEAR === s.id % DAYS_PER_YEAR) livestockYear(E, s, hhs);
+  if (part === 0 && dayNo % DAYS_PER_YEAR === s.id % DAYS_PER_YEAR) livestockYear(E, s, hhs);
   E.touchSave();
 }
 
@@ -324,7 +331,7 @@ function produceFromTrade(E: Econ, s: Settlement, hh: Household, head: Person, w
 // ---------------------------------------------------------------------------------------------
 
 function sellSurplus(E: Econ, s: Settlement, hh: Household, units: number, tier: number, full: boolean): void {
-  if (E.marketFor(s.id) < 0) return;
+  if (E.marketFor(s.id) < 0 || E.tick?.besieged) return; // a blockaded place sells nothing
   const st = hh.stores;
   const diet = dietOf(tier);
   const dth = daysToHarvest(E.dayOfYear);
@@ -370,7 +377,7 @@ function sellSurplus(E: Econ, s: Settlement, hh: Household, units: number, tier:
     const v = st[g] ?? 0;
     if (g === 'ale' ? v > units * 2 : v > 0.5) {
       const spare = g === 'ale' ? v - units * 1.5 : v;
-      const money = GOODS[g].basePrice * spare * 0.8;
+      const money = GOODS[g].basePrice * spare * 0.8 * (g === 'wool' ? 1 + E.techBonus(s.id, 'wool.price') : 1);
       bagAdd(st, g, -spare);
       hh.purse = Math.round((hh.purse + money) * 100) / 100;
     }
@@ -389,6 +396,7 @@ function payRent(E: Econ, s: Settlement, hh: Household, head: Person, lordHH: Ho
   let rent = 0;
   if (head.estate === 'free') rent = strips * RENT_PER_STRIP / 2;
   else if (strips > 0) rent = strips * 0.6; // chevage and fines in place of money rent for the unfree
+  rent *= Math.max(0.3, 1 + 0.35 * E.manorPolicy(s.id).rent); // the lord's policy: relief to harsh
   if (rent <= 0) return;
   const paid = Math.min(rent, hh.purse * 0.5);
   hh.purse = Math.round((hh.purse - paid) * 100) / 100;
@@ -466,6 +474,8 @@ export function yearlyProsperity(E: Econ): void {
     ss.prosperity = next;
     state.touchSettlement(ss);
     t[4] = next;
+    t[5] = Math.round(hungerShare * 1000) / 1000; // read by farm.ts: a hungry year calls for more land under the plough
+    t[6] = Math.round(t[0]); // person-days behind it (the weight in a market's reckoning)
     t[0] = 0; t[1] = 0; t[2] = 0; t[3] = 0;
     if (hungerShare > 0.12) {
       const text = `Hunger in ${s.name}: ${Math.round(hungerShare * 100)}% of the year's rations went missing.`;

@@ -30,7 +30,10 @@ export interface System<P extends Phase = Phase> {
   run(ctx: SimContext, info: PhaseInfo[P]): void;
 }
 
-export interface SystemProfile { calls: number; totalMs: number; maxMs: number }
+export interface SystemProfile { calls: number; totalMs: number; maxMs: number; /** Calls that took longer than `SLOW_MS`. */ slow: number }
+
+/** A call longer than this (ms) is counted as slow in the profile (a frame budget is 16 ms; one system should not take half). */
+export const SLOW_MS = 8;
 
 const PHASES: readonly Phase[] = ['perStep', 'hourly', 'daily', 'seasonal', 'yearly'];
 
@@ -42,6 +45,8 @@ export class Scheduler {
   private seq = 0;
   /** When true, per-system wall time is recorded in `profile`. */
   profiling = false;
+  /** Clock for the profile (ms). Tools running a busy machine swap in CPU time so other processes do not inflate the numbers. */
+  clock: () => number = () => performance.now();
   readonly profile = new Map<string, SystemProfile>();
 
   register<P extends Phase>(sys: System<P>): () => void {
@@ -74,14 +79,15 @@ export class Scheduler {
     }
     for (let i = 0; i < list.length; i++) {
       const sys = list[i].sys as System<P>;
-      const t0 = performance.now();
+      const t0 = this.clock();
       sys.run(ctx, info);
-      const dt = performance.now() - t0;
+      const dt = this.clock() - t0;
       let p = this.profile.get(sys.name);
-      if (!p) { p = { calls: 0, totalMs: 0, maxMs: 0 }; this.profile.set(sys.name, p); }
+      if (!p) { p = { calls: 0, totalMs: 0, maxMs: 0, slow: 0 }; this.profile.set(sys.name, p); }
       p.calls++;
       p.totalMs += dt;
       if (dt > p.maxMs) p.maxMs = dt;
+      if (dt > SLOW_MS) p.slow++;
     }
   }
 }

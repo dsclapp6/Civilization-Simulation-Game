@@ -729,7 +729,8 @@ function winnowBout(E: Econ, p: Person, d: BarnData, f: number): ActionOutcome {
 function millBout(E: Econ, p: Person, d: BarnData, f: number): ActionOutcome {
   const g = d.good as string;
   const quern = d.act === 'quern';
-  const got = takeFrom(E, p, g, 8 * f);
+  // a water- or windmill in the community grinds faster (the techniques of the millwrights)
+  const got = takeFrom(E, p, g, 8 * f * (quern ? 1 : 1 + Math.max(0, E.techBonus(p.settlement, 'mill.speed'))));
   if (got < 0.1) return { ok: false, message: 'No grain left to grind.' };
   const multure = quern ? 0 : round2(got / 16);
   const flour = round2((got - multure) * FLOUR_PER_GALLON[g] * (1 + perkSum(p, 'brewing', 'yield') * 0));

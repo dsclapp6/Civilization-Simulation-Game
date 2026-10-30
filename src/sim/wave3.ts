@@ -167,6 +167,8 @@ export interface PoliticsApi {
   strength(house: HouseId): number;
   /** Battles and sieges report their outcome so wars progress. */
   reportBattle(war: number, attackerWon: boolean, weight: number): void;
+  /** Additive: the manor's policy (−1 relief · 0 customary · 1 heavy · 2 harsh) for rents and for week- and boon-work; the economy's dues read it. */
+  manorPolicy?(settlement: number): { rent: number; labour: number };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -194,6 +196,10 @@ export interface MilitaryApi {
   // ---- additive (military module); optional so fakes in other modules' tests need not implement them ----
   /** Fighting weight of a House's retinue, garrison and levy (politics `strength`, AI decisions, the UI). */
   strength?(house: HouseId): number;
+  /** Additive: fighting weight of the standing forces only (retinue, garrison households, mercenaries), cheap and cached for the day. */
+  standing?(house: HouseId): number;
+  /** Additive: is the settlement under siege (the economy lets nothing in or out of a blockaded place)? */
+  siegeAt?(settlement: number): unknown;
   /** A raiding party of `house` goes against a settlement (burn, steal herds, take captives). Returns the army id, 0 = none raised. */
   raid?(house: HouseId, settlement: number, opts?: { size?: number }): number;
   /** The two Houses (or their lieges) are at war or in a feud: their armies fight when they meet. */
