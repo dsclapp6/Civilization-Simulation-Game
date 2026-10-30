@@ -269,6 +269,7 @@ export class Hud {
       b.classList.toggle('alert', badge.tone === 'vermilion');
     }
     for (const sep of this.dockSeps) sep.classList.toggle('mu-hide', !anyRealm);
+    this.dockEl.classList.toggle('compact', !anyRealm);
   }
 
   private buildTravel(): void {
