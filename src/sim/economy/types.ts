@@ -43,6 +43,18 @@ export interface GoodDef {
   slot?: EquipSlot;
   /** How it looks in hand (tools and weapons). */
   held?: HeldItem;
+  // ---- additive (wave 2 economy) ----
+  /** Singular wording for the UI ("gallon of wheat"); `unit` is the plural phrase. */
+  unitOne?: string;
+  /** Price multipliers for quality tiers 0..4 (default: tools' [0.55, 1, 2.5, 6, 15]). */
+  qualityPrice?: readonly number[];
+  /** Traded in the stock-and-flow market model (otherwise priced by an index). */
+  macro?: boolean;
+  /** Venues that stock it: 'market' (ordinary stalls) or building kinds. */
+  sold?: readonly string[];
+  /** Clothing: warmth added to the wearer (0..1) and status shown to others. */
+  warmth?: number;
+  status?: number;
 }
 
 export type ItemKey = string;
@@ -273,6 +285,8 @@ export interface PerkDef {
   level: 5 | 10 | 15 | 20;
   name: string;
   description: string;
+  /** Additive (wave 2 economy): effect vocabulary read by sim/economy/perks.ts (see content/perks.json). */
+  effects?: Readonly<Record<string, number>>;
 }
 
 export interface PerkChoice { skill: SkillId; level: number; options: [PerkDef, PerkDef] }
