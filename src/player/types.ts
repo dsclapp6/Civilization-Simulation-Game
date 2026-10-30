@@ -48,6 +48,8 @@ export interface InputState {
   // held
   attack: boolean;
   block: boolean;
+  /** The camera's ray (world coordinates, `d*` a unit vector): bows are aimed along it (wave 3 combat). */
+  aim?: { x: number; y: number; z: number; dx: number; dy: number; dz: number } | null;
 }
 
 export const EMPTY_INPUT: Readonly<InputState> = {

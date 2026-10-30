@@ -71,6 +71,8 @@ export interface BodyEnv {
   effort: number;
   /** A dodge was requested this step. */
   dodge: boolean;
+  /** Multiplier on the speed the gait asks for (fighting, aiming, a wound slowing the legs); default 1. */
+  speedScale?: number;
 }
 
 export function createBody(x: number, z: number, yaw: number, y: number, endurance: number): BodyState {
@@ -163,7 +165,7 @@ export function stepBody(b: BodyState, input: Readonly<InputState>, env: BodyEnv
       b.gait = mag > 0.05 ? g : 'idle';
     }
     b.baseSpeed = mag > 0.05 ? base : 0;
-    let target = mag > 0.05 ? base * mag : 0;
+    let target = mag > 0.05 ? base * mag * (env.speedScale ?? 1) : 0;
     if (target > 0) {
       target *= agilityFactor(t.agility) * ageFactor(t.age) * loadFactor(t.weight, t.capacity) * clamp(nav.speedFactor(b.x, b.z), 0.3, 1.6);
       if (b.wading) target *= WADE_FACTOR;

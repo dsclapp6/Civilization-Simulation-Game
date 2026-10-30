@@ -2,5 +2,6 @@
 //   import './military';   (src/ui/panels/military.ts calls registerPanel('army', …))
 // Each wave 3 builder adds only its own line.
 import './politics';
-export {};
+import './combat';
 import './advancement';
+export {};

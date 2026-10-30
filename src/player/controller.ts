@@ -16,12 +16,14 @@ import { skillOf, gainSkill } from '../sim/skills';
 import type { SocialApi } from '../sim/social/types';
 import { ageYears, fullName, type Person, type PersonId } from '../sim/state';
 import { doorPoint } from '../sim/view-impl';
+import { formatMoney } from '../sim/money';
+import type { FightResult, PlayerCombatFrame, PlayerCombatPort, PlayerCombatPose } from '../sim/wave3';
 import type { WorldModel } from '../world/types';
 import {
   DISMOUNT_SECONDS, MOUNT_SECONDS, createBody, placeBody, stepBody, type BodyEnv, type BodyState, type BodyTraits,
 } from './body';
 import {
-  buildChoices, encounterRate, escapeChoice, makeEncounter, participantCount, pickEncounterKind, pickParticipants, pressOnChoice, sampleDanger, type ChoiceDef, type DangerSample,
+  buildChoices, encounterRate, escapeChoice, makeEncounter, participantCount, payMoney, pickEncounterKind, pickParticipants, pressOnChoice, sampleDanger, takeGoods, type ChoiceDef, type DangerSample,
   type EncounterData, type EncounterEnv,
 } from './encounters';
 import { Interaction, SCAN_INTERVAL } from './interaction';
@@ -84,6 +86,22 @@ export class PlayerController implements PlayerApi {
   private edgeMount = false;
   private edgeDodge = false;
   private edgeCancel = false;
+
+  // ---- combat (wave 3, src/combat): the port is looked up lazily, the module may be absent ----
+  private readonly cframe: PlayerCombatFrame = {
+    person: 0, x: 0, y: 0, z: 0, yaw: 0, speed: 0, mounted: false, dodgeT: 0, stamina: 0, staminaMax: 0, busy: false, dt: 0,
+  };
+  private readonly cpose: PlayerCombatPose = {
+    engaged: false, anim: null, animTime: 0, mainHand: null, offHand: null, moveScale: 1, faceYaw: null, aimPitch: null, staminaCost: 0,
+    effort: 0, noSprint: false, aiming: false, unhorse: false, armour: null, helmet: null,
+  };
+  /** The pose of the current step (null when nothing combat-like is asked of the body). */
+  private combatPose: PlayerCombatPose | null = null;
+  private readonly combatInput: InputState = { ...EMPTY_INPUT };
+  /** A road fight in progress: the journey it interrupted and the way to stop listening for its end. */
+  private fighting: { journey: Journey; data: EncounterData; id: number; off: () => void } | null = null;
+  private shownArmour = '';
+  private shownVersion = -1;
 
   // ---- clocks ----
   private steps = 0;
@@ -209,6 +227,9 @@ export class PlayerController implements PlayerApi {
     const p = this.sim.state.persons.get(id);
     this.personId = id;
     this.dead = false;
+    this.combat()?.reset();
+    this.combatPose = null;
+    if (this.fighting) { this.fighting.off(); this.fighting = null; }
     this.journey = null;
     this.encounterChoicesCache = [];
     this.hostileEncounter = false;
@@ -299,7 +320,8 @@ export class PlayerController implements PlayerApi {
     const i = this.input;
     i.forward = input.forward; i.right = input.right; i.cameraYaw = input.cameraYaw;
     i.sprint = input.sprint; i.walk = input.walk; i.interactHeld = input.interactHeld;
-    i.attack = input.attack; i.block = input.block;
+    i.attack = input.attack; i.block = input.block; i.aim = input.aim ?? null;
+    this.combat()?.input(input.attack, input.block, input.aim ?? null, input.cameraYaw);
     if (input.interact) this.edgeInteract = true;
     if (input.mount) this.edgeMount = true;
     if (input.dodge) this.edgeDodge = true;
@@ -325,7 +347,9 @@ export class PlayerController implements PlayerApi {
     h.carried = Math.round(this.traits.weight * 10) / 10;
     h.capacity = this.traits.capacity;
     h.mounted = b.mounted !== null;
-    h.prompt = this.journey?.encounter || !this.interaction.hasPrompt ? null : this.interaction.prompt;
+    // no "Talk" prompts in the middle of a fight
+    const brawling = this.combatPose !== null && this.combatPose.engaged && (this.combat() ? this.sim.services.combat?.fightOf?.(this.personId) : 0);
+    h.prompt = this.journey?.encounter || !this.interaction.hasPrompt || brawling ? null : this.interaction.prompt;
     const a = this.sim.actions.active(this.personId);
     if (a && a.option.seconds > 0) {
       const ha = this.hudAction;
@@ -559,8 +583,10 @@ export class PlayerController implements PlayerApi {
 
     // ---- the body ----
     const wasLocked = b.lock;
-    const frozen = working || talking || pending;
+    const combatPose = this.stepCombat(p, working, talking || pending, dt);
+    const frozen = working || talking || pending || (combatPose !== null && combatPose.moveScale <= 0.001);
     let driver: InputState = input;
+    if (combatPose !== null && combatPose.noSprint && input.sprint) { driver = this.combatInput; Object.assign(driver, input); driver.sprint = false; }
     if (this.followId !== null && !frozen) {
       if (wantsMove) this.followId = null;
       else driver = this.followDriver(dt) ?? input;
@@ -569,11 +595,22 @@ export class PlayerController implements PlayerApi {
       nav: this.zone.nav, traits: this.traits, frozen, effort: working && active ? workEffort(active.option.anim) : 0,
       dodge: eDodge && !frozen,
     };
+    if (combatPose !== null) {
+      env.speedScale = combatPose.moveScale;
+      env.effort = Math.max(env.effort, combatPose.effort);
+      // the roll costs breath in the body; the combat port only says whether this is the moment for one
+      if (env.dodge && !(this.combat()?.dodge() ?? true)) env.dodge = false;
+      if (combatPose.staminaCost > 0) b.stamina.value = Math.max(0, b.stamina.value - combatPose.staminaCost);
+    }
     if (this.faceYaw !== null && frozen) {
       b.yaw = turnToward(b.yaw, this.faceYaw, 12, dt);
       if (Math.abs(angleDiff(b.yaw, this.faceYaw)) < 0.02) this.faceYaw = null;
     } else if (!frozen) this.faceYaw = null;
     stepBody(b, driver, env, dt);
+    if (combatPose !== null) {
+      if (combatPose.faceYaw !== null && !b.mounted && b.dodgeT <= 0) b.yaw = turnToward(b.yaw, combatPose.faceYaw, 15, dt);
+      if (combatPose.unhorse && b.mounted) this.throwRider();
+    }
     if (wasLocked && !b.lock && wasLocked.kind === 'dismount') this.finishDismount();
     if (b.mounted && b.odometer - this.rideMark > 100) { this.rideMark = b.odometer; gainSkill(this.sim, p, 'riding', 2); }
 
@@ -588,6 +625,41 @@ export class PlayerController implements PlayerApi {
     this.persistT += dt;
     if (this.persistT >= PERSIST_INTERVAL) { this.persistT = 0; this.persistNow(); }
     this.syncDraw(1);
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Combat (src/combat is the brain: attacks, guards, bows and hurts; this only lends it the body)
+  // ---------------------------------------------------------------------------------------------
+
+  private combat(): PlayerCombatPort | undefined { return this.sim.services.combat?.player; }
+
+  /** One sub-step of the combat port; returns the pose it asks for, or null when it asks nothing. */
+  private stepCombat(p: Person, working: boolean, held: boolean, dt: number): PlayerCombatPose | null {
+    const port = this.combat();
+    this.combatPose = null;
+    if (!port || this.journey?.state.phase === 'travelling') return null;
+    const b = this.avatar;
+    const f = this.cframe;
+    f.person = p.id; f.x = b.x; f.y = b.y; f.z = b.z; f.yaw = b.yaw; f.speed = b.speed; f.mounted = b.mounted !== null;
+    f.dodgeT = b.dodgeT; f.stamina = b.stamina.value; f.staminaMax = b.stamina.max;
+    f.busy = working || held || b.lock !== null || b.sitting;
+    f.dt = dt;
+    port.step(f, this.cpose);
+    const pose = this.cpose;
+    if (!pose.engaged && pose.anim === null && pose.moveScale === 1 && pose.staminaCost === 0 && pose.effort === 0 && pose.faceYaw === null) return null;
+    this.combatPose = pose;
+    return pose;
+  }
+
+  /** The horse went down under the rider. */
+  private throwRider(): void {
+    const b = this.avatar;
+    const m = b.mounted;
+    if (!m) return;
+    if (m.animal >= 0) this.zone.releaseAnimal?.(m.animal, b.x, b.z, b.yaw);
+    b.mounted = null;
+    b.speed = 0;
+    this.interaction.invalidate();
   }
 
   private outOfReach(a: ActiveAction): boolean {
@@ -906,9 +978,13 @@ export class PlayerController implements PlayerApi {
   private encounterEnv(): EncounterEnv | null {
     const p = this.person();
     if (!p) return null;
+    const combat = this.sim.services.combat;
+    const main = combat ? this.economy.inventory(p.id).equipment.main : undefined;
     return {
       ctx: this.sim, person: p, social: this.social, economy: this.economy, mounted: this.avatar.mounted !== null,
       stamina: this.avatar.stamina.value / this.avatar.stamina.max, rng: this.sim.rng('travel'),
+      canFight: !!combat && !!this.zone.summon && this.summonedPeople.length + this.summonedAnimals.length > 0,
+      weaponName: main ? this.economy.describe(main).replace(/^an? /, '') : undefined,
     };
   }
 
@@ -936,6 +1012,10 @@ export class PlayerController implements PlayerApi {
     const choice = buildChoices(env, data).find((c) => c.id === choiceId);
     if (!choice || !choice.enabled) return { ok: false, message: choice?.reason ?? 'That is not an option now.' };
     const out = choice.run();
+    if (out.fight) {
+      const started = this.beginFight(j, data);
+      if (started) return started;
+    }
     // the encounter is over; the road goes on (unless the party turned back)
     j.encounter = null;
     j.state.encounter = undefined;
@@ -953,6 +1033,60 @@ export class PlayerController implements PlayerApi {
       if (outcome.ui) this.sim.events.emit('ui', outcome.ui);
     }
     return outcome;
+  }
+
+  /**
+   * "Fight": the party the encounter showed becomes the other side of a fight in the combat module. The journey
+   * waits (phase stays 'encounter' without an open encounter, so the body moves freely) until the fight is over.
+   */
+  private beginFight(j: Journey, data: EncounterData): ActionOutcome | null {
+    const combat = this.sim.services.combat;
+    if (!combat) return null;
+    const b = this.avatar;
+    const id = combat.engage([
+      { faction: 'player', people: [this.personId] },
+      { faction: data.kind === 'wolves' ? 'wolves' : 'outlaws', people: this.summonedPeople.slice(), animals: this.summonedAnimals.slice() },
+    ], { at: { x: b.x, z: b.z }, yieldAllowed: false, reason: data.kind });
+    if (id === 0) return null;
+    j.encounter = null;
+    j.state.encounter = undefined;
+    this.encounterChoicesCache = [];
+    this.interaction.invalidate();
+    this.scanT = SCAN_INTERVAL;
+    const off = combat.onFightEnded((r) => { if (r.id === id) this.endFight(r, data); });
+    this.fighting = { journey: j, data, id, off };
+    return { ok: true, message: 'You set your feet and draw.' };
+  }
+
+  /** The road fight is over: the outlaws take what the winner takes, the party disperses and the journey resumes. */
+  private endFight(r: FightResult, data: EncounterData): void {
+    const f = this.fighting;
+    if (!f) return;
+    f.off();
+    this.fighting = null;
+    const j = f.journey;
+    const p = this.person();
+    const won = r.winner === 'player';
+    this.dismissParty();
+    this.hostileEncounter = false;
+    if (!p || p.death || this.dead) return;
+    const env = this.encounterEnv();
+    if (won) {
+      // what the beaten carried
+      let coin = 0;
+      for (const id of r.dead) { const q = this.sim.state.persons.get(id); if (q && q.money > 0) { coin += q.money; q.money = 0; } }
+      if (coin > 0) { p.money += coin; this.sim.state.touch(p); }
+      this.notify('gain', coin > 0 ? `The road is clear. You take ${formatMoney(coin)} from the fallen.` : 'The road is clear.');
+    } else if (r.winner !== null && env) {
+      // beaten but alive: they take their pick and leave you lying in the road
+      const lost = payMoney(env, p.money * 0.6);
+      const taken = takeGoods(env, 0.4);
+      this.notify('loss', `They strip you of ${formatMoney(lost)}${taken > 0 ? ' and much of what you carried' : ''} and leave you in the road.`);
+    } else this.notify('info', 'It is over. The road is quiet again.');
+    if (this.journey === j && j.state.phase === 'encounter') {
+      this.sim.dispatch({ type: 'setActionTime', on: false });
+      this.resumeJourney(j);
+    }
   }
 
   private resumeJourney(j: Journey): void {
@@ -1001,6 +1135,7 @@ export class PlayerController implements PlayerApi {
     if (!j) return;
     this.restoreSpeed(j);
     if (j.encounter) this.sim.dispatch({ type: 'setActionTime', on: false });
+    if (this.fighting) { const id = this.fighting.id; this.fighting.off(); this.fighting = null; this.sim.services.combat?.disperse?.(id); }
     this.journey = null;
     this.streetPending = true;
     this.dismissParty();
@@ -1084,6 +1219,7 @@ export class PlayerController implements PlayerApi {
   }
 
   private markDead(): void {
+    this.combatPose = null;
     this.dead = true;
     this.deadFor = 0;
     this.followId = null;
@@ -1149,7 +1285,23 @@ export class PlayerController implements PlayerApi {
     const p = this.person() ?? this.sim.state.persons.get(this.personId);
     if (!p) return;
     const c = this.sim.view.appearance.get(this.sim.state, p, this.sim.absDay);
-    if (c.version !== this.draw.lookVersion) { this.draw.look = c.look; this.draw.lookVersion = c.version; }
+    const cp = this.cpose;
+    const wear = `${cp.armour ?? ''}|${cp.helmet ?? ''}`;
+    if (c.version !== this.shownVersion || wear !== this.shownArmour) {
+      this.shownArmour = wear;
+      this.shownVersion = c.version;
+      let h = 5381;
+      for (let k = 0; k < wear.length; k++) h = ((h * 33) ^ wear.charCodeAt(k)) >>> 0;
+      // the armour in the equipment slots is what the character is seen wearing
+      if (cp.armour !== null || cp.helmet !== null) {
+        this.draw.look = {
+          ...c.look,
+          armour: (cp.armour as CharacterDrawItem['look']['armour'] | null) ?? c.look.armour,
+          helmet: (cp.helmet as CharacterDrawItem['look']['helmet'] | null) ?? c.look.helmet,
+        };
+        this.draw.lookVersion = c.version * 100003 + (h % 99991) + 1;
+      } else { this.draw.look = c.look; this.draw.lookVersion = c.version; }
+    }
   }
 
   private emptyHud(): PlayerHud {
@@ -1204,10 +1356,15 @@ export class PlayerController implements PlayerApi {
     const working = active !== null && active.option.seconds > 0;
     const travelling = this.journey !== null && this.journey.state.phase === 'travelling';
 
+    const cp = this.dead ? null : this.combatPose;
+    const cpAnim = cp !== null && cp.anim !== null && !b.lock && (!mounted || cp.anim === 'ride_charge' || cp.anim === 'hit' || cp.anim === 'stagger' || cp.anim === 'fall' || cp.anim === 'dead');
     if (this.dead) anim = this.deadFor < DEAD_FALL_SECONDS ? 'fall' : 'dead';
     else if (b.lock) anim = b.lock.kind === 'mount' ? 'mount' : 'dismount';
     else if (clock.skip?.kind === 'sleep') anim = 'sleep';
-    else if (working && active) {
+    else if (cpAnim && cp !== null && cp.anim !== null && !working) {
+      anim = cp.anim;
+      if (mounted && anim === 'ride_charge') horse = 'gallop';
+    } else if (working && active) {
       anim = active.option.anim ?? 'idle';
       main = active.option.mainHand ?? 'none';
       off = active.option.offHand ?? 'none';
@@ -1223,13 +1380,19 @@ export class PlayerController implements PlayerApi {
     }
     if (b.lock) horse = 'idle';
 
+    const combatAnim = cpAnim && cp !== null && cp.anim === anim && !working;
     if (anim !== this.lastAnim) {
       this.lastAnim = anim;
       this.animT = 0;
     } else this.animT += frameDt;
     d.anim = anim;
-    d.animTime = this.animT;
-    d.moveSpeed = this.dead || b.lock || working || b.sitting ? 0 : moveSpeed;
+    d.animTime = combatAnim && cp !== null ? cp.animTime : this.animT;
+    d.moveSpeed = this.dead || b.lock || working || b.sitting || (combatAnim && !mounted && anim !== 'walk') ? 0 : moveSpeed;
+    if (cp !== null && !working) {
+      if (cp.mainHand !== null) main = cp.mainHand;
+      if (cp.offHand !== null) off = cp.offHand;
+    }
+    d.aimPitch = cp !== null && cp.aimPitch !== null ? cp.aimPitch : undefined;
     d.mainHand = main; d.offHand = off; d.carry = carry;
     // a heavy load shows as a pack on the back
     d.back = !mounted && this.traits.capacity > 0 && this.traits.weight > 0.25 * this.traits.capacity ? 'pack' : 'none';
