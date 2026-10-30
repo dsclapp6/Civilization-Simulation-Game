@@ -124,7 +124,7 @@ export function installCombat(sim: Simulation, deps: Wave3Deps): CombatModule {
       assaults.delete(fight.id);
       const victim = state.persons.get(a.victim);
       const me = state.persons.get(pid);
-      if (me && victim && a.witnessed && (victim.death || sim.state.ext['combat'] !== undefined)) {
+      if (me && victim && a.witnessed && (victim.death || book.isHurt(a.victim) || result.wounded.includes(a.victim))) {
         me.flags.outlaw = true;
         state.touch(me);
         state.log(sim.absDay, 'crime', `${fullName(me)} was seen attacking ${fullName(victim)} and is named an outlaw.`, [me.id, victim.id]);

@@ -346,6 +346,7 @@ const LOC_WORDS: Record<HitLocation, string> = { head: 'head', torso: 'chest', a
 /** The feed line for a blow that lands on the player: where, and how. */
 function hurtLine(loc: HitLocation, kind: WoundKind, killed: boolean): string {
   if (killed) return 'A killing blow!';
+  if (kind === 'bite') return `Teeth tear at your ${LOC_WORDS[loc]}!`;
   return kind === 'arrow' ? `An arrow strikes your ${LOC_WORDS[loc]}!` : `A blow ${KIND_WORDS[kind]} your ${LOC_WORDS[loc]}!`;
 }
 
