@@ -20,7 +20,7 @@ beforeAll(() => {
 });
 
 describe('initial population (large mock world, ~12k people)', () => {
-  it('generates 10-15k people in under 1.5 s', () => {
+  it.runIf(process.env.PERF)('generates 10-15k people in under 1.5 s (timing: npm run test:perf)', () => {
     expect(genMs).toBeLessThan(1500);
     expect(state.living).toBeGreaterThanOrEqual(10_000);
     expect(state.living).toBeLessThanOrEqual(15_000);

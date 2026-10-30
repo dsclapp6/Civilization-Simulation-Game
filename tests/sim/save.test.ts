@@ -199,7 +199,7 @@ describe('save slices never spend long on one frame', () => {
     expect(saver.stats.maxSliceMs).toBeLessThan(4);
   });
 
-  it('measures real slices on a full 12k-person save: p95 under 5 ms', () => {
+  it.runIf(process.env.PERF)('measures real slices on a full 12k-person save: p95 under 5 ms (timing: npm run test:perf)', () => {
     const world = createMockWorld({ seed: 'real', preset: 'large' });
     const state = GameState.fromWorld(world, 'real', 'knight');
     generatePopulation(state, world);

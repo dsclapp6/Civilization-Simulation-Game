@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "sim": "tsx tools/headless.ts",
-    "test:perf": "PERF=1 vitest run --no-file-parallelism perf.test"
+    "test:perf": "PERF=1 vitest run --no-file-parallelism perf.test population.test save.test"
   },
   "dependencies": {
     "three": "0.186.1"
