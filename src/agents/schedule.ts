@@ -197,20 +197,20 @@ export interface ScheduleDeps {
 interface DayTimes {
   sr: number; ss: number;
   wake: number; chore: number; mealA: number; mealB: number; workEnd: number; bed: number;
-  massA: number; massB: number;
+  massA: number; massB: number; gatherA: number; afterB: number;
 }
 
 const TRAVEL_MIN = 0.012;
-const TRAVEL_MAX = 0.1;
+const TRAVEL_MAX = 0.07;
 /** Day fraction a stroll of one metre takes on the macro clock (a person "covers" ~1000 m/day). */
-const TRAVEL_PER_METRE = 1 / 1000;
+const TRAVEL_PER_METRE = 1 / 2200;
 
 export class Schedule {
   private readonly state: GameState;
   private readonly world: WorldModel;
   private readonly places: Places;
   private readonly economy: EconomyApi;
-  private readonly times: DayTimes = { sr: 0, ss: 0, wake: 0, chore: 0, mealA: 0, mealB: 0, workEnd: 0, bed: 0, massA: 0, massB: 0 };
+  private readonly times: DayTimes = { sr: 0, ss: 0, wake: 0, chore: 0, mealA: 0, mealB: 0, workEnd: 0, bed: 0, massA: 0, massB: 0, gatherA: 0, afterB: 0 };
   private readonly wx: WeatherSample = { cloud: 0, rain: 0, snow: 0, fog: 0, windX: 0, windZ: 0, temperature: 10 };
   private wxKey = NaN;
   private readonly spotCache = new Map<number, { day: number; spot: WorkSpot | null }>();
@@ -246,10 +246,21 @@ export class Schedule {
     return out;
   }
 
+  /** Forces the weather every schedule sees (tests, dev pages); null returns to the simulated weather. */
+  forceWeather(w: { rain?: number; snow?: number; temperature?: number } | null): void {
+    this.forced = w ? { rain: w.rain ?? 0, snow: w.snow ?? 0, temperature: w.temperature ?? 12 } : null;
+    this.wxKey = NaN;
+  }
+  private forced: { rain: number; snow: number; temperature: number } | null = null;
+
   /** Weather at a time (cached to ~15 minutes of game time). */
   weather(absDay: number): WeatherSample {
     const key = Math.floor(absDay * 96);
-    if (key !== this.wxKey) { this.wxKey = key; sampleWeather(this.state.seed, key / 96, this.wx); }
+    if (key !== this.wxKey) {
+      this.wxKey = key;
+      sampleWeather(this.state.seed, key / 96, this.wx);
+      if (this.forced) { this.wx.rain = this.forced.rain; this.wx.snow = this.forced.snow; this.wx.temperature = this.forced.temperature; }
+    }
     return this.wx;
   }
 
@@ -329,6 +340,19 @@ export class Schedule {
 
   // ---- trips to the market town ----
 
+  /** Cheap test used by the zone's scan: might this person walk to market today? */
+  maybeMarketGoer(p: Person, day: number): boolean {
+    return this.marketGoer(p, day, ageYears(p, day)) >= 0;
+  }
+
+  /** Where a shepherd's flock grazes (the shepherd stands in the middle of it); null without pasture. */
+  pastureSpot(p: Person, out: P2): P2 | null {
+    const sp = this.places.of(p.settlement);
+    if (!sp || sp.pastures.length === 0) return null;
+    const par = sp.pastures[Math.floor(hash01(p.id, 9) * sp.pastures.length) % sp.pastures.length];
+    return polyPoint(par.poly, hash01(p.id, 10), 0.4 + 0.3 * hash01(p.id, 11), out);
+  }
+
   /** The market town this person walks to today, or −1. About one adult in six from the villages around goes. */
   private marketGoer(p: Person, day: number, age: number): number {
     if (age < 14 || age >= 62 || p.estate === 'clergy' || MONASTIC.has(p.career) || ARMS.has(p.career)) return -1;
@@ -395,6 +419,9 @@ export class Schedule {
     T.bed = Math.min(0.985, sunset + 0.05 + 0.05 * j(4));
     T.massA = sunrise + 0.085 + 0.012 * hash01(p.settlement, 5);
     T.massB = T.massA + 0.1;
+    // everyone leaves for church and for the churchyard at their own moment, so no one moves in a block
+    T.gatherA = T.massA - 0.03 - 0.05 * j(8);
+    T.afterB = T.massB + 0.025 + 0.05 * j(9);
     void absDay;
     return T;
   }
@@ -893,8 +920,8 @@ export class Schedule {
       }
       case 'home': return this.homeWork(p, o, home, sp, wk);
       case 'pasture': {
-        const par = sp.pastures.length ? sp.pastures[Math.floor(hash01(key, 9) * sp.pastures.length) % sp.pastures.length] : null;
-        if (par) { polyPoint(par.poly, hash01(key, 10), 0.4 + 0.3 * hash01(key, 11), this.pt); o.x = this.pt.x; o.z = this.pt.z; }
+        const ps = this.pastureSpot(p, this.pt);
+        if (ps) { o.x = ps.x; o.z = ps.z; }
         else { o.x = s.x + Math.cos(hash01(key, 12) * 6.28) * (s.radius + 40); o.z = s.z + Math.sin(hash01(key, 12) * 6.28) * (s.radius + 40); }
         o.building = -1; o.mode = Mode.Wander; o.radius = 5;
         return true;
@@ -1135,8 +1162,8 @@ export class Schedule {
   private holyDay(p: Person, o: Intent, day: number, f: number, T: DayTimes, age: number, wet: number, home: BuildingState | null, sp: SettlementPlaces | null): void {
     const j = (k: number): number => hash01(p.id, 700 + k);
     const church = sp?.church ?? null;
-    const gatherA = T.massA - 0.065;
-    const afterB = T.massB + 0.05;
+    const gatherA = T.gatherA;
+    const afterB = T.afterB;
     // who goes to Mass: nearly everyone (the sick are in bed already; some old and some mothers stay)
     const attends = !!church && j(day % 5) < (age >= 70 ? 0.55 : 0.93);
     if (f < gatherA) {
@@ -1196,19 +1223,20 @@ export class Schedule {
     if (f >= mid && f < afterMeal) { this.fromUntil(o, day, mid, afterMeal); this.atHome(o, home, true, 'eat', 'The holy-day dinner'); return; }
     if (f >= T.workEnd) { this.fromUntil(o, day, T.workEnd, T.bed); this.evening(p, o, day, age, wet, false, home, sp); return; }
     const first = f < mid;
-    this.fromUntil(o, day, first ? T.massB + 0.05 : afterMeal, first ? mid : T.workEnd);
+    this.fromUntil(o, day, first ? T.afterB : afterMeal, first ? mid : T.workEnd);
     if (wet > 0.5 || !sp) { this.atHome(o, home, true, 'home', 'Resting indoors'); return; }
     const r = j(day % 6 + (first ? 0 : 30));
     const male = p.sex === 'm';
-    if (male && age >= 14 && age <= 60 && r < 0.62) {
-      // archery at the butts: every able-bodied man and youth was bound to practise on Sundays and holidays
-      const butts = sp.first('archery_butts');
+    const butts = sp.first('archery_butts');
+    // archery: every able-bodied man and youth was bound to practise on Sundays and holidays (1363). Where the
+    // settlement has butts many go; elsewhere a handful loose arrows along the green.
+    if (male && age >= 14 && age <= 60 && r < (butts ? 0.42 : 0.1)) {
       o.activity = 'practice'; o.label = 'Archery practice';
       if (butts) { this.shootingLine(p, butts, o); return; }
       this.greenButts(p, o, sp);
       return;
     }
-    if (male && r < 0.8 && sp.alehouses.length) {
+    if (male && r < (butts ? 0.62 : 0.5) && sp.alehouses.length) {
       const ale = sp.alehouses[Math.floor(hash01(p.id, 6) * sp.alehouses.length) % sp.alehouses.length];
       this.alehouseSpot(p, ale, o, sp, wet > 0.4);
       return;
@@ -1249,6 +1277,12 @@ export class Schedule {
 // ---------------------------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------------------------
+
+/** What a career carries and holds when at work (shared with the player through ZoneApi.propsFor). */
+export function workProps(career: CareerId): { main: HeldItem; off: HeldItem; carry: CarryLook } {
+  const w = WORK[career];
+  return { main: w?.main ?? 'none', off: w?.off ?? 'none', carry: w?.carry ?? 'none' };
+}
 
 /** A point inside a convex polygon: from the centroid towards vertex `u`, `v` of the way out. */
 export function polyPoint(poly: readonly P2[], u: number, v: number, out: P2): P2 {

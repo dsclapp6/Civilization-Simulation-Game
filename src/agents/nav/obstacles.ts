@@ -260,18 +260,8 @@ export class Obstacles {
           }
         }
       }
-      // trunks and rocks (only chunks already loaded; the nav grid loads them ahead of anyone moving)
-      const range = r + MAX_SOLID_R;
-      this.forSolids(pos.x - range, pos.z - range, pos.x + range, pos.z + range, (ch, i) => {
-        const dx = pos.x - ch.x[i], dz = pos.z - ch.z[i];
-        const rr = r + ch.r[i];
-        const d2 = dx * dx + dz * dz;
-        if (d2 >= rr * rr) return;
-        contacts++;
-        moved = true;
-        const d = Math.sqrt(d2);
-        if (d > 1e-5) { const k = (rr - d) / d; pos.x += dx * k; pos.z += dz * k; } else pos.x += rr;
-      });
+      const hits = this.pushSolids(pos, r);
+      if (hits > 0) { contacts += hits; moved = true; }
       if (!moved) break;
     }
     return contacts;
@@ -290,15 +280,73 @@ export class Obstacles {
         }
       }
     }
-    let hit = false;
+    return this.solidHit(x, z, r);
+  }
+
+  /** Pushes a circle out of every trunk and rock it overlaps (allocation-free); returns the contacts. */
+  private pushSolids(pos: { x: number; z: number }, r: number): number {
     const range = r + MAX_SOLID_R;
-    this.forSolids(x - range, z - range, x + range, z + range, (ch, i) => {
-      if (hit) return;
-      const dx = x - ch.x[i], dz = z - ch.z[i];
-      const rr = r + ch.r[i];
-      if (dx * dx + dz * dz < rr * rr) hit = true;
-    });
-    return hit;
+    const x0 = pos.x - range, z0 = pos.z - range, x1 = pos.x + range, z1 = pos.z + range;
+    const cx0 = Math.floor(x0 / CHUNK_SIZE), cx1 = Math.floor(x1 / CHUNK_SIZE);
+    const cz0 = Math.floor(z0 / CHUNK_SIZE), cz1 = Math.floor(z1 / CHUNK_SIZE);
+    let contacts = 0;
+    for (let cz = cz0; cz <= cz1; cz++) {
+      for (let cx = cx0; cx <= cx1; cx++) {
+        const ch = this.chunk(cx, cz);
+        if (!ch || ch.n === 0) continue;
+        const ox = cx * CHUNK_SIZE, oz = cz * CHUNK_SIZE;
+        const sx0 = Math.max(0, Math.floor((x0 - ox) / SUB)), sx1 = Math.min(SUBS - 1, Math.floor((x1 - ox) / SUB));
+        const sz0 = Math.max(0, Math.floor((z0 - oz) / SUB)), sz1 = Math.min(SUBS - 1, Math.floor((z1 - oz) / SUB));
+        for (let sz = sz0; sz <= sz1; sz++) {
+          for (let sx = sx0; sx <= sx1; sx++) {
+            const s = sz * SUBS + sx;
+            for (let q = ch.start[s]; q < ch.start[s + 1]; q++) {
+              const i = ch.order[q];
+              const ri = ch.r[i];
+              if (ri === 0) continue;
+              const dx = pos.x - ch.x[i], dz = pos.z - ch.z[i];
+              const rr = r + ri;
+              const d2 = dx * dx + dz * dz;
+              if (d2 >= rr * rr) continue;
+              contacts++;
+              const d = Math.sqrt(d2);
+              if (d > 1e-5) { const k = (rr - d) / d; pos.x += dx * k; pos.z += dz * k; } else pos.x += rr;
+            }
+          }
+        }
+      }
+    }
+    return contacts;
+  }
+
+  private solidHit(x: number, z: number, r: number): boolean {
+    const range = r + MAX_SOLID_R;
+    const x0 = x - range, z0 = z - range, x1 = x + range, z1 = z + range;
+    const cx0 = Math.floor(x0 / CHUNK_SIZE), cx1 = Math.floor(x1 / CHUNK_SIZE);
+    const cz0 = Math.floor(z0 / CHUNK_SIZE), cz1 = Math.floor(z1 / CHUNK_SIZE);
+    for (let cz = cz0; cz <= cz1; cz++) {
+      for (let cx = cx0; cx <= cx1; cx++) {
+        const ch = this.chunk(cx, cz);
+        if (!ch || ch.n === 0) continue;
+        const ox = cx * CHUNK_SIZE, oz = cz * CHUNK_SIZE;
+        const sx0 = Math.max(0, Math.floor((x0 - ox) / SUB)), sx1 = Math.min(SUBS - 1, Math.floor((x1 - ox) / SUB));
+        const sz0 = Math.max(0, Math.floor((z0 - oz) / SUB)), sz1 = Math.min(SUBS - 1, Math.floor((z1 - oz) / SUB));
+        for (let sz = sz0; sz <= sz1; sz++) {
+          for (let sx = sx0; sx <= sx1; sx++) {
+            const s = sz * SUBS + sx;
+            for (let q = ch.start[s]; q < ch.start[s + 1]; q++) {
+              const i = ch.order[q];
+              const ri = ch.r[i];
+              if (ri === 0) continue;
+              const dx = x - ch.x[i], dz = z - ch.z[i];
+              const rr = r + ri;
+              if (dx * dx + dz * dz < rr * rr) return true;
+            }
+          }
+        }
+      }
+    }
+    return false;
   }
 
   /** Distance from a point to the nearest building footprint among those in its bucket (Infinity if none). */
