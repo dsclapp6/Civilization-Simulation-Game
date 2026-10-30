@@ -1,6 +1,7 @@
 // Headless run of the whole simulation with every gameplay module installed (no zone/player):
-// population, food, conflict and happenings per year, plus per-system cost.
-//   npx tsx tools/fullsim.ts --years 10 [--seed millennia] [--difficulty knight] [--preset tiny|small|large]
+// population, food, conflict and happenings per year, plus per-system cost. From 20 years on it also prints a summary
+// per decade (population min/max, prosperity, famine, revolts, wars, battles, sieges, raids) and the drift per year.
+//   npx tsx tools/fullsim.ts --years 10 [--seed millennia] [--difficulty knight] [--preset tiny|small|large] [--quiet]
 import { performance } from 'node:perf_hooks';
 import type { Difficulty } from '../src/core/domain';
 import { installCombat } from '../src/combat';
@@ -22,6 +23,7 @@ const years = Number(arg('years', '10'));
 const seed = arg('seed', 'millennia');
 const difficulty = arg('difficulty', 'knight') as Difficulty;
 const preset = arg('preset', '') as '' | 'tiny' | 'small' | 'large';
+const quiet = process.argv.includes('--quiet');
 
 const t0 = performance.now();
 const sim = Simulation.newGame({
@@ -56,7 +58,12 @@ const prosperity = (): number => {
   for (const st of sim.state.settlements.values()) { s += st.prosperity; n++; }
   return n ? s / n : 1;
 };
-console.log('year   pop  prosp  wars  battles  sieges  raids  happenings  ms/yr');
+if (!quiet) console.log('year   pop  prosp  low  famine  wars  battles  sieges  raids  happenings  ms/yr');
+interface YearRow { year: number; pop: number; pros: number; prosMin: number; famine: number; revolts: number; wars: number; battles: number; sieges: number; raids: number; ms: number }
+const rows: YearRow[] = [];
+const count = (...keys: string[]): number => keys.reduce((a, k) => a + (tally[k] ?? 0), 0);
+const prev = { famine: 0, revolts: 0, wars: 0, battles: 0, sieges: 0, raids: 0 };
+const minProsperity = (): number => { let m = 9; for (const st of sim.state.settlements.values()) m = Math.min(m, st.prosperity); return m === 9 ? 1 : m; };
 for (let y = 1; y <= years; y++) {
   const ts = performance.now();
   for (let d = 0; d < 16; d++) {
@@ -66,7 +73,11 @@ for (let y = 1; y <= years; y++) {
   }
   const ms = performance.now() - ts;
   const happenings = Object.entries(tally).filter(([k]) => k.startsWith('happening.')).reduce((a, [, v]) => a + v, 0);
-  console.log(`${String(y).padStart(4)} ${String(living()).padStart(6)}  ${prosperity().toFixed(2)}  ${String(tally['war.declared'] ?? 0).padStart(4)}  ${String(tally.battle ?? 0).padStart(7)}  ${String(tally['siege.start'] ?? 0).padStart(6)}  ${String(tally.raid ?? 0).padStart(5)}  ${String(happenings).padStart(10)}  ${ms.toFixed(0).padStart(5)}`);
+  const prevFam = prev.famine;
+  const now = { famine: count('happening.famine'), revolts: count('happening.peasant_revolt', 'happening.revolt'), wars: count('war.declared'), battles: count('battle'), sieges: count('siege.start'), raids: count('raid') };
+  rows.push({ year: y, pop: living(), pros: prosperity(), prosMin: minProsperity(), famine: now.famine - prev.famine, revolts: now.revolts - prev.revolts, wars: now.wars - prev.wars, battles: now.battles - prev.battles, sieges: now.sieges - prev.sieges, raids: now.raids - prev.raids, ms });
+  Object.assign(prev, now);
+  if (!quiet) console.log(`${String(y).padStart(4)} ${String(living()).padStart(6)}  ${prosperity().toFixed(2)}  ${minProsperity().toFixed(2)}  ${String(now.famine - prevFam).padStart(6)}  ${String(tally['war.declared'] ?? 0).padStart(4)}  ${String(tally.battle ?? 0).padStart(7)}  ${String(tally['siege.start'] ?? 0).padStart(6)}  ${String(tally.raid ?? 0).padStart(5)}  ${String(happenings).padStart(10)}  ${ms.toFixed(0).padStart(5)}`);
   // headless: when the player dies, carry on as the first eligible successor
   const ps = sim.state.run.pendingSuccession;
   if (sim.state.run.phase === 'choosing' && ps && ps.eligible.length) { sim.dispatch({ type: 'switchCharacter', personId: ps.eligible[0] }); bump('succession'); }
@@ -76,3 +87,23 @@ console.log('\ntotals:', Object.entries(tally).sort().map(([k, v]) => `${k}=${v}
 const prof = [...sim.scheduler.profile.entries()].sort((a, b) => b[1].maxMs - a[1].maxMs).slice(0, 12);
 console.log('\nslowest systems (max ms per call / avg ms):');
 for (const [name, p] of prof) console.log(`  ${name.padEnd(28)} max ${p.maxMs.toFixed(1).padStart(6)}  avg ${(p.totalMs / Math.max(1, p.calls)).toFixed(3)}  calls ${p.calls}`);
+
+if (rows.length >= 20) {
+  console.log('\nper decade (counts are events in the decade; pop/prosperity are the min..max of the yearly values):');
+  console.log('years      pop min..max     prosp mean (worst town)   famines (bad years)  revolts  wars  battles  sieges  raids');
+  for (let a = 0; a < rows.length; a += 10) {
+    const d = rows.slice(a, a + 10);
+    const sum = (f: (r: YearRow) => number): number => d.reduce((x, r) => x + f(r), 0);
+    const pops = d.map((r) => r.pop);
+    const bad = d.filter((r) => r.famine > 0).length;
+    const cells = [`${d[0].year}-${d[d.length - 1].year}`.padEnd(8), `${Math.min(...pops)}..${Math.max(...pops)}`.padEnd(16), `${(sum((r) => r.pros) / d.length).toFixed(2)} (${Math.min(...d.map((r) => r.prosMin)).toFixed(2)})`.padEnd(24),
+      `${sum((r) => r.famine)} (${bad})`.padEnd(20), String(sum((r) => r.revolts)).padEnd(8), String(sum((r) => r.wars)).padEnd(6), String(sum((r) => r.battles)).padEnd(9), String(sum((r) => r.sieges)).padEnd(8), String(sum((r) => r.raids))];
+    console.log(cells.join(' '));
+  }
+  // least-squares drift of the population over the years (percent a year)
+  const n = rows.length;
+  const xs = rows.map((r) => r.year), ys = rows.map((r) => Math.log(r.pop));
+  const mx = xs.reduce((a, b) => a + b, 0) / n, my = ys.reduce((a, b) => a + b, 0) / n;
+  const slope = xs.reduce((a, x, i) => a + (x - mx) * (ys[i] - my), 0) / xs.reduce((a, x) => a + (x - mx) ** 2, 0);
+  console.log(`population drift ${(slope * 100).toFixed(2)} %/yr (fit over ${n} years: ${rows[0].pop} -> ${rows[n - 1].pop}); famine starts ${rows.reduce((a, r) => a + r.famine, 0)} in ${n} years`);
+}

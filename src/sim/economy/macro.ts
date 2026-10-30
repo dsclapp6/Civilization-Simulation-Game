@@ -466,6 +466,7 @@ export function yearlyProsperity(E: Econ): void {
     ss.prosperity = next;
     state.touchSettlement(ss);
     t[4] = next;
+    t[5] = Math.round(hungerShare * 1000) / 1000; // read by farm.ts: a hungry year calls for more land under the plough
     t[0] = 0; t[1] = 0; t[2] = 0; t[3] = 0;
     if (hungerShare > 0.12) {
       const text = `Hunger in ${s.name}: ${Math.round(hungerShare * 100)}% of the year's rations went missing.`;

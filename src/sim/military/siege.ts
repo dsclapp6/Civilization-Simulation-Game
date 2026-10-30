@@ -162,7 +162,7 @@ export class SiegeSystem {
     rec.food = Math.max(0, rec.food - eaten);
     const starving = rec.food <= 0;
     const ss = M.state.settlementState(sid);
-    if (ss) { ss.prosperity = Math.max(0.3, ss.prosperity - (starving ? 0.08 : 0.02)); M.state.touchSettlement(ss); }
+    if (ss) { ss.prosperity = Math.max(0.3, ss.prosperity - (starving ? 0.04 : 0.006)); M.state.touchSettlement(ss); }
     rec.morale = Math.max(0, Math.min(1, rec.morale - (starving ? 0.06 : 0.012) + (men < 20 ? 0.02 : 0)));
     if (starving) this.famine(sid);
 

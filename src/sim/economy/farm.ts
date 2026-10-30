@@ -520,8 +520,14 @@ function adaptYields(E: Econ): void {
   for (const s of E.world.settlements) {
     if (s.strips.length === 0) continue;
     const price = postedPrice(E, s.id, 'wheat', 'buy', 0) / base;
+    const hunger = E.save.tally[String(s.id)]?.[5] ?? 0;
     const cur = scale[s.id] ?? 1;
-    const drift = Math.max(-0.03, Math.min(0.03, (price - 0.95) * 0.12));
+    // a dead band around the usual price (the control loop has a year's delay, so it must not chase the price): hunger or dear
+    // corn bring more land and effort into use quickly, a glut takes it out again slowly
+    let drift = 0;
+    if (hunger > 0.01 || price > 1.3) drift = Math.min(0.03, 0.01 + Math.max(0, hunger - 0.01) * 0.5 + Math.max(0, price - 1.3) * 0.06);
+    else if (price < 0.75) drift = -Math.min(0.02, (0.75 - price) * 0.1);
+    if (drift === 0) continue;
     scale[s.id] = Math.round(Math.max(0.7, Math.min(1.35, cur * (1 + drift))) * 1000) / 1000;
   }
 }
