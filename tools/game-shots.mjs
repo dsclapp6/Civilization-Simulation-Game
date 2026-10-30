@@ -94,6 +94,8 @@ async function load(extra) {
   await page.waitForFunction(() => window.__game !== undefined, null, { timeout: 300000, polling: 250 });
   await page.evaluate(() => window.__game.ready());
   await page.evaluate(() => window.__game.freeze(true));
+  // the first-minutes hints would float over every shot; the hint shots turn them on again
+  await page.evaluate(() => window.__game.host.setSettings({ hints: false }));
   console.log(`run ready in ${((Date.now() - t0) / 1000).toFixed(1)} s (${extra})`);
 }
 
@@ -343,6 +345,7 @@ try {
     const closeAll = () => page.evaluate(() => { for (const id of window.__ui.openPanels()) window.__ui.closePanel(id); });
     const hints = (on) => page.evaluate((v) => window.__game.host.setSettings({ hints: v }), on);
     await hints(false);
+    const clearToasts = () => page.evaluate(() => document.querySelectorAll('.mu-toast').forEach((e) => e.remove()));
 
     if (want('hint')) {
       await hints(true);
@@ -454,6 +457,7 @@ try {
         const me = sim.state.persons.get(pid); combat.book.forget(pid); me.health.hp = 1; me.health.conditions.length = 0; combat.port.reset();
       });
       await zoom(-1.8);
+      await clearToasts();
 
       if (want('fight')) {
         await skirmish('bandits', 3, { weapon: 'sword', shield: 'shield_heater', armour: ['mail_hauberk', 'kettle_hat'] }, [{ weapon: 'axe', armour: [] }, { weapon: 'staff', armour: ['cap_helmet'] }, { weapon: 'spear', armour: ['padded_armour'] }]);
@@ -475,8 +479,10 @@ try {
       if (want('bow')) {
         await advance(3, {});
         await grow();
+        await clearToasts();
         await skirmish('bandits', 3, { weapon: 'dagger', ranged: 'longbow', armour: [] }, { weapon: 'dagger', ranged: 'shortbow', armour: [] }, true);
-        await advance(0.5, { block: true, aim: await ray() });
+        await advance(1.7, {});  // let the module read the new kit before the string is drawn
+        await advance(0.45, { block: true, aim: await ray() });
         await pause(200);
         await shot('bow-draw', { settle: false });
         await advance(1.4, { block: true, aim: await ray() });
