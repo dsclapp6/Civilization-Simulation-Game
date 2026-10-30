@@ -216,6 +216,29 @@ function marketEdges(E: Econ): Array<[number, number, number]> {
       edges.set(`${lo}:${hi}`, [lo, hi, n.d]);
     }
   }
+  // three-nearest links leave clusters of neighbouring markets cut off from the rest (a region short of land can then
+  // starve while its neighbours' barns overflow): join the components with the shortest roads between them
+  const parent = new Map<number, number>();
+  const find = (x: number): number => { let r = x; while ((parent.get(r) ?? r) !== r) r = parent.get(r) as number; return r; };
+  for (const a of E.marketIds) parent.set(a, a);
+  for (const [a, b] of edges.values()) parent.set(find(a), find(b));
+  for (;;) {
+    let best: [number, number, number] | null = null, bestKey = Infinity;
+    for (const a of E.marketIds) {
+      const sa = E.settlementById.get(a);
+      if (!sa) continue;
+      for (const b of E.marketIds) {
+        if (b <= a || find(a) === find(b)) continue;
+        const sb = E.settlementById.get(b) as Settlement;
+        const d = Math.hypot(sa.x - sb.x, sa.z - sb.z);
+        const key = d * (sb.kingdom === sa.kingdom ? 1 : 2.5);
+        if (key < bestKey) { bestKey = key; best = [a, b, d]; }
+      }
+    }
+    if (!best) break;
+    edges.set(`${best[0]}:${best[1]}`, best);
+    parent.set(find(best[0]), find(best[1]));
+  }
   E.edges = [...edges.values()].sort((x, y) => x[0] - y[0] || x[1] - y[1]);
   return E.edges;
 }
@@ -240,7 +263,48 @@ export function marketFlowsDay(E: Econ): void {
       to.s[i] = Math.round((to.s[i] + q * (1 - loss)) * 100) / 100;
     }
   }
+  reliefCarts(E);
   E.touchMarkets();
+}
+
+/**
+ * Where a market runs short of staples (a city on poor land, a town with no fields in its hinterland) the long-distance
+ * grain merchants bring a cartload from the market with the biggest surplus nearby; neighbour-to-neighbour flows alone
+ * cannot carry enough through the small markets in between.
+ */
+function reliefCarts(E: Econ): void {
+  const ids = E.marketIds;
+  for (const g of CARRIED) {
+    const i = MACRO_INDEX[g];
+    if (i === undefined || g === 'cheese' || g === 'fish' || g === 'firewood') continue;
+    for (const b of ids) {
+      const rb = marketRec(E, b);
+      const tb = marketTargets(E, b)[i];
+      const fb = rb.s[i] / tb;
+      if (fb >= 0.55) continue;
+      const sb = E.settlementById.get(b) as Settlement;
+      let best = -1, bestScore = 0, bestDist = 0;
+      for (const a of ids) {
+        if (a === b) continue;
+        const ra = marketRec(E, a);
+        const ta = marketTargets(E, a)[i];
+        const spare = ra.s[i] - 1.1 * ta;
+        if (spare < 0.5) continue;
+        const sa = E.settlementById.get(a) as Settlement;
+        const d = Math.hypot(sa.x - sb.x, sa.z - sb.z) * (sa.kingdom === sb.kingdom ? 1 : 2);
+        const score = spare / (1 + d / 4000);
+        if (score > bestScore) { bestScore = score; best = a; bestDist = d; }
+      }
+      if (best < 0) continue;
+      const ra = marketRec(E, best);
+      const ta = marketTargets(E, best)[i];
+      const q = Math.min((1 - fb) * tb * 0.5, ra.s[i] - 1.1 * ta);
+      if (q < 0.3) continue;
+      const loss = 0.03 + Math.min(0.12, bestDist / 120000);
+      ra.s[i] = Math.round((ra.s[i] - q) * 100) / 100;
+      rb.s[i] = Math.round((rb.s[i] + q * (1 - loss)) * 100) / 100;
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
