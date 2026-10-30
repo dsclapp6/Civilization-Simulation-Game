@@ -18,7 +18,7 @@ function cxOf(k: number): number { return ((k % N) + 0.5) * CELL; }
 function czOf(k: number): number { return (Math.floor(k / N) + 0.5) * CELL; }
 
 const POP: Record<SettlementKind, [number, number]> = {
-  hamlet: [12, 32], village: [48, 108], town: [210, 360], city: [520, 820], castle: [28, 70], abbey: [30, 60], priory: [14, 30], nunnery: [16, 36],
+  hamlet: [14, 34], village: [66, 152], town: [135, 235], city: [245, 440], castle: [28, 70], abbey: [30, 60], priory: [14, 30], nunnery: [16, 36],
 };
 
 export function generateSites(s: GenState): void {
@@ -387,14 +387,24 @@ export function generateSites(s: GenState): void {
     const mainLabel = (() => { for (let k = 0; k < NN; k++) if (mainland[k]) return cl[k]; return 0; })();
     for (let c = 1; c < sizes.length; c++) {
       if (c === mainLabel || sizes[c] < 60 || sites.filter((x) => x.island).length >= 4) continue;
-      let best = -1, bs = -Infinity;
+      let best = -1, bs = -Infinity, bestFlat = 0;
       for (let k = 0; k < NN; k++) {
         if (cl[k] !== c || slope[k] > 0.1 || biome[k] === Biome.Beach || biome[k] === Biome.Marsh || coast[k] < 60) continue;
-        const sc = fert(k) + 0.4 * smoothstep(100, 300, coast[k]) * (1 - smoothstep(400, 900, coast[k])) + 0.1 * hash01(k, 2, 5);
-        if (sc > bs) { bs = sc; best = k; }
+        // houses need level ground round the site, not just at it (an island can be a steep cone)
+        const ci = k % N, cj = (k / N) | 0;
+        let flat = 0;
+        for (let dj = -3; dj <= 3; dj++) for (let di = -3; di <= 3; di++) {
+          const ii = ci + di, jj = cj + dj;
+          if (ii < 0 || jj < 0 || ii >= N || jj >= N) continue;
+          const kk = jj * N + ii;
+          if (cl[kk] === c && slope[kk] < 0.08 && biome[kk] !== Biome.Beach && biome[kk] !== Biome.Marsh && coast[kk] > 30) flat++;
+        }
+        if (flat < 8) continue;
+        const sc = fert(k) + 0.4 * smoothstep(100, 300, coast[k]) * (1 - smoothstep(400, 900, coast[k])) + 0.1 * hash01(k, 2, 5) + 0.02 * flat;
+        if (sc > bs) { bs = sc; best = k; bestFlat = flat; }
       }
       if (best < 0) continue;
-      const kind: SettlementKind = sizes[c] > 380 ? 'village' : 'hamlet';
+      const kind: SettlementKind = sizes[c] > 380 && bestFlat >= 26 ? 'village' : 'hamlet';
       const st = addSite(kind, cxOf(best), czOf(best), -1, ['island', 'coast']);
       st.island = true;
     }
