@@ -347,9 +347,9 @@ describe('encounters', () => {
     r.player.setInput(input({ forward: 1 }));
     for (let i = 0; i < 20; i++) r.sim.step(0.05);
     expect(dist(r.player.body()!.x, r.player.body()!.z, at.x, at.z)).toBeLessThan(0.01);
-    // other actions are refused until it is settled
-    const rest = r.sim.actions.list(r.pid, { kind: 'self' });
-    expect(rest.every((o) => o.id.startsWith('encounter.'))).toBe(true);
+    // other modules' actions (eating, resting…) are refused until it is settled
+    const others = r.sim.actions.list(r.pid, { kind: 'self' }).filter((o) => !o.id.startsWith('encounter.'));
+    for (const o of others) expect(r.player.perform(o).ok).toBe(false);
   });
 
   it('paying bandits costs the demand and the journey resumes at 8×', () => {

@@ -6,7 +6,7 @@ binding brief for every contributor and subagent.
 ## 1. Stack and commands
 - TypeScript (strict) + Vite 8 + Three.js 0.186 (`WebGLRenderer`, WebGL2). **No other runtime
   dependencies.** Dev-only: vitest, tsx, @types/*. Do not add packages.
-- `npm run dev` (Vite dev server) · `npm run typecheck` · `npm test` (vitest) ·
+- `npm run dev` (Vite dev server) · `npm run typecheck` · `npm test` (vitest) · `npm run test:perf` (timing budgets, run alone) ·
   `npm run build` · `npx tsx tools/<tool>.ts` for Node tools.
 - Playwright + Chromium are preinstalled on the build machine: `require('playwright')` works,
   `chromium.launch()` needs no options, WebGL2 runs on SwiftShader (slow but correct).
