@@ -140,8 +140,10 @@ export function heading(text: Child, ico?: IconName, right?: Child): HTMLElement
   return h('h3.mu-h3', null, ico ? icon(ico, 16) : null, text, right ? h('span.mu-heading-right', null, right) : null);
 }
 
-export function empty(text: string): HTMLElement {
-  return h('p.mu-empty', null, text);
+/** A placeholder for a list with nothing in it. With a title (and icon) it becomes a centred "nothing yet" page. */
+export function empty(text: string, o: { icon?: IconName; title?: string } = {}): HTMLElement {
+  if (!o.title) return h('p.mu-empty', null, text);
+  return h('div.mu-empty.big', null, o.icon ? icon(o.icon, 34) : null, h('div.mu-empty-title', null, o.title), h('p', null, text));
 }
 
 /** Filled / empty pips, e.g. rank markers. */

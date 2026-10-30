@@ -9,6 +9,7 @@ import { characterPanel } from './character';
 import { deathPanel, gameOverPanel } from './death';
 import { dialoguePanel } from './dialogue';
 import { familyPanel } from './family';
+import { helpPanel } from './help';
 import { inventoryPanel } from './inventory';
 import { ledgerPanel } from './ledger';
 import { mapPanel } from './map';
@@ -26,6 +27,7 @@ export function createPanel(ctx: PanelCtx, req: PanelRequest, hooks: UiHooks): U
       const f = extPanel(req.name);
       return f ? f(ctx, req, hooks) : messagePanel(ctx, 'Not yet written', `The “${req.name}” page is still being illuminated.`);
     }
+    case 'help': return helpPanel(ctx, req.tab);
     case 'message': return messagePanel(ctx, req.title, req.text);
     case 'confirm': return confirmPanel(ctx, req.options);
     case 'pause': return pausePanel(ctx, hooks);

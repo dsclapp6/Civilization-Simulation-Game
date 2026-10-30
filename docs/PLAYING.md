@@ -34,12 +34,52 @@ eligible is left the run ends and your Legacy gold stays.
 | **Q** | Stop the timed action in progress (walking away also stops it) |
 | **F** | Mount the household's horse nearby / dismount |
 | **Mouse** | Look around (click the view to capture the mouse; **Esc** releases it and opens the pause menu) |
+| **Left button** | Strike: a tap is a quick blow, holding builds a heavy overhead stroke. With a bow: loose the arrow |
+| **Right button** | Guard (a shield helps a great deal). With a bow or crossbow: hold to draw and aim along the camera |
 | **Wheel** | Zoom. Far out, the view becomes the strategic map |
 | **1 / 2 / 3** | Game speed 1× / 3× / 8× (refused with a message while an enemy is within 150 m) |
 | **P** | Pause |
-| **M** map and travel · **Tab** character · **I** inventory · **J** ledger and management · **H** family and House · **L** chronicle · **Z** sleep or wait · **Esc** menu | The UI's keys (see `src/ui`) |
+| **Tab** character · **I** inventory · **H** family and House · **J** ledger · **M** map and travel · **L** chronicle · **Z** sleep or wait | The UI's books and pages |
+| **R** requests and news · **B** wounds · **T** House techniques · **K** realm and politics · **C** command and army (the household page of the ledger when you have no troops) | The wave 3 pages. Each also has a button in the dock (bottom right); modules that are not in the run have none |
+| **F1** | Help and controls (also in the pause menu): all the keys, first steps, fighting, lords and wars |
+| **Esc** | Close the top page; with nothing open, the pause menu |
+| **← →**, **1–9**, **↑ ↓**, **PgUp PgDn**, **Enter** | Inside pages: switch tabs, scroll, confirm. **Enter** with a notice showing at the top of the screen opens the page it points to (a levy call or a war first) |
 
 While a panel or menu has the focus the movement keys and the mouse look do nothing.
+
+## The screen
+
+- **Top left**: your plate: name, age and rank, purse, **health**, **blood** (appears when you bleed or have lost blood),
+  **stamina** and four signs for hunger, rest, warmth and mood (gold = soon, red = now). A gold *Perk ready* badge
+  appears when a skill level offers a choice. Under it, in the first minutes of a run, a **hint card** says what to do
+  next and which key does it (see below).
+- **Top right**: the date, time of day and a dial, the place and realm you stand in, holy and market days, and the
+  speed buttons. Badges say *Paused*, *Action time* (the calendar crawls while you fight, talk or trade) and
+  *Danger nearby*.
+- **Bottom centre**: the prompt (`E  Reap · strip of barley`), the progress bar of work in progress and floating gains.
+  In a fight a small chip names your stance: *On guard*, *Striking*, *Drawing*, *Aiming*, *Staggered*…
+- **Bottom left**: the message feed. **Top centre**: toasts and **notices** (below).
+- **Bottom right**: the dock. Two rows of buttons for every page: character, inventory, family, ledger, map,
+  chronicle, rest; then requests, wounds, House techniques, realm and politics, command and army, and the menu. A gold dot
+  with a number says something waits (requests, letters and petitions); a red one that the levy is called or a wound
+  bleeds.
+
+### Notices
+
+Things that deserve your attention arrive as a toast at the top of the screen with a button that opens the right
+page: a villager asking a favour (the requests journal), a letter from another House or a tenant's petition (the
+realm page), a declared war (the wars tab), a siege, a raid or a plague at your own place, and the levy call (the
+command page). **Enter** takes the most pressing one. The levy call no longer seizes the screen: you may finish what
+you are doing first.
+
+### The first minutes
+
+A new run starts as a twelve-year-old in a peasant household. The hint card under your plate suggests, one at a
+time and only when it applies: how to move and look, what E does, that work earns coin and skill, the character
+sheet, what to do when you are hungry, tired or cold, the speed keys, the map, the holy-day archery, the choice
+of a career as you near fourteen, the fighting controls the first time steel is drawn, the bow, wounds, and F1.
+A hint goes away when you do what it asks, or with its **×**, and is not shown twice in a run. *Hide all hints*
+(on the card) or the **Hints for new players** switch in the settings turns the guide off.
 
 ## The loop
 
@@ -78,6 +118,50 @@ encounter offers *Face them* (street level: tap or hold **E** and the wheel list
 *Turn back* (get away, then head for where you started) and *End the journey here* (in front of
 outlaws or wolves that means turning and running). **Cancel journey** on the HUD stops where you are.
 
+### Fighting
+
+Fights come from the road (bandits, wolves, a patrol that will not be talked round), from raiders and soldiers at your
+door, and from your own quarrels. When steel is out the weapon appears in your hand and the calendar slows.
+
+- **Melee.** Tap the left button for a quick blow, hold it for a heavy overhead stroke that costs more breath. Hold
+  the right button to guard. **Space** rolls out of the way: for a moment nothing can touch you. Every swing, guard and
+  roll costs **stamina**; out of breath you can only walk (the stamina bar turns amber and pulses).
+- **Bows and crossbows.** Hold the right button to draw. A **reticle** appears in the middle of the screen and its ring
+  closes as the string comes back; then it holds steady (a held bow tires the arm). The arrow leaves along the camera:
+  click the left button to loose. A long shot drops, so aim a little high. A crossbow must be spanned between shots.
+- **Lances.** On a horse with a lance, gallop and hold the left button to couch it.
+- **Being hurt.** There is no health pool that refills by itself: blows leave **wounds** (head, torso, arms, legs; cut,
+  stab, bruise, arrow) that bleed, break bones, fester and mend over days. The screen flashes red on every blow,
+  the **blood** bar appears and the dock's wound button gets a red dot while you bleed. Open **Wounds** (**B**) to see
+  where you are hurt and to **bind** the wounds (Medicine skill decides how well); rest, food, a healer and the
+  infirmary do the rest. Lame legs and scars may remain.
+- **Down.** A heavy blow or loss of blood can knock you down: the screen darkens and says *You are down*. You cannot act
+  until you are on your feet again (a few seconds, unless you are dying). A nobleman who yields is held for ransom
+  instead of being killed.
+
+### Lords, wars and levies
+
+Your lord may go to war. **The levy** calls every man from fifteen to sixty on his manors: a notice tells you and the
+dock's **Command** button (**C**) turns red. In the command page you may *March to the muster* (you join the army) or
+refuse (a fine and shame). In an army you serve as a levy spearman, archer, man-at-arms, sergeant or knight depending on
+your arms and skills (the page shows the recruiter's tests) and your rank decides whom you command: yourself, a squad,
+a company or the whole army. In battle the keys **1–6** give orders (hold, advance, charge, loose, fall back, follow me).
+Armies march, besiege castles and walled towns, raid villages (burning, stealing herds, taking captives), and fight
+battles near you; the *Armies & wars* tab lists them, the *Forces* tab the strength of the great Houses.
+
+### Realm, offices and the House tree
+
+- **Realm and politics** (**K**): *Standing* (your House, its liege, vassals, strength and the letters waiting for an
+  answer), *Houses* (neighbours and rivals, with offers of truce, trade, marriage, alliance), *Wars* (peace terms),
+  *Claims*, *Offices* (the posts of your place and the elections for them: stand, canvass, pay for the ale) and *Command*
+  (what your titles let you rule: a manor's rents and labour, a barony's vassals, a realm's laws) and *Petitions*
+  (tenants asking a lord for relief). What you may command grows with your station; locked pages say how to unlock them.
+- **House techniques** (**T**): four branches (economy, military, kinship and diplomacy, knowledge and belief) of
+  techniques your House has, can learn or has lost. They live in people: practise the craft or study at a school and
+  you learn it; an unrecorded art dies with its last master.
+- **Requests and news** (**R**): the journal of favours people have asked of you (fetch, work, a loan, a lost animal, a
+  message, a watch, a godparent) with what is promised, and the notices of the district (fire, plague, fair).
+
 ### Death and succession
 
 When your character dies the body falls and the death screen shows the life story and who may carry on
@@ -87,7 +171,7 @@ With nobody left the run ends (game over, records, Legacy gold).
 
 ## Developer parameters
 
-All optional, on the URL of the game page:
+All optional, on the URL of the game page (`?mode=world|gallery|chars|village|ui` selects the developer viewers instead of the game):
 
 | Parameter | Effect |
 |---|---|
@@ -103,7 +187,7 @@ All optional, on the URL of the game page:
 Tools (headless Chromium, software GL, so they are slow): `node tools/game-shots.mjs` plays through the
 situations above and writes `docs/game/*.png`; `node tools/game-flow.mjs` clicks and types through the run
 start, hotkeys, pause, the action wheel, the map, a journey with encounters, death and succession and
-*Save and quit* / *Continue*, and checks what the game and the UI report at every step.
+*Save and quit* / *Continue*, and checks what the game and the UI report at every step (including the dock, the hotkeys of the wave 3 pages, notices and hints). `node tools/game-shots.mjs hint help notice fight bow down command politics techs requests` takes the wave 4 screens (`docs/game/`).
 
 ## For other modules
 
