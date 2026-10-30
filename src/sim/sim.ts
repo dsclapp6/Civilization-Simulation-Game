@@ -172,9 +172,13 @@ export class Simulation implements SimContext {
 
   registerSystem<P extends System['phase']>(sys: System<P>): () => void { return this.scheduler.register(sys); }
 
+  /** Living, free family of any rank plus House members of equal rank (SPEC §8). */
   eligibleSwitchTargets(fromId: PersonId = this.state.run.playerId): PersonId[] {
     return eligibleSwitchTargets(this.state, fromId);
   }
+
+  /** Takes over a relative or House member (same as the `switchCharacter` command). */
+  switchTo(personId: PersonId): boolean { return switchTo(this, personId); }
 
   /** Hash of the whole persisted state (determinism / round-trip checks). */
   stateHash(): string { return hashState(this.state); }
