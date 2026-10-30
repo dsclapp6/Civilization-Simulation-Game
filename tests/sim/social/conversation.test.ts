@@ -126,7 +126,7 @@ describe('choosing', () => {
     const start = c.opinion;
     c = r.social.choose(c.id, 'nav.chat');
     expect(c.page).toBe('chat');
-    expect(c.pageLabel.length).toBeGreaterThan(0);
+    expect((c.pageLabel ?? '').length).toBeGreaterThan(0);
     expect(c.options.map((o) => o.id)).toEqual(expect.arrayContaining(['chat.weather', 'chat.harvest', 'chat.hopes', 'nav.back']));
     const lines = c.lines.length;
     c = r.social.choose(c.id, 'chat.weather');

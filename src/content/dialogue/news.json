@@ -1,5 +1,5 @@
 {
-  "_doc": "News and rumour. news.item.* are gossip lines about events read from the world (speaker = whoever tells it); vars: {who} {whofull} {baby} {mother} {mothfirst} {father} {age} {cause} {widow} {groom} {bride} {groomfull} {bridefull} {title} {from} {ill} {good} {there}. Tags: great (rank 5+), far, died, infant, young, old, childbed, plague, widowed, woman, man. news.deed.* are rumours of what someone did; vars {who} {whofull} {other}.",
+  "_doc": "News and rumour. news.item.* are gossip lines about events read from the world (speaker = whoever tells it); vars: {who} {whofull} {baby} {babe} {mother} {mothfirst} {father} {age} {cause} {widow} {groom} {bride} {groomfull} {bridefull} {title} {from} {ill} {good} {there}. Tags: great (rank 5+), far, died, infant, young, old, childbed, plague, widowed, woman, man. news.deed.* are rumours of what someone did; vars {who} {whofull} {other}.",
   "news": {
     "ask": [
       "What news?",
@@ -38,7 +38,7 @@
         "God has sent {mother} {baby}; {who} is the name.",
         { "t": "Great news from the hall: {baby} is born to {mother}, and the house rejoices.", "if": { "tag": "great" } },
         { "t": "Poor {mothfirst} bore {baby}, {who}, but the little one did not live.", "if": { "tag": "died" } },
-        { "t": "{Who} came into the world this week, a squalling {baby}, they say. Strong lungs.", "if": { "not": "pious" } }
+        { "t": "{Who} came into the world this week, a squalling {babe}, they say. Strong lungs.", "if": { "not": "pious" } }
       ],
       "death": [
         "{Whofull} has passed on, aged {age}. God rest the soul.",

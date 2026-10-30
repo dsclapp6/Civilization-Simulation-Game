@@ -166,7 +166,7 @@ export class Speech {
   // ---- picking ----
 
   /** Chooses a variant of `poolId` for the context, or null when the pool is missing or nothing fits. */
-  pick(poolId: string, ctx: SpeechCtx): Picked | null {
+  pick(poolId: string, ctx: SpeechCtx, seed?: string): Picked | null {
     const pool = this.content.pools.get(poolId);
     if (!pool) { this.missingPools.add(poolId); return null; }
     const lines = pool.lines;
@@ -181,7 +181,8 @@ export class Speech {
     }
     if (cand.length === 0) return null;
     const key = `${ctx.speaker.id}|${poolId}`;
-    const recent = this.recent.get(key);
+    // a seeded pick is a pure function of its inputs (news that must not flicker between calls)
+    const recent = seed === undefined ? this.recent.get(key) : undefined;
     let total = 0;
     const eff: number[] = new Array(cand.length);
     for (let k = 0; k < cand.length; k++) {
@@ -192,17 +193,19 @@ export class Speech {
       total += eff[k];
     }
     if (total <= 0) { for (let k = 0; k < cand.length; k++) { eff[k] = weights[k]; total += eff[k]; } }
-    let r = noise01(ctx.speaker.id, ctx.listener?.id ?? 0, `${poolId}#${this.counter++}`) * total;
+    let r = noise01(ctx.speaker.id, ctx.listener?.id ?? 0, seed === undefined ? `${poolId}#${this.counter++}` : `${poolId}@${seed}`) * total;
     let chosen = cand[cand.length - 1];
     for (let k = 0; k < cand.length; k++) {
       r -= eff[k];
       if (r <= 0) { chosen = cand[k]; break; }
     }
-    if (this.recent.size > 4000) this.recent.clear();
-    const hist = recent ?? [];
-    hist.push(chosen);
-    if (hist.length > Math.min(4, Math.max(1, lines.length - 1))) hist.shift();
-    this.recent.set(key, hist);
+    if (seed === undefined) {
+      if (this.recent.size > 4000) this.recent.clear();
+      const hist = recent ?? [];
+      hist.push(chosen);
+      if (hist.length > Math.min(4, Math.max(1, lines.length - 1))) hist.shift();
+      this.recent.set(key, hist);
+    }
     const line = lines[chosen];
     return { text: this.fill(line.t, ctx), tone: line.tone, index: chosen };
   }
@@ -215,7 +218,7 @@ export class Speech {
   }
 
   /** Plain text of a pick ('' when nothing fits). */
-  text(poolId: string, ctx: SpeechCtx): string { return this.pick(poolId, ctx)?.text ?? ''; }
+  text(poolId: string, ctx: SpeechCtx, seed?: string): string { return this.pick(poolId, ctx, seed)?.text ?? ''; }
 
   /** How many variants of a pool could be used in this context. */
   fitting(poolId: string, ctx: SpeechCtx): number {

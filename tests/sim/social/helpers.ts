@@ -58,6 +58,8 @@ export function forceRolls(r: Rig, value: number): () => void {
 
 /** Starts a conversation or fails the test. */
 export function begin(r: Rig, other: Person): Conversation {
+  const open = r.social.current();
+  if (open) r.social.end(open.id);
   const c = r.social.start(r.player.id, other.id);
   if ('ok' in c) throw new Error(`could not start: ${c.reason}`);
   return c;

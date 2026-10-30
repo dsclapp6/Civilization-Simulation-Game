@@ -138,7 +138,7 @@ export class NewsEngine {
   tell(npc: Person, count: number): string[] {
     const core = this.core;
     const told = core.store.read().told;
-    const items = this.items(npc.settlement).filter((it) => told[it.key] === undefined || core.day - told[it.key] > 20);
+    const items = this.items(npc.settlement).filter((it) => told[it.key] === undefined || core.day - told[it.key] > NEWS.lifetimeDays);
     const ctx = core.speech.ctx(npc, core.person(core.playerId) ?? null);
     const chosen = this.pickVaried(items, count);
     const out: string[] = [];
@@ -175,6 +175,7 @@ export class NewsEngine {
   // ---- phrasing ----
 
   render(it: NewsItem, ctx: SpeechCtx, at: number): string {
+    const seed = `${it.key}:${ctx.speaker.id}`;
     const core = this.core;
     const v: Record<string, string> = { ...ctx.vars };
     const who = it.persons[0] !== undefined ? core.person(it.persons[0]) : undefined;
@@ -190,6 +191,7 @@ export class NewsEngine {
       case 'birth': {
         const mother = who && who.mother ? core.person(who.mother) : undefined;
         v.baby = who ? (who.sex === 'm' ? 'a boy' : 'a girl') : 'a child';
+        v.babe = who ? (who.sex === 'm' ? 'boy' : 'girl') : 'child';
         v.mother = mother ? fullName(mother) : 'a woman of the parish';
         v.mothfirst = mother ? mother.first : 'the mother';
         if (who && who.father && who.father !== 0) { const f = core.person(who.father); if (f) v.father = f.first; }
@@ -238,10 +240,10 @@ export class NewsEngine {
       default: break;
     }
     const local: SpeechCtx = { ...ctx, vars: v, cache: {}, tags: new Set([...ctx.tags, ...tags]) };
-    const text = core.speech.text(pool, local);
+    const text = core.speech.text(pool, local, seed);
     if (!text) return '';
     if (it.origin !== at) {
-      const lead = core.speech.text('news.far', local);
+      const lead = core.speech.text('news.far', local, `${seed}:far`);
       if (lead) return `${lead} ${capitalise(text)}`;
     }
     return capitalise(text);

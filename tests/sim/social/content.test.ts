@@ -22,7 +22,7 @@ const KNOWN_VARS = new Set([
   // supplied by topics
   'good', 'kids', 'nkids', 'kidword', 'theyword', 'parents', 'third', 'thirdfull', 'thirdaddr', 'he', 'his', 'him', 'role', 'words',
   'kinword', 'there', 'dir', 'walk', 'kind', 'thereLord', 'marketday', 'names', 'first1', 'money', 'item', 'skill', 'stat', 'statname',
-  'rank', 'office', 'who', 'whofull', 'baby', 'mother', 'mothfirst', 'father', 'age', 'cause', 'widow', 'groom', 'bride', 'groomfull',
+  'rank', 'office', 'who', 'whofull', 'baby', 'babe', 'mother', 'mothfirst', 'father', 'age', 'cause', 'widow', 'groom', 'bride', 'groomfull',
   'bridefull', 'title', 'from', 'ill', 'other', 'memory', 'ward',
 ]);
 
@@ -191,7 +191,7 @@ describe('dialogue coverage over a whole world', () => {
     const vars: Record<string, string> = {};
     for (const v of ['good', 'kids', 'nkids', 'kidword', 'theyword', 'parents', 'third', 'thirdfull', 'thirdaddr', 'he', 'his', 'him', 'role', 'words',
       'kinword', 'there', 'dir', 'walk', 'kind', 'thereLord', 'marketday', 'names', 'first1', 'money', 'item', 'skill', 'stat', 'statname', 'rank',
-      'office', 'who', 'whofull', 'baby', 'mother', 'mothfirst', 'father', 'age', 'cause', 'widow', 'groom', 'bride', 'groomfull', 'bridefull', 'title',
+      'office', 'who', 'whofull', 'baby', 'babe', 'mother', 'mothfirst', 'father', 'age', 'cause', 'widow', 'groom', 'bride', 'groomfull', 'bridefull', 'title',
       'from', 'ill', 'other', 'memory', 'ward']) vars[v] = `<${v}>`;
     for (const pool of speech.poolIds()) {
       const p = speech.pool(pool)!;

@@ -77,7 +77,7 @@ export const NEWS = {
   /** How fast news travels between settlements (metres per game day). */
   spreadPerDay: 900,
   /** Items older than this are stale (game days; a year is 16). */
-  lifetimeDays: 24,
+  lifetimeDays: 10,
   /** News only travels this far. */
   reach: 6500,
   /** Recorded rumours kept in the save. */

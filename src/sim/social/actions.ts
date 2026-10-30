@@ -140,11 +140,10 @@ function massWhy(core: SocialCore, target: TargetRef): string | undefined {
   if (!b) return 'There is no church here.';
   const daily = b.kind === 'abbey_church' || b.kind === 'cathedral';
   if (!daily && !isHolyDay(core.now)) return 'Mass is said on holy days.';
+  if (core.store.read().mass.last === core.day) return 'You have heard Mass today.';
   const part = dayPart(core.now);
   if (part !== 'dawn' && part !== 'morning' && part !== 'midday') return 'Mass is said in the morning.';
   if (!daily && !core.scene(b.settlement).priest) return 'There is no priest to say Mass.';
-  const rec = core.store.read().mass;
-  if (rec.last === core.day) return 'You have heard Mass today.';
   return undefined;
 }
 

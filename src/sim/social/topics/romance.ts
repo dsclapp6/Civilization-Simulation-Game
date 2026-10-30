@@ -49,17 +49,20 @@ export const romanceGroup: TopicGroup = {
   options(t, out) {
     const { session, core, actor, other } = t;
     const eligible = core.courtship.canCourt(actor, other);
-    const plausible = actor.sex !== other.sex && core.age(actor) >= 14 && core.age(other) >= 14 && other.estate !== 'clergy' && actor.estate !== 'clergy';
+    // offered when courting is possible, or fails for a reason worth explaining (rank, kinship, age); not to the married
+    const explain = !eligible.ok && (eligible.code === 'rank' || eligible.code === 'age' || eligible.code === 'kin' || eligible.code === 'betrothed' || eligible.code === 'young');
+    const plausible = eligible.ok || (explain && actor.sex !== other.sex && core.age(actor) >= 14);
     const rec = core.courtship.record(actor.id, other.id);
     if (session.page === 'root') {
-      if (plausible || rec) {
+      if (plausible || (rec && !actor.spouse)) {
         const pct = rec ? ` — ${Math.round(rec.p * 100)}% won` : '';
         out.push(mkOption('nav.court', `Court ${other.first}${pct}`, 'court', { enabled: eligible.ok, reason: eligible.reason, priority: 75, data: { progress: rec?.p ?? 0 } }));
       }
       if (rec && rec.p >= 0.5 && !actor.spouse && !other.spouse) {
         const block = core.courtship.proposalBlock(actor, other);
+        // always askable: when something stands in the way, they say so themselves (consent, age, "not yet")
         out.push(mkOption('romance.propose', `Ask ${other.first} to marry you`, 'marry', {
-          enabled: block === null, reason: block ?? undefined, chance: block === null ? core.courtship.proposalChance(actor, other) : undefined, priority: 95,
+          chance: block === null ? core.courtship.proposalChance(actor, other) : undefined, priority: 95, data: { blocked: block },
         }));
       }
       return;
