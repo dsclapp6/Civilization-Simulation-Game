@@ -80,8 +80,8 @@ export function generateHydrology(s: GenState): void {
     if (dd > ci.maxDepth) ci.maxDepth = dd;
     ci.sumLevel += filled[k];
   }
-  const maxLakes = 7;
-  const cand = compInfo.filter((c) => c.area >= 9 && c.area <= 1400 && c.maxDepth >= 2.5).sort((a, b) => b.area * b.maxDepth - a.area * a.maxDepth).slice(0, maxLakes);
+  const maxLakes = 5;
+  const cand = compInfo.filter((c) => c.area >= 9 && c.area <= 1100 && c.maxDepth >= 2.5).sort((a, b) => b.area * b.maxDepth - a.area * a.maxDepth).slice(0, maxLakes);
   const lakeOfComp = new Map<number, number>();
   const lakes: Lake[] = [];
   for (const c of cand) {
@@ -295,9 +295,12 @@ export function generateHydrology(s: GenState): void {
   const cw = new Float32Array(NN);
   const ct = new Float32Array(NN);
   for (const r of rivers) {
-    for (let i = 0; i + 1 < r.points.length; i++) {
-      const a = r.points[i], b = r.points[i + 1];
-      const wa = r.widths[i], wb = r.widths[i + 1];
+    // the macro grid is coarser than the polyline: carve along chords of two segments
+    for (let i = 0; i + 1 < r.points.length; i += 2) {
+      const j = Math.min(i + 2, r.points.length - 1);
+      const a = r.points[i], b = r.points[j];
+      const wa = r.widths[i], wb = r.widths[j];
+      const sa = r.surface[i], sb = r.surface[j];
       const wm = Math.max(wa, wb);
       const valley = 45 + 4.5 * wm;
       const reach = valley + CELL;
@@ -320,7 +323,7 @@ export function generateHydrology(s: GenState): void {
           const wt = 1 - smoothstep(flat, flat + v, d);
           if (wt <= cw[k]) continue;
           cw[k] = wt;
-          ct[k] = r.surface[i] + (r.surface[i + 1] - r.surface[i]) * t + 0.3;
+          ct[k] = sa + (sb - sa) * t + 0.3;
         }
       }
     }

@@ -65,12 +65,34 @@ export function tryFront(
 export function placeChurch(ctx: LayoutCtx, id: number, streets: Street[], level: number, inside?: P2[]): Plot | null {
   const rng = ctx.rng;
   const sides: (1 | -1)[] = rng.chance(0.5) ? [1, -1] : [-1, 1];
-  const church = tryFront(ctx, id, 'church', streets, [34, 46, 58, 72, 88], sides, [9, 14, 20, 28], 'parish', level, (rot, nx, nz) => {
+  const snap = (rot: number, nx: number, nz: number): number => {
     // front direction is -n; snap to a due south/north door when within 40 degrees
-    const fx = -nx, fz = -nz;
+    const fz = -nz;
     if (Math.abs(fz) > 0.77) return fz > 0 ? 0 : Math.PI;
     return rot;
-  }, inside);
+  };
+  let church = tryFront(ctx, id, 'church', streets, [34, 46, 58, 72, 88], sides, [9, 14, 20, 28], 'parish', level, snap, inside);
+  if (!church && inside) {
+    // no room inside the walls: a parish church stands just outside, along the street
+    church = tryFront(ctx, id, 'church', streets, [34, 46, 58, 72, 88, 110, 140, 180], sides, [9, 14, 20, 28], 'parish', level, snap);
+    if (church) ctx.bump('church.outside');
+  }
+  if (!church) {
+    // last resort: anywhere near the centre on level ground, facing the middle of the settlement
+    const site = ctx.s.sites[id];
+    search:
+    for (const range of [2.4, 3.6, 6]) {
+      for (const r of [36, 50, 66, 84, 104, 128, 156]) {
+        for (let a = 0; a < 18; a++) {
+          const ang = (a / 18) * Math.PI * 2 + id * 0.61;
+          const x = site.x + Math.cos(ang) * r, z = site.z + Math.sin(ang) * r;
+          if (inside && !pointInPolygon(x, z, inside) && r < 128) continue;
+          church = ctx.place(id, 'church', x, z, snap(yawOf(site.x - x, site.z - z), Math.cos(ang), Math.sin(ang)), { role: 'parish', level, gap: 3, maxRange: range });
+          if (church) { ctx.bump('church.radial'); break search; }
+        }
+      }
+    }
+  }
   if (church) {
     // churchyard reserved around and in front
     const def = BUILDINGS.church;

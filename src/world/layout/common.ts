@@ -240,7 +240,7 @@ export interface PlaceOpts {
 
 export interface PlotCandidate { kind: BuildingKind; x: number; z: number; rot: number; poly: P2[]; obb: Obb; isSeg: boolean; opts: PlaceOpts; }
 
-export interface Platform { x: number; z: number; hw: number; hd: number; rot: number; blend: number; /** fixed target height (area platforms) */ target?: number; /** yard (trodden ground) margin around the footprint */ yard?: number; }
+export interface Platform { x: number; z: number; hw: number; hd: number; rot: number; blend: number; /** fixed target height (area platforms) */ target?: number; /** yard (trodden ground) margin around the footprint */ yard?: number; /** plot this platform belongs to (undefined for area platforms) */ plot?: number; }
 
 export function yardFor(cat: string, kind: string): number {
   if (kind === 'well' || kind === 'stocks' || kind === 'market_stall' || kind === 'market_cross') return 0.6;
@@ -361,7 +361,7 @@ export class LayoutCtx {
     this.plotGroup[id] = c.opts.wallGroup ?? 0;
     this.occ.add(c.poly, c.isSeg ? TAG.wall : TAG.plot, id);
     // wall pieces do not reshape the ground (blend 0) but still exclude vegetation
-    this.platforms.push({ x: c.x, z: c.z, hw: def.w / 2, hd: def.d / 2, rot: c.rot, blend: c.isSeg ? 0 : 3 + Math.min(4, wide / 120), yard: c.isSeg ? 0 : yardFor(def.cat, c.kind) });
+    this.platforms.push({ x: c.x, z: c.z, hw: def.w / 2, hd: def.d / 2, rot: c.rot, blend: c.isSeg ? 0 : 3 + Math.min(4, wide / 120), yard: c.isSeg ? 0 : yardFor(def.cat, c.kind), plot: id });
     return plot;
   }
 

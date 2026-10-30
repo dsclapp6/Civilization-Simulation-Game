@@ -24,12 +24,12 @@ export function generateFields(ctx: LayoutCtx): void {
   for (const st of s.settlements) {
     const site = s.sites[st.id];
     switch (st.kind) {
-      case 'village': farms.push({ id: st.id, x: st.x, z: st.z, R: 400 + 2.6 * site.population, maxStrips: 420, blockN: [9, 22] }); break;
-      case 'hamlet': farms.push({ id: st.id, x: st.x, z: st.z, R: 260, maxStrips: 90, blockN: [6, 12] }); break;
-      case 'town': farms.push({ id: st.id, x: st.x, z: st.z, R: 400, maxStrips: 220, blockN: [8, 18] }); break;
-      case 'city': farms.push({ id: st.id, x: st.x, z: st.z, R: 480, maxStrips: 260, blockN: [8, 18] }); break;
-      case 'abbey': farms.push({ id: st.id, x: st.x, z: st.z, R: 560, maxStrips: 300, blockN: [8, 20] }); break;
-      case 'priory': case 'nunnery': farms.push({ id: st.id, x: st.x, z: st.z, R: 430, maxStrips: 190, blockN: [8, 16] }); break;
+      case 'village': farms.push({ id: st.id, x: st.x, z: st.z, R: 380 + 2.4 * site.population, maxStrips: 330, blockN: [9, 22] }); break;
+      case 'hamlet': farms.push({ id: st.id, x: st.x, z: st.z, R: 250, maxStrips: 70, blockN: [6, 12] }); break;
+      case 'town': farms.push({ id: st.id, x: st.x, z: st.z, R: 380, maxStrips: 170, blockN: [8, 18] }); break;
+      case 'city': farms.push({ id: st.id, x: st.x, z: st.z, R: 460, maxStrips: 200, blockN: [8, 18] }); break;
+      case 'abbey': farms.push({ id: st.id, x: st.x, z: st.z, R: 540, maxStrips: 240, blockN: [8, 20] }); break;
+      case 'priory': case 'nunnery': farms.push({ id: st.id, x: st.x, z: st.z, R: 420, maxStrips: 150, blockN: [8, 16] }); break;
       default: break;
     }
   }

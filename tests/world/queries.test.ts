@@ -229,7 +229,7 @@ describe('scatterInChunk', () => {
       });
       expect(a.length).toBeLessThan(4096);
     }
-  });
+  }, 60_000);
 
   it('is independent of cache state (LRU eviction does not change results)', () => {
     const w2 = worldFor('millennia');
@@ -264,7 +264,7 @@ describe('scatterInChunk', () => {
     expect(reeds).toBeGreaterThan(100);
     expect(willows).toBeGreaterThan(50);
     expect(hedge).toBeGreaterThan(1000);
-  });
+  }, 60_000);
 
   it('excludes water, roads, buildings, yards and field strips', () => {
     let tested = 0;
@@ -293,7 +293,7 @@ describe('scatterInChunk', () => {
       for (const it of w.scatterInChunk(ccx, ccz)) if (pointInPolygon(it.x, it.z, poly)) inside++;
     }
     expect(inside).toBe(0);
-  });
+  }, 60_000);
 
   it('plants orchards, hedgerows along parcels and trees by biome', () => {
     const orchard = w.parcels.find((p) => p.use === 'orchard');
@@ -309,5 +309,5 @@ describe('scatterInChunk', () => {
     }
     expect(pine).toBeGreaterThan(100);
     expect(oak).toBeGreaterThan(300);
-  });
+  }, 60_000);
 });

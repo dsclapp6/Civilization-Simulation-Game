@@ -34,17 +34,21 @@ export function generateSites(s: GenState): void {
   for (let k = 0; k < NN; k++) prom[k] = height[k] - hBlur[k];
   const riverNear = new Float32Array(NN); // widest river within ~4 cells
   {
-    const tmp = new Float32Array(NN);
     const R = 4;
-    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-      let m = 0;
-      for (let di = -R; di <= R; di++) { const ii = i + di; if (ii >= 0 && ii < N) { const v = s.riverWidth[j * N + ii]; if (v > m) m = v; } }
-      tmp[j * N + i] = m;
-    }
-    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-      let m = 0;
-      for (let dj = -R; dj <= R; dj++) { const jj = j + dj; if (jj >= 0 && jj < N) { const v = tmp[jj * N + i]; if (v > m) m = v; } }
-      riverNear[j * N + i] = m;
+    const rw = s.riverWidth;
+    for (let k = 0; k < NN; k++) {
+      const w = rw[k];
+      if (w <= 0) continue;
+      const i = k % N, j = (k - i) / N;
+      for (let dj = -R; dj <= R; dj++) {
+        const jj = j + dj;
+        if (jj < 0 || jj >= N) continue;
+        for (let di = -R; di <= R; di++) {
+          const ii = i + di;
+          if (ii < 0 || ii >= N) continue;
+          if (riverNear[jj * N + ii] < w) riverNear[jj * N + ii] = w;
+        }
+      }
     }
   }
   const fert = (k: number): number => s.fertility[k] / 255;
@@ -81,7 +85,7 @@ export function generateSites(s: GenState): void {
     // Balanced seeds: k-means over the mainland (so regions start comparable in size), then each centre
     // snaps to the best city site nearby. The seed nearest the middle of the land is placed first.
     const pts: number[] = [];
-    for (let k = 0; k < NN; k += 1) if ((k & 3) === 0 && ((k / N) & 3) === 0 && mainland[k] && height[k] < 900) pts.push(k);
+    for (let k = 0; k < NN; k += 1) if ((k & 7) === 0 && ((k / N) & 7) === 0 && mainland[k] && height[k] < 900) pts.push(k);
     const centres: { x: number; z: number }[] = [];
     let first = pts[0], bd0 = Infinity;
     for (const k of pts) { const d = Math.hypot(cxOf(k) - centre.x, czOf(k) - centre.z); if (d < bd0) { bd0 = d; first = k; } }
@@ -95,7 +99,7 @@ export function generateSites(s: GenState): void {
       }
       centres.push({ x: cxOf(bk), z: czOf(bk) });
     }
-    for (let it = 0; it < 10; it++) {
+    for (let it = 0; it < 8; it++) {
       const sx = new Float64Array(K), sz = new Float64Array(K), cnt = new Float64Array(K);
       for (const k of pts) {
         const x = cxOf(k), z = czOf(k);

@@ -13,6 +13,9 @@ import { lap, lapReset, type GenState } from './state';
 const { CELL, N, NN, D8L, D8X, D8Z } = G;
 const Biome = _Biome;
 
+/** Diagnostics: total A* node expansions (for tuning). */
+export const roadStats = { expanded: 0 };
+
 export const ROAD_WIDTH: Record<RoadKind, number> = { path: 2.4, track: 3.6, road: 5.2, highway: 7 };
 const RANK_KIND: RoadKind[] = ['path', 'track', 'road', 'highway'];
 
@@ -180,7 +183,7 @@ class Router {
     const bi = b % N, bj = (b - bi) / N;
     const hEst = (k: number): number => {
       const i = k % N, j = (k - i) / N;
-      return 0.55 * Math.hypot(i - bi, j - bj);
+      return 0.8 * Math.hypot(i - bi, j - bj);
     };
     heap.clear();
     g[a] = 0; visit[a] = stamp; prev[a] = -1;
@@ -193,6 +196,7 @@ class Router {
       closed[c] = stamp;
       if (c === b) { found = true; break; }
       if (++expanded > 700000) break;
+      roadStats.expanded++;
       const ci = c % N, cj = (c - ci) / N;
       const gc = g[c];
       const cOn = onNet(c);
@@ -410,7 +414,8 @@ export function findCrossings(s: GenState): void {
   const roads = s.roads;
   for (const r of s.rivers) r.depthMul.fill(1);
   const bridges: Bridge[] = [];
-  const fords: Ford[] = [];
+  let fords: Ford[] = [];
+  const fordSeg: number[] = [];
   const segGrid = new HashGrid(96);
   const segs: { ri: number; i: number }[] = [];
   s.rivers.forEach((r, ri) => {
@@ -454,15 +459,25 @@ export function findCrossings(s: GenState): void {
           });
         } else {
           fords.push({ id: fords.length, roadId: road.id, riverId: ri, x, z });
-          const dm = rv.depthMul;
-          dm[ei] = Math.min(dm[ei], 0.22);
-          if (ei + 1 < dm.length) dm[ei + 1] = Math.min(dm[ei + 1], 0.45);
-          if (ei > 0) dm[ei - 1] = Math.min(dm[ei - 1], 0.45);
+          fordSeg.push(ei);
         }
       }
       arc += slen;
     }
   }
+  // a ford beside a bridge on the same road is redundant: the bridge deck spans it
+  const keepFord = fords.map((f) => !bridges.some((b) => b.roadId === f.roadId && Math.hypot(b.x - f.x, b.z - f.z) < b.length / 2 + 22));
+  const kept: Ford[] = [];
+  fords.forEach((f, q) => {
+    if (!keepFord[q]) return;
+    const rv = s.rivers[f.riverId];
+    const dm = rv.depthMul, ei = fordSeg[q];
+    dm[ei] = Math.min(dm[ei], 0.22);
+    if (ei + 1 < dm.length) dm[ei + 1] = Math.min(dm[ei + 1], 0.45);
+    if (ei > 0) dm[ei - 1] = Math.min(dm[ei - 1], 0.45);
+    kept.push({ ...f, id: kept.length });
+  });
+  fords = kept;
   s.bridges = bridges;
   s.fords = fords;
 }

@@ -355,12 +355,13 @@ function placePort(ctx: LayoutCtx, id: number, cx: number, cz: number, maxD: num
 }
 
 function placeCathedralNear(ctx: LayoutCtx, id: number, cx: number, cz: number, poly: P2[]): Plot | null {
-  for (const range of [3.6, 6, 9]) {
-    for (const r of [46, 60, 76, 94, 114, 136, 160]) {
+  // inside the walls first; failing that, a cathedral close just outside
+  for (const pass of [0, 1]) for (const range of [3.6, 6, 9]) {
+    for (const r of pass === 0 ? [46, 60, 76, 94, 114, 136, 160] : [150, 180, 215, 250, 290, 330]) {
       for (let a = 0; a < 20; a++) {
         const ang = (a / 20) * Math.PI * 2 + id * 0.37;
         const x = cx + Math.cos(ang) * r, z = cz + Math.sin(ang) * r;
-        if (!pointInPolygon(x, z, poly)) continue;
+        if (pass === 0 && !pointInPolygon(x, z, poly)) continue;
         for (const rot of [0, Math.PI]) {
           const p = ctx.place(id, 'cathedral', x, z, rot, { role: 'parish', level: 2, gap: 3, maxRange: range });
           if (p) {
@@ -388,6 +389,24 @@ function placeCityCastle(ctx: LayoutCtx, id: number, cx: number, cz: number, R: 
           if (!pointInPolygon(x, z, poly)) continue;
           const base = yawOf(cx - x, cz - z); // gate toward the city centre
           if (tryCompound(ctx, id, specs, x, z, base, { hw: W / 2 + 6, hd: D / 2 + 6 }, range)) return;
+        }
+      }
+    }
+  }
+  // no room inside the walls: the castle stands against the walls, outside the circuit
+  let rAvg = 0;
+  for (const p of poly) rAvg += Math.hypot(p.x - cx, p.z - cz);
+  rAvg /= poly.length;
+  for (const scale of [0.85, 0.72]) {
+    const W = 78 * scale, D = 60 * scale;
+    const { specs } = castleSpecs(false, W, D);
+    for (const range of [6, 10, 14]) {
+      for (const rr of [rAvg + 45, rAvg + 65, rAvg + 90, rAvg + 120]) {
+        for (let a = 0; a < 16; a++) {
+          const ang = off + (a / 16) * Math.PI * 2;
+          const x = cx + Math.cos(ang) * rr, z = cz + Math.sin(ang) * rr;
+          if (pointInPolygon(x, z, poly)) continue;
+          if (tryCompound(ctx, id, specs, x, z, yawOf(cx - x, cz - z), { hw: W / 2 + 6, hd: D / 2 + 6 }, range)) return;
         }
       }
     }

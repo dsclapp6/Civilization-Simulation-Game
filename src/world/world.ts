@@ -20,6 +20,15 @@ const INV_B = 1 / BUCKET;
 const ROAD_COST = [0.85, 0.75, 0.6, 0.5];
 const ROAD_BLEND = 3.2;
 
+/** Smooth value noise in [0, 1] (bilinear over a hashed lattice); drives ground-type patches. */
+function softNoise(x: number, z: number): number {
+  const ix = Math.floor(x), iz = Math.floor(z);
+  const fx = x - ix, fz = z - iz;
+  const u = fx * fx * (3 - 2 * fx), v = fz * fz * (3 - 2 * fz);
+  const a = hash01(ix, iz, 7), b = hash01(ix + 1, iz, 7), c = hash01(ix, iz + 1, 7), d = hash01(ix + 1, iz + 1, 7);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+
 const F_NONE = 0, F_ROAD = 1, F_YARD = 2, F_FIELD = 3, F_GARDEN = 4;
 
 export class World implements WorldModel {
@@ -42,6 +51,8 @@ export class World implements WorldModel {
   readonly timings: Readonly<Record<string, number>>;
   /** Id of the central default home realm (an 'anglo' kingdom). */
   readonly homeKingdom: number;
+  /** Counters of placements that fell back or failed during generation (diagnostics). */
+  readonly diagnostics: Readonly<Record<string, number>>;
   /** Hedgerow segments x0,z0,x1,z1 (flattened) around furlongs. */
   readonly hedges: readonly number[];
 
@@ -79,6 +90,7 @@ export class World implements WorldModel {
     this.plots = s.plots; this.strips = s.strips; this.parcels = s.parcels;
     this.timings = s.timings;
     this.hedges = s.hedges;
+    this.diagnostics = ctx.diag;
     this.homeKingdom = Math.max(0, s.kingdoms.findIndex((k, i) => k.culture === 'anglo' && i === this.centralKingdom()));
 
     // ---- roads ----
@@ -244,16 +256,30 @@ export class World implements WorldModel {
     const pe = pc.start[b + 1];
     const hitNow = tm.hit;
     if (hitNow.d <= hitNow.hw + 0.8) return h;
+    // inside a footprint (plus a hair) the nearest platform decides exactly; beyond it neighbours blend
+    let bestSd = 1e9, bestI = -1;
     for (let p = pc.start[b]; p < pe; p++) {
       const i = pc.items[p];
+      if (this.pBlend[i] <= 0) continue;
       const dx = x - this.pX[i], dz = z - this.pZ[i];
       const lx = Math.abs(dx * this.pCos[i] - dz * this.pSin[i]) - this.pHw[i];
       const lz = Math.abs(dx * this.pSin[i] + dz * this.pCos[i]) - this.pHd[i];
       const ox = lx > 0 ? lx : 0, oz = lz > 0 ? lz : 0;
       const sd = Math.sqrt(ox * ox + oz * oz) + (lx > lz ? (lx < 0 ? lx : 0) : (lz < 0 ? lz : 0));
+      if (sd < bestSd) { bestSd = sd; bestI = i; }
+    }
+    if (bestI >= 0 && bestSd <= 0.3) return this.pTarget[bestI];
+    for (let p = pc.start[b]; p < pe; p++) {
+      const i = pc.items[p];
       const blend = this.pBlend[i];
-      if (blend <= 0 || sd >= blend) continue;
-      const w = sd <= 0.3 ? 1 : 1 - smoothstep(0.3, blend, sd);
+      if (blend <= 0) continue;
+      const dx = x - this.pX[i], dz = z - this.pZ[i];
+      const lx = Math.abs(dx * this.pCos[i] - dz * this.pSin[i]) - this.pHw[i];
+      const lz = Math.abs(dx * this.pSin[i] + dz * this.pCos[i]) - this.pHd[i];
+      const ox = lx > 0 ? lx : 0, oz = lz > 0 ? lz : 0;
+      const sd = Math.sqrt(ox * ox + oz * oz) + (lx > lz ? (lx < 0 ? lx : 0) : (lz < 0 ? lz : 0));
+      if (sd >= blend) continue;
+      const w = 1 - smoothstep(0.3, blend, sd);
       h += (this.pTarget[i] - h) * w;
     }
     return h;
@@ -343,21 +369,25 @@ export class World implements WorldModel {
     if (f === F_GARDEN) return Ground.Dirt;
     // natural ground
     const sl = s.slope[k];
-    const n = hash01(Math.floor(x / 9), Math.floor(z / 9), 7);
-    switch (b0) {
+    const n = softNoise(x * 0.055, z * 0.055);
+    const forestHere = G.bilerp(s.forest, x, z);
+    // biome borders wander: sample the macro biome at a noise-warped position instead of the grid cell
+    const bw = s.biome[this.cell(x + 26 * (softNoise(x * 0.028 + 4.1, z * 0.028) - 0.5), z + 26 * (softNoise(x * 0.028, z * 0.028 + 9.3) - 0.5))];
+    const bn = bw === Biome.Sea || bw === Biome.Lake ? b0 : bw;
+    switch (bn) {
       case Biome.Snow: return Ground.Snow;
-      case Biome.Mountain: return sl > 0.32 || n < 0.35 ? Ground.Rock : Ground.Moor;
-      case Biome.Beach: return sl > 0.06 || n < 0.25 ? Ground.Shingle : Ground.Sand;
-      case Biome.Marsh: return n > 0.82 ? Ground.Mud : Ground.Marsh;
-      case Biome.Moor: return n < 0.2 ? Ground.Heath : Ground.Moor;
+      case Biome.Mountain: return sl > 0.32 || n < 0.42 ? Ground.Rock : Ground.Moor;
+      case Biome.Beach: return sl > 0.06 || n < 0.3 ? Ground.Shingle : Ground.Sand;
+      case Biome.Marsh: return n > 0.74 ? Ground.Mud : Ground.Marsh;
+      case Biome.Moor: return n < 0.28 ? Ground.Heath : Ground.Moor;
       case Biome.Heath: return Ground.Heath;
-      case Biome.Upland: return sl > 0.4 ? Ground.Rock : n < 0.4 ? Ground.Moor : n < 0.55 ? Ground.Heath : Ground.Grass;
-      case Biome.Broadleaf: case Biome.Pine: return s.forest[k] > 100 ? Ground.ForestFloor : Ground.Grass;
+      case Biome.Upland: return sl > 0.4 ? Ground.Rock : n < 0.38 ? Ground.Moor : n < 0.52 ? Ground.Heath : Ground.Grass;
+      case Biome.Broadleaf: case Biome.Pine: return forestHere > 100 ? Ground.ForestFloor : Ground.Grass;
       default: break;
     }
     if (sl > 0.6) return Ground.Rock;
-    if (s.forest[k] > 140) return Ground.ForestFloor;
-    return n < 0.55 ? Ground.Meadow : Ground.Grass;
+    if (forestHere > 140) return Ground.ForestFloor;
+    return n < 0.5 ? Ground.Meadow : Ground.Grass;
   }
 
   walkCostAt(x: number, z: number): number {
@@ -369,8 +399,8 @@ export class World implements WorldModel {
     const sl = G.bilerp(s.slope, x, z);
     const slopeMul = sl > 0.95 ? Infinity : 1 + 3 * smoothstep(0.1, 0.55, sl);
     if (feat === F_ROAD) {
-      if (this.fFlags & 1) return ROAD_COST[this.fRoadKind];
       if (this.fFlags & 2) return 2;
+      if (this.fFlags & 1) return ROAD_COST[this.fRoadKind];
       return ROAD_COST[this.fRoadKind] * (1 + (slopeMul - 1) * 0.4);
     }
     if (b === Biome.Sea) return Infinity;

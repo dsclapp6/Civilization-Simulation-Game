@@ -359,11 +359,31 @@ export function abbeySpecs(kind: 'abbey' | 'priory' | 'nunnery'): { specs: Spec[
   return { specs, gate: { lx: 0, lz: 78 }, half: { hw: 38, hd: 44 } };
 }
 
+interface AbbeyTier {
+  specs: Spec[]; gate: { lx: number; lz: number }; half: { hw: number; hd: number };
+  ranges: number[]; offs: number[]; kingdomOnly: boolean;
+}
+
+/** Smaller compounds for sites too cramped for the full plan: church, cloister, infirmary, guesthouse and gate. */
+function reducedAbbey(kind: 'abbey' | 'priory' | 'nunnery', minimal: boolean): { specs: Spec[]; gate: { lx: number; lz: number }; half: { hw: number; hd: number } } {
+  const big = kind === 'abbey';
+  const specs: Spec[] = [];
+  const church: BuildingKind = big ? 'abbey_church' : 'church';
+  const cl = big ? 26.5 : 21;
+  specs.push({ kind: church, lx: 0, lz: 0, dr: 0, role: 'parish', level: big ? 2 : 1, gap: 2 });
+  specs.push({ kind: 'cloister', lx: big ? 3 : 0, lz: cl, dr: 0, role: 'monastic', level: 1, gap: 1 });
+  if (minimal) return { specs, gate: { lx: 0, lz: big ? 46 : 40 }, half: { hw: big ? 26 : 22, hd: big ? 30 : 26 } };
+  specs.push({ kind: 'infirmary', lx: big ? 24 : 21, lz: big ? 26 : 21, dr: -Math.PI / 2, role: 'infirmary', level: 1, optional: true });
+  specs.push({ kind: 'cottage', lx: big ? -17 : -22, lz: big ? 28 : 22, dr: Math.PI / 2, role: 'guesthouse', level: 1, optional: true });
+  specs.push({ kind: 'gatehouse', lx: 0, lz: big ? 62 : 52, dr: 0, role: 'gate', level: 1 });
+  return { specs, gate: { lx: 0, lz: big ? 72 : 62 }, half: { hw: big ? 40 : 32, hd: big ? 40 : 36 } };
+}
+
 export function layoutAbbey(ctx: LayoutCtx, id: number): void {
   const s = ctx.s;
   const site = s.sites[id], st = s.settlements[id];
   const kind = site.kind as 'abbey' | 'priory' | 'nunnery';
-  const { specs, gate, half } = abbeySpecs(kind);
+  const full = abbeySpecs(kind);
   const streets = incidentStreets(ctx, id, 160, 0);
   // the compound's long axis runs along the entry road if there is one
   let base0 = 0;
@@ -373,30 +393,42 @@ export function layoutAbbey(ctx: LayoutCtx, id: number): void {
     const p = entry.pts[Math.min(entry.pts.length - 1, 20)];
     base0 = yawOf(p.x - site.x, p.z - site.z); // the gate (+z) faces the entry road
   } else base0 = rng.pick([0, Math.PI / 2, Math.PI, -Math.PI / 2]);
+  const tiers: AbbeyTier[] = [
+    { ...full, ranges: [6, 9, 13], offs: [0, 35, 70, 110, 160, 220], kingdomOnly: true },
+    { ...reducedAbbey(kind, false), ranges: [9, 13, 18], offs: [0, 40, 80, 130, 190, 260, 340], kingdomOnly: true },
+    { ...reducedAbbey(kind, false), ranges: [13, 18, 25], offs: [0, 40, 80, 130, 190, 260, 340, 420], kingdomOnly: false },
+    { ...reducedAbbey(kind, true), ranges: [13, 18, 25], offs: [0, 30, 60, 100, 150, 220, 300], kingdomOnly: false },
+  ];
   let placed: Plot[] | null = null;
   let used = { cx: site.x, cz: site.z, base: base0 };
+  let tier = tiers[0];
   ctx.ignoreRoads = new Set(s.roads.filter((r) => r.from === id || r.to === id).map((r) => r.id));
-  // the compound frame has its church at the origin and the gate at +z: centre the whole group on the site
-  const centreShift = gate.lz * 0.5;
   outer:
-  for (const range of [6, 9, 13]) {
-    for (const off of [0, 35, 70, 110, 160, 220]) {
-      for (let a = 0; a < (off === 0 ? 1 : 12); a++) {
-        const ang = (a / 12) * Math.PI * 2 + id * 0.7;
-        for (const dbase of [0, 0.25, -0.25, 0.6, -0.6, Math.PI / 2, -Math.PI / 2, Math.PI]) {
-          const base = normAngle(base0 + dbase);
-          const sx = site.x + Math.cos(ang) * off, sz = site.z + Math.sin(ang) * off;
-          // frame origin such that the compound centre (0, centreShift) sits at (sx, sz)
-          const cx = sx - Math.sin(base) * centreShift, cz = sz - Math.cos(base) * centreShift;
-          if (!sameKingdom(ctx, id, sx, sz)) continue;
-          placed = tryCompound(ctx, id, specs, cx, cz, base, { hw: half.hw, hd: gate.lz * 0.5 + 12, lz: centreShift }, range);
-          if (placed) { used = { cx, cz, base }; break outer; }
+  for (let ti = 0; ti < tiers.length; ti++) {
+    const T = tiers[ti];
+    // the compound frame has its church at the origin and the gate at +z: centre the whole group on the site
+    const shift = T.gate.lz * 0.5;
+    for (const range of T.ranges) {
+      for (const off of T.offs) {
+        for (let a = 0; a < (off === 0 ? 1 : 12); a++) {
+          const ang = (a / 12) * Math.PI * 2 + id * 0.7;
+          for (const dbase of [0, 0.25, -0.25, 0.6, -0.6, Math.PI / 2, -Math.PI / 2, Math.PI]) {
+            const base = normAngle(base0 + dbase);
+            const sx = site.x + Math.cos(ang) * off, sz = site.z + Math.sin(ang) * off;
+            // frame origin such that the compound centre (0, shift) sits at (sx, sz)
+            const cx = sx - Math.sin(base) * shift, cz = sz - Math.cos(base) * shift;
+            if (T.kingdomOnly && !sameKingdom(ctx, id, sx, sz)) continue;
+            placed = tryCompound(ctx, id, T.specs, cx, cz, base, { hw: T.half.hw, hd: T.gate.lz * 0.5 + 12, lz: shift }, range);
+            if (placed) { used = { cx, cz, base }; tier = T; if (ti > 0) ctx.bump('abbey.reduced'); break outer; }
+          }
         }
       }
     }
   }
   ctx.ignoreRoads = undefined;
   if (!placed) { ctx.bump('abbey.failed'); const c = ctx.place(id, kind === 'abbey' ? 'abbey_church' : 'church', site.x, site.z, base0, { role: 'parish', level: 1, maxRange: 6 }); if (!c) return; st.radius = 40; return; }
+  const { gate, half } = tier;
+  const centreShift = gate.lz * 0.5;
   const frame = { x: used.cx, z: used.cz, rot: used.base };
   const gatePt = localToWorld(frame, gate.lx, gate.lz, { x: 0, z: 0 });
   const centreWorld = localToWorld(frame, 0, centreShift, { x: 0, z: 0 });

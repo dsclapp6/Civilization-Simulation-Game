@@ -35,12 +35,33 @@ function chunk(type: string, data: Uint8Array): Buffer {
   out.writeUInt32BE(crc32(out.subarray(4, 8 + data.length)), 8 + data.length);
   return out;
 }
-/** Minimal PNG (8-bit RGB, zlib-deflated scanlines with filter 0). */
+/** Minimal PNG encoder (8-bit RGB, zlib-deflated scanlines, adaptive Sub/Up/Paeth/None row filters). */
 export function encodePng(w: number, h: number, rgb: Uint8Array): Buffer {
-  const raw = Buffer.alloc((w * 3 + 1) * h);
+  const stride = w * 3;
+  const raw = Buffer.alloc((stride + 1) * h);
+  const cand = [new Uint8Array(stride), new Uint8Array(stride), new Uint8Array(stride), new Uint8Array(stride)];
   for (let y = 0; y < h; y++) {
-    raw[y * (w * 3 + 1)] = 0;
-    Buffer.from(rgb.buffer, rgb.byteOffset + y * w * 3, w * 3).copy(raw, y * (w * 3 + 1) + 1);
+    const row = y * stride;
+    // filter candidates: 0 None, 1 Sub, 2 Up, 4 Paeth
+    for (let i = 0; i < stride; i++) {
+      const x = rgb[row + i];
+      const a = i >= 3 ? rgb[row + i - 3] : 0;
+      const b = y > 0 ? rgb[row - stride + i] : 0;
+      const c = y > 0 && i >= 3 ? rgb[row - stride + i - 3] : 0;
+      cand[0][i] = x;
+      cand[1][i] = (x - a) & 255;
+      cand[2][i] = (x - b) & 255;
+      const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+      cand[3][i] = (x - (pa <= pb && pa <= pc ? a : pb <= pc ? b : c)) & 255;
+    }
+    let best = 0, bestScore = Infinity;
+    for (let f = 0; f < 4; f++) {
+      let score = 0;
+      for (let i = 0; i < stride; i++) { const v = cand[f][i]; score += v < 128 ? v : 256 - v; }
+      if (score < bestScore) { bestScore = score; best = f; }
+    }
+    raw[y * (stride + 1)] = best === 3 ? 4 : best;
+    Buffer.from(cand[best].buffer, 0, stride).copy(raw, y * (stride + 1) + 1);
   }
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4);
@@ -201,7 +222,34 @@ function drawMarker(c: Canvas, st: Settlement, x: number, y: number, k: number):
 
 // ------------------------------------------------------------------ zoomed settlement views
 
-export function renderZoom(w: World, cxm: number, czm: number, sizeM: number, pxPerM: number): Canvas {
+const SCATTER_DRAW: Record<string, { c: RGB; r: number }> = {
+  oak: { c: [38, 98, 40], r: 3.4 }, beech: { c: [52, 112, 48], r: 3.2 }, birch: { c: [110, 158, 72], r: 2.2 }, ash: { c: [66, 118, 58], r: 3 },
+  willow: { c: [98, 150, 90], r: 3 }, pine: { c: [24, 78, 54], r: 2.2 }, spruce: { c: [18, 66, 48], r: 2 }, apple: { c: [150, 186, 72], r: 2 },
+  bush: { c: [74, 118, 54], r: 0.9 }, bramble: { c: [96, 78, 60], r: 0.8 }, reeds: { c: [190, 196, 118], r: 0.5 }, fern: { c: [60, 130, 70], r: 0.5 },
+  grass_tuft: { c: [160, 190, 100], r: 0.3 }, flowers: { c: [255, 226, 96], r: 0.35 }, rock_small: { c: [128, 124, 118], r: 0.5 },
+  rock_large: { c: [118, 114, 108], r: 1.1 }, boulder: { c: [104, 100, 96], r: 1.8 }, stump: { c: [120, 90, 60], r: 0.5 }, log: { c: [110, 80, 50], r: 0.8 },
+  deadtree: { c: [96, 80, 66], r: 1.2 },
+};
+
+/** Vegetation and rocks from world.scatterInChunk (canopy-sized discs; trees drawn last so they overlap undergrowth). */
+function drawScatter(w: World, c: Canvas, x0: number, z0: number, sizeM: number, pxPerM: number): void {
+  const cx0 = Math.max(0, Math.floor(x0 / 64)), cx1 = Math.min(249, Math.floor((x0 + sizeM) / 64));
+  const cz0 = Math.max(0, Math.floor(z0 / 64)), cz1 = Math.min(249, Math.floor((z0 + sizeM) / 64));
+  const small: { kind: string; x: number; y: number; r: number }[] = [];
+  const trees: { kind: string; x: number; y: number; r: number }[] = [];
+  for (let cz = cz0; cz <= cz1; cz++) for (let cx = cx0; cx <= cx1; cx++) {
+    for (const it of w.scatterInChunk(cx, cz)) {
+      const d = SCATTER_DRAW[it.kind];
+      if (!d) continue;
+      const rec = { kind: it.kind, x: (it.x - x0) * pxPerM, y: (it.z - z0) * pxPerM, r: Math.max(0.6, d.r * it.scale * pxPerM * 0.5) };
+      (d.r >= 2 ? trees : small).push(rec);
+    }
+  }
+  for (const it of small) if (it.kind !== 'grass_tuft' || pxPerM >= 1) c.circle(it.x, it.y, it.r, SCATTER_DRAW[it.kind].c, 0.9);
+  for (const it of trees) { c.circle(it.x, it.y, it.r, SCATTER_DRAW[it.kind].c, 0.82); }
+}
+
+export function renderZoom(w: World, cxm: number, czm: number, sizeM: number, pxPerM: number, scatter = true): Canvas {
   const W = Math.round(sizeM * pxPerM);
   const c = new Canvas(W, W);
   const x0 = cxm - sizeM / 2, z0 = czm - sizeM / 2;
@@ -236,6 +284,7 @@ export function renderZoom(w: World, cxm: number, czm: number, sizeM: number, px
     c.polygon(q, FIELD_COLOR[st.field], 0.55);
     c.outline(q, 1, [90, 76, 30], 0.6);
   }
+  if (scatter) drawScatter(w, c, x0, z0, sizeM, pxPerM);
   for (const r of w.roads) {
     for (let i = 1; i < r.points.length; i++) {
       const a = r.points[i - 1], b = r.points[i];
@@ -289,6 +338,33 @@ function pickSettlements(w: World): Record<string, Settlement | undefined> {
   return { village: richVillage, town, city, castle, abbey, hamlet };
 }
 
+function pickLandscapes(w: World): Record<string, { x: number; z: number; label: string } | undefined> {
+  const N = w.macro.res, cell = w.macro.cell;
+  const far = (x: number, z: number): boolean => w.settlements.every((s) => Math.hypot(s.x - x, s.z - z) > 700);
+  const find = (pred: (k: number) => boolean, score: (k: number) => number): { x: number; z: number } | undefined => {
+    let best = -1, bs = -Infinity;
+    for (let k = 0; k < N * N; k += 3) {
+      if (!pred(k)) continue;
+      const x = (k % N + 0.5) * cell, z = (Math.floor(k / N) + 0.5) * cell;
+      if (x < 900 || z < 900 || x > 15100 || z > 15100) continue;
+      const sc = score(k);
+      if (sc > bs && far(x, z)) { bs = sc; best = k; }
+    }
+    return best < 0 ? undefined : { x: (best % N + 0.5) * cell, z: (Math.floor(best / N) + 0.5) * cell };
+  };
+  const m = w.macro;
+  const forest = find((k) => m.biome[k] === Biome.Broadleaf && m.forest[k] > 220, (k) => m.forest[k] - (w.s.slope[k] * 300));
+  const marsh = find((k) => m.biome[k] === Biome.Marsh, (k) => w.s.wetness[k] + (w.s.waterDist[k] < 400 ? 0.5 : 0));
+  const moor = find((k) => m.biome[k] === Biome.Moor || m.biome[k] === Biome.Upland, (k) => m.height[k] / 400 + (m.biome[k] === Biome.Moor ? 1 : 0));
+  const peak = find((k) => m.biome[k] === Biome.Mountain, (k) => m.height[k]);
+  const r = w.rivers.slice().sort((a, b) => b.widths[b.widths.length - 1] - a.widths[a.widths.length - 1])[0];
+  const mouth = r ? r.points[r.points.length - 3] : undefined;
+  return {
+    forest: forest && { ...forest, label: 'WOODLAND' }, marsh: marsh && { ...marsh, label: 'MARSH AND FEN' }, moor: moor && { ...moor, label: 'UPLAND MOOR' },
+    mountain: peak && { ...peak, label: 'MOUNTAINS' }, mouth: mouth && { x: mouth.x, z: mouth.z, label: 'RIVER MOUTH' },
+  };
+}
+
 if (process.argv[1] && process.argv[1].replace(/\\/g, '/').endsWith('tools/worldmap.ts')) {
   const seed = arg('seed', 'abc');
   const out = arg('out', 'tools/out');
@@ -310,11 +386,21 @@ if (process.argv[1] && process.argv[1].replace(/\\/g, '/').endsWith('tools/world
   for (const [name, st] of Object.entries(picks)) {
     if (!st || (only !== 'all' && only !== name)) continue;
     const size2 = name === 'city' ? zoom * 1.6 : name === 'castle' || name === 'abbey' || name === 'hamlet' ? zoom * 0.75 : zoom;
-    const ppm = name === 'city' ? 1 : name === 'castle' || name === 'abbey' || name === 'hamlet' ? 2 : 2;
+    const ppm = name === 'city' ? 1 : 2;
     const c = renderZoom(world, st.x, st.z, size2, ppm);
     c.text(10, 10, `${st.name} ${st.kind}`, [255, 255, 255], 2);
     const file = join(out, `zoom-${name}-${seed}.png`);
     writeFileSync(file, c.png());
     console.log('wrote', file, `(${st.name}, ${st.kind}, plots ${st.plots.length}, strips ${st.strips.length}, parcels ${st.parcels.length})`);
+  }
+  // landscape views: woodland, a river mouth, marsh and mountains (vegetation scatter on)
+  const wild = pickLandscapes(world);
+  for (const [name, p] of Object.entries(wild)) {
+    if (!p || (only !== 'all' && only !== name)) continue;
+    const c = renderZoom(world, p.x, p.z, zoom * 0.75, 2);
+    c.text(10, 10, p.label, [255, 255, 255], 2);
+    const file = join(out, `zoom-${name}-${seed}.png`);
+    writeFileSync(file, c.png());
+    console.log('wrote', file, `(${p.label})`);
   }
 }

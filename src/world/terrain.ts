@@ -27,6 +27,26 @@ export class LowField {
   }
 }
 
+/**
+ * Ridged fractal with smooth crests (1 - n^2 instead of 1 - |n|). Sharp creases sampled on a coarse grid and
+ * interpolated bilinearly turn into long straight 45-degree scarps, so the crests are rounded here.
+ */
+function softRidge(n: Simplex2, x: number, y: number, octaves: number): number {
+  let amp = 1, freq = 1, sum = 0, norm = 0, prev = 1;
+  for (let o = 0; o < octaves; o++) {
+    const v = n.noise(x * freq, y * freq);
+    let r = 1 - v * v * 1.15;
+    if (r < 0) r = 0;
+    r *= r;
+    sum += r * amp * prev;
+    norm += amp;
+    prev = r;
+    amp *= 0.5;
+    freq *= 2.1;
+  }
+  return sum / norm;
+}
+
 export function quantile(arr: Float32Array, frac: number): number {
   let lo = Infinity, hi = -Infinity;
   for (let i = 0; i < arr.length; i++) { const v = arr[i]; if (v < lo) lo = v; if (v > hi) hi = v; }
@@ -224,8 +244,8 @@ export function generateTerrain(s: GenState): void {
         const hillsA = 46 * Math.pow(0.5 + 0.5 * nHill.fbm(u * 4.3, v * 4.3, 4), 1.7);
         const up = U * (110 + 95 * lUp2.at(u, v));
         const hrMask = smoothstep(0.46, 0.66, lHR.at(u, v));
-        const ridgeHills = hrMask > 0 ? hrMask * 120 * Math.pow(nRidgeH.ridged(u * 5.2 + 9, v * 5.2 + 3, 3), 2.2) : 0;
-        const mountains = Mt > 0.003 ? Mt * (240 + 930 * Math.pow(nRidge.ridged(u * 6.5 + 1, v * 6.5 + 2, 4), 1.25)) + Mb * 90 : Mb * 90;
+        const ridgeHills = hrMask > 0 ? hrMask * 120 * Math.pow(softRidge(nRidgeH, u * 5.2 + 9, v * 5.2 + 3, 3), 1.6) : 0;
+        const mountains = Mt > 0.003 ? Mt * (240 + 930 * Math.pow(softRidge(nRidge, u * 6.5 + 1, v * 6.5 + 2, 4), 1.1)) + Mb * 90 : Mb * 90;
         dRelief[q] = 4 + hillsA + roll * (0.5 + 0.5 * (1 - LZ)) + up + ridgeHills + mountains;
         dMt[q] = Mt; dMb[q] = Mb; dLZ[q] = LZ;
         dCliff[q] = lCliff.at(u, v);
@@ -267,6 +287,17 @@ export function generateTerrain(s: GenState): void {
     }
   };
   for (let j = 0; j < N; j++) reliefRow(j);
+
+  // The range should top out around 1000-1200 m whatever the noise gave: rescale the uplands above 300 m.
+  {
+    let peak = 0;
+    for (let k = 0; k < NN; k++) if (height[k] > peak) peak = height[k];
+    const wanted = rng.range(1020, 1180);
+    if (peak > 320 && (peak < 980 || peak > 1250)) {
+      const f = (wanted - 300) / (peak - 300);
+      for (let k = 0; k < NN; k++) if (height[k] > 300) height[k] = 300 + (height[k] - 300) * f;
+    }
+  }
 
   lap(s, 't.relief');
   // ---------- grid-scale roughness: breaks the planar slopes so drainage branches like real rivers ----------

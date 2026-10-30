@@ -57,6 +57,8 @@ export class TerrainModel {
   readonly rsX0: Float32Array; readonly rsZ0: Float32Array; readonly rsDx: Float32Array; readonly rsDz: Float32Array; readonly rsInv: Float32Array;
   readonly rsW0: Float32Array; readonly rsW1: Float32Array; readonly rsS0: Float32Array; readonly rsS1: Float32Array;
   readonly rsRiver: Int32Array; readonly rsDepth: Float32Array;
+  /** 1 for the first segment of a river (its source end has no rounded cap) */
+  readonly rsHead: Uint8Array;
   readonly riverCsr: Csr;
   readonly lakeDist: Float32Array;
   /** Shared scratch record of the last riverHit() call. */
@@ -90,7 +92,7 @@ export class TerrainModel {
     this.rsDx = new Float32Array(count); this.rsDz = new Float32Array(count); this.rsInv = new Float32Array(count);
     this.rsW0 = new Float32Array(count); this.rsW1 = new Float32Array(count);
     this.rsS0 = new Float32Array(count); this.rsS1 = new Float32Array(count);
-    this.rsRiver = new Int32Array(count); this.rsDepth = new Float32Array(count);
+    this.rsRiver = new Int32Array(count); this.rsDepth = new Float32Array(count); this.rsHead = new Uint8Array(count);
     let q = 0;
     for (const r of s.rivers) {
       for (let i = 0; i + 1 < r.points.length; i++, q++) {
@@ -100,7 +102,7 @@ export class TerrainModel {
         this.rsInv[q] = l2 > 0 ? 1 / l2 : 0;
         this.rsW0[q] = r.widths[i]; this.rsW1[q] = r.widths[i + 1];
         this.rsS0[q] = r.surface[i]; this.rsS1[q] = r.surface[i + 1];
-        this.rsRiver[q] = r.id; this.rsDepth[q] = r.depthMul[i] ?? 1;
+        this.rsRiver[q] = r.id; this.rsDepth[q] = r.depthMul[i] ?? 1; this.rsHead[q] = i === 0 ? 1 : 0;
       }
     }
     const reach = (i: number): number => Math.max(this.rsW0[i], this.rsW1[i]) * 0.5 + 38;
@@ -174,7 +176,7 @@ export class TerrainModel {
       const i = c.items[p];
       const dx = x - this.rsX0[i], dz = z - this.rsZ0[i];
       let t = (dx * this.rsDx[i] + dz * this.rsDz[i]) * this.rsInv[i];
-      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      if (t < 0) { if (this.rsHead[i]) continue; t = 0; } else if (t > 1) t = 1; // no rounded cap at a stream's source
       const ex = dx - this.rsDx[i] * t, ez = dz - this.rsDz[i] * t;
       const d2 = ex * ex + ez * ez;
       if (d2 < best) { best = d2; bi = i; bt = t; }
@@ -192,6 +194,7 @@ export class TerrainModel {
   /** Terrain height without roads / plots flattening, including river channels. */
   baseHeight(x: number, z: number): number {
     let h = this.macroHeight(x, z);
+    const hMacro = h;
     if (h > 0.2) h += this.detailAt(x, z);
     const hit = this.riverHit(x, z);
     if (hit.d < Infinity) {
@@ -213,8 +216,8 @@ export class TerrainModel {
         }
         // banks always stand a little above the water, so a river never floats above lower ground beside it
         const off = hit.d - hw;
-        if (off < 5) {
-          const floorH = s + 0.2 + 0.2 * off;
+        if (off < 5 && hMacro > 0.6) {
+          const floorH = s + 0.15 + 0.07 * off;
           if (h < floorH) h = floorH;
         }
       }
