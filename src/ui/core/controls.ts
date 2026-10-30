@@ -47,7 +47,7 @@ export const CONTROL_GROUPS: readonly ControlGroup[] = [
     rows: [
       { keys: ['LMB'], what: 'Strike. A tap is a quick blow; hold it for a heavy overhead stroke.' },
       { keys: ['RMB'], what: 'Guard with a weapon or shield. With a bow: draw and aim along the camera.' },
-      { keys: ['LMB', 'RMB'], what: 'Bow: draw with RMB, loose with LMB. The reticle in the middle of the screen is where the arrow goes.' },
+      { keys: ['RMB then LMB'], what: 'Bow: hold RMB to draw, click LMB to loose. The reticle in the middle of the screen is where the arrow goes.' },
       { keys: [k(K.input.dodge)], what: 'Roll out of a blow; for a moment nothing can touch you.' },
       { keys: [k(K.input.sprint), 'LMB'], what: 'On a horse with a lance: gallop at someone and hold LMB to couch the lance.' },
     ],

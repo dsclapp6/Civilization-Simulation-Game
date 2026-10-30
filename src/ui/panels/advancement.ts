@@ -10,6 +10,7 @@ import { icon, type IconName } from '../core/icons';
 import { bar, button, chip, empty, heading, tabs } from '../components/widgets';
 import { createWindow } from '../components/window';
 import type { PanelCtx, UiPanel } from '../app/panel';
+import { tabKeys } from '../core/tabkeys';
 import { every, panelOf } from './base';
 import { registerPanel } from './extRegistry';
 
@@ -136,7 +137,10 @@ function techsPanel(ctx: PanelCtx): UiPanel {
     content.scrollTop = scroll;
   }
   render(true);
-  return panelOf({ id: 'techs', group: 'main', pauses: 'menu', backdropCloses: ctx }, win.el, { tick: every(1.5, () => render()) });
+  return panelOf({ id: 'techs', group: 'main', pauses: 'menu', backdropCloses: ctx }, win.el, {
+    tick: every(1.5, () => render()),
+    key: tabKeys(a.branches().map((b) => b.id as string), () => branch, (id) => { branch = id; tabsEl.set(branch); render(true); }, { scroller: content }),
+  });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -250,7 +254,10 @@ function requestsPanel(ctx: PanelCtx): UiPanel {
     content.scrollTop = scroll;
   }
   render(true);
-  return panelOf({ id: 'requests', group: 'main', pauses: 'menu', backdropCloses: ctx }, win.el, { tick: every(1.2, () => render()) });
+  return panelOf({ id: 'requests', group: 'main', pauses: 'menu', backdropCloses: ctx }, win.el, {
+    tick: every(1.2, () => render()),
+    key: tabKeys(['requests', 'notices'], () => tab, (id) => { tab = id as typeof tab; tabsEl.set(tab); render(true); }, { scroller: content }),
+  });
 }
 
 registerPanel('techs', (ctx) => techsPanel(ctx));

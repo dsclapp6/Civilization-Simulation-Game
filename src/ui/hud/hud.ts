@@ -232,7 +232,7 @@ export class Hud {
     let lastGroup = '';
     for (const d of DOCK_ENTRIES) {
       if (lastGroup && d.group !== lastGroup) {
-        const sep = h('span.mu-dock-sep');
+        const sep = h('span.mu-dock-break');
         this.dockSeps.push(sep);
         this.dockEl.appendChild(sep);
       }
@@ -246,7 +246,7 @@ export class Hud {
     }
     const menu = h<HTMLButtonElement>('button.mu-dockbtn', { type: 'button', tip: 'Menu  (Esc)', 'aria-label': 'Menu' }, icon('cog', 19));
     menu.addEventListener('click', () => this.deps.open({ panel: 'pause' }));
-    this.dockEl.append(h('span.mu-dock-sep'), menu);
+    this.dockEl.append(menu);
   }
 
   /** Hides the buttons of modules this run does not have, and puts the little count dots on the others. */
@@ -457,11 +457,11 @@ export class Hud {
     this.bloodRow.classList.toggle('mu-hide', !showBlood);
     this.plate.classList.toggle('bleeding', bleeding > 0);
     if (showBlood) { this.bloodBar.set(blood); this.bloodNum.textContent = `${Math.round(blood * 100)}`; }
-    if (down) this.downText.textContent = bleeding > 0 || blood < 0.5 ? 'Bleeding. You cannot act until you are on your feet again.' : 'Winded and helpless. Stay down or struggle up when you can.';
+    if (down) this.downText.textContent = bleeding > 0 || blood < 0.5 ? 'You are bleeding. You cannot act until you are on your feet again.' : 'Knocked flat. Catch your breath; you will be up in a moment.';
     // out of breath
     this.stRow.classList.toggle('winded', !!hud?.exhausted);
     // stance chip
-    const label = stateLabel(state, !!hud?.exhausted);
+    const label = state === 'down' ? '' : stateLabel(state, !!hud?.exhausted);
     const key = `${c?.engaged ? 1 : 0}|${label}`;
     if (key !== this.lastCombatKey) {
       this.lastCombatKey = key;
@@ -472,7 +472,7 @@ export class Hud {
   }
 
   private updatePrompt(hud: ReturnType<GameServices['player']['hud']>): void {
-    const p = hud ? promptView(hud.prompt) : null;
+    const p = hud && hud.combat?.state !== 'down' ? promptView(hud.prompt) : null;
     if (!p) {
       if (this.promptShown) { this.promptShown = false; this.promptEl.classList.add('mu-hide'); }
       return;

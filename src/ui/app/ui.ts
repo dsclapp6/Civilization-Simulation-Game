@@ -253,6 +253,9 @@ export class UiApp implements GameUIExt {
     }
   }
 
+  /** Dev and screenshot hook: shows one hint of the first-minutes guide now. */
+  showHint(id: string): boolean { return this.guide.force(id); }
+
   closePanel(id: string): void { this.stack.close(id); }
   isOpen(id: string): boolean { return this.stack.has(id); }
   openPanels(): string[] { return this.stack.all().map((p) => p.id); }

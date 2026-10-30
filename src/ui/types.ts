@@ -98,6 +98,8 @@ export interface GameUIExt extends GameUI {
   showMenu(view: 'main' | 'difficulty' | 'shop' | 'records' | 'settings'): void;
   /** Shows the "You are born …" reveal for the current character. */
   showBirth(): void;
+  /** Shows one hint of the first-minutes guide now (tools and tests). */
+  showHint?(id: string): boolean;
 }
 
 /** Optional economy members the UI uses when the economy provides them. */

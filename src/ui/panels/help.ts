@@ -8,8 +8,8 @@ import { tabKeys } from '../core/tabkeys';
 import { panelOf } from './base';
 
 type Tab = 'controls' | 'basics' | 'combat' | 'realm';
-const TABS: ReadonlyArray<{ id: Tab; label: string; icon: 'keycap' | 'book' | 'swords' | 'crown' }> = [
-  { id: 'controls', label: 'Controls', icon: 'keycap' },
+const TABS: ReadonlyArray<{ id: Tab; label: string; icon: 'hand' | 'book' | 'swords' | 'crown' }> = [
+  { id: 'controls', label: 'Controls', icon: 'hand' },
   { id: 'basics', label: 'First steps', icon: 'book' },
   { id: 'combat', label: 'Fighting', icon: 'swords' },
   { id: 'realm', label: 'Lords and wars', icon: 'crown' },
@@ -45,6 +45,6 @@ export function helpPanel(ctx: PanelCtx, start: Tab | undefined): UiPanel {
   win.showFoot(h('span.mu-small.mu-dim', null, 'F1 opens this page at any time.'), h('div.mu-grow'),
     h('button.mu-btn.primary', { type: 'button', onclick: () => ctx.close() }, 'Close'));
   return panelOf({ id: 'help', group: 'main', pauses: 'menu', backdropCloses: ctx }, win.el, {
-    key: tabKeys(TABS.map((x) => x.id), () => tab, (id) => select(id as Tab), content),
+    key: tabKeys(TABS.map((x) => x.id), () => tab, (id) => select(id as Tab), { scroller: content }),
   });
 }

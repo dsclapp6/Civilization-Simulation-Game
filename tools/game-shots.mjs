@@ -330,6 +330,210 @@ try {
       }
     }
   }
+
+  // -------------------------------------------------------------------------------------------
+  // Wave 4: the HUD and pages for the new modules (hint, help, notices, fight, bow, down, panels)
+  // -------------------------------------------------------------------------------------------
+  const W4 = ['hint', 'help', 'notice', 'fight', 'bow', 'down', 'wounds-hud', 'command', 'politics', 'techs', 'requests', 'fair'];
+  if (want(...W4)) {
+    await load('autostart=1&time=0.42');
+    const put = (x, z, yaw) => page.evaluate(([px, pz, py]) => { window.__game.session.services.player.placeAt(px, pz, py); }, [x, z, yaw]);
+    const ui = (fn, arg) => page.evaluate(fn, arg);
+    const pause = (ms = 500) => page.waitForTimeout(ms);
+    const closeAll = () => page.evaluate(() => { for (const id of window.__ui.openPanels()) window.__ui.closePanel(id); });
+
+    if (want('hint')) {
+      await ui(() => window.__ui.showHint('interact'));
+      await pause(600);
+      await shot('hint', { settle: false });
+      await ui(() => window.__ui.showHint('work'));
+      await pause(300);
+    }
+
+    if (want('help')) {
+      await ui(() => window.__ui.openPanel({ panel: 'help' }));
+      await pause(500);
+      await shot('help-controls', { settle: false });
+      await ui(() => { window.__ui.closePanel('help'); window.__ui.openPanel({ panel: 'help', tab: 'combat' }); });
+      await pause(400);
+      await shot('help-combat', { settle: false });
+      await closeAll();
+    }
+
+    if (want('notice', 'requests')) {
+      // a villager asks a favour: a toast that opens the journal, and a dot on the dock
+      await ui(() => { window.__game.session.sim.services.happenings.offerRequest('fetch'); });
+      await advance(0.3);
+      await pause(900);
+      await shot('notice-request', { settle: false });
+    }
+
+    if (want('requests')) {
+      await ui(() => window.__ui.openPanel({ panel: 'ext', name: 'requests' }));
+      await pause(500);
+      await shot('requests', { settle: false });
+      await closeAll();
+    }
+
+    if (want('techs')) {
+      await ui(() => {
+        const s = window.__game.session; const adv = s.sim.services.advancement; const me = s.sim.state.persons.get(s.sim.state.run.playerId);
+        for (const t of ['heavy_plough', 'watermill', 'parish_school']) adv.grant(me.id, t, 'practice');
+        window.__ui.openPanel({ panel: 'ext', name: 'techs' });
+      });
+      await pause(600);
+      await shot('techs', { settle: false });
+      await closeAll();
+    }
+
+    if (want('politics')) {
+      await ui(() => window.__ui.openPanel({ panel: 'ext', name: 'politics' }));
+      await pause(600);
+      await shot('politics', { settle: false });
+      await closeAll();
+    }
+
+    if (want('fight', 'bow', 'down', 'wounds-hud')) {
+      const c = await page.evaluate(() => {
+        const s = window.__game.session; const nav = s.services.zone.nav; const p = s.services.player; const b0 = p.body();
+        let best = null;
+        for (let r = 60; r <= 260 && !best; r += 20) {
+          for (let k = 0; k < 24 && !best; k++) {
+            const a = (k / 24) * Math.PI * 2; const cx = b0.x + Math.sin(a) * r, cz = b0.z + Math.cos(a) * r;
+            let ok = true; const h0 = nav.groundY(cx, cz); let hmin = h0, hmax = h0;
+            for (let i = 0; i < 16 && ok; i++) {
+              const q = (i / 16) * Math.PI * 2; const rr = i % 2 ? 9 : 18; const x = cx + Math.sin(q) * rr, z = cz + Math.cos(q) * rr;
+              if (!nav.walkable(x, z)) ok = false;
+              const h = nav.groundY(x, z); hmin = Math.min(hmin, h); hmax = Math.max(hmax, h);
+            }
+            if (ok && hmax - hmin < 1.6 && h0 > 1) best = { x: cx, z: cz };
+          }
+        }
+        return best ?? { x: b0.x, z: b0.z };
+      });
+      await put(c.x, c.z, 0);
+      await advance(0.3);
+      const open = await openHeading();
+      await put(c.x, c.z, open.yaw);
+      await face(open.yaw);
+      await advance(0.3);
+      const grow = () => page.evaluate(() => {
+        const sim = window.__game.session.sim; const me = sim.state.persons.get(sim.state.run.playerId);
+        me.birthDay = Math.floor(sim.absDay) - 16 * 26; me.trained.str = 14; me.trained.end = 13; me.trained.agi = 12; me.trained.per = 13;
+        me.skills.melee = Math.max(me.skills.melee, 120); me.skills.archery = Math.max(me.skills.archery, 300); me.health.hp = 1;
+      });
+      await grow();
+      const skirmish = (kind, n, mine, theirs, far) => page.evaluate(([k, count, m, t, f]) => {
+        const s = window.__game.session; const sim = s.sim; const combat = sim.services.combat; const pid = sim.state.run.playerId;
+        combat.arena.setKitOverride(pid, m);
+        const id = combat.debug.skirmish(k, count);
+        const fight = combat.arena.fights.get(id); const b = s.services.player.body();
+        let i = 0;
+        if (fight) for (const side of fight.sides) for (const fi of side.members) if (fi.person && fi.personId !== pid) {
+          combat.arena.setKitOverride(fi.personId, Array.isArray(t) ? t[i++ % t.length] : t);
+          if (f) { fi.preferRanged = true; fi.shotsLeft = 20; fi.x = b.x + Math.sin(b.yaw) * (22 + 4 * (i % 3)); fi.z = b.z + Math.cos(b.yaw) * (22 + 4 * (i % 3)); }
+        }
+        return id;
+      }, [kind, n, mine, theirs, far]);
+      const ray = () => page.evaluate(() => {
+        const r = window.__game.session.renderer; const e = r.getCamera().matrixWorld.elements; const l = Math.hypot(-e[8], -e[9], -e[10]);
+        return { x: e[12], y: e[13], z: e[14], dx: -e[8] / l, dy: -e[9] / l, dz: -e[10] / l };
+      });
+      const reset = () => page.evaluate(() => {
+        const sim = window.__game.session.sim; const combat = sim.services.combat; const pid = sim.state.run.playerId;
+        for (const f of [...combat.arena.fights.values()]) combat.arena.endFight(f, 'dispersed');
+        const me = sim.state.persons.get(pid); combat.book.forget(pid); me.health.hp = 1; me.health.conditions.length = 0; combat.port.reset();
+      });
+      await zoom(-1.8);
+
+      if (want('fight')) {
+        await skirmish('bandits', 3, { weapon: 'sword', shield: 'shield_heater', armour: ['mail_hauberk', 'kettle_hat'] }, [{ weapon: 'axe', armour: [] }, { weapon: 'staff', armour: ['cap_helmet'] }, { weapon: 'spear', armour: ['padded_armour'] }]);
+        await advance(1.0, { block: true });
+        // fight on until the character has taken a blow, then look
+        for (let i = 0; i < 120; i++) {
+          await advance(0.1, { attack: i % 9 === 2 || i % 9 === 3, block: i % 9 >= 6 });
+          const st = await page.evaluate(() => window.__game.session.services.player.hud()?.combat?.state);
+          if (i > 25 && (st === 'hit' || st === 'stagger')) break;
+        }
+        await pause(150);
+        await shot('fight', { settle: false });
+        await advance(0.2, { block: true });
+        await pause(100);
+        await shot('fight-guard', { settle: false });
+        await reset();
+      }
+
+      if (want('bow')) {
+        await advance(3, {});
+        await grow();
+        await skirmish('bandits', 3, { weapon: 'dagger', ranged: 'longbow', armour: [] }, { weapon: 'dagger', ranged: 'shortbow', armour: [] }, true);
+        await advance(0.5, { block: true, aim: await ray() });
+        await pause(200);
+        await shot('bow-draw', { settle: false });
+        await advance(1.4, { block: true, aim: await ray() });
+        await pause(200);
+        await shot('bow-aim', { settle: false });
+        await reset();
+      }
+
+      if (want('down', 'wounds-hud')) {
+        await advance(3, {});
+        await grow();
+        await skirmish('bandits', 3, { weapon: 'sword', armour: [] }, [{ weapon: 'axe', armour: [] }]);
+        await advance(0.4, {});
+        await page.evaluate(() => {
+          const sim = window.__game.session.sim; const combat = sim.services.combat; const pid = sim.state.run.playerId;
+          const me = sim.state.persons.get(pid);
+          const mk = (location, kind, severity, extra = {}) => ({ location, kind, severity, bleeding: false, rate: 0, fracture: false, mortal: false, stun: 0, damage: severity * 70, ...extra });
+          combat.book.inflict(me, mk('arm_l', 'cut', 0.34, { bleeding: true, rate: 0.0035 }), 'axe');
+          combat.book.inflict(me, mk('torso', 'pierce', 0.3, { bleeding: true, rate: 0.003 }), 'spear');
+          combat.book.advance(me, 40);
+        });
+        await advance(0.3, {});
+        await pause(500);
+        if (want('wounds-hud')) await shot('wounds-hud', { settle: false });
+        if (want('down')) {
+          await page.evaluate(async () => {
+            const combat = window.__game.session.sim.services.combat; const pf = combat.arena.player;
+            if (pf) { combat.arena.fall(pf); pf.riseAt = 30; }
+          });
+          await advance(2.0, {});
+          await pause(900);
+          await shot('down', { settle: false });
+        }
+        await reset();
+      }
+    }
+
+    if (want('command')) {
+      const info = await page.evaluate(() => {
+        const s = window.__game.session; const sim = s.sim; const mil = sim.services.military; const st = sim.state;
+        const me = st.persons.get(st.run.playerId);
+        const lord = mil.lordHouse(me.settlement);
+        const id = mil.raiseArmy(lord, 'defence', {});
+        return { lord, id, call: mil.service().call ? true : false };
+      });
+      console.log('army', JSON.stringify(info));
+      await advance(0.5);
+      await pause(800);
+      await shot('notice-call', { settle: false });
+      await ui(() => window.__ui.openPanel({ panel: 'ext', name: 'army' }));
+      await pause(600);
+      await shot('command', { settle: false });
+      await closeAll();
+    }
+
+    if (want('fair')) {
+      const ok = await page.evaluate(() => {
+        const s = window.__game.session; const sim = s.sim; const hap = sim.services.happenings; const me = sim.state.persons.get(sim.state.run.playerId);
+        return hap.trigger('fair', me.settlement);
+      });
+      console.log('fair', ok);
+      await advance(1.0);
+      await pause(800);
+      await shot('fair', { settle: true });
+    }
+  }
 } finally {
   await browser.close();
   if (vite) { try { process.kill(-vite.pid, 'SIGTERM'); } catch { vite.kill('SIGTERM'); } }

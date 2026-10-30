@@ -11,6 +11,7 @@ import { icon, type IconName } from '../core/icons';
 import { bar, button, chip, empty, heading, tabs } from '../components/widgets';
 import { createWindow } from '../components/window';
 import type { PanelCtx, UiPanel } from '../app/panel';
+import { tabKeys } from '../core/tabkeys';
 import { panelOf } from './base';
 import { registerPanel } from './extRegistry';
 
@@ -343,7 +344,10 @@ export function politicsPanel(ctx: PanelCtx, startTab: Tab | undefined): UiPanel
   for (const ev of ['war', 'stance', 'office', 'request'] as const) ctx.listen(ev, () => render());
   render();
   void TITLE_RANK;
-  return panelOf({ id: 'politics', group: 'main', pauses: 'menu', backdropCloses: ctx }, win.el);
+  const TAB_IDS: Tab[] = ['standing', 'houses', 'wars', 'claims', 'offices', 'manage', 'petitions'];
+  return panelOf({ id: 'politics', group: 'main', pauses: 'menu', backdropCloses: ctx }, win.el, {
+    key: tabKeys(TAB_IDS, () => tab, (id) => { tab = id as Tab; tabsEl.set(tab); render(); }, { scroller: () => content.querySelector<HTMLElement>('.mu-scroll') }),
+  });
 }
 
 registerPanel('politics', (ctx, req) => politicsPanel(ctx, (req.data as { tab?: Tab } | undefined)?.tab));

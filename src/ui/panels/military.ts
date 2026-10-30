@@ -11,6 +11,7 @@ import { icon, type IconName } from '../core/icons';
 import { bar, button, chip, empty, heading, tabs } from '../components/widgets';
 import { createWindow } from '../components/window';
 import type { PanelCtx, UiPanel } from '../app/panel';
+import { tabKeys } from '../core/tabkeys';
 import { panelOf } from './base';
 import { registerPanel } from './extRegistry';
 
@@ -326,15 +327,17 @@ export function armyPanel(ctx: PanelCtx, startTab: Tab = 'command'): UiPanel {
   ctx.interval(600, render);
   for (const ev of ['battle', 'siege', 'raid', 'captured', 'war'] as const) ctx.listen(ev, () => { lastSig = ''; render(); });
 
+  const switchTab = tabKeys(['command', 'armies', 'forces'], () => tab, (id) => { tab = id as Tab; tabsEl.set(tab); lastSig = ''; render(); },
+    { scroller: () => content.querySelector<HTMLElement>('.mu-scroll'), digits: () => tab !== 'command' });
   return panelOf({ id: 'army', group: 'main', pauses: 'menu', backdropCloses: ctx }, win.el, {
-    key: (intent) => {
+    key: (intent, e) => {
       if (intent.type === 'digit' && tab === 'command' && intent.n >= 1 && intent.n <= BATTLE_ORDERS.length) {
         const o = BATTLE_ORDERS[intent.n - 1];
         const r = mil.command(o);
         act(r, `${ORDER_INFO[o].label}!`);
         return true;
       }
-      return false;
+      return switchTab(intent, e);
     },
   });
 }

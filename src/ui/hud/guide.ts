@@ -20,6 +20,7 @@ export interface GuideDeps {
 }
 
 const COOLDOWN = 5;
+const COMBAT_HINTS = new Set(['fight', 'bow', 'wounds']);
 const STORE = 'millennia.guide.';
 
 function readSeen(seed: string): Set<string> {
@@ -91,7 +92,7 @@ export class Guide {
     if (cur) {
       const age = now - this.shownAt;
       if (cur.done(facts) || (cur.maxSeconds !== undefined && age > cur.maxSeconds) || (!cur.when(facts) && age > 3)) { this.finish(); return; }
-      this.el.classList.toggle('quiet', this.deps.suppressed());
+      this.el.classList.toggle('quiet', this.deps.suppressed() || (facts.engaged && !COMBAT_HINTS.has(cur.id)));
       return;
     }
     if (this.deps.suppressed() || facts.travelling || now - this.hiddenAt < COOLDOWN) return;
@@ -155,6 +156,14 @@ export class Guide {
     this.current = null;
     this.el.classList.add('mu-hide');
     if (count) this.hiddenAt = this.lastT;
+  }
+
+  /** For tools and tests: puts a given hint on the card now. */
+  force(id: string): boolean {
+    const def = HINTS.find((x) => x.id === id);
+    if (!def) return false;
+    this.show(def, this.lastT);
+    return true;
   }
 
   /** For tools and tests: the hint on show. */

@@ -6,12 +6,12 @@ export function tabKeys(
   ids: readonly string[],
   current: () => string,
   select: (id: string) => void,
-  scroller?: HTMLElement | (() => HTMLElement | null),
-  locked?: (id: string) => boolean,
+  opts: { scroller?: HTMLElement | (() => HTMLElement | null); locked?: (id: string) => boolean; digits?: () => boolean } = {},
 ): (intent: KeyIntent, e: KeyboardEvent) => boolean {
+  const { scroller, locked } = opts;
   return (intent) => {
     const open = (list: readonly string[]): string[] => list.filter((id) => !locked?.(id));
-    if (intent.type === 'digit') {
+    if (intent.type === 'digit' && (opts.digits?.() ?? true)) {
       const id = ids[intent.n - 1];
       if (!id || locked?.(id)) return false;
       select(id);

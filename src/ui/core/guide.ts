@@ -142,6 +142,8 @@ export const HINTS: readonly HintDef[] = [
 export function pickHint(f: GuideFacts, seen: ReadonlySet<string>): HintDef | null {
   for (const h of HINTS) {
     if (seen.has(h.id)) continue;
+    // in a fight only the fighting hints speak
+    if (f.engaged && h.id !== 'fight' && h.id !== 'bow') continue;
     if (h.when(f)) return h;
   }
   return null;
