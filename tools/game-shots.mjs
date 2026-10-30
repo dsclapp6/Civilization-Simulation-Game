@@ -334,7 +334,7 @@ try {
   // -------------------------------------------------------------------------------------------
   // Wave 4: the HUD and pages for the new modules (hint, help, notices, fight, bow, down, panels)
   // -------------------------------------------------------------------------------------------
-  const W4 = ['hint', 'help', 'notice', 'fight', 'bow', 'down', 'wounds-hud', 'command', 'politics', 'techs', 'requests', 'market-day'];
+  const W4 = ['hint', 'pause', 'help', 'notice', 'fight', 'bow', 'down', 'wounds-hud', 'command', 'politics', 'techs', 'requests', 'market-day'];
   if (want(...W4)) {
     await load('autostart=1&time=0.42');
     const put = (x, z, yaw) => page.evaluate(([px, pz, py]) => { window.__game.session.services.player.placeAt(px, pz, py); }, [x, z, yaw]);
@@ -351,6 +351,13 @@ try {
       await shot('hint', { settle: false });
       await hints(false);
       await pause(300);
+    }
+
+    if (want('pause')) {
+      await ui(() => window.__ui.openPanel({ panel: 'pause' }));
+      await pause(500);
+      await shot('pause', { settle: false });
+      await closeAll();
     }
 
     if (want('help')) {
