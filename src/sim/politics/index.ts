@@ -53,11 +53,12 @@ export function installPolitics(sim: Simulation, deps: Pick<Wave3Deps, 'economy'
   const offs: Array<() => void> = [];
   offs.push(sim.registerSystem({
     name: 'politics.daily', phase: 'daily', order: 70,
-    run: () => {
+    run: (_ctx, info) => {
       core.invalidate();
       wars.daily();
       realms.coalitionsDaily();
       diplo.expire();
+      unrest.slice(Math.floor(info.absDay));
     },
   }));
   // the Houses think and the posts are reviewed a little each hour, so no frame carries the whole day
@@ -72,7 +73,7 @@ export function installPolitics(sim: Simulation, deps: Pick<Wave3Deps, 'economy'
     name: 'politics.seasonal', phase: 'seasonal', order: 70,
     run: () => {
       core.invalidate();
-      unrest.seasonal();
+      unrest.bandsSeasonal();
       realms.coalitionsSeasonal();
       manage.seasonal();
       decayTies(core);

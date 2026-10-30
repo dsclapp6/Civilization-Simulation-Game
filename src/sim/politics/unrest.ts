@@ -23,36 +23,43 @@ export class Unrest {
 
   // ---- seasonal ----
 
+  /** Every village once, then the bands (tests and tools; the game calls `slice` daily and `bandsSeasonal` each season). */
   seasonal(): void {
+    for (const s of this.core.world.settlements) this.village(s.id, s.kind);
+    this.bandsSeasonal();
+  }
+
+  /** Daily: a quarter of the villages are reckoned today, so each is looked at once a season. */
+  slice(day: number): void {
+    for (const s of this.core.world.settlements) if ((s.id + day) % 4 === 0) this.village(s.id, s.kind);
+  }
+
+  /** One village's season: unrest moves with the harvest, the dues and the lord's temper; a revolt or an outlaw may follow. */
+  private village(sid: number, kind: string): void {
+    if (kind !== 'village' && kind !== 'hamlet') return;
     const c = this.core;
     const rng = c.rng('unrest');
-    for (const s of c.world.settlements) {
-      if (s.kind !== 'village' && s.kind !== 'hamlet') continue;
-      const t = this.lordTitle(s.id);
-      if (!t || !t.holder) continue;
-      const lord = c.living(t.holder);
-      if (!lord) continue;
-      const st = c.state.settlements.get(s.id);
-      const policy = c.policyPeek(s.id);
-      const house = lord.house;
-      this.aiPolicy(s.id, lord, rng.next());
-      let delta = -3;
-      if (st) delta += Math.max(0, 0.9 - st.prosperity) * 28 + Math.max(0, st.epidemic - 0.3) * 6;
-      delta += policy.rent * 3 + policy.labour * 3 + (policy.justice === 'harsh' ? 2 : policy.justice === 'lenient' ? -2 : 0);
-      const hap = c.sim.services.happenings;
-      if (hap) for (const id of hap.activeAt(s.id)) if (DISASTER.test(id)) { delta += 2; break; }
-      if (c.lawsFor(c.kingdomOfHouse(house)).tax >= 3) delta += 1.5;
-      if (c.warsOf(house).length > 0) delta += 2;
-      const reeve = this.offices.holders('reeve', s.id)[0];
-      if (reeve) delta += clamp(-c.social.opinion(reeve, lord.id) / 40, -2, 3);
-      this.collect(s.id, lord);
-      const u = this.get(s.id);
-      if (delta !== 0 || u > 0) c.raiseUnrest(s.id, delta);
-      const now = this.get(s.id);
-      if (now >= 60 && rng.chance(clamp((now - 55) / 100 * 0.6, 0, 0.4))) this.startRevolt(s.id);
-      else if ((now >= 35 || (st && st.prosperity < 0.7)) && rng.chance(0.18)) this.spawnOutlaw(s.id);
-    }
-    this.bandsSeasonal();
+    const t = this.lordTitle(sid);
+    if (!t || !t.holder) return;
+    const lord = c.living(t.holder);
+    if (!lord) return;
+    const st = c.state.settlements.get(sid);
+    const policy = c.policyPeek(sid);
+    this.aiPolicy(sid, lord, rng.next());
+    let delta = -3;
+    if (st) delta += Math.max(0, 0.9 - st.prosperity) * 28 + Math.max(0, st.epidemic - 0.3) * 6;
+    delta += policy.rent * 3 + policy.labour * 3 + (policy.justice === 'harsh' ? 2 : policy.justice === 'lenient' ? -2 : 0);
+    const hap = c.sim.services.happenings;
+    if (hap) for (const id of hap.activeAt(sid)) if (DISASTER.test(id)) { delta += 2; break; }
+    if (c.lawsFor(c.kingdomOfHouse(lord.house)).tax >= 3) delta += 1.5;
+    if (c.warsOf(lord.house).length > 0) delta += 2;
+    const reeve = this.offices.holders('reeve', sid)[0];
+    if (reeve) delta += clamp(-c.social.opinion(reeve, lord.id) / 40, -2, 3);
+    this.collect(sid, lord);
+    if (delta !== 0 || this.get(sid) > 0) c.raiseUnrest(sid, delta);
+    const now = this.get(sid);
+    if (now >= 60 && rng.chance(clamp((now - 55) / 100 * 0.6, 0, 0.4))) this.startRevolt(sid);
+    else if ((now >= 35 || (st && st.prosperity < 0.7)) && rng.chance(0.18)) this.spawnOutlaw(sid);
   }
 
   /** What the lord's policy takes from, or gives to, the village this season. */
@@ -216,7 +223,7 @@ export class Unrest {
     this.makeOutlaw(pool[Math.floor(rng.next() * pool.length)], sid);
   }
 
-  private bandsSeasonal(): void {
+  bandsSeasonal(): void {
     const c = this.core;
     const rng = c.rng('band');
     for (let i = c.save.bands.length - 1; i >= 0; i--) {
