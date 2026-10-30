@@ -232,6 +232,13 @@ export function politicsPanel(ctx: PanelCtx, startTab: Tab | undefined): UiPanel
           actions.push(button('Give ale (6d)', { size: 'small', icon: 'cup', tip: 'A little generosity moves votes — and invites talk', onClick: () => { const r = api.bribe(p.id, s.office, s.place, 6); say(r.ok, 'The ale flows; the electors remember.', r.reason); render(); } }));
           actions.push(button('Withdraw', { size: 'small', onClick: () => { api.withdraw(p.id, s.office, s.place); render(); } }));
         } else actions.push(button('Stand for it', { size: 'small', variant: 'primary', icon: 'hand', disabled: !can.ok, tip: can.ok ? undefined : can.reason, onClick: () => { const r = api.stand(p.id, s.office, s.place); say(r.ok, 'You are a candidate.', r.reason); render(); } }));
+      } else if (s.patron === p.id) {
+        // the lord names the holder himself
+        const e2 = elections.find((x) => x.office === s.office && x.place === s.place);
+        for (const c of (e2?.candidates ?? []).filter((x) => !x.you && x.person !== s.holder).slice(0, 3)) {
+          actions.push(button(`Appoint ${c.name.split(' ')[0]}`, { size: 'small', variant: 'primary', icon: 'key',
+            onClick: () => { const r = api.appoint(p.id, s.office, s.place, c.person); say(r.ok, `${c.name} is appointed.`, r.reason); render(); } }));
+        }
       } else if (!s.holder || s.holder !== p.id) {
         const chance = s.holder ? 0 : api.petitionChance(p.id, s.office, s.place);
         actions.push(button('Petition the lord', { size: 'small', variant: 'primary', icon: 'quill', disabled: !!s.holder || chance <= 0, tip: s.holder ? 'The post is filled' : `About ${Math.round(chance * 100)} in a hundred`,
@@ -241,7 +248,7 @@ export function politicsPanel(ctx: PanelCtx, startTab: Tab | undefined): UiPanel
       return h('div.mu-li', null,
         h('div.mu-grow', null, h('b', null, `${label} of ${s.placeName}`),
           h('div.mu-small.mu-dim', null, `${holder ? (mineSeat ? 'you hold it' : fullName(holder)) : 'vacant'} · ${s.mode === 'elected' ? 'chosen by the electors' : s.patron ? `given by ${ctx.nameOf(s.patron)}` : 'no patron'} · ${s.mode === 'elected' ? 'vote' : 'review'} ${dateText(s.next)}`),
-          e && e.candidates.length ? h('div.mu-tiny.mu-dim', null, `Candidates: ${e.candidates.map((c) => `${c.you ? 'you' : c.name} (${c.standing})`).join(', ')}`) : null),
+          e && e.candidates.length ? h('div.mu-tiny.mu-dim', null, `${s.mode === 'elected' ? 'Candidates (votes if held today)' : 'Fit for the post'}: ${e.candidates.map((c) => `${c.you ? 'you' : c.name}${s.mode === 'elected' ? ` (${c.standing})` : ''}`).join(', ')}`) : null),
         mineSeat ? chip('yours', 'green', 'check') : null, ...actions);
     });
     const held = p.offices.filter((o) => OFFICE_NAME[o.office]);
