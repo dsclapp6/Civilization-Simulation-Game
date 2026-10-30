@@ -18,6 +18,9 @@ interface Pose { pos: THREE.Vector3; quat: THREE.Quaternion; fov: number }
 const FOLLOW_MIN = 2.2;
 const FOLLOW_MAX = 140;
 const MAP_MIN = 450;
+/** Aiming: shoulder offset to the right (m) and boom length. */
+const AIM_SHOULDER = 0.62;
+const AIM_DISTANCE = 3.2;
 /** Extra boom pitches tried, in order, when the way back is blocked. */
 const PITCH_LIFTS = [0, 0.12, 0.24, 0.36];
 const MAP_MAX = 30000;
@@ -59,6 +62,9 @@ export class CameraRig {
   private readonly side = new THREE.Vector3();
   /** Extra pitch (smoothed) that lifts the boom over a roof or wall behind the character. */
   private pitchLift = 0;
+  /** Over-the-shoulder aim blend (0 normal follow … 1 aiming a bow or crossbow) and its target. */
+  private aimK = 0;
+  private aimWant = false;
 
   constructor(aspect: number, private readonly env: CameraEnv) {
     this.camera = new THREE.PerspectiveCamera(55, aspect, 0.2, 60000);
@@ -164,6 +170,12 @@ export class CameraRig {
     this.freePitch = Math.atan2(dy, Math.hypot(dx, dz));
   }
 
+  /**
+   * Aiming a bow or crossbow: the follow camera eases in over the right shoulder, so the
+   * character stands left of the screen centre (the reticle) and the target is in clear view.
+   */
+  setAim(on: boolean): void { this.aimWant = on; }
+
   /** Jump to the end of any running mode transition. */
   skipTransition(): void { this.transFrom = null; }
 
@@ -250,10 +262,18 @@ export class CameraRig {
     if (this.target.distanceTo(focus) > 40) this.target.copy(focus);
     const head = this.tmp2.copy(this.target);
     head.y += 1.55;
+    // over-the-shoulder aim: shift the boom origin (and the look point with it) to the right
+    const aimT = this.aimWant ? 1 : 0;
+    this.aimK += (aimT - this.aimK) * (dt > 0 ? 1 - Math.exp(-dt * 7) : 1);
+    if (this.aimK > 1e-3) {
+      head.x += -Math.cos(this.yaw) * AIM_SHOULDER * this.aimK;
+      head.z += Math.sin(this.yaw) * AIM_SHOULDER * this.aimK;
+      head.y += 0.1 * this.aimK;
+    }
     // In tight spots (a cottage right behind the character, a narrow lane) a camera that only
     // pulls in ends up in the character's hair. Prefer to crane up over the obstacle: find the
     // smallest extra pitch that keeps most of the wanted distance, and ease towards it.
-    const want = this.distance;
+    const want = this.distance + (Math.min(this.distance, AIM_DISTANCE) - this.distance) * this.aimK;
     let lift = 0;
     if (dt > 0 || this.pitchLift === 0) {
       let best = -1, bestLift = 0;

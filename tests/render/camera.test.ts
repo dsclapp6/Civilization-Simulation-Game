@@ -57,6 +57,29 @@ describe('camera rig', () => {
     expect(rig.camera.position.y).toBeLessThan(1.55 + 9 * Math.sin(0.3) + 0.3);
   });
 
+  it('moves over the right shoulder while aiming, so the screen centre is clear of the head', () => {
+    const flat = { heightAt: () => 0, worldSize: 16000 };
+    const rig = new CameraRig(16 / 9, flat);
+    rig.yaw = 0; rig.pitch = 0.2; rig.distance = 9;
+    const focus = new THREE.Vector3(500, 0, 500);
+    for (let i = 0; i < 60; i++) rig.update(1 / 30, focus);
+    const head = new THREE.Vector3(500, 1.55, 500);
+    const rayHits = () => {
+      const dir = rig.camera.getWorldDirection(new THREE.Vector3());
+      const ray = new THREE.Ray(rig.camera.position.clone(), dir);
+      return ray.distanceToPoint(head);
+    };
+    expect(rayHits()).toBeLessThan(0.35);
+    rig.setAim(true);
+    for (let i = 0; i < 60; i++) rig.update(1 / 30, focus);
+    // closer, beside the head: the view ray passes clear of it
+    expect(rig.camera.position.distanceTo(head)).toBeLessThan(4.5);
+    expect(rayHits()).toBeGreaterThan(0.45);
+    rig.setAim(false);
+    for (let i = 0; i < 90; i++) rig.update(1 / 30, focus);
+    expect(rayHits()).toBeLessThan(0.35);
+  });
+
   it('rises smoothly to the map and back, with altitude interpolated in log space', () => {
     const rig = new CameraRig(16 / 9, env);
     const focus = new THREE.Vector3(4000, 5, 4000);

@@ -29,6 +29,7 @@ import { PostFx } from './post/postFx';
 
 export type { CameraMode, GameRenderer, GroundPoint, PickResult, QualityLevel, RenderStats, RendererOptions } from './types';
 
+const AIM_ANIMS = new Set<string>(['draw_bow', 'aim_bow', 'shoot_bow', 'aim_crossbow', 'shoot_crossbow', 'reload_crossbow']);
 const VIEW_TO_CAMERA: Record<ViewMode, CameraMode> = { street: 'follow', map: 'map', travel: 'map', cinematic: 'cinematic' };
 
 export function createRenderer(container: HTMLElement, world: WorldModel, assets: AssetLibrary, opts: RendererOptions = {}): GameRenderer {
@@ -205,6 +206,15 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
       // the sim's view mode drives the camera, except an explicitly posed free camera (dev, cut-scenes)
       if ((lastViewMode !== null || vm !== 'street') && rig.mode !== 'free') rig.setMode(VIEW_TO_CAMERA[vm], lastViewMode === null ? 0 : 1.4);
       lastViewMode = vm;
+    }
+    // aiming a bow or crossbow: over-the-shoulder camera (the reticle must not sit on the head)
+    {
+      const pl = view.player();
+      let aiming = false;
+      if (pl && pl.alive && vm === 'street') {
+        for (const c of view.characters()) if (c.id === pl.personId) { aiming = AIM_ANIMS.has(c.anim); break; }
+      }
+      rig.setAim(aiming);
     }
     rig.update(dt, focusFor(view));
     const mapBlend = rig.mapBlend();

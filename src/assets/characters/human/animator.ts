@@ -169,8 +169,11 @@ export function evaluatePose(st: HumanAnimState, item: CharacterDrawItem, ctx: A
     st.curGround = st.clipDef?.ground ? 1 : 0;
     if (first) st.fromGround = st.curGround;
     st.ownTime = 0;
-    if (clipName === 'hit') st.flash = 1;
   }
+  // hit flash: a brief red pulse keyed to the animation's own clock (seconds since the anim began,
+  // from the simulation), so it ends on time even when frames are few or far apart
+  if (clipName === 'hit') st.flash = Math.max(0, 1 - item.animTime * 4);
+  else if (item.animTime > 0.25) st.flash = 0;
   st.anim = item.anim;
   st.ownTime += dt;
   const out = st.tmp;
