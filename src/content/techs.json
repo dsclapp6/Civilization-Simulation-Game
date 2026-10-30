@@ -1,0 +1,318 @@
+{
+  "_doc": "House trees (SPEC §17): four branches of techniques that live in people. A tech is learned by DOING the activity (learn.* are the qualifications and yearly chances for NPCs; learn.player is the practice the player's own actions count towards), is held by the people who know it and taught by masters to apprentices and children (teach.*), is preserved by scribes in books (writable) and is lost when its last holder dies unrecorded. `requires` are techs the learner must already know (the player's House counts its members). `start` is the share of qualified people who already know it when a run begins (0 = undiscovered). `effects` is a vocabulary other modules read through advancement.bonus()/settlementBonus(); the keys are listed in docs of src/sim/advancement/types.ts. `year` gates the tech until that game year (late techs).",
+  "branches": [
+    { "id": "economy", "name": "Economy", "blurb": "Ploughs and mills, charters and credit: how the land and the market pay." },
+    { "id": "military", "name": "Military", "blurb": "Bows, armour, castles and siege engines: how a House holds what it has." },
+    { "id": "kinship", "name": "Kinship & Diplomacy", "blurb": "Marriage, oaths and treaties: how Houses bind each other." },
+    { "id": "knowledge", "name": "Knowledge & Belief", "blurb": "Letters, learning and healing: what the Church and the schools keep alive." }
+  ],
+  "techs": [
+    {
+      "id": "heavy_plough", "branch": "economy", "name": "Heavy plough", "points": 20,
+      "desc": "A wheeled plough with coulter and mouldboard turns the heavy clay soils that the scratch-plough cannot. Needs oxen, but every acre yields more.",
+      "requires": [], "start": 0.35,
+      "learn": { "careers": ["farmer", "yeoman", "wheelwright"], "skill": "farming", "minSkill": 3, "rate": 0.02, "player": { "actions": ["farm.plough"], "need": 14 } },
+      "teach": { "skill": "farming", "min": 4, "fee": 48 },
+      "effects": { "farm.yield": 0.1, "prosperity": 0.03 }
+    },
+    {
+      "id": "improved_rotation", "branch": "economy", "name": "Improved rotation", "points": 25,
+      "desc": "Peas and beans on the fallow field, manure spread with care: the three-field round is made to feed more mouths.",
+      "requires": ["heavy_plough"], "start": 0.04,
+      "learn": { "careers": ["farmer", "yeoman", "steward", "bailiff"], "skill": "farming", "minSkill": 5, "rate": 0.01, "player": { "actions": ["farm.sow", "farm.harrow", "farm.manure"], "need": 30 } },
+      "teach": { "skill": "farming", "min": 6, "fee": 96 },
+      "effects": { "farm.yield": 0.08, "prosperity": 0.04, "famine.resist": 0.15 }
+    },
+    {
+      "id": "watermill", "branch": "economy", "name": "Watermill", "points": 20,
+      "desc": "A wheel in the stream grinds the village corn faster than a hundred querns. Millers learn to dam, to race and to gear.",
+      "requires": [], "start": 0.8,
+      "learn": { "careers": ["miller", "carpenter", "mason"], "building": ["watermill"], "rate": 0.03, "player": { "actions": ["farm.mill"], "need": 10 } },
+      "teach": { "skill": "carpentry", "min": 0, "fee": 72 },
+      "effects": { "mill.speed": 0.2 }
+    },
+    {
+      "id": "windmill", "branch": "economy", "name": "Windmill", "points": 25,
+      "desc": "A post mill turned into the wind grinds where there is no stream. New in the lowlands, and the lords' millers are jealous of it.",
+      "requires": ["watermill"], "start": 0.3,
+      "learn": { "careers": ["miller", "carpenter"], "building": ["windmill"], "rate": 0.02, "player": { "actions": ["farm.mill"], "need": 16 } },
+      "teach": { "skill": "carpentry", "min": 3, "fee": 96 },
+      "effects": { "mill.speed": 0.15 }
+    },
+    {
+      "id": "fulling_mill", "branch": "economy", "name": "Fulling mill", "points": 20,
+      "desc": "Water-driven hammers full the cloth in place of the fuller's feet, and a town's wool becomes broadcloth.",
+      "requires": [], "start": 0.55,
+      "learn": { "careers": ["fuller", "weaver"], "skill": "tailoring", "minSkill": 3, "rate": 0.02, "player": { "actions": ["craft.weave_cloth", "craft.weave_linen"], "need": 16 } },
+      "teach": { "skill": "tailoring", "min": 4, "fee": 72 },
+      "effects": { "cloth.value": 0.1 }
+    },
+    {
+      "id": "market_charter", "branch": "economy", "name": "Market charter", "points": 30,
+      "desc": "The right to hold a weekly market, written under the lord's seal. Stalls, tolls and the peace of the market follow.",
+      "requires": [], "start": 0.9, "heritable": true,
+      "learn": { "titles": ["town", "manor"], "market": true, "rate": 0.05 },
+      "teach": { "fee": 240 },
+      "effects": { "market.depth": 0.15 }
+    },
+    {
+      "id": "fair_charter", "branch": "economy", "name": "Fair charter", "points": 40,
+      "desc": "A yearly fair of several days draws merchants from far off. The town keeps the tolls and the crowds fill the inns.",
+      "requires": ["market_charter"], "start": 0.5, "heritable": true,
+      "learn": { "titles": ["town"], "market": true, "rate": 0.03 },
+      "teach": { "fee": 480 },
+      "effects": { "fair": 1 }
+    },
+    {
+      "id": "guild_charter", "branch": "economy", "name": "Guild charter", "points": 30,
+      "desc": "The masters of a trade swear together, set the quality and the prices, and watch the town by night against fire.",
+      "requires": [], "start": 0.6, "heritable": true,
+      "learn": { "fields": ["craft"], "minStage": 2, "building": ["guildhall"], "rate": 0.03 },
+      "teach": { "fee": 360 },
+      "effects": { "fire.spread": -0.2, "craft.quality": 0.05 }
+    },
+    {
+      "id": "wool_trade", "branch": "economy", "name": "Wool trade", "points": 25,
+      "desc": "English wool is the finest in Christendom: those who grade it, bale it and ship it to the looms of the north grow rich.",
+      "requires": [], "start": 0.3,
+      "learn": { "careers": ["merchant", "peddler", "shopkeeper"], "skill": "trade", "minSkill": 4, "rate": 0.015, "player": { "actions": ["trade.market"], "need": 20 } },
+      "teach": { "skill": "trade", "min": 5, "fee": 96 },
+      "effects": { "wool.price": 0.1, "trade.margin": 0.03 }
+    },
+    {
+      "id": "letters_of_credit", "branch": "economy", "name": "Letters of credit", "points": 35,
+      "desc": "A merchant's sealed letter, honoured by his partners in another town, saves carrying silver over robbers' roads.",
+      "requires": ["wool_trade"], "start": 0.05,
+      "learn": { "careers": ["merchant"], "skill": "trade", "minSkill": 6, "rate": 0.01, "player": { "actions": ["trade.market", "trade.person"], "need": 28 } },
+      "teach": { "skill": "trade", "min": 7, "fee": 240 },
+      "effects": { "trade.margin": 0.05, "road.risk": -0.1 }
+    },
+
+    {
+      "id": "longbow_drill", "branch": "military", "name": "Longbow drill", "points": 25,
+      "desc": "A bowman who has drawn a war bow since boyhood looses a dozen arrows a minute. Sunday practice at the butts breeds an army of them.",
+      "requires": [], "start": 0.25,
+      "learn": { "careers": ["archer", "yeoman", "soldier", "man_at_arms"], "skill": "archery", "minSkill": 4, "rate": 0.02, "player": { "actions": ["arms.practise"], "need": 24 } },
+      "teach": { "skill": "archery", "min": 6, "fee": 72 },
+      "effects": { "arms.longbow": 1, "levy.archers": 0.1 }
+    },
+    {
+      "id": "crossbows", "branch": "military", "name": "Crossbows", "points": 20,
+      "desc": "A windlass spans the bow and a clerk could shoot it. The Church frowns on it, and every garrison wants it.",
+      "requires": [], "start": 0.3,
+      "learn": { "careers": ["man_at_arms", "soldier", "archer", "sergeant", "smith"], "skill": "archery", "minSkill": 3, "rate": 0.02, "player": { "actions": ["craft.forge_crossbow", "arms.practise"], "need": 12 } },
+      "teach": { "skill": "archery", "min": 5, "fee": 72 },
+      "effects": { "arms.crossbow": 1 }
+    },
+    {
+      "id": "coat_of_plates", "branch": "military", "name": "Coat of plates", "points": 25,
+      "desc": "Iron plates riveted inside a cloth coat turn arrow and blade. A smith who can make one is a man worth keeping.",
+      "requires": [], "start": 0.2,
+      "learn": { "careers": ["smith"], "skill": "smithing", "minSkill": 6, "rate": 0.015, "player": { "actions": ["craft.forge_plates"], "need": 4 } },
+      "teach": { "skill": "smithing", "min": 7, "fee": 192 },
+      "effects": { "armour.plates": 1 }
+    },
+    {
+      "id": "plate_armour", "branch": "military", "name": "Plate armour", "points": 40, "year": 6,
+      "desc": "A full harness of fitted steel from crown to heel. Slow to forge, ruinous to buy, and a knight in it is nearly proof against arrows.",
+      "requires": ["coat_of_plates"], "start": 0,
+      "learn": { "careers": ["smith"], "skill": "smithing", "minSkill": 10, "rate": 0.01, "player": { "actions": ["craft.forge_plates"], "need": 10 } },
+      "teach": { "skill": "smithing", "min": 11, "fee": 480 },
+      "effects": { "armour.plate": 1 }
+    },
+    {
+      "id": "destriers", "branch": "military", "name": "Destriers", "points": 25,
+      "desc": "Great warhorses bred and trained for the couched lance; a charge of them breaks any line that has not stakes.",
+      "requires": [], "start": 0.25,
+      "learn": { "careers": ["knight", "squire", "man_at_arms", "sergeant"], "skill": "riding", "minSkill": 6, "building": ["stable"], "rate": 0.02 },
+      "teach": { "skill": "riding", "min": 7, "fee": 240 },
+      "effects": { "arms.destrier": 1 }
+    },
+    {
+      "id": "stone_keep", "branch": "military", "name": "Stone keep", "points": 30,
+      "desc": "A square tower of dressed stone replaces the timber motte: it cannot be burned, and a few men can hold it for months.",
+      "requires": [], "start": 0.5, "heritable": true,
+      "learn": { "titles": ["manor", "barony", "county", "kingdom"], "building": ["keep_stone"], "rate": 0.03, "careers": ["mason"], "skill": "masonry", "minSkill": 6 },
+      "teach": { "skill": "masonry", "min": 7, "fee": 480 },
+      "effects": { "defence.keep": 1 }
+    },
+    {
+      "id": "curtain_walls", "branch": "military", "name": "Curtain walls", "points": 40,
+      "desc": "A ring of stone round the whole bailey, with mural towers and a gatehouse. It takes years and a fortune, and it makes the place a fortress.",
+      "requires": ["stone_keep"], "start": 0.2, "heritable": true,
+      "learn": { "titles": ["barony", "county", "kingdom"], "building": ["wall", "tower", "gatehouse"], "rate": 0.02, "careers": ["mason"], "skill": "masonry", "minSkill": 8 },
+      "teach": { "skill": "masonry", "min": 9, "fee": 720 },
+      "effects": { "defence.walls": 1 }
+    },
+    {
+      "id": "concentric_castle", "branch": "military", "name": "Concentric castle", "points": 60, "year": 4,
+      "desc": "Wall within wall, each commanding the other, so that a breach of the outer ring leaves the attacker in a killing ground.",
+      "requires": ["curtain_walls"], "start": 0, "heritable": true,
+      "learn": { "titles": ["county", "kingdom"], "careers": ["mason"], "skill": "masonry", "minSkill": 12, "rate": 0.01 },
+      "teach": { "skill": "masonry", "min": 12, "fee": 1440 },
+      "effects": { "defence.concentric": 1 }
+    },
+    {
+      "id": "trebuchet", "branch": "military", "name": "Trebuchet", "points": 30,
+      "desc": "A counterweighted beam that hurls a stone the weight of a man against a wall. No curtain wall stands long before one.",
+      "requires": [], "start": 0.12,
+      "learn": { "careers": ["carpenter", "mason", "sergeant", "knight"], "skill": "carpentry", "minSkill": 7, "rate": 0.012 },
+      "teach": { "skill": "carpentry", "min": 8, "fee": 480 },
+      "effects": { "siege.trebuchet": 1 }
+    },
+    {
+      "id": "paid_retinues", "branch": "military", "name": "Paid retinues", "points": 25,
+      "desc": "Indentured men-at-arms kept in wages by the year, not called out for forty days: the lord's own army.",
+      "requires": [], "start": 0.35, "heritable": true,
+      "learn": { "titles": ["manor", "barony", "county", "kingdom"], "skill": "stewardship", "minSkill": 4, "rate": 0.03 },
+      "teach": { "skill": "stewardship", "min": 5, "fee": 480 },
+      "effects": { "levy.retinue": 0.2 }
+    },
+    {
+      "id": "bombards", "branch": "military", "name": "Bombards", "points": 50, "year": 10,
+      "desc": "Hooped iron tubes that throw stone balls by powder. Loud, slow and dangerous to the gunner, and the end of the high wall.",
+      "requires": ["trebuchet"], "start": 0,
+      "learn": { "careers": ["smith"], "skill": "smithing", "minSkill": 10, "rate": 0.008 },
+      "teach": { "skill": "smithing", "min": 11, "fee": 960 },
+      "effects": { "siege.bombard": 1 }
+    },
+
+    {
+      "id": "marriage_pacts", "branch": "kinship", "name": "Marriage pacts", "points": 20,
+      "desc": "Contracts of dowry and dower, drawn up before witnesses, that bind two families and settle who inherits.",
+      "requires": [], "start": 0.8, "heritable": true,
+      "learn": { "estates": ["noble"], "minTier": 4, "rate": 0.05 },
+      "teach": { "fee": 240 },
+      "effects": { "marriage.dowry": 0.1 }
+    },
+    {
+      "id": "wardship", "branch": "kinship", "name": "Wardship", "points": 20,
+      "desc": "A lord holds the orphan heir of a vassal, keeps the revenues till he comes of age and chooses his bride.",
+      "requires": [], "start": 0.7, "heritable": true,
+      "learn": { "titles": ["manor", "barony", "county", "kingdom", "abbey"], "rate": 0.04 },
+      "teach": { "fee": 240 },
+      "effects": { "ward.income": 0.2 }
+    },
+    {
+      "id": "oaths", "branch": "kinship", "name": "Oaths of fealty", "points": 20,
+      "desc": "Hands joined between a lord's, a vow on relics: the bond on which every vassal's service rests.",
+      "requires": [], "start": 0.9, "heritable": true,
+      "learn": { "estates": ["noble"], "minTier": 5, "rate": 0.05 },
+      "teach": { "fee": 120 },
+      "effects": { "vassal.levy": 0.1 }
+    },
+    {
+      "id": "truces", "branch": "kinship", "name": "Truces", "points": 25,
+      "desc": "The Truce of God, a fortnight's peace, a ransom paid and honoured: a way out of a war that neither can win.",
+      "requires": ["oaths"], "start": 0.5, "heritable": true,
+      "learn": { "estates": ["noble", "clergy"], "minTier": 5, "skill": "persuasion", "minSkill": 3, "rate": 0.03 },
+      "teach": { "skill": "persuasion", "min": 4, "fee": 360 },
+      "effects": { "diplomacy.truce": 1 }
+    },
+    {
+      "id": "heralds", "branch": "kinship", "name": "Heralds", "points": 25,
+      "desc": "Men in painted tabards who know every shield in the land, carry challenges under safe-conduct and keep the roll of arms.",
+      "requires": ["oaths"], "start": 0.3, "heritable": true,
+      "learn": { "careers": ["knight", "squire", "lord", "noble"], "skill": "persuasion", "minSkill": 3, "rate": 0.025 },
+      "teach": { "skill": "persuasion", "min": 4, "fee": 240 },
+      "effects": { "diplomacy.contact": 1 }
+    },
+    {
+      "id": "tournaments", "branch": "kinship", "name": "Tournaments", "points": 30,
+      "desc": "A mêlée and a joust under rules, with heralds, ladies and ransoms: where young knights win horses, wives and a name.",
+      "requires": ["heralds"], "start": 0.25, "heritable": true,
+      "learn": { "careers": ["knight", "squire", "lord"], "skill": "melee", "minSkill": 6, "rate": 0.02 },
+      "teach": { "skill": "melee", "min": 7, "fee": 480 },
+      "effects": { "tournament": 1 }
+    },
+    {
+      "id": "alliance_treaties", "branch": "kinship", "name": "Alliance treaties", "points": 35,
+      "desc": "A written pact of mutual aid sworn by two Houses, with hostages or marriages as pledge.",
+      "requires": ["oaths", "marriage_pacts"], "start": 0.25, "heritable": true,
+      "learn": { "titles": ["barony", "county", "kingdom"], "skill": "persuasion", "minSkill": 5, "rate": 0.02 },
+      "teach": { "skill": "persuasion", "min": 6, "fee": 720 },
+      "effects": { "diplomacy.alliance": 1 }
+    },
+    {
+      "id": "council_of_the_realm", "branch": "kinship", "name": "Council of the realm", "points": 50,
+      "desc": "Barons, bishops and burgesses summoned to advise the king and grant him taxes: law made by consent.",
+      "requires": ["oaths", "written_charters"], "start": 0.1, "heritable": true,
+      "learn": { "titles": ["county", "kingdom"], "skill": "stewardship", "minSkill": 6, "rate": 0.015 },
+      "teach": { "skill": "stewardship", "min": 7, "fee": 1440 },
+      "effects": { "realm.council": 1 }
+    },
+
+    {
+      "id": "parish_school", "branch": "knowledge", "name": "Parish school", "points": 20,
+      "desc": "The priest teaches a few boys their letters and the creed. A village with a clerk's son is a village that can keep accounts.",
+      "requires": [], "start": 0.7,
+      "learn": { "careers": ["priest", "clerk", "monk", "nun"], "skill": "letters", "minSkill": 3, "rate": 0.04, "player": { "study": ["school", "church"], "need": 6 } },
+      "teach": { "skill": "letters", "min": 4, "fee": 48 },
+      "effects": { "literacy": 0.05 }
+    },
+    {
+      "id": "scriptorium", "branch": "knowledge", "name": "Scriptorium", "points": 30,
+      "desc": "A heated room of desks where monks copy books on vellum. What is written there outlives the men who knew it.",
+      "requires": ["parish_school"], "start": 0.6,
+      "learn": { "careers": ["monk", "nun", "prior", "abbot", "clerk"], "skill": "letters", "minSkill": 5, "building": ["cloister", "abbey_church"], "rate": 0.04, "player": { "study": ["cloister", "abbey_church"], "need": 10 } },
+      "teach": { "skill": "letters", "min": 6, "fee": 144 },
+      "effects": { "records": 0.3 }
+    },
+    {
+      "id": "cathedral_school", "branch": "knowledge", "name": "Cathedral school", "points": 35,
+      "desc": "Masters lecture on grammar, logic and scripture to the clever sons of the diocese; a few go on to the great studia abroad.",
+      "requires": ["scriptorium"], "start": 0.4,
+      "learn": { "careers": ["bishop", "abbot", "prior", "clerk", "priest"], "skill": "letters", "minSkill": 7, "building": ["cathedral"], "rate": 0.03, "player": { "study": ["cathedral"], "need": 14 } },
+      "teach": { "skill": "letters", "min": 8, "fee": 360 },
+      "effects": { "literacy": 0.08, "records": 0.2 }
+    },
+    {
+      "id": "university", "branch": "knowledge", "name": "University", "points": 60, "year": 3,
+      "desc": "A guild of masters and scholars with its own privileges, degrees and halls. Law, medicine and theology are taught to all who can pay.",
+      "requires": ["cathedral_school"], "start": 0,
+      "learn": { "careers": ["bishop", "abbot", "clerk"], "skill": "letters", "minSkill": 10, "building": ["cathedral", "school"], "rate": 0.015, "player": { "study": ["cathedral"], "need": 24 } },
+      "teach": { "skill": "letters", "min": 10, "fee": 960 },
+      "effects": { "literacy": 0.1, "records": 0.2 }
+    },
+    {
+      "id": "herbal_medicine", "branch": "knowledge", "name": "Herbal medicine", "points": 25,
+      "desc": "Herbals and the lore of simples: willow-bark for fever, comfrey for broken bones, rue and wormwood against the pestilence.",
+      "requires": [], "start": 0.6,
+      "learn": { "careers": ["healer", "midwife", "monk", "nun", "shepherd"], "skill": "medicine", "minSkill": 3, "rate": 0.03, "player": { "study": ["infirmary", "cloister"], "need": 8 } },
+      "teach": { "skill": "medicine", "min": 4, "fee": 72 },
+      "effects": { "plague.fatality": -0.08, "healing": 0.1 }
+    },
+    {
+      "id": "infirmary_care", "branch": "knowledge", "name": "Infirmary and hospital", "points": 35,
+      "desc": "Beds, clean linen, broth and a brother who does nothing but nurse: the sick of a whole town can recover under one roof.",
+      "requires": ["herbal_medicine"], "start": 0.4,
+      "learn": { "careers": ["healer", "monk", "nun", "prior"], "skill": "medicine", "minSkill": 6, "building": ["infirmary"], "rate": 0.02, "player": { "study": ["infirmary"], "need": 14 } },
+      "teach": { "skill": "medicine", "min": 7, "fee": 240 },
+      "effects": { "plague.fatality": -0.1, "epidemic.decay": 0.15, "healing": 0.1 }
+    },
+    {
+      "id": "written_charters", "branch": "knowledge", "name": "Charters and records", "points": 25,
+      "desc": "Rolls of rents, charters sealed in wax and a chest to keep them: a House whose rights are written can prove them.",
+      "requires": [], "start": 0.6,
+      "learn": { "careers": ["clerk", "steward", "bailiff", "priest", "monk", "prior", "abbot"], "skill": "letters", "minSkill": 4, "rate": 0.03, "player": { "study": ["school", "cloister", "abbey_church", "guildhall"], "need": 8 } },
+      "teach": { "skill": "letters", "min": 5, "fee": 120 },
+      "effects": { "records": 0.2, "tax.efficiency": 0.05 }
+    },
+    {
+      "id": "accounting", "branch": "knowledge", "name": "Accounting", "points": 35,
+      "desc": "Double columns, tallies and the exchequer's chequered cloth: the lord who knows what he has is hard to cheat.",
+      "requires": ["written_charters"], "start": 0.22,
+      "learn": { "careers": ["merchant", "steward", "clerk", "bailiff", "shopkeeper"], "skill": "stewardship", "minSkill": 4, "rate": 0.02, "player": { "actions": ["trade.market", "trade.person", "manage.household"], "study": ["guildhall", "school"], "need": 20 } },
+      "teach": { "skill": "stewardship", "min": 5, "fee": 240 },
+      "effects": { "tax.efficiency": 0.1, "trade.margin": 0.03 }
+    },
+    {
+      "id": "printing", "branch": "knowledge", "name": "Printing", "points": 80, "year": 12,
+      "desc": "Movable type and a press: a hundred copies in the time a monk copies a page. Learning leaves the cloister for good.",
+      "requires": ["accounting"], "start": 0,
+      "learn": { "careers": ["clerk", "merchant", "monk"], "skill": "letters", "minSkill": 8, "rate": 0.008 },
+      "teach": { "skill": "letters", "min": 9, "fee": 1440 },
+      "effects": { "records": 1, "literacy": 0.15 }
+    }
+  ]
+}

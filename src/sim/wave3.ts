@@ -122,11 +122,21 @@ export interface AdvancementApi {
   knows(person: PersonId, tech: string): boolean;
   /** Does the House (any member or sworn person) command it? */
   houseHas(house: HouseId, tech: string): boolean;
+  /** Additive (wave 3 advancement): sum of a tech effect (e.g. 'farm.yield', 'arms.longbow') over what the House commands. */
+  bonus?(house: HouseId, key: string): number;
+  /** Additive: does any resident of the settlement know the technique (the community's craft: a mill, a fulling shop)? */
+  settlementHas?(settlement: number, tech: string): boolean;
+  /** Additive: the same effect sum over the techniques known in a settlement. */
+  settlementBonus?(settlement: number, key: string): number;
 }
 
 export interface HappeningsApi {
   /** Active disaster/event ids touching a settlement (plague, famine, fire, fair…). */
   activeAt(settlement: number): readonly string[];
+  /** Additive (wave 3 happenings): is something of this kind (plague, famine, fair, bandits …) happening anywhere / at the settlement? */
+  isActive?(kind: string, settlement?: number): boolean;
+  /** Additive: start a happening by hand (dev tools, tests, scenarios); returns its id or 0 if it cannot start there. */
+  trigger?(kind: string, settlement: number): number;
 }
 
 export interface Wave3Services {
