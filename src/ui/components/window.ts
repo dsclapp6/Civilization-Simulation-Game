@@ -25,7 +25,7 @@ export interface WindowParts {
   subEl: HTMLElement;
   setTitle(title: string, subtitle?: string): void;
   /** Show the footer (hidden until something is put in it). */
-  showFoot(...children: Array<Node | string>): HTMLElement;
+  showFoot(...children: Array<Node | string | null>): HTMLElement;
 }
 
 export function createWindow(o: WindowOptions): WindowParts {
@@ -48,13 +48,13 @@ export function createWindow(o: WindowOptions): WindowParts {
     },
     showFoot(...children) {
       foot.classList.remove('mu-hide');
-      foot.replaceChildren(...children.map((c) => (typeof c === 'string' ? document.createTextNode(c) : c)));
+      foot.replaceChildren(...children.filter((c): c is Node | string => c !== null).map((c) => (typeof c === 'string' ? document.createTextNode(c) : c)));
       return foot;
     },
   };
 }
 
 /** Wraps a window in the dimmed, centred modal layer element. */
-export function modalShell(win: HTMLElement, mode: '' | 'clear' | 'dock-bottom' | 'dock-right' = ''): HTMLElement {
+export function modalShell(win: HTMLElement, mode: '' | 'clear' | 'dock-bottom' | 'dock-right' | 'screen' = ''): HTMLElement {
   return h('div.mu-modal', { class: mode }, win);
 }

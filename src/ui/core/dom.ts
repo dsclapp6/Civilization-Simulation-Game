@@ -107,6 +107,12 @@ export function staticSvg(markup: string): SVGElement {
 
 export function clear(el: Element): void { el.replaceChildren(); }
 
+/** Like `el.append(...)` but skips null / false / undefined and flattens arrays. */
+export function append<T extends Node>(el: T, ...children: Child[]): T {
+  appendChildren(el, children);
+  return el;
+}
+
 export function replace(el: Element, ...children: Child[]): void {
   el.replaceChildren();
   appendChildren(el, children);

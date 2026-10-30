@@ -55,7 +55,7 @@ const GOOD_BY_ID = new Map(MOCK_GOODS.map((x) => [x.id, x]));
 
 const PERKS: Partial<Record<SkillId, Array<[string, string, string, string, string]>>> = {
   farming: [
-    ['farming.steady_hands', 'Steady hands', 'Reaping and sowing take a tenth less time.', 'farming.good_earth', 'Good earth: strips you work yield a little more grain.'],
+    ['farming.steady_hands', 'Steady hands', 'Reaping and sowing take a tenth less time.', 'farming.good_earth', 'Good earth: Strips you work yield a little more grain.'],
     ['farming.bound_sheaves', 'Tight binder', 'Sheaves are bound well: less is lost between field and barn.', 'farming.weather_eye', 'Weather eye: you know a day ahead when rain is coming.'],
   ],
   husbandry: [['husbandry.gentle_hand', 'Gentle hand', 'Animals in your care are calmer and thrive.', 'husbandry.good_breeder', 'Good breeder: your beasts bear more young.']],
@@ -151,7 +151,7 @@ export class MockEconomy implements EconomyApi {
     }
     const str = p ? p.trained.str : 10;
     return {
-      owner: person, items, money: p?.money ?? 0, weight: Math.round(weight * 10) / 10, capacity: Math.round(20 + str * 2.5),
+      owner: person, items, money: p?.money ?? 0, weight: Math.round(weight * 10) / 10, capacity: Math.round(28 + str * 4.5),
       equipment: { ...(this.equipment.get(person) ?? {}) },
     };
   }
@@ -159,8 +159,9 @@ export class MockEconomy implements EconomyApi {
   stores(household: number): ItemStack[] {
     const hh = this.sim.state.households.get(household);
     if (!hh) return [];
-    const base: Record<string, number> = Object.keys(hh.stores).length ? hh.stores : { wheat: 12, barley: 8, oats: 6, peas: 0, ale: 5, cheese: 3, firewood: 14, wool: 2 };
-    return Object.entries(base).filter(([, q]) => q > 0).map(([k, q]) => this.stackOf(k, q)).filter((s): s is ItemStack => !!s);
+    const known = Object.entries(hh.stores).filter(([k, q]) => q > 0 && GOOD_BY_ID.has(parseItemKey(k).good));
+    const base: Array<[string, number]> = known.length ? known : [['wheat', 12], ['barley', 8], ['oats', 6], ['ale', 5], ['cheese', 3], ['firewood', 14], ['wool', 2]];
+    return base.map(([k, q]) => this.stackOf(k, q)).filter((s): s is ItemStack => !!s);
   }
 
   private take(person: PersonId, key: ItemKey, qty: number): boolean {

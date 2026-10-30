@@ -106,7 +106,7 @@ export class MockSocial implements SocialApi {
     switch (optionId) {
       case 'news': {
         const items = this.news(this.sim.state.persons.get(them)?.settlement ?? 0, 2);
-        say(items.join(' Also, they say '), them, 'friendly');
+        say(items.join(' '), them, 'friendly');
         break;
       }
       case 'chat': say('Fair weather for the work, God be thanked. The barley is coming on well.', them, 'friendly'); nudge(1, 'friendly talk'); break;

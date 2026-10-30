@@ -1,6 +1,7 @@
 /* In-game HUD: corner plates, prompt, feed, dock, overlays. Compact; the 3D view stays the star. */
 
-.mu-hud { position: absolute; inset: 0; pointer-events: none; }
+.mu-hud { position: absolute; inset: 0; pointer-events: none; transition: opacity 0.35s; }
+.mu-hud.dimmed { opacity: 0; }
 .mu-hud > * { position: absolute; }
 .mu-hud .mu-plate { opacity: 0.95; }
 

@@ -51,7 +51,9 @@ export class UiApp implements GameUIExt {
     quitToMenu: () => { void this.leaveToMenu(); },
     newRun: () => { void this.leaveToMenu('difficulty'); },
     showBirth: () => this.openPanel({ panel: 'birth' }),
+    pendingGameOver: () => this.pendingGameOver,
   };
+  private pendingGameOver: SimEvents['gameOver'] | null = null;
   private screen: UiScreen = 'menu';
   private bound: Bound | null = null;
   private clock = 0;
@@ -86,7 +88,7 @@ export class UiApp implements GameUIExt {
     this.stack = new PanelStack<UiPanel>({
       onShow: (p) => this.onPanelShown(p),
       onHide: (p) => this.onPanelHidden(p),
-      onChange: () => this.syncPause(),
+      onChange: () => { this.syncPause(); this.syncHudDim(); },
     });
     this.hudLayer.appendChild(this.hud.el);
     this.hud.setVisible(false);
@@ -143,6 +145,7 @@ export class UiApp implements GameUIExt {
       this.loading.hide();
       this.hud.setVisible(false);
       this.pendingBirth = false;
+      this.pendingGameOver = null;
       this.menu.open(this.afterMenu ?? 'main');
       this.afterMenu = null;
     } else if (screen === 'loading') {
@@ -293,8 +296,10 @@ export class UiApp implements GameUIExt {
   private unbind(): void {
     const b = this.bound;
     if (!b) { this.stack.clear(); return; }
-    this.bound = null;
+    // close the panels while still bound so a pause the UI is holding is released with them
     this.stack.clear();
+    b.pause.sync(false);
+    this.bound = null;
     for (const off of b.offs) off();
     b.pause.forget();
     this.feed.clear();
@@ -311,7 +316,7 @@ export class UiApp implements GameUIExt {
 
   private onPlayerSwitched(e: SimEvents['playerSwitched']): void {
     this.stack.close('death');
-    for (const p of [...this.stack.all()]) if (p.group === 'main' || p.group === 'talk') this.stack.close(p.id);
+    for (const p of [...this.stack.all()]) if (p.group === 'main' || p.group === 'dialogue' || p.group === 'trade') this.stack.close(p.id);
     this.hud.setVisible(true);
     this.hud.reset();
     const g = this.bound?.game;
@@ -322,8 +327,10 @@ export class UiApp implements GameUIExt {
   }
 
   private onGameOver(e: SimEvents['gameOver']): void {
-    // the death screen (if any) stays under the game-over card until the player moves on
-    this.stack.close('death');
+    this.pendingGameOver = e;
+    // the last of the line dies first: the death screen stays, and its Continue leads here
+    if (this.stack.has('death')) return;
+    this.stack.clear();
     this.hud.setVisible(false);
     this.openPanel({ panel: 'gameover', summary: e });
   }
@@ -383,6 +390,7 @@ export class UiApp implements GameUIExt {
       nameOf: (id) => this.nameOf(id),
       placeName: (id) => this.placeName(id),
       describe: (key, qty) => g.economy.describe(key, qty),
+      toLocal: (p) => { const s = this.effectiveScale(); return { x: p.x / s, y: p.y / s }; },
     };
   }
 
@@ -435,6 +443,10 @@ export class UiApp implements GameUIExt {
     b.pause.sync(this.stack.wantsPause(this.menuPauseSetting()));
   }
 
+  private syncHudDim(): void {
+    this.hud.setDimmed(this.stack.all().some((p) => p.hidesHud));
+  }
+
   private syncMenuPauseSetting(): void {
     const v = this.menuPauseSetting();
     if (v !== this.lastMenuPause) { this.lastMenuPause = v; this.syncPause(); }
@@ -444,6 +456,8 @@ export class UiApp implements GameUIExt {
     this.applySettings();
     this.syncPause();
   }
+
+  private effectiveScale(): number { return Math.max(0.8, Math.min(1.4, this.host.settings().uiScale || 1)); }
 
   private applySettings(): void {
     const s = Math.max(0.8, Math.min(1.4, this.host.settings().uiScale || 1));
@@ -488,7 +502,7 @@ export class UiApp implements GameUIExt {
     const top = this.stack.top();
     if (intent.type === 'toggle') {
       // screens (pause, death, birth…) and conversations own the keyboard
-      if (top && (top.group === 'screen' || top.group === 'talk' || top.escape === 'ignore')) return false;
+      if (top && (top.group === 'screen' || top.group === 'dialogue' || top.group === 'trade' || top.escape === 'ignore')) return false;
       if (this.bound?.game.sim.state.run.phase !== 'alive') return false;
       this.togglePanelKey(intent.panel);
       return true;

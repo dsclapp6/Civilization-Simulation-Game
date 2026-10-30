@@ -10,7 +10,9 @@ export interface PanelBase {
   captures?: boolean;
   pauses?: 'never' | 'menu' | 'always';
   escape?: EscapePolicy;
-  mode?: '' | 'clear' | 'dock-bottom' | 'dock-right';
+  mode?: '' | 'clear' | 'dock-bottom' | 'dock-right' | 'screen';
+  /** The HUD fades out while this panel is open (birth reveal, death, game over). */
+  hidesHud?: boolean;
   /** Clicking the dimmed area outside the window closes the panel. */
   backdropCloses?: PanelCtx | null;
 }
@@ -27,6 +29,7 @@ export function panelOf(base: PanelBase, content: HTMLElement, extras: PanelExtr
     captures: base.captures ?? true,
     pauses: base.pauses ?? 'never',
     escape: base.escape ?? 'close',
+    hidesHud: base.hidesHud,
     el,
     ...extras,
   };

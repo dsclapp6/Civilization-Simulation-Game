@@ -276,6 +276,9 @@ export class Hud {
 
   setVisible(v: boolean): void { this.el.classList.toggle('mu-hide', !v); }
 
+  /** Fades the whole HUD out (birth reveal, death, game over). */
+  setDimmed(on: boolean): void { this.el.classList.toggle('dimmed', on); }
+
   /** Clears transient state (new run, back to menu). */
   reset(): void {
     this.feedEl.replaceChildren();

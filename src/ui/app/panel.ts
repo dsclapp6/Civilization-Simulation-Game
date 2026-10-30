@@ -17,6 +17,8 @@ import type { StackPanel } from '../core/stack';
 export interface UiPanel extends StackPanel {
   /** The element appended to the panel layer (usually a `.mu-modal`). */
   readonly el: HTMLElement;
+  /** The HUD fades out while this panel is open. */
+  readonly hidesHud?: boolean;
   /** Called once the element is in the DOM. */
   mount?(): void;
   /** Every frame while open; throttle inside (`now` is the UI clock in seconds). */
@@ -56,6 +58,8 @@ export interface PanelCtx {
   dispatch(cmd: Command): CommandResult;
   nameOf(id: PersonId): string;
   placeName(id: number): string;
+  /** Screen (client) coordinates → this UI's own coordinate space (differs when the UI is scaled). */
+  toLocal(p: { x: number; y: number }): { x: number; y: number };
   /** Display wording for an item key and quantity ("3 gallons of ale", "a good sickle"). */
   describe(key: string, qty?: number): string;
 }
@@ -68,6 +72,8 @@ export interface UiHooks {
   newRun(): void;
   /** Show the birth reveal for the current character (e.g. after taking over a successor). */
   showBirth(): void;
+  /** The game-over summary received while the death screen was showing (extinct line), if any. */
+  pendingGameOver(): SimEvents['gameOver'] | null;
 }
 
 export type PanelFactory<R extends PanelRequest = PanelRequest> = (ctx: PanelCtx, req: R, hooks: UiHooks) => UiPanel;
