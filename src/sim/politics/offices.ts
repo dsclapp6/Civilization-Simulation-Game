@@ -386,19 +386,22 @@ export class Offices {
     return best;
   }
 
-  /** Puts a person in the post; the previous holder steps down. */
-  install(office: OfficeId, place: number, p: Person): void {
+  private unseat(office: string, place: number, id: PersonId): void {
     const c = this.core;
-    for (const id of this.holders(office, place)) {
-      if (id === p.id) continue;
-      const old = c.person(id);
-      if (!old) continue;
+    const old = c.person(id);
+    if (old) {
       const i = old.offices.findIndex((o) => o.office === office && o.place === place);
       if (i >= 0) old.offices.splice(i, 1);
       c.state.touch(old);
-      this.unindex(office, place, id);
-      c.sim.events.emit('office', { person: id, office, place, gained: false });
     }
+    this.unindex(office, place, id);
+    c.sim.events.emit('office', { person: id, office, place, gained: false });
+  }
+
+  /** Puts a person in the post; the previous holder steps down (unless the post has several seats). */
+  install(office: OfficeId, place: number, p: Person, keep = false): void {
+    const c = this.core;
+    if (!keep) for (const id of this.holders(office, place)) if (id !== p.id) this.unseat(office, place, id);
     if (!p.offices.some((o) => o.office === office && o.place === place)) p.offices.push({ office, place, since: Math.round(c.day) });
     p.prestige += office === 'reeve' ? 2 : 4;
     if ((office === 'mayor' || office === 'alderman') && p.rankTier < 4) setRank(c.sim, p, 4);
@@ -436,26 +439,29 @@ export class Offices {
   }
 
   private review(seat: Seat): void {
-    const c = this.core;
     const { office, place } = seat;
     if (office === 'bailiff' && !this.needsBailiff(place)) return;
-    const live = this.holders(office, place);
-    const n = SEATS[office] ?? 1;
-    const yearly = office === 'reeve' || office === 'mayor' || office === 'alderman' || office === 'warden';
-    if (!yearly && live.length >= n) return; // appointed posts are held for life
-    if (!this.titleFor(office, place) && office !== 'warden' && office !== 'mayor' && office !== 'alderman') return;
-    const before = live.length;
-    for (let i = before; i < n || (yearly && i < 1); i++) {
-      const w = this.holdElection(office, place);
-      if (!w) break;
-      if (!yearly) continue;
-      // a second alderman: the runner-up
-      if (n > 1 && i + 1 < n) {
-        const next = this.pool(office, place, 6).find((p) => !this.holders(office, place).includes(p.id));
-        if (next && this.holders(office, place).length < n) this.install(office, place, next);
-      }
-      break;
+    if (office === 'alderman') { this.seatAldermen(place); return; }
+    const yearly = office === 'reeve' || office === 'mayor' || office === 'warden';
+    if (!yearly && this.holders(office, place).length >= 1) return; // appointed posts are held for life
+    if (!yearly && !this.titleFor(office, place)) return;
+    this.holdElection(office, place);
+  }
+
+  /** The council of a town: the two best-liked burgesses sit as aldermen. */
+  private seatAldermen(place: number): void {
+    const c = this.core;
+    const { tally, candidates } = this.tally('alderman', place, true);
+    const winners: Person[] = [];
+    for (const t of tally.slice(0, SEATS.alderman ?? 2)) {
+      const p = candidates.find((x) => x.id === t.person);
+      if (p) winners.push(p);
     }
+    for (const id of this.holders('alderman', place)) if (!winners.some((w) => w.id === id)) this.unseat('alderman', place, id);
+    const have = this.holders('alderman', place);
+    for (const w of winners) if (!have.includes(w.id)) this.install('alderman', place, w, true);
+    c.save.candidacies = c.save.candidacies.filter((x) => !(x.office === 'alderman' && x.place === place));
+    c.touch();
   }
 
   // ---- the player ----
