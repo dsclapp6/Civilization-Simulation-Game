@@ -50,7 +50,7 @@ function calib(E: Econ): { yg: number; meanFert: number } {
   }
   // gross yield of a cropped strip at ratio 1: needs 12% over the need, after the tithe and the seed
   // (household farming gets care 0.7, weeding done, a little lag: about 0.93 of the potential)
-  const yg = cropped > 0 ? (need * 1.08) / (cropped * 0.66 * 0.93) : 20;
+  const yg = cropped > 0 ? (need * 1.1) / (cropped * 0.66 * 0.93) : 20;
   const r = { yg, meanFert: n > 0 ? fertSum / n : 0.6 };
   globalCache.set(E, r);
   return r;
@@ -518,18 +518,29 @@ export function initFarm(E: Econ): void {
 function adaptYields(E: Econ): void {
   const base = GOODS.wheat.basePrice;
   const scale = (E.farm.scale ??= {});
-  for (const s of E.world.settlements) {
-    if (s.strips.length === 0) continue;
-    const price = postedPrice(E, s.id, 'wheat', 'buy', 0) / base;
-    const hunger = E.save.tally[String(s.id)]?.[5] ?? 0;
-    const cur = scale[s.id] ?? 1;
-    // a dead band around the usual price (the control loop has a year's delay, so it must not chase the price): hunger or dear
+  // the fields feed their market's whole hinterland (towns and castles have none of their own), so hunger and the price
+  // of corn are read for the market and answered by every village that sends its grain there
+  for (const mid of E.marketIds) {
+    const members = E.hinterland.get(mid) ?? [mid];
+    let hungry = 0, days = 0;
+    for (const sid of members) {
+      const t = E.save.tally[String(sid)];
+      if (t && t[6]) { hungry += (t[5] ?? 0) * t[6]; days += t[6]; }
+    }
+    const hunger = days > 0 ? hungry / days : 0;
+    const price = postedPrice(E, mid, 'wheat', 'buy', 0) / base;
+    // a dead band around the usual price (the loop has a year's delay, so it must not chase the price): hunger or dear
     // corn bring more land and effort into use quickly, a glut takes it out again slowly
     let drift = 0;
-    if (hunger > 0.01 || price > 1.3) drift = Math.min(0.03, 0.01 + Math.max(0, hunger - 0.01) * 0.5 + Math.max(0, price - 1.3) * 0.06);
-    else if (price < 0.75) drift = -Math.min(0.02, (0.75 - price) * 0.1);
+    if (hunger > 0.004 || price > 1.15) drift = Math.min(0.03, 0.01 + Math.max(0, hunger - 0.004) * 0.6 + Math.max(0, price - 1.15) * 0.06);
+    else if (price < 0.75 && hunger < 0.001) drift = -Math.min(0.02, (0.75 - price) * 0.1);
     if (drift === 0) continue;
-    scale[s.id] = Math.round(Math.max(0.7, Math.min(1.35, cur * (1 + drift))) * 1000) / 1000;
+    for (const sid of members) {
+      const s = E.settlementById.get(sid);
+      if (!s || s.strips.length === 0) continue;
+      const cur = scale[sid] ?? 1;
+      scale[sid] = Math.round(Math.max(0.7, Math.min(1.35, cur * (1 + drift))) * 1000) / 1000;
+    }
   }
 }
 

@@ -34,7 +34,7 @@ export const DEALER_SPREAD = 0.14;
 
 /** Days of the hinterland's use a market keeps in stock. */
 const COVER: Record<string, number> = {
-  wheat: 14, rye: 14, barley: 14, oats: 14, peas: 14, beans: 14, bread: 1.5, ale: 3, vegetables: 3, cheese: 10,
+  wheat: 8, rye: 8, barley: 8, oats: 8, peas: 8, beans: 8, bread: 1.5, ale: 3, vegetables: 3, cheese: 10,
   eggs: 4, meat: 4, fish: 3, firewood: 6,
 };
 /** Daily pull of the stock towards its target (trade with the wider world beyond the modelled markets). */
@@ -287,6 +287,8 @@ function reliefCarts(E: Econ): void {
         const spare = ra.s[i] - 1.1 * ta;
         if (spare < 0.5) continue;
         const sa = E.settlementById.get(a) as Settlement;
+        // carts cross a border only for a bad year's worst gaps and carry less: a kingdom's famine is mostly its own
+        if (sa.kingdom !== sb.kingdom && fb > 0.2) continue;
         const d = Math.hypot(sa.x - sb.x, sa.z - sb.z) * (sa.kingdom === sb.kingdom ? 1 : 2);
         const score = spare / (1 + d / 4000);
         if (score > bestScore) { bestScore = score; best = a; bestDist = d; }
