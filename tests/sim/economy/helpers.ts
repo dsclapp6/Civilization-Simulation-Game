@@ -10,6 +10,7 @@ import { stockHousehold } from '../../../src/sim/economy/macro';
 import type { Simulation } from '../../../src/sim/sim';
 import { installSocial } from '../../../src/sim/social';
 import type { SocialApi, TopicProvider } from '../../../src/sim/social/types';
+import type { JobOffer } from '../../../src/sim/economy/types';
 import { newSim, type TestSimOptions } from '../helpers';
 
 export interface EconSim { sim: Simulation; eco: EconomyRuntime; social: SocialApi; topics: TopicProvider[] }
@@ -135,6 +136,96 @@ export function grind(sim: Simulation, target: TargetRef, id: string, max = 60):
     if (!r.ok) break;
   }
   return n;
+}
+
+// ---------------------------------------------------------------------------------------------
+// A scripted worker: takes the first enabled option it likes, eats and sleeps as a sensible person would
+// ---------------------------------------------------------------------------------------------
+
+export interface WorkSpec {
+  /** The player's home (the family table for meals). */
+  home: TargetRef;
+  /** Places to look for work, in order of preference. */
+  targets: TargetRef[];
+  /** Option ids worth doing. */
+  accept: RegExp;
+  /** Option ids never to start. */
+  reject?: RegExp;
+  /** Game days to work (the run also ends when `until` returns true). */
+  days: number;
+  until?: () => boolean;
+  /** Counts of completed actions by id, and a short log. */
+  counts?: Record<string, number>;
+  log?: string[];
+  /** Hours to let pass when there is nothing to do (default 6). */
+  idleHours?: number;
+}
+
+/** Runs the scripted worker; returns the game days used. */
+export function runWork(sim: Simulation, spec: WorkSpec): number {
+  const player = playerOf(sim);
+  const start = sim.absDay;
+  const counts = spec.counts ?? {};
+  const note = (o: ActionOption, msg?: string): void => {
+    counts[o.id] = (counts[o.id] ?? 0) + 1;
+    if (spec.log && spec.log.length < 500) spec.log.push(`${(sim.absDay - start).toFixed(1)} ${o.id}${msg ? `: ${msg}` : ''}`);
+  };
+  for (let iter = 0; iter < 6000 && sim.absDay - start < spec.days; iter++) {
+    if (spec.until?.()) break;
+    if (sim.state.run.phase !== 'alive') break;
+    if (player.needs.hunger < 0.45) {
+      const eat = find(optionsFor(sim, spec.home), 'eat.home');
+      if (eat?.enabled) perform(sim, eat);
+    }
+    if (player.needs.rest < 0.2) {
+      sim.dispatch({ type: 'sleep' });
+      let g = 0;
+      while (sim.clock.skip && g++ < 2000) sim.step(0.25);
+    }
+    let acted = false;
+    for (const t of spec.targets) {
+      const o = optionsFor(sim, t).find((x) => x.enabled && spec.accept.test(x.id) && !(spec.reject && spec.reject.test(x.id)));
+      if (!o) continue;
+      const r = perform(sim, o);
+      if (r.ok) { note(o, r.message); acted = true; break; }
+    }
+    if (!acted) sim.advanceHours(spec.idleHours ?? 6);
+  }
+  return sim.absDay - start;
+}
+
+/**
+ * Makes the player a free-born boy of `age` living where a master takes apprentices with the given title
+ * ("Apprentice smith"), with money in the family purse for the premium. Returns the post and its workshop.
+ */
+export function makeApprentice(sim: Simulation, opts: { age?: number; title?: string; purse?: number } = {}): { player: Person; hh: Household; job: JobOffer; shop: number; settlement: number } {
+  const st = sim.state;
+  const eco = ecoOf(sim);
+  const player = playerOf(sim);
+  const hh = st.households.get(player.household) as Household;
+  const title = opts.title ?? 'Apprentice smith';
+  player.sex = 'm';
+  player.estate = 'free';
+  player.birthDay = Math.round(sim.absDay - (opts.age ?? 12) * 16);
+  refreshTrained(player, ageYears(player, sim.absDay));
+  player.career = 'child';
+  player.careerStage = 0;
+  hh.purse = opts.purse ?? 600;
+  let found: JobOffer | undefined;
+  // the player's own settlement first, then the others
+  const order = [...sim.world.settlements].sort((a, b) => (a.id === player.settlement ? -1 : 0) - (b.id === player.settlement ? -1 : 0) || a.id - b.id);
+  for (const s of order) {
+    found = eco.jobs(s.id, player.id).find((j) => j.title === title && j.building !== undefined);
+    if (found) break;
+  }
+  if (!found) throw new Error(`nobody in the test world takes an "${title}"`);
+  if (hh.settlement !== found.settlement) {
+    const home = pickHome(st, sim.rng('test-home'), found.settlement, ['cottage', 'longhouse', 'townhouse']);
+    st.relocateHousehold(hh, found.settlement, home ? home.id : -1);
+  }
+  st.touch(player);
+  st.touchHousehold(hh);
+  return { player, hh, job: found, shop: found.building as number, settlement: found.settlement };
 }
 
 // ---------------------------------------------------------------------------------------------
