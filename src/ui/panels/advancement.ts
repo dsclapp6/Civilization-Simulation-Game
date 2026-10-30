@@ -13,8 +13,8 @@ import type { PanelCtx, UiPanel } from '../app/panel';
 import { every, panelOf } from './base';
 import { registerPanel } from './extRegistry';
 
-const adv = (ctx: PanelCtx): AdvancementRuntime | undefined => ctx.sim.services.advancement as AdvancementRuntime | undefined;
-const hap = (ctx: PanelCtx): HappeningsRuntime | undefined => ctx.sim.services.happenings as HappeningsRuntime | undefined;
+const adv = (ctx: PanelCtx): AdvancementRuntime | undefined => ctx.sim.services?.advancement as AdvancementRuntime | undefined;
+const hap = (ctx: PanelCtx): HappeningsRuntime | undefined => ctx.sim.services?.happenings as HappeningsRuntime | undefined;
 
 // ---------------------------------------------------------------------------------------------
 // The House tree
@@ -40,7 +40,7 @@ const pct = (v: number): string => `${Math.round(Math.abs(v) * 100)}%`;
 const PRACTICE_TEXT: Record<string, string> = {
   'farm.plough': 'ploughing', 'farm.sow': 'sowing', 'farm.harrow': 'harrowing', 'farm.manure': 'spreading manure', 'farm.mill': 'milling grain',
   'craft.weave_cloth': 'weaving cloth', 'craft.weave_linen': 'weaving linen', 'craft.forge_plates': 'forging coats of plates', 'craft.forge_crossbow': 'forging crossbows',
-  'arms.practise': 'practice at the butts', 'trade.market': 'trading at market', 'trade.person': 'trading with merchants', 'manage.household': 'managing a household',
+  'arms.practise': 'archery at the butts', 'trade.market': 'trading at market', 'trade.person': 'trading with merchants', 'manage.household': 'managing a household',
 };
 const STUDY_TEXT: Record<string, string> = { school: 'the school', church: 'the church', cloister: 'a cloister', abbey_church: 'an abbey', cathedral: 'a cathedral', infirmary: 'an infirmary', guildhall: 'a guildhall' };
 

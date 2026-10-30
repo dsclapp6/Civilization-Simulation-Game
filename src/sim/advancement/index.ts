@@ -11,9 +11,8 @@ import type { Wave3Deps } from '../wave3deps';
 import { installHappenings, type HappeningsInstall } from '../happenings';
 import { Adv } from './core';
 import { BRANCHES, TECHS, TECH_BY_ID } from './data';
-import { canLearn, libraryLost, onDeath, settlementYear } from './learning';
+import { canLearn, libraryLost, onDeath, practice, settlementYear } from './learning';
 import { listenToActions, studyProvider, teach, techTopics } from './topics';
-import { practice } from './learning';
 import type { AdvancementRuntime, TechState, TechView } from './types';
 
 export type { AdvancementRuntime, BranchDef, BranchId, TechDef, TechView, TechState } from './types';
