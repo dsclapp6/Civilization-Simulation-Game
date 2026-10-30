@@ -3,14 +3,14 @@
 // providers on `sim.actions`, the dialogue topics on the social system, and returns the API the UI,
 // the player controller, social and the agents use. Everything works headless.
 import type { Simulation } from '../sim';
-import type { SocialApi } from '../social/types';
+import type { PriceTip, SocialApi } from '../social/types';
 import { Econ } from './core';
-import { PERK_BY_ID, PERKS, GOODS, GOOD_LIST, ENTRY_TESTS, describeItem } from './data';
+import { PERK_BY_ID, PERKS, GOODS, GOOD_LIST, ENTRY_TESTS, MACRO_INDEX, basePriceOf, describeItem } from './data';
 import { holdingsDaily, holding, householdPlan, ledger, listingsAt, buyOrRent, setTask, hire, dismiss, stackList } from './holdings';
 import { applyForJob, careerPaths, employmentDaily, employmentOf, jobsAt, quitJob, workSpot } from './jobs';
 import { bagWeight, bagTake, bagAdd, bagGet } from './items';
 import { apiPrice, doTrade, marketView, partnerLines, quoteTrade } from './market';
-import { consume, playerHour, seasonalNeeds } from './needs';
+import { clothingStatus, consume, playerHour, seasonalNeeds } from './needs';
 import { attachObligationEvents, obligationsDaily, obligationsOf } from './obligations';
 import { addOwned, capacityOf, ownedQty, takeOwned, weightOf, canCarry } from './own';
 import { announcePerkChoices, choosePerk, openChoices } from './perks';
@@ -212,6 +212,53 @@ export function installEconomy(sim: Simulation, deps: EconomyDeps): EconomyRunti
     choosePerk: (person, perkId) => { const p = E.person(person); return p ? choosePerk(E, p, perkId) : noPerson; },
   };
   void parseItemKey; void bagGet; void PERKS;
+  // ---- links into the social system (docs/SOCIAL.md) ----
+  deps.social.setHooks?.({
+    giveHook: (from, to, key, qty) => api.give(from, to, key as ItemKey | 'money', qty),
+    itemInfoHook: (key) => {
+      if (key === 'money') return { name: 'coin', value: 1 };
+      const g = goodOf(key);
+      return g ? { name: describeItem(key), value: basePriceOf(key) } : null;
+    },
+    priceTipsHook: (settlement) => {
+      const mid = E.marketFor(settlement);
+      const view = mid >= 0 ? marketView(E, mid, null) : null;
+      if (!view) return [];
+      const tips: PriceTip[] = [];
+      for (const l of view.lines) {
+        if (MACRO_INDEX[parseItemKey(l.key).good] === undefined || Math.abs(l.trend) < 0.15) continue;
+        tips.push({ good: parseItemKey(l.key).good, trend: l.trend, price: l.buy });
+      }
+      return tips;
+    },
+    dressTierHook: (person) => {
+      const p = E.person(person);
+      if (!p) return 1;
+      // only the player's clothes are modelled; everyone else dresses to their rank
+      if (!E.save.eq[String(person)]) return p.rankTier;
+      const status = clothingStatus(E, p);
+      return Math.max(1, Math.min(8, Math.round(1 + status * 1.4)));
+    },
+    apprenticeHook: (youth, master, dryRun) => {
+      const y = E.person(youth), m = E.person(master);
+      if (!y || !m || y.death || m.death) return noPerson;
+      const job = jobsAt(E, m.settlement, youth).find((j) => j.employer === master && j.terms === 'apprenticeship');
+      if (!job) return { ok: false, reason: `${m.first} takes no apprentices just now` };
+      const premium = job.premium ?? 0;
+      const lacking = job.requirements.find((r) => !r.met && !/premium|leave/i.test(r.label));
+      if (lacking) return { ok: false, reason: lacking.label, premium };
+      if (dryRun) return { ok: true, premium };
+      if (!E.isPlayer(youth) && premium > 0) {
+        // the youth's family pays the master out of its purse
+        const hh = E.hhOf(y);
+        if (!hh || hh.purse + 1e-9 < premium) return { ok: false, reason: 'The family cannot pay the premium', premium };
+        E.debit(hh, premium);
+      }
+      const r = applyForJob(E, youth, job.id, { premiumPaid: !E.isPlayer(youth) });
+      return { ...r, premium };
+    },
+  });
+
   return api;
 }
 

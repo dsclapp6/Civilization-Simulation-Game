@@ -89,7 +89,7 @@ export interface EconSave {
   /** Rent terms already paid (householdId → last term index paid). */
   paid: Record<string, number>;
   /** Day numbers of the last daily/weekly bookkeeping (idempotency across loads). */
-  last: { day: number; week: number; year: number };
+  last: { day: number; week: number; year: number; /** 1 while the player's household table is laid (set by the macro household tick), 0 when it went short. */ board?: number };
 }
 
 export function newEconSave(): EconSave {

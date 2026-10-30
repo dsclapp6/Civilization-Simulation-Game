@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { skillLevel, xpForLevel } from '../../../src/sim/people';
 import { CAREERS } from '../../../src/sim/careers';
+import { dayOfWeek } from '../../../src/sim/calendar';
 import { econSim, find, makeApprentice, optionsFor, perform, runWork } from './helpers';
 import { bagAdd } from '../../../src/sim/economy/items';
 
@@ -66,15 +67,19 @@ describe("the smith's ladder", () => {
     // give him what the masterpiece asks for
     for (const k of ['iron', 'charcoal', 'nails', 'timber', 'planks']) bagAdd(player.inventory, k, 40);
     player.money += 200;
+    // a masterpiece takes a day or two at the forge: start each try the morning after the holy day
     let master = false;
+    const msgs: string[] = [];
     for (let attempt = 0; attempt < 12 && !master; attempt++) {
+      for (let g = 0; g < 200 && !(dayOfWeek(sim.absDay) === 1 && sim.absDay % 1 > 0.3 && sim.absDay % 1 < 0.45); g++) sim.advanceHours(1);
       const o = find(optionsFor(sim, smithy), 'craft.masterpiece');
-      if (!o || !o.enabled) break;
+      if (!o || !o.enabled) { msgs.push(`disabled: ${o?.reason}`); break; }
       const r = perform(sim, o);
-      if (r.ok) master = true;
+      msgs.push(`${r.ok} ${r.message}`);
+      if (r.ok && player.careerStage === 2) master = true;
       for (const k of ['iron', 'charcoal', 'nails', 'timber', 'planks']) bagAdd(player.inventory, k, 20);
     }
-    expect(master, 'the guild passes the masterpiece').toBe(true);
+    expect(master, `the guild passes the masterpiece: ${msgs.join(' | ')}`).toBe(true);
     expect(player.careerStage).toBe(2);
     expect(eco.employment(player.id)).toBeNull(); // he works for himself now
     const hh2 = sim.state.households.get(player.household)!;

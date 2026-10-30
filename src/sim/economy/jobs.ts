@@ -404,14 +404,14 @@ function findJob(E: Econ, jobIdNum: number, person: PersonId): JobOffer | null {
   return null;
 }
 
-export function applyForJob(E: Econ, personId: PersonId, id: number): Result {
+export function applyForJob(E: Econ, personId: PersonId, id: number, opts: { premiumPaid?: boolean } = {}): Result {
   const p = E.person(personId);
   if (!p || p.death) return { ok: false, reason: 'Nobody to take the post' };
   const job = findJob(E, id, personId);
   if (!job) return { ok: false, reason: 'That post is no longer on offer' };
   const filledUntil = E.save.filled[String(id)];
   if (filledUntil !== undefined && filledUntil > E.day) return { ok: false, reason: 'That post has been taken' };
-  const lacking = job.requirements.find((r) => !r.met);
+  const lacking = job.requirements.find((r) => !r.met && !(opts.premiumPaid && /premium|leave/i.test(r.label)));
   if (lacking && !(E.isPlayer(personId) === false && job.terms === 'day')) return { ok: false, reason: `Needs: ${lacking.label}` };
   if (employmentOf(E, personId) && job.terms !== 'day') return { ok: false, reason: 'You are already bound to a master. Leave that post first' };
   const employer = job.employer ? E.person(job.employer) : undefined;

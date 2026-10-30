@@ -92,7 +92,7 @@ function householdDay(
     any ??= p;
     const age = (now - p.birthDay) / 16;
     const u = age >= 14 ? 1 : age >= 8 ? 0.7 : age >= 3 ? 0.5 : 0.25;
-    if (E.isPlayer(id)) { playerHere = true; playerUnit = u; continue; }
+    if (E.isPlayer(id)) { playerHere = true; playerUnit = u; }
     units += u;
   }
   if (!any) return;
@@ -118,8 +118,10 @@ function householdDay(
     drink(E, s, hh, units * dt, tier, urban);
     burn(E, s, hh, units * dt, tier, urban, sea);
     E.probe?.('food', tier, hh.purse - pFood);
-    if (playerHere && unfilled > 0.25) {
-      E.notify('Your household is going hungry. Buy food or bring in grain.', 'warn');
+    if (playerHere) {
+      // the player sits down at the household table at meal times while it is laid (needs.ts)
+      E.save.last.board = unfilled > 0.25 ? 0 : 1;
+      if (unfilled > 0.25) E.notify('Your household is going hungry. Buy food or bring in grain.', 'warn');
     }
   }
 
@@ -152,7 +154,7 @@ function householdDay(
     marketer = false;
     for (const id of hh.members) if (!E.isPlayer(id) && E.save.plan[String(id)] === 'market') { marketer = true; break; }
   }
-  sellSurplus(E, s, hh, units + playerUnit, tier, marketer);
+  sellSurplus(E, s, hh, units, tier, marketer);
   E.probe?.('sales', tier, hh.purse - pSell);
 
   // ---- the purse of a household nobody plays pulls towards what its rank and size would hold ----

@@ -88,7 +88,7 @@ function warn(E: Econ, p: Person, kind: string, text: string, level: 'warn' | 'd
 }
 
 /** Every hour: the player's needs move, and what they cost in health. */
-export function playerHour(E: Econ, _info: HourInfo): void {
+export function playerHour(E: Econ, info: HourInfo): void {
   const p = E.person(E.playerId);
   if (!p || p.death || E.state.run.phase !== 'alive') return;
   const n = p.needs;
@@ -100,6 +100,12 @@ export function playerHour(E: Econ, _info: HourInfo): void {
   if (!sleeping) n.rest = r2(clamp01(n.rest - 0.036 - (night ? 0.01 : 0)));
   else n.rest = r2(clamp01(n.rest + 0.12));
 
+  // two meals a day at the household table, charged to the household by the macro tick (macro.ts): board and lodging,
+  // the family's supper. Away from the home village there is no table: carry bread or buy a meal.
+  if ((info.hour === 7 || info.hour === 18) && n.hunger < 0.8 && E.save.last.board === 1) {
+    const hh = E.hhOf(p);
+    if (hh && hh.settlement === p.settlement) n.hunger = r2(Math.max(n.hunger, 0.92));
+  }
   autoEat(E, p);
 
   // warmth: weather against clothes, shelter and fire
