@@ -254,6 +254,23 @@ export async function start(root: AppRoot): Promise<void> {
       },
     },
     {
+      id: 'death-extinct', label: 'Death (last of the House)', group: 'Game', run: async (c) => {
+        const mock = await c.enter({ fresh: true, bg: 'night', time: 0.3 });
+        const sim = mock.sim;
+        const player = sim.state.persons.get(sim.state.run.playerId);
+        if (!player) return;
+        // everyone who could carry on dies first; then the player
+        for (let round = 0; round < 8; round++) {
+          const targets = sim.eligibleSwitchTargets();
+          if (!targets.length) break;
+          for (const id of targets) { const p = sim.state.persons.get(id); if (p && !p.death) killPerson(sim, p, 'plague', sim.absDay); }
+        }
+        sim.score.award('deed', 150, 'Gallery deeds');
+        killPerson(sim, player, 'plague', sim.absDay);
+        await c.frames(4);
+      },
+    },
+    {
       id: 'gameover', label: 'Game over', group: 'Game', run: async (c) => {
         const mock = await c.enter({ fresh: true, bg: 'night', time: 0.2 });
         mock.sim.score.award('rank', 900, 'Gallery rank');

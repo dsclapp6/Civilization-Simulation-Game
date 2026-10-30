@@ -178,7 +178,8 @@ export function lifeStory(ctx: ReadCtx, deceasedId: PersonId, lifeNumber = 1): L
   const dy = toDate(deathDay).year;
   const career = p ? CAREERS[p.career].label.toLowerCase() : 'person';
   const born = by >= 1 ? `was born in Year ${by}` : 'was born long before this chronicle began';
-  paras.push(`${name} ${born}${place ? ` and lived in ${place}` : ''}. ${capital(they)} ${p ? `worked as a ${career}` : 'made a life'} and ${stationPhrase(tier)}.`);
+  if (age < 14) paras.push(`${name} ${born}${place ? ` and lived in ${place}` : ''}. ${capital(they)} was only ${age} years old.`);
+  else paras.push(`${name} ${born}${place ? ` and lived in ${place}` : ''}. ${capital(they)} ${p ? `worked as a ${career}` : 'made a life'} and ${stationPhrase(tier)}.`);
   if (spouseP && p) {
     const kids = children.length;
     paras.push(`${capital(they)} married ${fullName(spouseP)} in Year ${toDate(p.marriedDay >= 0 ? p.marriedDay : deathDay).year}${kids ? ` and was ${sex === 'm' ? 'father' : 'mother'} to ${plural(kids, 'child', 'children')}: ${joinList(children.slice(0, 4).map((c) => c.name.split(' ')[0]))}${kids > 4 ? ' and more' : ''}.` : '.'}`);

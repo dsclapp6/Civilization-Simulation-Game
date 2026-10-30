@@ -1,5 +1,5 @@
 // UI screenshots for visual review: starts Vite on :5177, opens the UI gallery (?mode=ui) in headless
-// Chromium and saves docs/ui/<name>-<WxH>.png for every screen and panel.
+// Chromium and saves docs/ui/<name>-<WxH>.jpg (or .png) for every screen and panel.
 //
 //   node tools/ui-shots.mjs                       # all entries at 1280x720 and 1920x1080
 //   node tools/ui-shots.mjs hud trade --size=1280x720
