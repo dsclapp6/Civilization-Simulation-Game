@@ -4,7 +4,9 @@
 import { dist } from '../../core/math';
 import { arrivalOf } from './arrive';
 import { disband, giveOrder, marchHour, nearestSettlementId, raise, settlementPoint } from './armies';
+import { defendersOf } from './battle';
 import { UNIT_POWER } from './config';
+import { fortBonus, fortifications } from './siege';
 import type { Mil } from './store';
 import { CHAR_UNIT, type Army } from './types';
 
@@ -241,6 +243,22 @@ function garrisonAt(M: Mil, sid: number): number {
 const garrisonCache = new Map<number, number>();
 let garrisonDay = -1;
 
+function fortified(M: Mil, sid: number): boolean { return fortifications(M, sid).length > 0; }
+
+const defenceCache = new Map<number, number>();
+let defenceDay = -1;
+/** Fighting weight of a strong place's defenders times its walls, cached for the day (the assault would meet exactly this). */
+function defenceOf(M: Mil, sid: number, lord: number): number {
+  const day = Math.floor(M.day);
+  if (defenceDay !== day) { defenceCache.clear(); defenceDay = day; }
+  let v = defenceCache.get(sid);
+  if (v === undefined) {
+    v = Math.max(6, defendersOf(M, sid, lord).total * fortBonus(M, sid));
+    defenceCache.set(sid, v);
+  }
+  return v;
+}
+
 /** The most rewarding enemy place we can take or ravage: value over distance, weaker and hungrier first. */
 function pickTarget(M: Mil, a: Army): { id: number; how: 'siege' | 'raid' } | null {
   const size = a.men.length;
@@ -267,14 +285,19 @@ function pickTarget(M: Mil, a: Army): { id: number; how: 'siege' | 'raid' } | nu
     if (ss) { score *= 1 + Math.max(0, 1 - ss.prosperity) * 1.5 + ss.epidemic * 0.5; }
     const happ = M.sim.services.happenings;
     if (happ && happ.activeAt(s.id).length > 0) score *= 1.25;
-    const defenders = Math.max(4, garrisonAt(M, s.id) * 0.8 + (strong ? 18 : 4) + (ss ? ss.target * 0.03 : 0));
-    const odds = power / (defenders * (strong ? 2.2 : 1));
+    // what the walls hold: the real garrison, retinue and militia (as the assault would meet them) behind the fortifications
+    const defenders = strong ? defenceOf(M, s.id, lord) : Math.max(4, garrisonAt(M, s.id) * 0.8 + 4 + (ss ? ss.target * 0.03 : 0));
+    const odds = power / defenders;
     let how: 'siege' | 'raid' = 'raid';
     if (strong) {
-      if (odds < 1.0 || size < 60) continue;
+      if (odds < 0.75 || size < 25) continue;
       how = 'siege';
     } else {
-      how = size < 90 || pol === undefined ? 'raid' : (odds > 2.5 && s.kind !== 'hamlet' ? 'siege' : 'raid');
+      // a manor house is taken (not just ravaged) when it is the enemy's seat or has earthworks and the host is clearly stronger
+      const seat = M.state.houses.get(lord)?.seat === s.id;
+      const earthworks = seat || fortified(M, s.id);
+      how = pol === undefined || s.kind === 'hamlet' || size < 25 ? 'raid'
+        : earthworks && odds > 1.3 ? 'siege' : size >= 90 && odds > 2.5 ? 'siege' : 'raid';
     }
     score *= 0.9 + rng.next() * 0.2;
     if (!best || score > best.score) best = { id: s.id, how, score };

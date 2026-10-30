@@ -572,6 +572,8 @@ export function startRevolt(H: Hap, sid: number): HappeningRec | null {
 }
 
 function revoltRoll(H: Hap): void {
+  // politics (unrest.ts) owns risings when it is installed; this roll is the fallback without it
+  if (H.sim.services.politics) return;
   const rng = H.rng();
   for (const s of H.world.settlements) {
     if (s.kind === 'castle' || s.kind === 'city') continue;
@@ -621,6 +623,11 @@ function resolveRevolt(H: Hap, rec: HappeningRec): void {
 
 /** A realm, county or barony in the hands of a child (regency), shared among coheiresses, or without a holder is in crisis. */
 function successionWatch(H: Hap): void {
+  // with politics installed it owns titles, regencies and their crises; the happenings only watch when it is absent
+  if (H.sim.services.politics) {
+    for (const rec of H.activeOf('succession')) if (H.day >= rec.end) H.end(rec, { place: H.placeName(rec.settlement) });
+    return;
+  }
   for (const t of H.state.titles.values()) {
     if (t.kind !== 'kingdom' && t.kind !== 'county' && t.kind !== 'barony') continue;
     const trouble = t.holder === 0 ? 'vacant' : t.regent !== 0 ? 'regency' : t.coholders.length > 1 ? 'coheiresses' : '';
