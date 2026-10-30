@@ -365,11 +365,11 @@ export class PlayerController implements PlayerApi {
     h.speed = b.speed;
     h.gait = b.sitting ? 'sit' : b.gait;
     h.following = this.followId ? this.nameOf(this.followId) : null;
-    h.combat = this.combat() ? this.combatHud() : undefined;
+    h.combat = this.combat() ? this.hudCombat : undefined;
     return h;
   }
 
-  /** The fighting state for the HUD, from the pose the combat module last asked of the body. */
+  /** Refreshes the fighting state for the HUD from the pose the combat module last asked of the body (every sub-step, so no blow is missed). */
   private combatHud(): PlayerCombatHud {
     const c = this.hudCombat;
     const cp = this.combatPose;
@@ -666,7 +666,7 @@ export class PlayerController implements PlayerApi {
   private stepCombat(p: Person, working: boolean, held: boolean, dt: number): PlayerCombatPose | null {
     const port = this.combat();
     this.combatPose = null;
-    if (!port || this.journey?.state.phase === 'travelling') return null;
+    if (!port || this.journey?.state.phase === 'travelling') { this.combatHud(); return null; }
     const b = this.avatar;
     const f = this.cframe;
     f.person = p.id; f.x = b.x; f.y = b.y; f.z = b.z; f.yaw = b.yaw; f.speed = b.speed; f.mounted = b.mounted !== null;
@@ -675,8 +675,9 @@ export class PlayerController implements PlayerApi {
     f.dt = dt;
     port.step(f, this.cpose);
     const pose = this.cpose;
-    if (!pose.engaged && pose.anim === null && pose.moveScale === 1 && pose.staminaCost === 0 && pose.effort === 0 && pose.faceYaw === null) return null;
+    if (!pose.engaged && pose.anim === null && pose.moveScale === 1 && pose.staminaCost === 0 && pose.effort === 0 && pose.faceYaw === null) { this.combatHud(); return null; }
     this.combatPose = pose;
+    this.combatHud();
     return pose;
   }
 
