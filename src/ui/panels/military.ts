@@ -96,7 +96,7 @@ export function armyPanel(ctx: PanelCtx, startTab: Tab = 'command'): UiPanel {
       h('div', { style: { margin: '8px 0' } }, troops(a)),
       h('div.mu-grid.c2', null,
         h('div', null, h('div.mu-tiny.mu-dim.mu-caps', null, 'Morale'), morale.el),
-        h('div', null, h('div.mu-tiny.mu-dim.mu-caps', null, `Food: ${a.supplyDays} days`), food.el)));
+        h('div', null, h('div.mu-tiny.mu-dim.mu-caps', null, `Food: ${plural(a.supplyDays, "day")}`), food.el)));
   };
 
   const places = (a: ArmyDetail): Array<{ id: number; name: string; kind: string; d: number; hostile: boolean }> => {
@@ -225,7 +225,7 @@ export function armyPanel(ctx: PanelCtx, startTab: Tab = 'command'): UiPanel {
       if (svc.level === 'army') wrap.append(orders(army, 'army'));
       const siege = army.task === 'siege' ? mil.sieges().find((s) => s.army === army.id) : undefined;
       if (siege) wrap.append(h('div.mu-card', null, h('h4', null, `The siege of ${siege.name}`),
-        h('div.mu-row.mu-wrap.mu-gap-6', { style: { marginTop: '6px' } }, chip(`Food within: ${siege.foodDays} days`, siege.foodDays < 5 ? 'vermilion' : 'gold', 'bread'), chip(`${siege.defenders} defenders`, '', 'shield'),
+        h('div.mu-row.mu-wrap.mu-gap-6', { style: { marginTop: '6px' } }, chip(`Food within: ${plural(siege.foodDays, "day")}`, siege.foodDays < 5 ? 'vermilion' : 'gold', 'bread'), chip(`${siege.defenders} defenders`, '', 'shield'),
           chip(`Walls ${Math.round(siege.walls * 100)}%`, '', 'masonry'), chip(`Their morale ${Math.round(siege.morale * 100)}%`, '', 'heart'),
           siege.rams ? chip(`${siege.rams} ram${siege.rams > 1 ? 's' : ''}`, 'lapis', 'hammer') : null, siege.trebuchets ? chip(`${siege.trebuchets} trebuchet${siege.trebuchets > 1 ? 's' : ''}`, 'lapis', 'hammer') : null,
           siege.mine > 0 ? chip(`Mine ${Math.round(siege.mine * 100)}%`, 'lapis', 'mining') : null)));

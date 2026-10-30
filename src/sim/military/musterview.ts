@@ -50,7 +50,7 @@ export class MusterView {
     let ax = a.x, az = a.z;
     const dx = body.x - ax, dz = body.z - az;
     const d = Math.hypot(dx, dz) || 1;
-    if (d > 40) { ax += (dx / d) * (d - 28); az += (dz / d) * (d - 28); }
+    if (d > 40) { ax += (dx / d) * (d - 24); az += (dz / d) * (d - 24); }
     if (!nav.walkable(ax, az) && nav.nearestWalkable(ax, az, 60, this.out)) { ax = this.out.x; az = this.out.z; }
     const yaw = Math.atan2(body.x - ax, body.z - az);
     const fx = Math.sin(yaw), fz = Math.cos(yaw);
