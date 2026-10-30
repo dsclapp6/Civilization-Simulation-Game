@@ -149,8 +149,7 @@ function aboutPlace(t: TopicCtx, sid: number): TopicReply {
   const { core, other } = t;
   const place = core.settlement(sid);
   const home = core.settlement(other.settlement);
-  const lines = iSay(t, 'ask.place.ask');
-  if (!place || !home) return { lines: [...lines, ...npcSays(t, 'ask.place.unknown')] };
+  if (!place || !home) return { lines: [...iSay(t, 'ask.place.ask'), ...npcSays(t, 'ask.place.unknown')] };
   const v = t.npc.vars;
   const d = Math.sqrt(dist2(place.x, place.z, home.x, home.z));
   v.there = place.name;
@@ -165,6 +164,7 @@ function aboutPlace(t: TopicCtx, sid: number): TopicReply {
   if (place.culture !== home.culture) t.npc.tags.add('there_strange');
   if (core.state.buildingsAt.get(sid)?.some((b) => b.kind === 'watermill' || b.kind === 'windmill')) t.npc.tags.add('there_mill');
   const gain = chatGain(t, 0.9, 1);
+  const lines = iSay(t, 'ask.place.ask'); // after the placeholders above are filled in
   const out: DialogueLine[] = [...lines, ...npcSays(t, 'ask.place.reply')];
   const extra = npcSays(t, 'ask.place.more');
   if (extra.length > 0 && t.npc.tags.size > 0) out.push(...extra);

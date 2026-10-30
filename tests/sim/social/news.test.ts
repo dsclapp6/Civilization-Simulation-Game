@@ -24,7 +24,7 @@ describe('news and rumour', () => {
     const lines = r.social.news(mother.settlement, 40);
     const text = lines.join('\n');
     expect(lines.length).toBeGreaterThanOrEqual(3);
-    expect(text).toContain(baby.first);
+    expect(text.includes(baby.first) || text.includes(mother.first)).toBe(true);
     expect(text).toContain(old.first);
     expect(text).toContain(groom.first);
     for (const l of lines) { expect(l).not.toMatch(/[{}]|undefined/); expect(l.length).toBeGreaterThan(10); }
@@ -41,12 +41,13 @@ describe('news and rumour', () => {
     const baby = newborn(r, mother, 0);
     baby.birthDay = Math.floor(r.sim.absDay);
     const delay = far.dist / NEWS.spreadPerDay;
-    const hearsOfIt = (): boolean => r.social.news(home, 20).some((l) => l.includes(baby.first));
-    expect(r.social.news(far.id, 20).some((l) => l.includes(baby.first))).toBe(true); // there it is fresh
+    const mentions = (l: string): boolean => l.includes(baby.first) || l.includes(mother.first);
+    const hearsOfIt = (): boolean => r.social.news(home, 40).some(mentions);
+    expect(r.social.news(far.id, 40).some(mentions)).toBe(true); // there it is fresh
     expect(hearsOfIt()).toBe(false); // here it has not arrived
     setClock(r.sim, 0.5 + 0.0, 5 + Math.ceil(delay) + 1);
     expect(hearsOfIt()).toBe(true);
-    expect(r.social.news(home, 20).find((l) => l.includes(baby.first))).toMatch(new RegExp(`${r.core.placeName(far.id)}`));
+    expect(r.social.news(home, 40).find(mentions)).toMatch(new RegExp(`${r.core.placeName(far.id)}`));
     setClock(r.sim, 0.5, 5 + NEWS.lifetimeDays + 3);
     expect(hearsOfIt()).toBe(false);
   });

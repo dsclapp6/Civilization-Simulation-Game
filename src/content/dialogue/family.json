@@ -9,24 +9,29 @@
         "It's {third}, {addr}. I'd like to ask your leave."
       ],
       "yes": [
-        { "t": "You have it, {first}, and gladly. {Third} is a good match.", "tone": "warm" },
-        { "t": "I'd hoped you would choose well. Go, and God bless you both.", "tone": "warm" },
-        { "t": "Then it's settled. I'll speak to the priest myself.", "tone": "pleased" },
-        { "t": "My blessing, and my purse as far as it reaches.", "tone": "warm", "if": { "trait": "ambitious" } },
-        { "t": "I'd have chosen differently, perhaps. But I'm not the one marrying. Go.", "tone": "friendly", "if": { "trait": "patient" } }
+        {"t": "You have it, {first}, and gladly. {Third} is a good match.", "tone": "warm"},
+        {"t": "I'd hoped you would choose well. Go, and God bless you both.", "tone": "warm"},
+        {"t": "Then it's settled. I'll speak to the priest myself.", "tone": "pleased"},
+        {"t": "My blessing, and my purse as far as it reaches.", "tone": "warm", "if": {"trait": "ambitious"}},
+        {"t": "I'd have chosen differently, perhaps. But I'm not the one marrying. Go.", "tone": "friendly", "if": {"trait": "patient"}},
+        {"t": "I'd have chosen no differently myself.", "tone": "warm"},
+        {"t": "God give you joy, {first}.", "tone": "warm"}
       ],
       "no": [
-        { "t": "I cannot, {first}. {Third} is not what I'd want for you.", "tone": "cold" },
-        { "t": "No. Not this match. I will not give leave.", "tone": "cold" },
-        { "t": "Think again. I'd sooner see you wait than marry wrong.", "tone": "sad" },
-        { "t": "I forbid it. The family's good name is not for spending.", "tone": "angry", "if": { "trait": "hot_tempered" } }
+        {"t": "I cannot, {first}. {Third} is not what I'd want for you.", "tone": "cold"},
+        {"t": "No. Not this match. I will not give leave.", "tone": "cold"},
+        {"t": "Think again. I'd sooner see you wait than marry wrong.", "tone": "sad"},
+        {"t": "I forbid it. The family's good name is not for spending.", "tone": "angry", "if": {"trait": "hot_tempered"}},
+        {"t": "Not this one. Find another.", "tone": "cold"},
+        {"t": "I'll not give my blessing. Ask me again in a year if you still wish.", "tone": "cold"}
       ],
       "later": [
-        { "t": "I'll need time to think on it, {first}. Ask again soon.", "tone": "neutral" },
-        { "t": "Give me some days. A match is not decided in a breath.", "tone": "neutral" }
+        {"t": "I'll need time to think on it, {first}. Ask again soon.", "tone": "neutral"},
+        {"t": "Give me some days. A match is not decided in a breath.", "tone": "neutral"},
+        {"t": "Come back in a few days. I must think on it.", "tone": "neutral"},
+        {"t": "Let me talk it over with the household first. Come back soon.", "tone": "neutral"}
       ]
     },
-
     "hand": {
       "ask": [
         "{Addr}, I would ask for {third}'s hand in marriage.",
@@ -35,23 +40,28 @@
         "{Third} and I are of one mind. Will you consent?"
       ],
       "yes": [
-        { "t": "I will, and gladly. You've shown yourself honest, {first}.", "tone": "warm" },
-        { "t": "Then you have my leave. Treat {third} well.", "tone": "friendly" },
-        { "t": "A fine match, by my reckoning. Take my hand on it.", "tone": "pleased" },
-        { "t": "Aye. There's no one I'd sooner see my {third} with.", "tone": "warm", "if": { "op": ["warm", "devoted"] } }
+        {"t": "I will, and gladly. You've shown yourself honest, {first}.", "tone": "warm"},
+        {"t": "Then you have my leave. Treat {third} well.", "tone": "friendly"},
+        {"t": "A fine match, by my reckoning. Take my hand on it.", "tone": "pleased"},
+        {"t": "Aye. There's no one I'd sooner see my {third} with.", "tone": "warm", "if": {"op": ["warm", "devoted"]}},
+        {"t": "You may have my blessing. Be good to {third}.", "tone": "warm"},
+        {"t": "I give {third} gladly.", "tone": "warm"}
       ],
       "no": [
-        { "t": "No. I have other plans for {third}.", "tone": "cold" },
-        { "t": "You are not what I'd want for them. I'm sorry.", "tone": "cold" },
-        { "t": "Not a chance, {first}. You've not the means, nor the name.", "tone": "cold", "if": { "trait": "ambitious" } },
-        { "t": "I'll not hear it. Leave us.", "tone": "angry", "if": { "trait": "hot_tempered" } }
+        {"t": "No. I have other plans for {third}.", "tone": "cold"},
+        {"t": "You are not what I'd want for them. I'm sorry.", "tone": "cold"},
+        {"t": "Not a chance, {first}. You've not the means, nor the name.", "tone": "cold", "if": {"trait": "ambitious"}},
+        {"t": "I'll not hear it. Leave us.", "tone": "angry", "if": {"trait": "hot_tempered"}},
+        {"t": "Not while I draw breath.", "tone": "angry"},
+        {"t": "Find a wife — a husband — elsewhere.", "tone": "cold"}
       ],
       "later": [
-        { "t": "Let me think, {first}. This is no light thing.", "tone": "neutral" },
-        { "t": "Come again in a few days. I must speak with {third} first.", "tone": "neutral" }
+        {"t": "Let me think, {first}. This is no light thing.", "tone": "neutral"},
+        {"t": "Come again in a few days. I must speak with {third} first.", "tone": "neutral"},
+        {"t": "Come back in a few days. I must think on it.", "tone": "neutral"},
+        {"t": "Let me talk it over with the household first. Come back soon.", "tone": "neutral"}
       ]
     },
-
     "lord": {
       "ask": [
         "My lord, I ask your leave to marry {third}.",
@@ -60,22 +70,27 @@
         "With your leave, {addr}: I wish to take {third} to wife."
       ],
       "yes": [
-        { "t": "You have it. The steward will name the fee. Merchet, as custom has it.", "tone": "neutral" },
-        { "t": "Granted. A marriage under my roof is no ill thing.", "tone": "friendly" },
-        { "t": "Granted, and may it be fruitful. The reeve will record it.", "tone": "friendly" },
-        { "t": "Aye, leave given. The merchet is due before Michaelmas.", "tone": "neutral", "if": { "trait": "greedy" } }
+        {"t": "You have it. The steward will name the fee. Merchet, as custom has it.", "tone": "neutral"},
+        {"t": "Granted. A marriage under my roof is no ill thing.", "tone": "friendly"},
+        {"t": "Granted, and may it be fruitful. The reeve will record it.", "tone": "friendly"},
+        {"t": "Aye, leave given. The merchet is due before Michaelmas.", "tone": "neutral", "if": {"trait": "greedy"}},
+        {"t": "Leave is given. Mark the merchet.", "tone": "neutral"},
+        {"t": "Be wed in God's name, and keep the peace of my manor.", "tone": "friendly"}
       ],
       "no": [
-        { "t": "Denied. I'll not lose a good pair of hands to another manor.", "tone": "cold" },
-        { "t": "Not this one. Choose another within my lands.", "tone": "cold" },
-        { "t": "You presume. Begone.", "tone": "angry", "if": { "trait": "hot_tempered" } }
+        {"t": "Denied. I'll not lose a good pair of hands to another manor.", "tone": "cold"},
+        {"t": "Not this one. Choose another within my lands.", "tone": "cold"},
+        {"t": "You presume. Begone.", "tone": "angry", "if": {"trait": "hot_tempered"}},
+        {"t": "I cannot spare you from my lands.", "tone": "cold"},
+        {"t": "Not this match. Choose another.", "tone": "cold"}
       ],
       "later": [
-        { "t": "I will consider it. Ask me again when I am less pressed.", "tone": "neutral" },
-        { "t": "The steward must look at the roll of tenants. Wait.", "tone": "neutral" }
+        {"t": "I will consider it. Ask me again when I am less pressed.", "tone": "neutral"},
+        {"t": "The steward must look at the roll of tenants. Wait.", "tone": "neutral"},
+        {"t": "Come back in a few days. I must think on it.", "tone": "neutral"},
+        {"t": "Let me talk it over with the household first. Come back soon.", "tone": "neutral"}
       ]
     },
-
     "apprentice": {
       "ask": [
         "I'd like to learn a trade, {addr}. Could I be apprenticed to {third}, the {trade}?",
@@ -84,22 +99,25 @@
         "I want to be more than a labourer. Would you pay for me to learn from {third}?"
       ],
       "yes": [
-        { "t": "A trade will serve you better than I ever could. Yes. It costs {money}, but you're worth it.", "tone": "warm" },
-        { "t": "Very well. I'll speak to {third} and pay the {money}. Don't shame us.", "tone": "friendly" },
-        { "t": "Seven years is long, but a trade is for life. You go.", "tone": "friendly" },
-        { "t": "I'd hoped you'd choose. Work hard.", "tone": "warm", "if": { "trait": "ambitious" } }
+        {"t": "A trade will serve you better than I ever could. Yes. It costs {money}, but you're worth it.", "tone": "warm"},
+        {"t": "Very well. I'll speak to {third} and pay the {money}. Don't shame us.", "tone": "friendly"},
+        {"t": "Seven years is long, but a trade is for life. You go.", "tone": "friendly"},
+        {"t": "I'd hoped you'd choose. Work hard.", "tone": "warm", "if": {"trait": "ambitious"}},
+        {"t": "Then it's agreed. The indenture is for seven years.", "tone": "friendly"},
+        {"t": "I'll pay the {money}. Make it worth it.", "tone": "friendly"}
       ],
       "no": [
-        { "t": "{Third} won't have you, or I can't persuade them. Not this time.", "tone": "sad" },
-        { "t": "No, {first}. The house needs you more than the craft does.", "tone": "neutral" },
-        { "t": "A trade? At your age? Hmph. Not yet.", "tone": "cold", "if": { "trait": "hot_tempered" } }
+        {"t": "{Third} won't have you, or I can't persuade them. Not this time.", "tone": "sad"},
+        {"t": "No, {first}. The house needs you more than the craft does.", "tone": "neutral"},
+        {"t": "A trade? At your age? Hmph. Not yet.", "tone": "cold", "if": {"trait": "hot_tempered"}},
+        {"t": "The craft is not for us.", "tone": "neutral"},
+        {"t": "They have no room.", "tone": "sad"}
       ],
       "poor": [
-        { "t": "We haven't the {money}, {first}. I'm sorry. Perhaps next year.", "tone": "sad" },
-        { "t": "The premium is {money}. We cannot spare it.", "tone": "sad" }
+        {"t": "We haven't the {money}, {first}. I'm sorry. Perhaps next year.", "tone": "sad"},
+        {"t": "The premium is {money}. We cannot spare it.", "tone": "sad"}
       ]
     },
-
     "match": {
       "ask": [
         "Would you speak for me to {thirdfull}'s family, {addr}? I'd like to be matched.",
@@ -108,20 +126,23 @@
         "Will you find me a match, {addr}? {Third}, perhaps?"
       ],
       "yes": [
-        { "t": "It's done. I've spoken to their people, and they're willing.", "tone": "warm" },
-        { "t": "I'll see to it. A good match is half the battle, and this is a good match.", "tone": "friendly" },
-        { "t": "They agreed. The rest is for the priest and the neighbours.", "tone": "pleased" }
+        {"t": "It's done. I've spoken to their people, and they're willing.", "tone": "warm"},
+        {"t": "I'll see to it. A good match is half the battle, and this is a good match.", "tone": "friendly"},
+        {"t": "They agreed. The rest is for the priest and the neighbours.", "tone": "pleased"},
+        {"t": "They agree. We will see you wed.", "tone": "warm"},
+        {"t": "It's arranged, {first}.", "tone": "warm"}
       ],
       "no": [
-        { "t": "They were not interested, {first}. I tried.", "tone": "sad" },
-        { "t": "They'd not hear of it. We might find a better.", "tone": "neutral" }
+        {"t": "They were not interested, {first}. I tried.", "tone": "sad"},
+        {"t": "They'd not hear of it. We might find a better.", "tone": "neutral"},
+        {"t": "They declined.", "tone": "sad"},
+        {"t": "Let's look elsewhere.", "tone": "neutral"}
       ],
       "dowry": [
-        { "t": "They want about {money} with you. We haven't it just now.", "tone": "sad" },
-        { "t": "A dowry of {money} is expected. Without it, the answer is no.", "tone": "neutral" }
+        {"t": "They want about {money} with you. We haven't it just now.", "tone": "sad"},
+        {"t": "A dowry of {money} is expected. Without it, the answer is no.", "tone": "neutral"}
       ]
     },
-
     "propose": {
       "ask": [
         "I come with a proposal, {addr}: a match between my {ward} and your {third}.",
@@ -130,38 +151,47 @@
         "Our families are good neighbours. Might they be better? {Ward} and {third}."
       ],
       "yes": [
-        { "t": "I think well of it. I accept.", "tone": "warm" },
-        { "t": "You have my consent. Our houses are the stronger for it.", "tone": "pleased" },
-        { "t": "A fine match, and my {third} has said as much. Agreed.", "tone": "warm" },
-        { "t": "Done. Come, we'll drink to it.", "tone": "pleased", "if": { "trait": "greedy" } }
+        {"t": "I think well of it. I accept.", "tone": "warm"},
+        {"t": "You have my consent. Our houses are the stronger for it.", "tone": "pleased"},
+        {"t": "A fine match, and my {third} has said as much. Agreed.", "tone": "warm"},
+        {"t": "Done. Come, we'll drink to it.", "tone": "pleased", "if": {"trait": "greedy"}},
+        {"t": "A good match. Agreed.", "tone": "warm"},
+        {"t": "Our houses will be one.", "tone": "pleased"}
       ],
       "no": [
-        { "t": "No. I thank you for the offer, but I'll look elsewhere.", "tone": "neutral" },
-        { "t": "I cannot see it. Another time, perhaps.", "tone": "neutral" },
-        { "t": "My {third} deserves a better match than that.", "tone": "cold", "if": { "trait": "ambitious" } }
+        {"t": "No. I thank you for the offer, but I'll look elsewhere.", "tone": "neutral"},
+        {"t": "I cannot see it. Another time, perhaps.", "tone": "neutral"},
+        {"t": "My {third} deserves a better match than that.", "tone": "cold", "if": {"trait": "ambitious"}},
+        {"t": "We must decline.", "tone": "cold"},
+        {"t": "Another time, perhaps.", "tone": "neutral"}
       ],
       "dowry": [
-        { "t": "A match, perhaps, but with a dowry of about {money}. Less, and I'll not hear it.", "tone": "neutral" },
-        { "t": "The terms are the thing. Bring {money}, and we'll talk.", "tone": "neutral", "if": { "trait": "greedy" } }
+        {"t": "A match, perhaps, but with a dowry of about {money}. Less, and I'll not hear it.", "tone": "neutral"},
+        {"t": "The terms are the thing. Bring {money}, and we'll talk.", "tone": "neutral", "if": {"trait": "greedy"}}
       ]
     },
-
     "discuss": {
       "ask": [
         "Whom do you think I might marry?",
         "I've been thinking of settling down. Who would suit me?",
         "Help me think, {addr}. Who is there?",
-        "You know the families hereabouts. Who might I court?"
+        "You know the families hereabouts. Who might I court?",
+        "Who might suit me, do you think?",
+        "Whom would you advise me to marry?"
       ],
       "reply": [
-        { "t": "Let me think... {Names}. Any of them might suit.", "tone": "friendly" },
-        { "t": "I'd look at {first1} first, if I were you. Then there's {names}.", "tone": "friendly" },
-        { "t": "Good prospects: {names}. Courting takes time, so start soon.", "tone": "friendly" },
-        { "t": "{Names}. And I'll say this: choose with your head as much as your heart.", "tone": "neutral", "if": { "trait": "patient" } }
+        {"t": "Let me think... {Names}. Any of them might suit.", "tone": "friendly"},
+        {"t": "I'd look at {first1} first, if I were you. Then there's {names}.", "tone": "friendly"},
+        {"t": "Good prospects: {names}. Courting takes time, so start soon.", "tone": "friendly"},
+        {"t": "{Names}. And I'll say this: choose with your head as much as your heart.", "tone": "neutral", "if": {"trait": "patient"}},
+        {"t": "Consider {names}. Good families, all.", "tone": "friendly"},
+        {"t": "I'd start with {first1}. Then {names}.", "tone": "friendly"}
       ],
       "none": [
-        { "t": "Slim pickings, {first}. Ask me when the harvest is in.", "tone": "neutral" },
-        { "t": "Nobody I'd put forward. Not yet.", "tone": "neutral" }
+        {"t": "Slim pickings, {first}. Ask me when the harvest is in.", "tone": "neutral"},
+        {"t": "Nobody I'd put forward. Not yet.", "tone": "neutral"},
+        {"t": "Nobody comes to mind just now, {first}.", "tone": "neutral"},
+        {"t": "Let me ask around.", "tone": "neutral"}
       ]
     }
   }

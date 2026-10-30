@@ -37,11 +37,11 @@ export function createSocialActions(core: SocialCore, convs: Conversations): Act
       const actor = core.living(actorId);
       if (!actor) return { ok: false };
       switch (option.id) {
-        case 'social.talk': return talk(core, convs, actor, option);
+        case 'social.talk': return talk(convs, actor, option);
         case 'social.greet': return greet(core, actor, option);
         case 'social.wrestle': return wrestle(core, ctx, actor, option);
         case 'social.play': return play(core, ctx, actor, option);
-        case 'social.pray': return pray(core, actor, option);
+        case 'social.pray': return pray(core, actor);
         case 'social.mass': return mass(core, actor, option);
         case 'social.confess': return confess(core, actor, option);
         default: return { ok: false };
@@ -151,7 +151,7 @@ function massWhy(core: SocialCore, target: TargetRef): string | undefined {
 // Outcomes
 // ---------------------------------------------------------------------------------------------
 
-function talk(core: SocialCore, convs: Conversations, actor: Person, option: ActionOption): ActionOutcome {
+function talk(convs: Conversations, actor: Person, option: ActionOption): ActionOutcome {
   if (option.target.kind !== 'person') return { ok: false };
   const r = convs.start(actor.id, option.target.id);
   if ('ok' in r) return { ok: false, message: r.reason };
@@ -211,8 +211,7 @@ function play(core: SocialCore, ctx: SimContext, actor: Person, option: ActionOp
   return { ok: true, message: text || `You and ${other.first} race about the green.`, gains };
 }
 
-function pray(core: SocialCore, actor: Person, option: ActionOption): ActionOutcome {
-  void option;
+function pray(core: SocialCore, actor: Person): ActionOutcome {
   const rec = core.store.write().mass;
   const first = rec.pray !== core.day;
   rec.pray = core.day;

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { formatMoney } from '../../../src/sim/money';
 import { skillLevel } from '../../../src/sim/people';
 import type { Person } from '../../../src/sim/state';
 import { DEBT } from '../../../src/sim/social/tuning';
@@ -104,7 +105,7 @@ describe('loans and debts', () => {
     r.social.end(c.id);
     setClock(r.sim, 0.5, 2);
     const d = begin(r, npc);
-    expect(d.lines.some((l) => /owe|lent/.test(l.text))).toBe(true);
+    expect(d.lines.some((l) => l.text.includes(formatMoney(amount)))).toBe(true);
   });
 
   it('is repaid in full or in part, mending the lender\'s trust and your name', () => {

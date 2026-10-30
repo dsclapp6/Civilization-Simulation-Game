@@ -64,6 +64,8 @@ export class Speech {
   readonly unknownVars = new Set<string>();
   /** Pools asked for that do not exist. */
   readonly missingPools = new Set<string>();
+  /** Tools (the content audit) can watch every pick: pool, how many variants fitted, which was chosen. */
+  probe: ((poolId: string, eligible: number, chosen: number) => void) | null = null;
 
   constructor(private readonly core: SocialCore) {}
 
@@ -206,6 +208,7 @@ export class Speech {
       if (hist.length > Math.min(4, Math.max(1, lines.length - 1))) hist.shift();
       this.recent.set(key, hist);
     }
+    if (this.probe) this.probe(poolId, cand.length, chosen);
     const line = lines[chosen];
     return { text: this.fill(line.t, ctx), tone: line.tone, index: chosen };
   }

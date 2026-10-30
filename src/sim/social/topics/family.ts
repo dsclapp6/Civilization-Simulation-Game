@@ -1,10 +1,8 @@
 // "Family matters…": asking consent to a courtship (a parent's blessing, the lord's leave), being
 // sent to a master as an apprentice, discussing and arranging matches. Heads of households arrange
 // matches for their wards (child, sibling) with the other family's head — opinion, rank and dowry decide.
-import { BUILDINGS } from '../../../content/types';
 import { CAREERS, type CareerId } from '../../careers';
 import { formatMoney } from '../../money';
-import { TIER_MONEY } from '../../people';
 import { fullName, type Person, type PersonId } from '../../state';
 import { gainSkill } from '../../skills';
 import type { ArrangeOutcome } from '../courtship';
@@ -199,7 +197,7 @@ function consent(t: TopicCtx, partnerId: PersonId): TopicReply {
 }
 
 function apprentice(t: TopicCtx, masterId: PersonId): TopicReply {
-  const { core, actor, other } = t;
+  const { core, actor } = t;
   const st = core.state;
   const master = core.living(masterId);
   if (!master) return { lines: [] };
@@ -224,7 +222,6 @@ function apprentice(t: TopicCtx, masterId: PersonId): TopicReply {
   core.opinion.adjust(master.id, actor.id, 3, 'apprenticed');
   core.notify(`You are apprenticed to ${fullName(master)}, ${trade}.`, 'gain');
   st.log(core.now, 'career', `${fullName(actor)} was apprenticed to ${fullName(master)}, ${trade}.`, [actor.id, master.id]);
-  void other;
   return { lines: [...lines, ...npcSays(t, 'family.apprentice.yes', 'warm')], opinion: 2, reason: 'apprenticed' };
 }
 
@@ -250,11 +247,10 @@ function proposeMatch(t: TopicCtx, wardId: PersonId, candId: PersonId): TopicRep
 }
 
 function matchReply(t: TopicCtx, lines: ReturnType<typeof iSay>, out: ArrangeOutcome, pool: string): TopicReply {
-  const { core, actor } = t;
+  const { core } = t;
   if (out.ok) {
     if (out.code === 'betrothed') t.npc.tags.add('betrothed');
     core.notify(out.code === 'wed' ? 'The match is made, and the wedding done.' : 'The match is made; they are promised.', 'social');
-    void actor;
     return { lines: [...lines, ...npcSays(t, `${pool}.yes`, 'warm')], opinion: 3, reason: 'match' };
   }
   t.npc.vars.money = formatMoney(out.dowryExpected);
@@ -277,4 +273,3 @@ function discuss(t: TopicCtx): TopicReply {
   return { lines: [...lines, ...npcSays(t, 'family.discuss.reply', 'friendly')], opinion: 0.5, reason: 'chat' };
 }
 
-export { BUILDINGS, TIER_MONEY };

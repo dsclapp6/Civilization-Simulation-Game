@@ -8,46 +8,63 @@
         "What sort of person is {third}?",
         "Who is {third}, exactly?",
         "What are folk saying of {third}?",
-        { "t": "I've heard the name {third}. Who is that?", "if": { "tag": "stranger" } }
+        {"t": "I've heard the name {third}. Who is that?", "if": {"tag": "stranger"}}
       ],
       "reply": [
-        { "t": "{Thirdfull}? {He} is {role}, as you'd know if you'd lived here a day. {He} is {words}.", "tone": "friendly" },
-        { "t": "{Third} is {role}. I'd call {him} {words}, if you want the plain of it.", "tone": "friendly" },
-        { "t": "Ah, {third}. {Role}, and {words}. That's the measure of {him}.", "tone": "neutral" },
-        { "t": "{Thirdaddr}? Everyone knows {him}. {He} is {words}, and has been since I was small.", "tone": "neutral", "if": { "age": ["adult", "elder"] } },
-        { "t": "{Third} is my own {kinword}. {He} is {words}, and I'll hear no ill said of {him}.", "tone": "warm", "if": { "tag": "third_kin" } },
-        { "t": "{Third} is my {kinword}, God help me. {He} is {words}.", "tone": "neutral", "if": { "tag": "third_kin", "op": ["cold", "hostile"] } },
-        { "t": "{Thirdfull} holds this place from the king, or near enough. {He} is {words}, they say.", "tone": "neutral", "if": { "tag": "third_noble" } },
-        { "t": "{Thirdaddr} rules here, and rules, by most accounts, as {words} as lords go.", "tone": "neutral", "if": { "tag": "third_noble", "role": "serf" } },
-        { "t": "{Thirdaddr} is {role} — a man of God, though men are men. {He} is {words}.", "tone": "friendly", "if": { "tag": "third_cleric" } },
-        { "t": "{Third} watches over our souls, {role}. {He} is {words}, and fair with it.", "tone": "friendly", "if": { "tag": "third_cleric", "trait": "pious" } },
-        { "t": "Oh, {third}! Where to begin? {He} is {words}, they say, and talks the hind leg off a mule.", "tone": "pleased", "if": { "tag": "third_liked" } },
-        { "t": "Of all the people in this place, I'd trust {third} first. {He} is {words}.", "tone": "warm", "if": { "tag": "third_loved" } },
-        { "t": "Mind {third}. {He} is {words}, and keeps old grudges like some keep hens.", "tone": "wary", "if": { "tag": "third_disliked" } },
-        { "t": "{Third}? I'd cross the road, {addr}. {He} is {words}, which is the kindest I can say.", "tone": "cold", "if": { "tag": "third_hated" } },
-        { "t": "{Third} is {words}, in my reckoning. But I'm only one voice.", "tone": "neutral", "if": { "trait": "honest" } },
-        { "t": "Between you and me, {third} is {words}. Not that I'd say it before others.", "tone": "wary", "if": { "trait": "deceitful" } }
+        {"t": "{Thirdfull}? {He} is {role}, as you'd know if you'd lived here a day. {He} is {words}.", "tone": "friendly"},
+        {"t": "{Third} is {role}. I'd call {him} {words}, if you want the plain of it.", "tone": "friendly"},
+        {"t": "Ah, {third}. {Role}, and {words}. That's the measure of {him}.", "tone": "neutral"},
+        {"t": "{Thirdaddr}? Everyone knows {him}. {He} is {words}, and has been since I was small.", "tone": "neutral", "if": {"age": ["adult", "elder"]}},
+        {"t": "{Third} is my own {kinword}. {He} is {words}, and I'll hear no ill said of {him}.", "tone": "warm", "if": {"tag": "third_kin"}},
+        {"t": "{Third} is my {kinword}, God help me. {He} is {words}.", "tone": "neutral", "if": {"tag": "third_kin", "op": ["cold", "hostile"]}},
+        {"t": "{Thirdfull} holds this place from the king, or near enough. {He} is {words}, they say.", "tone": "neutral", "if": {"tag": "third_noble"}},
+        {"t": "{Thirdaddr} rules here, and rules, by most accounts, as {words} as lords go.", "tone": "neutral", "if": {"tag": "third_noble", "role": "serf"}},
+        {"t": "{Thirdaddr} is {role} — a man of God, though men are men. {He} is {words}.", "tone": "friendly", "if": {"tag": "third_cleric"}},
+        {"t": "{Third} watches over our souls, {role}. {He} is {words}, and fair with it.", "tone": "friendly", "if": {"tag": "third_cleric", "trait": "pious"}},
+        {"t": "Oh, {third}! Where to begin? {He} is {words}, they say, and talks the hind leg off a mule.", "tone": "pleased", "if": {"tag": "third_liked"}},
+        {"t": "Of all the people in this place, I'd trust {third} first. {He} is {words}.", "tone": "warm", "if": {"tag": "third_loved"}},
+        {"t": "Mind {third}. {He} is {words}, and keeps old grudges like some keep hens.", "tone": "wary", "if": {"tag": "third_disliked"}},
+        {"t": "{Third}? I'd cross the road, {addr}. {He} is {words}, which is the kindest I can say.", "tone": "cold", "if": {"tag": "third_hated"}},
+        {"t": "{Third} is {words}, in my reckoning. But I'm only one voice.", "tone": "neutral", "if": {"trait": "honest"}},
+        {"t": "Between you and me, {third} is {words}. Not that I'd say it before others.", "tone": "wary", "if": {"trait": "deceitful"}}
       ],
       "feel": [
-        { "t": "I'd call {him} a friend, truth be told.", "tone": "warm", "if": { "tag": "third_loved" } },
-        { "t": "I think the world of {him}.", "tone": "warm", "if": { "tag": "third_loved" } },
-        { "t": "We get along well enough, {third} and I.", "tone": "friendly", "if": { "tag": "third_liked" } },
-        { "t": "I've a soft spot for {him}, I'll admit.", "tone": "friendly", "if": { "tag": "third_liked" } },
-        { "t": "We keep our own counsel, {third} and I.", "tone": "neutral", "if": { "tag": "third_neutral" } },
-        { "t": "I've nothing for or against {him}.", "tone": "neutral", "if": { "tag": "third_neutral" } },
-        { "t": "I'd not seek {him} out, put it that way.", "tone": "cold", "if": { "tag": "third_disliked" } },
-        { "t": "We've had words, {third} and I, more than once.", "tone": "cold", "if": { "tag": "third_disliked" } },
-        { "t": "I can't abide {him}. There. It's said.", "tone": "angry", "if": { "tag": "third_hated" } },
-        { "t": "There's old bad blood between us. Don't make me tell it.", "tone": "angry", "if": { "tag": "third_hated" } }
+        {"t": "I'd call {him} a friend, truth be told.", "tone": "warm", "if": {"tag": "third_loved"}},
+        {"t": "I think the world of {him}.", "tone": "warm", "if": {"tag": "third_loved"}},
+        {"t": "We get along well enough, {third} and I.", "tone": "friendly", "if": {"tag": "third_liked"}},
+        {"t": "I've a soft spot for {him}, I'll admit.", "tone": "friendly", "if": {"tag": "third_liked"}},
+        {"t": "We keep our own counsel, {third} and I.", "tone": "neutral", "if": {"tag": "third_neutral"}},
+        {"t": "I've nothing for or against {him}.", "tone": "neutral", "if": {"tag": "third_neutral"}},
+        {"t": "I'd not seek {him} out, put it that way.", "tone": "cold", "if": {"tag": "third_disliked"}},
+        {"t": "We've had words, {third} and I, more than once.", "tone": "cold", "if": {"tag": "third_disliked"}},
+        {"t": "I can't abide {him}. There. It's said.", "tone": "angry", "if": {"tag": "third_hated"}},
+        {"t": "There's old bad blood between us. Don't make me tell it.", "tone": "angry", "if": {"tag": "third_hated"}},
+        {"t": "I'd trust {him} with my purse, which says it all.", "tone": "warm", "if": {"tag": "third_loved"}},
+        {"t": "A true friend, {third}. I'd say so in front of anyone.", "tone": "warm", "if": {"tag": "third_loved"}},
+        {"t": "{He} makes me laugh. In this life, that's gold.", "tone": "pleased", "if": {"tag": "third_loved"}},
+        {"t": "{He} and I have shared bread more than once.", "tone": "friendly", "if": {"tag": "third_liked"}},
+        {"t": "A decent sort. I've no quarrel with {him}.", "tone": "friendly", "if": {"tag": "third_liked"}},
+        {"t": "I like {him}, as far as I like anyone.", "tone": "friendly", "if": {"tag": "third_liked", "trait": "deceitful"}},
+        {"t": "We nod when we pass. Nothing more.", "tone": "neutral", "if": {"tag": "third_neutral"}},
+        {"t": "{He} keeps to {his} own, and I keep to mine. Peace.", "tone": "neutral", "if": {"tag": "third_neutral"}},
+        {"t": "I know {him}, but I couldn't say I know {him} well.", "tone": "neutral", "if": {"tag": "third_neutral"}},
+        {"t": "We don't see eye to eye, {third} and I.", "tone": "cold", "if": {"tag": "third_disliked"}},
+        {"t": "I'd sooner not share a bench with {him}.", "tone": "cold", "if": {"tag": "third_disliked"}},
+        {"t": "{He} owes me an apology. I'm still waiting.", "tone": "cold", "if": {"tag": "third_disliked"}},
+        {"t": "Never trust {him}. That's all I'll say, and all you'll hear from me.", "tone": "angry", "if": {"tag": "third_hated"}},
+        {"t": "If {he} fell in the river tomorrow I'd stand on the bank and watch.", "tone": "angry", "if": {"tag": "third_hated"}},
+        {"t": "{He} wronged me, once. I don't forgive easily.", "tone": "cold", "if": {"tag": "third_hated"}}
       ],
       "unknown": [
-        { "t": "I don't know that name, {addr}.", "tone": "neutral" },
-        { "t": "Never heard of {third}. Not from round here, are they?", "tone": "neutral" },
-        { "t": "{Third}? No. You'd do better to ask elsewhere.", "tone": "neutral" },
-        { "t": "I couldn't say. We don't mix much with folk like that.", "tone": "neutral", "if": { "rank": "high" } }
+        {"t": "I don't know that name, {addr}.", "tone": "neutral"},
+        {"t": "Never heard of {third}. Not from round here, are they?", "tone": "neutral"},
+        {"t": "{Third}? No. You'd do better to ask elsewhere.", "tone": "neutral"},
+        {"t": "I couldn't say. We don't mix much with folk like that.", "tone": "neutral", "if": {"rank": "high"}},
+        {"t": "Can't say I've heard of {third}. Is {he} from round here?", "tone": "neutral"},
+        {"t": "That name means nothing to me.", "tone": "neutral"},
+        {"t": "You've the advantage of me; I haven't met {third}.", "tone": "neutral", "if": {"rank": ["mid", "high"]}}
       ]
     },
-
     "place": {
       "ask": [
         "What is {there} like?",
@@ -57,54 +74,77 @@
         "I've heard of {there}. Is it worth a visit?"
       ],
       "reply": [
-        { "t": "{There}? It lies {dir} of here, about {walk}. A {kind}, by all accounts.", "tone": "neutral" },
-        { "t": "Take the road {dir}: {there} is {walk} away. It's a {kind}, of middling size.", "tone": "neutral" },
-        { "t": "{There} is {walk} to the {dir}. I've been once, for a wedding.", "tone": "friendly", "if": { "age": ["adult", "elder"] } },
-        { "t": "Oh, {there}! {Walk} {dir}. A {kind}, as long as you keep your purse close.", "tone": "friendly", "if": { "trait": "deceitful" } },
-        { "t": "A fair {kind} to the {dir}, {walk}. They say the folk there are friendly.", "tone": "friendly", "if": { "trait": "pious" } },
-        { "t": "Never been, {addr}. {Walk} {dir} by the road, I'm told. Too far for me.", "tone": "neutral", "if": { "rank": "low", "age": ["adult", "elder"] } },
-        { "t": "Past the village? I don't know, {addr}. My legs don't go that far, only my ears. {Walk} {dir}, I think.", "tone": "neutral", "if": { "age": "elder" } },
-        { "t": "I'd have to ask my steward. {There} lies {dir}, about {walk}. A {kind}, as I recall.", "tone": "neutral", "if": { "rank": "high" } }
+        {"t": "{There}? It lies {dir} of here, about {walk}. A {kind}, by all accounts.", "tone": "neutral"},
+        {"t": "Take the road {dir}: {there} is {walk} away. It's a {kind}, of middling size.", "tone": "neutral"},
+        {"t": "{There} is {walk} to the {dir}. I've been once, for a wedding.", "tone": "friendly", "if": {"age": ["adult", "elder"]}},
+        {"t": "Oh, {there}! {Walk} {dir}. A {kind}, as long as you keep your purse close.", "tone": "friendly", "if": {"trait": "deceitful"}},
+        {"t": "A fair {kind} to the {dir}, {walk}. They say the folk there are friendly.", "tone": "friendly", "if": {"trait": "pious"}},
+        {"t": "Never been, {addr}. {Walk} {dir} by the road, I'm told. Too far for me.", "tone": "neutral", "if": {"rank": "low", "age": ["adult", "elder"]}},
+        {"t": "Past the village? I don't know, {addr}. My legs don't go that far, only my ears. {Walk} {dir}, I think.", "tone": "neutral", "if": {"age": "elder"}},
+        {"t": "I'd have to ask my steward. {There} lies {dir}, about {walk}. A {kind}, as I recall.", "tone": "neutral", "if": {"rank": "high"}}
       ],
       "more": [
-        { "t": "They hold a market there on {marketday}, if you've goods to sell.", "tone": "friendly", "if": { "tag": "there_market" } },
-        { "t": "Good markets there. Buy low here and sell high there, if you're quick about it.", "tone": "friendly", "if": { "tag": "there_market", "role": "trade" } },
-        { "t": "It belongs to {thereLord}. A fair lord, they say.", "tone": "neutral", "if": { "tag": "there_village" } },
-        { "t": "There's a mill, and they pay the lord's fee same as we do.", "tone": "neutral", "if": { "tag": "there_mill" } },
-        { "t": "The monks there brew good ale. Or so I'm told.", "tone": "friendly", "if": { "tag": "there_abbey" } },
-        { "t": "The nuns are said to be fine weavers. I've never seen it.", "tone": "friendly", "if": { "tag": "there_nunnery" } },
-        { "t": "A castle, held by {thereLord}. Folk go quiet when they pass it.", "tone": "wary", "if": { "tag": "there_castle" } },
-        { "t": "A great city, walled and busy. Everything is dearer, and everyone is in a hurry.", "tone": "neutral", "if": { "tag": "there_city" } },
-        { "t": "Another kingdom, mind. The tolls are different and so are the customs.", "tone": "wary", "if": { "tag": "there_foreign" } },
-        { "t": "They talk oddly there, and keep odd customs. Good folk, though, mostly.", "tone": "neutral", "if": { "tag": "there_strange" } }
+        {"t": "They hold a market there on {marketday}, if you've goods to sell.", "tone": "friendly", "if": {"tag": "there_market"}},
+        {"t": "Good markets there. Buy low here and sell high there, if you're quick about it.", "tone": "friendly", "if": {"tag": "there_market", "role": "trade"}},
+        {"t": "It belongs to {thereLord}. A fair lord, they say.", "tone": "neutral", "if": {"tag": "there_village"}},
+        {"t": "There's a mill, and they pay the lord's fee same as we do.", "tone": "neutral", "if": {"tag": "there_mill"}},
+        {"t": "The monks there brew good ale. Or so I'm told.", "tone": "friendly", "if": {"tag": "there_abbey"}},
+        {"t": "The nuns are said to be fine weavers. I've never seen it.", "tone": "friendly", "if": {"tag": "there_nunnery"}},
+        {"t": "A castle, held by {thereLord}. Folk go quiet when they pass it.", "tone": "wary", "if": {"tag": "there_castle"}},
+        {"t": "A great city, walled and busy. Everything is dearer, and everyone is in a hurry.", "tone": "neutral", "if": {"tag": "there_city"}},
+        {"t": "Another kingdom, mind. The tolls are different and so are the customs.", "tone": "wary", "if": {"tag": "there_foreign"}},
+        {"t": "They talk oddly there, and keep odd customs. Good folk, though, mostly.", "tone": "neutral", "if": {"tag": "there_strange"}},
+        {"t": "A good road leads there; you can't miss it.", "tone": "neutral"},
+        {"t": "I've a cousin there, or had.", "tone": "friendly", "if": {"age": ["adult", "elder"]}},
+        {"t": "It's pleasant enough, in summer.", "tone": "neutral", "if": {"season": [1]}},
+        {"t": "In winter, I wouldn't try the road.", "tone": "wary", "if": {"season": [3]}},
+        {"t": "They say the ale is better there than here. They're wrong, but they say it.", "tone": "friendly", "if": {"tag": "there_village"}},
+        {"t": "They keep to themselves, as villages do.", "tone": "neutral", "if": {"tag": "there_village"}},
+        {"t": "The market there is lively; bring something to sell.", "tone": "friendly", "if": {"tag": "there_market"}},
+        {"t": "Market day is {marketday}, so plan for it.", "tone": "friendly", "if": {"tag": "there_market"}},
+        {"t": "Mind the tolls on the way in.", "tone": "wary", "if": {"tag": "there_market"}},
+        {"t": "The mill grinds for half the shire, they say.", "tone": "neutral", "if": {"tag": "there_mill"}},
+        {"t": "The abbey bell carries a long way on a still day.", "tone": "friendly", "if": {"tag": "there_abbey"}},
+        {"t": "Pilgrims stop there for the night. You'll meet strangers.", "tone": "neutral", "if": {"tag": "there_abbey"}},
+        {"t": "The sisters are said to be kind to travellers.", "tone": "friendly", "if": {"tag": "there_nunnery"}},
+        {"t": "Mind your tongue near the walls; the garrison is jumpy.", "tone": "wary", "if": {"tag": "there_castle"}},
+        {"t": "The lord keeps a strict gate. No weapons past the bailey.", "tone": "neutral", "if": {"tag": "there_castle"}},
+        {"t": "Crowds, smoke and prices. It has all a person could want, and none cheap.", "tone": "neutral", "if": {"tag": "there_city"}},
+        {"t": "Another realm, other laws. Know them before you break them.", "tone": "wary", "if": {"tag": "there_foreign"}},
+        {"t": "Folk there speak differently. Slowly, and they listen. Fair enough.", "tone": "neutral", "if": {"tag": "there_strange"}}
       ],
       "unknown": [
-        { "t": "That's a place I've never heard of, {addr}.", "tone": "neutral" },
-        { "t": "I couldn't tell you. I've never left my own parish.", "tone": "neutral" }
+        {"t": "That's a place I've never heard of, {addr}.", "tone": "neutral"},
+        {"t": "I couldn't tell you. I've never left my own parish.", "tone": "neutral"}
       ]
     },
-
     "marriageable": {
       "ask": [
         "Who is there in these parts a person might marry?",
         "Are there any marriageable folk hereabouts?",
         "I've been thinking of marriage. Who is there?",
-        { "t": "A word between friends: is anyone looking for a match?", "if": { "tag": "friend" } }
+        {"t": "A word between friends: is anyone looking for a match?", "if": {"tag": "friend"}},
+        "I'm of an age to think of a match. Who is there?",
+        "Know of any worthy folk looking for a partner?",
+        "Who's unattached hereabouts? I'm curious."
       ],
       "reply": [
-        { "t": "Let me think... {Names}. Make of that what you will.", "tone": "friendly" },
-        { "t": "There's {names}. Don't tell them I sent you.", "tone": "friendly" },
-        { "t": "Well, I'd put {first1} first on any list. Then: {names}.", "tone": "pleased" },
-        { "t": "Now that's a question. {Names} — those I know of, anyhow.", "tone": "friendly" },
-        { "t": "I know a few: {names}. There'll be more, if you look.", "tone": "friendly" },
-        { "t": "Marriage is a serious matter, {first}. But since you ask: {names}.", "tone": "neutral", "if": { "rank": ["mid", "high"] } },
-        { "t": "A match, eh? You're not the first to ask. {Names}.", "tone": "friendly", "if": { "trait": "patient" } }
+        {"t": "Let me think... {Names}. Make of that what you will.", "tone": "friendly"},
+        {"t": "There's {names}. Don't tell them I sent you.", "tone": "friendly"},
+        {"t": "Well, I'd put {first1} first on any list. Then: {names}.", "tone": "pleased"},
+        {"t": "Now that's a question. {Names} — those I know of, anyhow.", "tone": "friendly"},
+        {"t": "I know a few: {names}. There'll be more, if you look.", "tone": "friendly"},
+        {"t": "Marriage is a serious matter, {first}. But since you ask: {names}.", "tone": "neutral", "if": {"rank": ["mid", "high"]}},
+        {"t": "A match, eh? You're not the first to ask. {Names}.", "tone": "friendly", "if": {"trait": "patient"}}
       ],
       "none": [
-        { "t": "Nobody springs to mind, {addr}. Ask me again when I've thought on it.", "tone": "neutral" },
-        { "t": "Slim pickings hereabouts, I'm afraid.", "tone": "neutral" },
-        { "t": "None that I'd put forward. Perhaps the next village.", "tone": "neutral" },
-        { "t": "Not that I know of. And I know most.", "tone": "neutral", "if": { "age": ["adult", "elder"] } }
+        {"t": "Nobody springs to mind, {addr}. Ask me again when I've thought on it.", "tone": "neutral"},
+        {"t": "Slim pickings hereabouts, I'm afraid.", "tone": "neutral"},
+        {"t": "None that I'd put forward. Perhaps the next village.", "tone": "neutral"},
+        {"t": "Not that I know of. And I know most.", "tone": "neutral", "if": {"age": ["adult", "elder"]}},
+        {"t": "Not a soul I'd recommend.", "tone": "neutral"},
+        {"t": "They've mostly paired off already. Ask again in a year.", "tone": "friendly"},
+        {"t": "You'd have to look further afield, {first}.", "tone": "neutral"}
       ]
     }
   }

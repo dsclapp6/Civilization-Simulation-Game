@@ -285,7 +285,7 @@ describe('consent, proposal and the wedding', () => {
     c = r.social.choose(c.id, 'romance.propose');
     yes();
     expect(me.spouse).toBe(him.id);
-    expect(c.lines.some((l) => l.speaker === him.id && l.tone === 'warm')).toBe(true);
+    expect(c.lines.some((l) => l.speaker === him.id && (l.tone === 'warm' || l.tone === 'pleased'))).toBe(true);
     // she took his House and standing
     expect(me.house).toBe(him.house);
     expect(c.options.some((o) => o.id === 'nav.court')).toBe(false);

@@ -8,7 +8,10 @@
         "\"Ow! You've a grip like a smith's, {first}.\" {Self} grins.",
         "A good throw. {Self} gets up laughing and dusts down.",
         "{Self} slaps the ground in surrender. \"Enough, enough!\"",
-        "\"Where did you learn that?\" {Self} rubs a bruised shoulder."
+        "\"Where did you learn that?\" {Self} rubs a bruised shoulder.",
+        "You twist {self}'s arm up behind, and they yield with a laugh.",
+        "A hard struggle. At the end {self} lies panting beneath you.",
+        "\"Where did you get your strength?\" {Self} pants."
       ],
       "lose": [
         "{Self} throws you flat. \"Down you go. Best of three?\"",
@@ -16,7 +19,10 @@
         "\"Not bad,\" says {self}, \"but not good enough.\" You taste dirt.",
         "{Self} laughs and offers a hand up. You take it, ruefully.",
         "The onlookers jeer kindly as you are flung down.",
-        "\"Next time, {first}!\" {Self} grins, not even out of breath."
+        "\"Next time, {first}!\" {Self} grins, not even out of breath.",
+        "{Self} proves too strong; you land hard and laugh.",
+        "It was close. In the end, {self} wins.",
+        "You are bested, but not shamed, and {self} says as much."
       ]
     },
     "play": [
@@ -25,7 +31,10 @@
       "\"Again tomorrow?\" says {self}, still giggling.",
       "You chase {self} round the well, then round it again.",
       "A rowdy hour of hoops and hide-and-seek.",
-      "You play with {self} till the light begins to fade."
+      "You play with {self} till the light begins to fade.",
+      "A game of hoodman blind, much shrieking.",
+      "You and {self} play at skittles until the light fades.",
+      "You and {self} chase hoops down the lane."
     ],
     "pray": [
       "You kneel on the cold stones and say a Paternoster.",
@@ -33,7 +42,9 @@
       "For a few quiet minutes the cares of the day fall away.",
       "You say an Ave and cross yourself.",
       "You pray for rain, or for sun, as the season wants.",
-      "You light a candle and say what is on your heart."
+      "You light a candle and say what is on your heart.",
+      "You pray in silence, and are glad of it.",
+      "You whisper the Hail Mary and cross yourself."
     ],
     "mass": [
       "You hear Mass with the parish; the incense hangs blue in the light.",
@@ -41,15 +52,19 @@
       "You kneel with your neighbours; the priest lifts the Host and the bell rings.",
       "Mass is long and the bench is hard, but you leave quieter in heart.",
       "You sing the responses, off-key, with everyone else.",
-      { "t": "The priest nods to you as you leave.", "if": { "role": "priest" } },
-      { "t": "The monks' chant rises and falls under the great roof.", "if": { "place": ["abbey", "priory", "nunnery"] } }
+      {"t": "The priest nods to you as you leave.", "if": {"role": "priest"}},
+      {"t": "The monks' chant rises and falls under the great roof.", "if": {"place": ["abbey", "priory", "nunnery"]}},
+      "You answer \"Amen\" with all the rest.",
+      "The sanctus bell rings and the whole church kneels."
     ],
     "confess": [
-      { "t": "{Self} hears you out and sets a penance: three Paternosters and a day of fasting.", "if": { "tag": "sinful" } },
-      { "t": "\"Go and sin no more, my {addr}.\" {Self} makes the sign of the cross.", "if": { "tag": "sinful" } },
-      { "t": "{Self} listens gravely, then absolves you. The weight lifts.", "if": { "tag": "sinful" } },
-      { "t": "\"I have heard few confessions so light,\" says {self} with a small smile.", "if": { "tag": "blameless" } },
-      { "t": "{Self} hears you with patience and sets a gentle penance.", "if": { "tag": "blameless" } }
+      {"t": "{Self} hears you out and sets a penance: three Paternosters and a day of fasting.", "if": {"tag": "sinful"}},
+      {"t": "\"Go and sin no more, my {addr}.\" {Self} makes the sign of the cross.", "if": {"tag": "sinful"}},
+      {"t": "{Self} listens gravely, then absolves you. The weight lifts.", "if": {"tag": "sinful"}},
+      {"t": "\"I have heard few confessions so light,\" says {self} with a small smile.", "if": {"tag": "blameless"}},
+      {"t": "{Self} hears you with patience and sets a gentle penance.", "if": {"tag": "blameless"}},
+      {"t": "{Self} hears you, absolves you, and sends you home lighter.", "if": {"tag": "sinful"}},
+      {"t": "A short confession; {self} nods and gives a small penance.", "if": {"tag": "blameless"}}
     ]
   }
 }

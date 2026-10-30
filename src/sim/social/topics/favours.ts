@@ -52,7 +52,7 @@ export function transferItem(core: SocialCore, from: Person, to: Person, key: st
 }
 
 /** Goodwill earned by a gift worth `value` pence: a few pence mean a lot to a poor man, little to a lord. */
-export function giftGain(core: SocialCore, other: Person, value: number): number {
+export function giftGain(other: Person, value: number): number {
   const scale = Math.max(4, TIER_MONEY[other.rankTier] * 0.25);
   let g = 2.2 * Math.log(1 + value / scale);
   if (other.traits.includes('greedy')) g *= 1.4;
@@ -326,7 +326,7 @@ export const giftsGroup: TopicGroup = {
     const rec = core.store.talkRec(actor.id, other.id, core.day, true);
     const nth = rec ? rec.g : 0;
     if (rec) { rec.g++; core.store.touch(); }
-    const gain = Math.round(giftGain(core, other, value) * Math.max(0, 1 - RAPPORT.giftPerUse * nth) * 10) / 10;
+    const gain = Math.round(giftGain(other, value) * Math.max(0, 1 - RAPPORT.giftPerUse * nth) * 10) / 10;
     const poor = other.rankTier <= 2 || other.career === 'beggar';
     if (nth === 0 && value >= 3 && value >= actor.money * 0.04 && poor) core.opinion.addRep(actor, 'generosity', 1);
     if (value >= 24 && poor) core.news.rumour('alms', other.settlement, actor.id, other.id);

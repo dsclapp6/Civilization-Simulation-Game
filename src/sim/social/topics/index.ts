@@ -36,11 +36,13 @@ export class BuiltinTopics implements TopicProvider {
 
   context(s: Session): TopicCtx {
     const core = this.core;
+    // one set of {placeholder} values serves both speakers: the topic fills it in once
+    const vars: Record<string, string> = {};
     return {
       core, session: s, actor: s.actor, other: s.other,
       op: core.opinion.total(s.other, s.actor),
-      npc: core.speech.ctx(s.other, s.actor),
-      me: core.speech.ctx(s.actor, s.other),
+      npc: core.speech.ctx(s.other, s.actor, { vars }),
+      me: core.speech.ctx(s.actor, s.other, { vars }),
     };
   }
 
