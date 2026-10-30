@@ -4,7 +4,7 @@ import type { Person, PersonId } from '../state';
 import { CAREERS } from '../careers';
 import type { Conversation, DialogueLine, DialogueOption, TopicProvider, TopicReply } from '../social/types';
 import type { Econ } from './core';
-import { careerEcon } from './data';
+import { careerEcon, pd } from './data';
 import { applyForJob, jobId, jobsAt, JOB_KINDS } from './jobs';
 import { hire, dismiss, standardWage } from './holdings';
 import { manumissionPrice, obligationsOf } from './obligations';
@@ -50,7 +50,7 @@ export function economyTopics(E: Econ): TopicProvider {
         const hired = E.save.helpers.some((h) => h.w === b.id && h.e === a.id);
         if (hired) out.push(opt('econ.dismiss', `Let ${b.first} go`, 'manage', true, undefined, 2));
         else if (['labourer', 'cottar', 'farmer', 'woodward', 'shepherd', 'swineherd', 'servant', 'none'].includes(b.career) && !E.isHired(b.id)) {
-          out.push(opt('econ.hire', `Offer ${b.first} work at ${standardWage(E, b)}d a day`, 'work', true, undefined, 6));
+          out.push(opt('econ.hire', `Offer ${b.first} work at ${pd(standardWage(E, b))} a day`, 'work', true, undefined, 6));
         }
       }
       // the manor
@@ -60,7 +60,7 @@ export function economyTopics(E: Econ): TopicProvider {
           const hh2 = E.hhOf(a);
           const price = manumissionPrice(E, a);
           const ok = !!hh2 && hh2.head === a.id && E.canAfford(a, price);
-          out.push(opt('econ.freedom', `Ask to buy your freedom (${price}d)`, 'request', ok, !hh2 || hh2.head !== a.id ? 'Only the head of the household may ask' : ok ? undefined : `Freedom costs ${price}d`, 3));
+          out.push(opt('econ.freedom', `Ask to buy your freedom (${pd(price)})`, 'request', ok, !hh2 || hh2.head !== a.id ? 'Only the head of the household may ask' : ok ? undefined : `Freedom costs ${pd(price)}`, 3));
         }
       }
     },
@@ -74,12 +74,12 @@ export function economyTopics(E: Econ): TopicProvider {
           if (jobs.length === 0) return { lines: [say(bid, 'I have nothing for you just now. Try the reeve at the manor, or ask the masters in town.', 'neutral')] };
           const best = jobs.find((j) => j.requirements.every((r) => r.met)) ?? jobs[0];
           const lacking = best.requirements.find((r) => !r.met);
-          const lines = [say(bid, lacking ? `I could use a ${best.title.toLowerCase()}, but ${lacking.label.toLowerCase()} is wanting.` : `I need a ${best.title.toLowerCase()}. ${best.wage > 0 ? `${best.wage}d a day` : 'Board and lodging'}${best.premium ? `, and a premium of ${best.premium}d` : ''}.`, lacking ? 'wary' : 'friendly')];
+          const lines = [say(bid, lacking ? `I could use a ${best.title.toLowerCase()}, but ${lacking.label.toLowerCase()} is wanting.` : `I need a ${best.title.toLowerCase()}. ${best.wage > 0 ? `${pd(best.wage)} a day` : 'Board and lodging'}${best.premium ? `, and a premium of ${pd(best.premium)}` : ''}.`, lacking ? 'wary' : 'friendly')];
           return { lines, ui: { panel: 'jobs', settlement: b.settlement } };
         }
         case 'econ.wages': {
           const lines = [
-            say(bid, `A farmhand earns 2d a day here, a boy half that. A journeyman might have 3d, a master 5d or more. Ale is ${Math.round(E.dayOfYear * 0 + 1.2 * 10) / 10}d a gallon, and a good sickle a few days' wages.`, 'neutral'),
+            say(bid, `A farmhand earns 2d a day here, a boy half that. A journeyman might have 3d, a master 5d or more. Ale is ${pd(Math.round(E.dayOfYear * 0 + 1.2 * 10) / 10)} a gallon, and a good sickle a few days' wages.`, 'neutral'),
           ];
           return { lines };
         }
@@ -95,7 +95,7 @@ export function economyTopics(E: Econ): TopicProvider {
         case 'econ.hire': {
           const wage = standardWage(E, b);
           const r = hire(E, a.id, bid, wage, 'auto');
-          return r.ok ? { lines: [say(bid, `Done. I will work for you at ${wage}d a day, so long as you pay.`, 'pleased')], opinion: 2 } : { lines: [say(bid, r.reason ?? 'No.', 'wary')] };
+          return r.ok ? { lines: [say(bid, `Done. I will work for you at ${pd(wage)} a day, so long as you pay.`, 'pleased')], opinion: 2 } : { lines: [say(bid, r.reason ?? 'No.', 'wary')] };
         }
         case 'econ.dismiss': {
           const r = dismiss(E, a.id, bid);
@@ -108,7 +108,7 @@ export function economyTopics(E: Econ): TopicProvider {
         }
         case 'econ.freedom': {
           const price = manumissionPrice(E, a);
-          return { lines: [say(bid, `The lord will sell you and yours your freedom for ${price}d. Say the word and it is done.`, 'neutral')], ui: { panel: 'message', title: 'Freedom', text: `Buying your freedom costs ${price}d. Use "Buy your freedom" on yourself to pay.` } };
+          return { lines: [say(bid, `The lord will sell you and yours your freedom for ${pd(price)}. Say the word and it is done.`, 'neutral')], ui: { panel: 'message', title: 'Freedom', text: `Buying your freedom costs ${pd(price)}. Use "Buy your freedom" on yourself to pay.` } };
         }
       }
       return { lines: [] };

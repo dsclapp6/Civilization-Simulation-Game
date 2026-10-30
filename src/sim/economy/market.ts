@@ -16,9 +16,7 @@ import type { TradePartnerRef } from '../actions';
 import { BUILDINGS } from '../../content/types';
 import type { Settlement } from '../../world/types';
 import type { Econ, MarketRec } from './core';
-import {
-  GOODS, GOOD_LIST, MACRO_GOODS, MACRO_INDEX, basePriceOf, careerEcon, goodOf, keyOf, qualityOf,
-} from './data';
+import { GOODS, GOOD_LIST, MACRO_GOODS, MACRO_INDEX, basePriceOf, careerEcon, goodOf, keyOf, qualityOf, pd } from './data';
 import { RATION, STAPLE_GRAINS, dailyUse, marketBuyShare, typicalTier } from './diet';
 import { bagAdd, bagGet } from './items';
 import { addOwned, canCarry, capacityOf, ownedQty, takeOwned, weightOf } from './own';
@@ -573,14 +571,13 @@ export function quoteTrade(E: Econ, actorId: number, partner: TradePartnerRef, l
   const money = round2(spend + toll - gain);
   const closed = isOpen(E, v);
   if (!reason && closed) reason = closed;
-  if (!reason && money > 0 && !E.canAfford(actor, money, true)) reason = `You need ${formatPence(money)}`;
+  if (!reason && money > 0 && !E.canAfford(actor, money, true)) reason = `You need ${pd(money)}`;
   if (!reason && v.payer && money < 0 && v.payer.purse + 1e-9 < -money) reason = 'They cannot afford that';
   if (!reason && weightIn - weightOut > 0 && !canCarry(actor, weightIn - weightOut)) reason = `Too heavy to carry (you can bear ${capacityOf(actor)} kg)`;
   return reason ? { lines: out, money, ok: false, reason } : { lines: out, money, ok: true };
 }
 
 const round2 = (v: number): number => Math.round(v * 100) / 100;
-function formatPence(v: number): string { return `${round2(v)}d`; }
 
 export function doTrade(E: Econ, actorId: number, partner: TradePartnerRef, lines: TradeLine[]): TradeResult {
   const quote = quoteTrade(E, actorId, partner, lines);

@@ -7,6 +7,7 @@ import recipesJson from '../../content/recipes.json';
 import type { Sex, SkillId, StatId } from '../../core/domain';
 import type { AnimState, HeldItem } from '../../core/view';
 import type { CareerId } from '../careers';
+import { formatMoney } from '../money';
 import { CROPS } from '../farming';
 import {
   QUALITY_NAMES, parseItemKey,
@@ -191,4 +192,11 @@ export function validateData(): string[] {
     for (const g of [...(c.sells ?? []), ...(c.buys ?? []), ...Object.keys(c.produces ?? {}), ...Object.keys(c.consumes ?? {})]) if (!GOODS[g]) bad.push(`career ${id}: unknown good ${g}`);
   }
   return bad;
+}
+
+/** Money for texts, in the game's style: fractions of a penny below a penny, then "4½d", "1s 4d", "£3 2s". */
+export function pd(n: number): string {
+  if (n >= 11.5) return formatMoney(Math.round(n));
+  if (n >= 0.95) return formatMoney(Math.round(n * 2) / 2);
+  return `${Math.round(n * 100) / 100}d`;
 }

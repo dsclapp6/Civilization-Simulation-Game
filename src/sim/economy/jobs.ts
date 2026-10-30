@@ -12,9 +12,10 @@ import { skillLevel } from '../people';
 import { setRank, shiftFamilyRank } from '../succession';
 import { ageYears, NONE, type BuildingState, type Household, type Person, type PersonId } from '../state';
 import type { Econ, EmploymentSave } from './core';
-import { CAREER_ECON, ENTRY_TESTS, FIELD_INFO, GOODS, careerEcon } from './data';
+import { CAREER_ECON, ENTRY_TESTS, FIELD_INFO, GOODS, careerEcon, pd } from './data';
 import { nextTask } from './farm';
 import { bagGet } from './items';
+import { manumissionPrice } from './obligations';
 import { countGoodOf } from './own';
 import type {
   CareerPath, Employment, JobOffer, Requirement, Result, WorkSpot,
@@ -97,6 +98,9 @@ export function testRequirements(E: Econ, p: Person, test: (typeof ENTRY_TESTS)[
 
 function sexRuleOk(sex: Sex, rule?: Sex): boolean { return !rule || rule === sex; }
 
+/** Fields whose door is shut to one sex (SPEC §6). */
+const SEX_BARRED: Partial<Record<string, Sex>> = { arms: 'f', knighthood: 'f' };
+
 export function careerPaths(E: Econ, personId: PersonId): CareerPath[] {
   const p = E.person(personId);
   if (!p) return [];
@@ -122,14 +126,14 @@ export function careerPaths(E: Econ, personId: PersonId): CareerPath[] {
         const female = p.sex === 'f';
         requirements = [
           req('Aged 12 to 18 for an apprenticeship', age >= 12 && age <= 18 || own === 'craft'),
-          req('A master who will take you on (kin, a good name, or a premium of about 100d)', true),
+          req(`A master who will take you on (kin, a good name, or a premium of about ${pd(100)})`, true),
           req(female ? 'Women: spinning and weaving, or a widow\'s workshop' : 'Men in most trades', true),
         ];
         if (female) open = true;
         break;
       }
       case 'trade':
-        requirements = [req('Aged 16 or more', age >= 16), req('Capital: 24d for a peddler\'s pack', money(E, p) >= 24 || own === 'trade'), req('Letters 1 helps', skillLevel(p.skills.letters) >= 1)];
+        requirements = [req('Aged 16 or more', age >= 16), req(`Capital: ${pd(24)} for a peddler's pack`, money(E, p) >= 24 || own === 'trade'), req('Letters 1 helps', skillLevel(p.skills.letters) >= 1)];
         break;
       case 'arms':
         requirements = ENTRY_TESTS.length ? testRequirements(E, p, ENTRY_TESTS[0]) : [];
@@ -140,7 +144,7 @@ export function careerPaths(E: Econ, personId: PersonId): CareerPath[] {
         open = p.sex === 'm' && p.estate === 'noble';
         break;
       case 'church':
-        requirements = [req('Aged 14 or more', age >= 14), req('Letters 1 or a gift of 24d to the house', skillLevel(p.skills.letters) >= 1 || money(E, p) >= 24)];
+        requirements = [req('Aged 14 or more', age >= 14), req(`Letters 1 or a gift of ${pd(24)} to the house`, skillLevel(p.skills.letters) >= 1 || money(E, p) >= 24)];
         break;
       case 'service':
         requirements = [req('Aged 11 or more', age >= 11), req('Clerks need Letters 3', skillLevel(p.skills.letters) >= 3)];
@@ -153,7 +157,7 @@ export function careerPaths(E: Econ, personId: PersonId): CareerPath[] {
         break;
       case 'freedom': {
         const unfree = p.estate === 'unfree';
-        requirements = [req('Unfree', unfree), req('120d for manumission, or a year and a day in a chartered town', money(E, p) >= 120)];
+        requirements = [req('Unfree', unfree), req(`${pd(manumissionPrice(E, p))} for manumission, or a year and a day in a chartered town`, money(E, p) >= manumissionPrice(E, p))];
         open = unfree;
         break;
       }
@@ -164,7 +168,8 @@ export function careerPaths(E: Econ, personId: PersonId): CareerPath[] {
     const path: CareerPath = {
       field: field as CareerField, label: info.label, entry: info.entry, ladder: info.ladder, stage, requirements, open,
     };
-    if (info.sexRule) path.sexRule = info.sexRule;
+    // the note explains a closed door, so it is given only where the person's sex is what bars them
+    if (info.sexRule && SEX_BARRED[field] === p.sex) path.sexRule = info.sexRule;
     out.push(path);
   }
   return out;
@@ -277,8 +282,8 @@ export function jobsAt(E: Econ, sid: number, forPerson: PersonId): JobOffer[] {
         requirements: [
           req('Aged 12 to 18', age >= 12 && age <= 18),
           req(def.sex === 'm' ? 'A boy (the trade takes men)' : 'Boys and girls alike', sexOk),
-          req(premium > 0 ? `A premium of ${premium}d${kin ? '' : ' (kin pay nothing)'}` : 'Kin of the master: no premium', premium <= 0 || money(E, p) >= premium + (free ? 0 : 24)),
-          req(free ? 'Free born' : 'Your lord\'s leave (24d)', free || money(E, p) >= premium + 24),
+          req(premium > 0 ? `A premium of ${pd(premium)}${kin ? '' : ' (kin pay nothing)'}` : 'Kin of the master: no premium', premium <= 0 || money(E, p) >= premium + (free ? 0 : 24)),
+          req(free ? 'Free born' : `Your lord's leave (${pd(24)})`, free || money(E, p) >= premium + 24),
           req('Not already bound', employmentOf(E, p.id)?.terms !== 'apprenticeship'),
         ],
       });
@@ -332,7 +337,7 @@ export function jobsAt(E: Econ, sid: number, forPerson: PersonId): JobOffer[] {
   if (healer) {
     specs.push({
       kind: ids.healer, career: 'healer', stage: 0, title: `${titleCase(CAREERS[healer.career].label.toLowerCase())}'s apprentice`, terms: 'apprenticeship', wage: 0,
-      premium: 60, employer: healer.id, requirements: [req('Aged 14 or more', age >= 14), req('A premium of 60d', money(E, p) >= 60)],
+      premium: 60, employer: healer.id, requirements: [req('Aged 14 or more', age >= 14), req(`A premium of ${pd(60)}`, money(E, p) >= 60)],
     });
   }
 
@@ -347,7 +352,7 @@ export function jobsAt(E: Econ, sid: number, forPerson: PersonId): JobOffer[] {
         employer: head.id, building: buildingsOf(E, sid, ['cloister', 'church', 'abbey_church'])[0]?.id,
         requirements: [
           req('Aged 14 or more', age >= 14), req(nun ? 'A woman' : 'A man', nun ? p.sex === 'f' : p.sex === 'm'),
-          req('Letters 1 or a gift of 24d', skillLevel(p.skills.letters) >= 1 || money(E, p) >= 24),
+          req(`Letters 1 or a gift of ${pd(24)}`, skillLevel(p.skills.letters) >= 1 || money(E, p) >= 24),
         ],
       });
     }
@@ -419,7 +424,7 @@ export function applyForJob(E: Econ, personId: PersonId, id: number): Result {
   // the fee: the youth's pocket first, then the family purse (SPEC §6: the family pays a master a premium)
   const unfreeLicence = p.estate === 'unfree' && kindOf === ids.apprentice ? 24 : 0;
   const fee = premium > 0 && E.isPlayer(personId) ? premium + unfreeLicence : 0;
-  if (fee > 0 && !E.payWithFamily(p, fee, 'Premium for the post')) return { ok: false, reason: `You cannot pay ${fee}d` };
+  if (fee > 0 && !E.payWithFamily(p, fee, 'Premium for the post')) return { ok: false, reason: `You cannot pay ${pd(fee)}` };
   const joinsHousehold = kindOf === ids.apprentice || kindOf === ids.healer || kindOf === ids.servant || kindOf === ids.novice
     || kindOf === ids.archer || kindOf === ids.manAtArms || kindOf === ids.sergeant;
 
@@ -557,7 +562,7 @@ function finishApprenticeship(E: Econ, p: Person, rec: EmploymentSave): void {
   E.state.touch(p);
   E.sim.events.emit('careerChanged', { person: p.id, from: rec.c, to: rec.c, stage: 1 });
   if (player) {
-    E.notify(`Your apprenticeship is done: you are a journeyman ${CAREERS[rec.c].label.toLowerCase()} on ${rec.w}d a day.`, 'gain', p.id);
+    E.notify(`Your apprenticeship is done: you are a journeyman ${CAREERS[rec.c].label.toLowerCase()} on ${pd(rec.w)} a day.`, 'gain', p.id);
     E.state.log(E.day, 'career', `${p.first} finished his apprenticeship and became a journeyman.`, [p.id]);
     E.sim.score.award('deed', 10, 'Journeyman');
   }

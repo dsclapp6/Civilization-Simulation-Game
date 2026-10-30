@@ -21,6 +21,7 @@ import { farmProvider } from './work-farm';
 import { miscProvider, stockProvider } from './work-misc';
 import { giveKit } from './macro';
 import { goodOf } from './data';
+import type { PersonId } from '../state';
 import type { EconomyApi, EquipSlot, InventoryView, ItemKey, ItemStack, Result } from './types';
 import { parseItemKey } from './types';
 
@@ -28,6 +29,8 @@ export interface EconomyDeps { social: SocialApi }
 
 /** The API plus the runtime, for tools, tests and the dev pages. */
 export interface EconomyRuntime extends EconomyApi {
+  /** Throws goods away (the inventory's Drop button); `give(person, 0, key, qty)` does the same. */
+  drop(person: PersonId, key: ItemKey | 'money', qty: number): Result;
   readonly econ: Econ;
   /** Removes every system, provider, topic and listener the economy installed. */
   dispose(): void;
@@ -57,6 +60,32 @@ export function installEconomy(sim: Simulation, deps: EconomyDeps): EconomyRunti
   }));
 
   const noPerson: Result = { ok: false, reason: 'Nobody there' };
+
+  /** Throws goods (or coins) away: they leave the pack and are gone. Whatever is no longer carried is also taken off the body. */
+  const dropGoods = (person: PersonId, key: ItemKey | 'money', qty: number): Result => {
+    const p = E.person(person);
+    if (!p || p.death) return noPerson;
+    if (!(qty > 0)) return { ok: false, reason: 'Drop something' };
+    if (key === 'money') {
+      if (p.money + 1e-9 < qty) return { ok: false, reason: 'You do not have that much' };
+      p.money = Math.round((p.money - qty) * 100) / 100;
+      E.state.touch(p);
+      return { ok: true };
+    }
+    if (!goodOf(key)) return { ok: false, reason: 'No such item' };
+    if (goodOf(key)?.category === 'livestock') return { ok: false, reason: 'Animals are not carried: sell them or leave them with the household' };
+    if (!bagTake(p.inventory, key, qty)) return { ok: false, reason: 'You do not carry that much' };
+    if (bagGet(p.inventory, key) <= 0) {
+      const eq = E.save.eq[String(person)];
+      if (eq) {
+        let changed = false;
+        for (const slot of Object.keys(eq) as EquipSlot[]) if (eq[slot] === key) { delete eq[slot]; changed = true; }
+        if (changed) E.touchSave();
+      }
+    }
+    E.state.touch(p);
+    return { ok: true };
+  };
 
   const api: EconomyRuntime = {
     econ: E,
@@ -122,7 +151,10 @@ export function installEconomy(sim: Simulation, deps: EconomyDeps): EconomyRunti
       const p = E.person(person);
       return p ? consume(E, p, key, qty) : noPerson;
     },
+    drop: dropGoods,
     give(from, to, key, qty): Result {
+      // "to nobody" is the inventory's Drop button
+      if (to === 0) return dropGoods(from, key, qty);
       const a = E.person(from), b = E.person(to);
       if (!a || !b || b.death) return noPerson;
       if (qty <= 0) return { ok: false, reason: 'Give something' };

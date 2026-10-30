@@ -136,3 +136,76 @@ export function grind(sim: Simulation, target: TargetRef, id: string, max = 60):
   }
   return n;
 }
+
+// ---------------------------------------------------------------------------------------------
+// A scripted player: works the household's strips, eats and sleeps as a sensible person would
+// ---------------------------------------------------------------------------------------------
+
+export interface FarmBot {
+  sim: Simulation;
+  strips: number[];
+  home: TargetRef;
+  mill: TargetRef | null;
+  /** How many times each action id ran to completion. */
+  counts: Record<string, number>;
+  log: string[];
+  bouts: number;
+}
+
+export function farmBot(sim: Simulation, strips: number[], hh: Household): FarmBot {
+  const player = playerOf(sim);
+  const village = sim.world.settlements.find((s) => s.id === player.settlement);
+  const mill = village ? sim.state.buildingsAt.get(village.id)?.find((b) => b.kind === 'watermill' || b.kind === 'windmill') : undefined;
+  return { sim, strips, home: { kind: 'building', id: hh.home }, mill: mill ? { kind: 'building', id: mill.id } : null, counts: {}, log: [], bouts: 0 };
+}
+
+export interface BotOptions {
+  /** Mill the household's grain at the mill (default false: keep it as grain). */
+  mill?: boolean;
+  /** Stop the run as soon as this returns true. */
+  until?: () => boolean;
+  /** Ids the bot must not start. */
+  skip?: RegExp;
+}
+
+/** Runs the scripted player for `days` of game time (or until `opts.until`). Returns the game days actually used. */
+export function runBot(bot: FarmBot, days: number, opts: BotOptions = {}): number {
+  const { sim } = bot;
+  const player = playerOf(sim);
+  const start = sim.absDay;
+  const note = (id: string, msg?: string): void => {
+    bot.counts[id] = (bot.counts[id] ?? 0) + 1;
+    bot.bouts++;
+    if (bot.log.length < 400) bot.log.push(`${(sim.absDay - start).toFixed(1)} ${id}${msg ? `: ${msg}` : ''}`);
+  };
+  const start1 = (o: ActionOption | undefined): boolean => {
+    if (!o || !o.enabled || (opts.skip && opts.skip.test(o.id))) return false;
+    const r = perform(sim, o);
+    if (r.ok) note(o.id, r.message);
+    return r.ok;
+  };
+  for (let iter = 0; iter < 4000 && sim.absDay - start < days; iter++) {
+    if (opts.until?.()) break;
+    if (sim.state.run.phase !== 'alive') break;
+    if (player.needs.hunger < 0.45) start1(find(optionsFor(sim, bot.home), 'eat.home'));
+    if (player.needs.rest < 0.2) {
+      sim.dispatch({ type: 'sleep' });
+      let g = 0;
+      while (sim.clock.skip && g++ < 2000) sim.step(0.25);
+    }
+    let acted = false;
+    for (const id of bot.strips) {
+      const o = optionsFor(sim, { kind: 'strip', id }).find((x) => x.enabled && x.id !== 'farm.wait' && x.id !== 'farm.manure' && x.id !== 'farm.hire_on');
+      if (o && start1(o)) { acted = true; break; }
+    }
+    if (!acted) {
+      const barn = optionsFor(sim, bot.home).filter((o) => /^farm\.(unload|thresh|winnow)/.test(o.id) && o.enabled).sort((a, b) => b.priority - a.priority)[0];
+      if (barn && start1(barn)) acted = true;
+    }
+    if (!acted && opts.mill && bot.mill) {
+      if (start1(find(optionsFor(sim, bot.mill), 'farm.mill'))) acted = true;
+    }
+    if (!acted) sim.advanceHours(6);
+  }
+  return sim.absDay - start;
+}

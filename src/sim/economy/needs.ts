@@ -9,7 +9,8 @@ import { killPerson } from '../succession';
 import type { Person } from '../state';
 import type { Econ } from './core';
 import { GOODS, qualityOf } from './data';
-import { bagGet, bagTake } from './items';
+import { RATION } from './diet';
+import { bagEntries, bagGet, bagTake } from './items';
 import { parseItemKey, type ItemKey, type Result } from './types';
 
 const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -144,11 +145,58 @@ export function playerHour(E: Econ, _info: HourInfo): void {
   }
 }
 
-/** A hungry character with food in the pack eats without being told (the HUD still shows what is eaten): nobody should have to click a loaf twice a day. */
+/** Grain, pulses and flour make a pottage when the larder holds nothing prepared. */
+export const POTTAGE = ['flour', 'rye', 'barley', 'oats', 'wheat', 'peas', 'beans'];
+
+/** A meal from the household's stores: prepared food first, otherwise a pottage of flour or grain. */
+export function eatAtHome(E: Econ, p: Person): { ok: boolean; message: string } {
+  const hh = E.hhOf(p);
+  if (!hh) return { ok: false, message: 'You have no household.' };
+  const foods = bagEntries(hh.stores).filter(([k]) => GOODS[parseItemKey(k).good]?.food && GOODS[parseItemKey(k).good].category !== 'livestock');
+  // bread or flat cakes first, then cheese, vegetables and a little ale
+  const order = ['bread', 'cheese', 'eggs', 'vegetables', 'meat', 'fish', 'ale', 'honey'];
+  foods.sort((a, b) => order.indexOf(parseItemKey(a[0]).good) - order.indexOf(parseItemKey(b[0]).good));
+  let ate = 0;
+  for (const [k, have] of foods) {
+    if (p.needs.hunger >= 0.9) break;
+    const g = GOODS[parseItemKey(k).good];
+    const need = (0.92 - p.needs.hunger) / (g.food ?? 0.2);
+    const unit = g.category === 'drink' ? 0.25 : 1;
+    const qty = Math.min(have, Math.max(unit, Math.ceil(need / unit) * unit), g.category === 'drink' ? 0.5 : 3);
+    bagTake(hh.stores, k, qty);
+    p.needs.hunger = Math.min(1, Math.round((p.needs.hunger + (g.food ?? 0.2) * qty) * 1000) / 1000);
+    ate++;
+    if (ate >= 3) break;
+  }
+  if (ate === 0) {
+    for (const g of POTTAGE) {
+      // a gallon of grain is 3 to 4 days of rations (diet.ts); a ration is about 0.55 of the hunger bar
+      const per = g === 'flour' ? 0.06 : (RATION[g] ?? 3) * 0.55;
+      const have = bagGet(hh.stores, g);
+      if (have <= 0.1) continue;
+      const want = Math.max(0, 0.92 - p.needs.hunger) / per;
+      const qty = Math.min(have, Math.max(0.05, Math.ceil(want * 20) / 20), g === 'flour' ? 12 : 0.6);
+      bagTake(hh.stores, g, qty);
+      p.needs.hunger = Math.round(Math.min(1, p.needs.hunger + per * qty) * 1000) / 1000;
+      ate++;
+      break;
+    }
+  }
+  E.state.touchHousehold(hh);
+  E.state.touch(p);
+  return ate > 0 ? { ok: true, message: 'You eat at the family table.' } : { ok: false, message: 'There is nothing to eat.' };
+}
+
+/** A hungry character with food in the pack, or at the family table in the home village, eats without being told: nobody should have to click a loaf twice a day. */
 function autoEat(E: Econ, p: Person): void {
   if (p.needs.hunger >= 0.3) return;
   const foods = Object.keys(p.inventory).filter((k) => k.charCodeAt(0) !== 126 && GOODS[parseItemKey(k).good]?.food && GOODS[parseItemKey(k).good].category !== 'livestock');
-  if (foods.length === 0) return;
+  if (foods.length === 0) {
+    // nothing in the pack: in the home village the family table is not far
+    const hh = E.hhOf(p);
+    if (hh && hh.settlement === p.settlement && eatAtHome(E, p).ok) E.notify('You eat at the family table.', 'info', p.id);
+    return;
+  }
   // bread and cheese before ale and vegetables
   const order = ['bread', 'cheese', 'meat', 'fish', 'eggs', 'vegetables', 'honey', 'ale'];
   foods.sort((a, b) => order.indexOf(parseItemKey(a).good) - order.indexOf(parseItemKey(b).good));

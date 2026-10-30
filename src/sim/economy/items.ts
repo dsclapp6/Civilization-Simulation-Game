@@ -10,12 +10,16 @@ export const round2 = (v: number): number => Math.round(v * 100) / 100 + 0;
 
 export const isGoodKey = (key: string): boolean => key.charCodeAt(0) !== 126; // '~'
 
+const wearKey = (key: ItemKey): string => `~w:${key}`;
+
 export function bagGet(bag: Bag, key: ItemKey): number { return bag[key] ?? 0; }
 
 export function bagAdd(bag: Bag, key: ItemKey, qty: number): void {
   const v = round2((bag[key] ?? 0) + qty);
-  if (v <= 0.004) delete bag[key];
-  else bag[key] = v;
+  if (v <= 0.004) {
+    delete bag[key];
+    if (key.charCodeAt(0) !== 126) delete bag[wearKey(key)]; // a tool that is gone takes its wear with it
+  } else bag[key] = v;
 }
 
 /** Takes `qty` if the bag holds that much; all or nothing. */
@@ -78,7 +82,6 @@ export function moveGood(from: Bag, to: Bag, good: string, qty: number): number 
 
 // ---- tool wear ---------------------------------------------------------------------------
 
-const wearKey = (key: ItemKey): string => `~w:${key}`;
 
 /** Adds wear to one tool of this key; returns 'dulled' when it drops a tier, 'broke' when it is gone. */
 export function wearTool(bag: Bag, key: ItemKey, amount: number): 'ok' | 'dulled' | 'broke' {

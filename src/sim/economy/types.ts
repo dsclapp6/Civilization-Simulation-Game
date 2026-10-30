@@ -325,6 +325,8 @@ export interface EconomyApi {
   /** Eat/drink from the inventory (hunger need). */
   consume(person: PersonId, key: ItemKey, qty?: number): Result;
   give(from: PersonId, to: PersonId, key: ItemKey | 'money', qty: number): Result;
+  /** Additive (wave 2): throws goods away, the inventory's Drop button. `give(person, 0, key, qty)` means the same. */
+  drop?(person: PersonId, key: ItemKey | 'money', qty: number): Result;
 
   // markets and trade
   market(settlement: number): MarketView | null;

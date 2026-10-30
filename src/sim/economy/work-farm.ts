@@ -11,7 +11,7 @@ import {
 import { skillLevel } from '../people';
 import type { Person, StripState } from '../state';
 import type { Econ } from './core';
-import { CAREER_ECON, GOODS, TOOL_SPEED } from './data';
+import { CAREER_ECON, GOODS, TOOL_SPEED, pd } from './data';
 import {
   TASK_BOUTS, TITHE, grossYield, nextTask, payTithe, seedFor, sowingNow, taskLabel, type StripTask,
 } from './farm';
@@ -193,7 +193,7 @@ function listStrip(E: Econ, p: Person, id: number, out: ActionOption[]): void {
       void job;
       const wage = E.age(p) >= 14 ? 2 : 1;
       out.push(option({
-        id: 'farm.hire_on', label: `Take day work here (${wage}d a day)`, seconds: 0, category: 'work', priority: 5, repeat: false, ...base,
+        id: 'farm.hire_on', label: `Take day work here (${pd(wage)} a day)`, seconds: 0, category: 'work', priority: 5, repeat: false, ...base,
         enabled: !emp, reason: emp ? 'You are already bound to a post' : undefined, data: { act: 'hire_on', job: -1 } as FarmData,
       }));
       const hireOn = out[out.length - 1];

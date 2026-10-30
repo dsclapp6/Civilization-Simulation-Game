@@ -11,12 +11,12 @@ import { trainStat } from '../skills';
 import { shiftFamilyRank } from '../succession';
 import { ageYears, type Household, type Person } from '../state';
 import type { Econ } from './core';
-import { CAREER_ECON, GOODS, GOOD_LIST, careerEcon, keyOf } from './data';
+import { CAREER_ECON, GOODS, GOOD_LIST, careerEcon, keyOf, pd } from './data';
 import { RATION } from './diet';
 import { bagAdd, bagEntries, bagGet, bagTake, countGood } from './items';
 import { employmentOf } from './jobs';
 import { buyFreedom, fleeToTown, manumissionPrice } from './obligations';
-import { consume } from './needs';
+import { POTTAGE, consume, eatAtHome } from './needs';
 import { openChoices, perkSum } from './perks';
 import { giveOutput } from './work-craft';
 import {
@@ -225,7 +225,7 @@ export function miscProvider(E: Econ): ActionProvider {
         case 'errand': return errand(E, p, d.person as number);
         case 'practise': return practise(E, p, d.building as number);
         case 'eat': return eatItem(E, p, d.key as string, d.qty as number);
-        case 'eat_home': return eatAtHome(E, p);
+        case 'eat_home': { const r = eatAtHome(E, p); return { ok: r.ok, message: r.message }; }
         case 'open': return { ok: true, ui: d.ui as never };
         case 'become': return becomeCareer(E, p, d.career as string);
         case 'free': { const r = buyFreedom(E, p); return { ok: r.ok, message: r.ok ? 'You are free.' : r.reason }; }
@@ -262,9 +262,9 @@ function listSelf(E: Econ, p: Person, out: ActionOption[]): void {
   if (p.estate === 'unfree') {
     const hh = E.hhOf(p);
     const price = manumissionPrice(E, p);
-    const o = option({ id: 'manage.freedom', label: `Buy your freedom (${price}d)`, seconds: 0, ...base, category: 'manage', priority: 2, data: { act: 'free' } as WorkData });
+    const o = option({ id: 'manage.freedom', label: `Buy your freedom (${pd(price)})`, seconds: 0, ...base, category: 'manage', priority: 2, data: { act: 'free' } as WorkData });
     if (!hh || hh.head !== p.id) { o.enabled = false; o.reason = 'Only the head of the household can buy its freedom'; }
-    else if (!E.canAfford(p, price)) { o.enabled = false; o.reason = `Freedom costs ${price}d`; }
+    else if (!E.canAfford(p, price)) { o.enabled = false; o.reason = `Freedom costs ${pd(price)}`; }
     out.push(o);
   }
 }
@@ -289,7 +289,7 @@ function listPerson(E: Econ, p: Person, id: number, out: ActionOption[]): void {
     const pay = round2(0.45 * Math.max(0, 1 - n / 6));
     const o = option({
       id: 'errand.run', label: `Run an errand for ${q.first}`, seconds: 9, anim: 'carry_walk', mainHand: 'basket', carry: 'basket', category: 'work', priority: 6, repeat: false,
-      preview: pay > 0 ? `A ha'penny or two for the trouble (${pay}d) · Odd jobs` : 'Nobody has more errands for you today', ...base, data: { act: 'errand', person: id } as WorkData,
+      preview: pay > 0 ? `A ha'penny or two for the trouble (${pd(pay)}) · Odd jobs` : 'Nobody has more errands for you today', ...base, data: { act: 'errand', person: id } as WorkData,
     });
     const block = holyDayBlock(E) ?? incapable(p);
     if (block) { o.enabled = false; o.reason = block; } else if (pay <= 0) { o.enabled = false; o.reason = 'You have run enough errands today'; }
@@ -298,9 +298,9 @@ function listPerson(E: Econ, p: Person, id: number, out: ActionOption[]): void {
   // the lord's reeve: freedom
   if (p.estate === 'unfree' && q.offices.some((of) => of.office === 'lord' || of.office === 'reeve')) {
     const price = manumissionPrice(E, p);
-    const o = option({ id: 'manage.freedom', label: `Ask ${q.first} to free you (${price}d)`, seconds: 0, category: 'manage', repeat: false, priority: 4, ...base, data: { act: 'free' } as WorkData });
+    const o = option({ id: 'manage.freedom', label: `Ask ${q.first} to free you (${pd(price)})`, seconds: 0, category: 'manage', repeat: false, priority: 4, ...base, data: { act: 'free' } as WorkData });
     const hh = E.hhOf(p);
-    if (!hh || hh.head !== p.id) { o.enabled = false; o.reason = 'Only the head of the household can buy its freedom'; } else if (!E.canAfford(p, price)) { o.enabled = false; o.reason = `Freedom costs ${price}d`; }
+    if (!hh || hh.head !== p.id) { o.enabled = false; o.reason = 'Only the head of the household can buy its freedom'; } else if (!E.canAfford(p, price)) { o.enabled = false; o.reason = `Freedom costs ${pd(price)}`; }
     out.push(o);
   }
 }
@@ -358,22 +358,22 @@ function listBuilding(E: Econ, p: Person, id: number, out: ActionOption[]): void
     if (!hasFood) { o.enabled = false; o.reason = 'The larder is empty'; } else if (p.needs.hunger >= 0.97) { o.enabled = false; o.reason = 'You are not hungry'; }
     out.push(o);
     if (p.career !== 'alewife' && p.career !== 'tavern_keeper' && ageYears(p, E.day) >= 16) {
-      const o2 = option({ id: 'career.alewife', label: 'Hang out the ale-stake (6d): set up as an alewife', seconds: 0, category: 'manage', priority: 3, ...base, data: { act: 'become', career: 'alewife' } as WorkData });
-      if (skillLevel(p.skills.brewing) < 3) { o2.enabled = false; o2.reason = 'Needs Brewing 3: practise brewing ale at home'; } else if (!E.canAfford(p, 6)) { o2.enabled = false; o2.reason = 'The stake and sign cost 6d'; }
+      const o2 = option({ id: 'career.alewife', label: `Hang out the ale-stake (${pd(6)}): set up as an alewife`, seconds: 0, category: 'manage', priority: 3, ...base, data: { act: 'become', career: 'alewife' } as WorkData });
+      if (skillLevel(p.skills.brewing) < 3) { o2.enabled = false; o2.reason = 'Needs Brewing 3: practise brewing ale at home'; } else if (!E.canAfford(p, 6)) { o2.enabled = false; o2.reason = `The stake and sign cost ${pd(6)}`; }
       out.push(o2);
     }
   }
   // the traders' ladder
   if (['market_hall', 'market_stall', 'market_cross', 'warehouse', 'guildhall'].includes(b.kind)) {
     if (p.career !== 'peddler' && p.career !== 'merchant' && p.career !== 'shopkeeper' && ageYears(p, E.day) >= 16) {
-      const o = option({ id: 'career.peddler', label: "Buy a pedlar's pack (24d)", seconds: 0, category: 'manage', priority: 3, ...base, data: { act: 'become', career: 'peddler' } as WorkData });
-      if (!E.canAfford(p, 24)) { o.enabled = false; o.reason = 'The pack and its goods cost 24d'; }
+      const o = option({ id: 'career.peddler', label: `Buy a pedlar's pack (${pd(24)})`, seconds: 0, category: 'manage', priority: 3, ...base, data: { act: 'become', career: 'peddler' } as WorkData });
+      if (!E.canAfford(p, 24)) { o.enabled = false; o.reason = `The pack and its goods cost ${pd(24)}`; }
       out.push(o);
     }
     if (p.career === 'peddler' || (CAREERS[p.career].field === 'trade' && p.careerStage === 0)) {
-      const o = option({ id: 'career.merchant', label: 'Set up as a merchant (300d)', seconds: 0, category: 'manage', priority: 3, ...base, data: { act: 'become', career: 'merchant' } as WorkData });
+      const o = option({ id: 'career.merchant', label: `Set up as a merchant (${pd(300)})`, seconds: 0, category: 'manage', priority: 3, ...base, data: { act: 'become', career: 'merchant' } as WorkData });
       if (skillLevel(p.skills.trade) < 5) { o.enabled = false; o.reason = 'Needs Trade 5'; }
-      else if (!E.canAfford(p, 300)) { o.enabled = false; o.reason = 'A merchant needs 300d of capital'; }
+      else if (!E.canAfford(p, 300)) { o.enabled = false; o.reason = `A merchant needs ${pd(300)} of capital`; }
       out.push(o);
     }
   }
@@ -407,7 +407,7 @@ function errand(E: Econ, p: Person, personId: number): ActionOutcome {
   boutDone(E, p, { skill: 'persuasion', xp: 3, heavy: 0.3, bouts: 0.6 });
   giveXp(E, p, 'trade', 2, 1);
   if (q) E.social.adjustOpinion(q.id, p.id, 1, 'ran an errand');
-  return { ok: true, message: `${q ? q.first : 'They'} thanks you${pay > 0 ? ` and gives you ${pay}d` : ''}.`, gains: pay > 0 ? [{ label: 'Coin', amount: pay, ref: 'money' }] : [] };
+  return { ok: true, message: `${q ? q.first : 'They'} thanks you${pay > 0 ? ` and gives you ${pd(pay)}` : ''}.`, gains: pay > 0 ? [{ label: 'Coin', amount: pay, ref: 'money' }] : [] };
 }
 
 function practise(E: Econ, p: Person, buildingId: number): ActionOutcome {
@@ -426,51 +426,9 @@ function practise(E: Econ, p: Person, buildingId: number): ActionOutcome {
 }
 
 
-/** Grain, pulses and flour make a pottage when the larder holds nothing prepared. */
-const POTTAGE = ['flour', 'rye', 'barley', 'oats', 'wheat', 'peas', 'beans'];
-
 function eatItem(E: Econ, p: Person, key: ItemKey, qty: number): ActionOutcome {
   const r = consume(E, p, key, qty);
   return { ok: r.ok, message: r.ok ? `You ${GOODS[parseItemKey(key).good]?.category === 'drink' ? 'drink' : 'eat'} and feel better.` : r.reason };
-}
-
-function eatAtHome(E: Econ, p: Person): ActionOutcome {
-  const hh = E.hhOf(p);
-  if (!hh) return { ok: false, message: 'You have no household.' };
-  const foods = bagEntries(hh.stores).filter(([k]) => GOODS[parseItemKey(k).good]?.food && GOODS[parseItemKey(k).good].category !== 'livestock');
-  // bread or flat cakes first, then cheese, vegetables and a little ale
-  const order = ['bread', 'cheese', 'eggs', 'vegetables', 'meat', 'fish', 'ale', 'honey'];
-  foods.sort((a, b) => order.indexOf(parseItemKey(a[0]).good) - order.indexOf(parseItemKey(b[0]).good));
-  let ate = 0;
-  for (const [k, have] of foods) {
-    if (p.needs.hunger >= 0.9) break;
-    const g = GOODS[parseItemKey(k).good];
-    const need = (0.92 - p.needs.hunger) / (g.food ?? 0.2);
-    const unit = g.category === 'drink' ? 0.25 : 1;
-    const qty = Math.min(have, Math.max(unit, Math.ceil(need / unit) * unit), g.category === 'drink' ? 0.5 : 3);
-    bagTake(hh.stores, k, qty);
-    p.needs.hunger = Math.min(1, Math.round((p.needs.hunger + (g.food ?? 0.2) * qty) * 1000) / 1000);
-    ate++;
-    if (ate >= 3) break;
-  }
-  // flour and grain make pottage if there is nothing else
-  if (ate === 0) {
-    for (const g of POTTAGE) {
-      // a gallon of grain is 3 to 4 days of rations (diet.ts); a ration is about 0.55 of the hunger bar
-      const per = g === 'flour' ? 0.06 : (RATION[g] ?? 3) * 0.55;
-      const have = bagGet(hh.stores, g);
-      if (have <= 0.1) continue;
-      const want = Math.max(0, 0.92 - p.needs.hunger) / per;
-      const qty = Math.min(have, Math.max(0.05, Math.ceil(want * 20) / 20), g === 'flour' ? 12 : 0.6);
-      bagTake(hh.stores, g, qty);
-      p.needs.hunger = Math.round(Math.min(1, p.needs.hunger + per * qty) * 1000) / 1000;
-      ate++;
-      break;
-    }
-  }
-  E.state.touchHousehold(hh);
-  E.state.touch(p);
-  return ate > 0 ? { ok: true, message: 'You eat at the family table.' } : { ok: false, message: 'There is nothing to eat.' };
 }
 
 function becomeCareer(E: Econ, p: Person, career: string): ActionOutcome {

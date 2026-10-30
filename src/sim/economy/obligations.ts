@@ -5,10 +5,13 @@
 import { DAYS_PER_YEAR } from '../../core/time';
 import { dayOfWeek } from '../calendar';
 import { CAREERS } from '../careers';
+import { CROPS } from '../farming';
 import { shiftFamilyRank } from '../succession';
 import type { Household, Person, PersonId } from '../state';
 import type { Econ, FineSave } from './core';
-import { basePriceOf } from './data';
+import { basePriceOf, pd } from './data';
+import { GRAIN_PER_UNIT_DAY } from './diet';
+import { yieldBase } from './farm';
 import { RENT_PER_STRIP } from './macro';
 import { bagAdd, bagGet } from './items';
 import type { Obligation, ObligationKind, Result } from './types';
@@ -77,11 +80,11 @@ export function obligationsOf(E: Econ, personId: PersonId): Obligation[] {
     if (annual > 0) {
       const lastPaid = E.save.paid[String(hh.id)] ?? -1;
       const term = Math.floor(day / 8);
-      push('rent', `Rent: ${Math.round(annual * 100) / 100}d a year, half at each term`, annual / 2, 'pence', next, lordId, lastPaid < term - 1);
+      push('rent', `Rent: ${pd(Math.round(annual * 100) / 100)} a year, half at each term`, annual / 2, 'pence', next, lordId, lastPaid < term - 1);
     }
     // tithe: a tenth of what the strips will give
     const exp = expectedHarvest(E, hh);
-    if (exp > 0) push('tithe', 'Tithe: every tenth sheaf to the parish church', Math.round(exp * 0.1 * 10) / 10, 'goods', yearStart + 6, 0);
+    if (exp > 0) push('tithe', 'Tithe: every tenth sheaf of the harvest goes to the parish church', Math.round(exp * 0.1 * 10) / 10, 'goods', yearStart + 6, 0);
     // heriot and merchet as warnings
     const best = bestBeast(hh);
     if (best && (p.estate === 'unfree' || E.save.tenure[String(hh.id)] === 'lease') && hh.head === p.id) {
@@ -95,7 +98,12 @@ export function obligationsOf(E: Econ, personId: PersonId): Obligation[] {
     for (const h of E.save.helpers) if (h.hh === hh.id) wages += h.wage;
     if (wages > 0) push('wage', 'Wages of your hired helpers (daily)', wages, 'pence', Math.floor(day) + 1, 0);
   }
-  if (p.estate === 'unfree' || p.estate === 'free') push('mill_fee', "The lord's mill takes one grain in sixteen as multure", 6.25, 'goods', -1, lordId);
+  if ((p.estate === 'unfree' || p.estate === 'free') && hh) {
+    // multure: a sixteenth of what the household grinds in a year
+    let units = 0;
+    for (const id of hh.members) { const m = E.person(id); if (m && !m.death) units += E.age(m) >= 14 ? 1 : 0.5; }
+    push('mill_fee', "The lord's mill takes a sixteenth of the grain you grind (multure)", Math.round(units * GRAIN_PER_UNIT_DAY * 10) / 10, 'goods', -1, lordId);
+  }
   if (p.estate === 'unfree') push('toll', 'A serf who sells off the manor pays the lord a fine', 3, 'pence', -1, lordId);
 
   for (const f of E.save.fines[String(personId)] ?? []) {
@@ -116,15 +124,16 @@ function bestBeast(hh: Household): { key: string; value: number } | null {
   return best;
 }
 
+/** Gallons the household's sown strips should give this year (the tithe is a tenth of it). */
 function expectedHarvest(E: Econ, hh: Household): number {
-  let n = 0;
+  let gallons = 0;
   const s = E.settlementById.get(hh.settlement);
   if (!s) return 0;
   for (const id of s.strips) {
     const st = E.state.strips.get(id);
-    if (st && st.holder === hh.id && (st.state === 'sown' || st.state === 'growing' || st.state === 'ripe')) n++;
+    if (st && st.holder === hh.id && (st.state === 'sown' || st.state === 'growing' || st.state === 'ripe')) gallons += yieldBase(E, s.id) * (CROPS[st.crop]?.ratio ?? 1);
   }
-  return n * 20;
+  return gallons;
 }
 
 /** Annual money rent of a household (leased strips and a rented house), and the next term day. */
@@ -132,9 +141,11 @@ export function rentOf(E: Econ, hh: Household): { annual: number; next: number }
   let annual = 0;
   const s = E.settlementById.get(hh.settlement);
   if (s) {
+    // a free tenant pays the customary rent on strips held without a lease; the unfree pay in labour (week-work)
+    const customary = E.person(hh.head)?.estate === 'free' ? RENT_PER_STRIP : 0;
     for (const id of s.strips) {
       const st = E.state.strips.get(id);
-      if (st && st.holder === hh.id) annual += E.save.lease[String(id)] ?? 0;
+      if (st && st.holder === hh.id) annual += E.save.lease[String(id)] ?? customary;
     }
   }
   if (hh.home >= 0) annual += E.save.lease[`b${hh.home}`] ?? 0;
@@ -153,7 +164,7 @@ export function addFine(E: Econ, p: Person, amount: number, reason: string, to: 
   const f: FineSave = { amount: Math.round(amount * 100) / 100, reason, day: Math.floor(E.day), due: Math.floor(E.day) + 4, to };
   list.push(f);
   E.touchSave();
-  if (E.isPlayer(p.id)) E.notify(`Fined ${f.amount}d: ${reason}. It falls due in four days.`, 'warn', p.id);
+  if (E.isPlayer(p.id)) E.notify(`Fined ${pd(f.amount)}: ${reason}. It falls due in four days.`, 'warn', p.id);
   const lord = to ? E.person(to) : undefined;
   if (lord) E.social.adjustOpinion(lord.id, p.id, -2, reason);
 }
@@ -163,7 +174,7 @@ export function payFine(E: Econ, p: Person, index = 0): Result {
   const list = E.save.fines[key];
   const f = list?.[index];
   if (!list || !f) return { ok: false, reason: 'You owe no fine' };
-  if (!E.spend(p, f.amount, `Fine: ${f.reason}`, true)) return { ok: false, reason: `You need ${f.amount}d` };
+  if (!E.spend(p, f.amount, `Fine: ${f.reason}`, true)) return { ok: false, reason: `You need ${pd(f.amount)}` };
   const lord = f.to ? E.person(f.to) : undefined;
   if (lord) E.credit(E.hhOf(lord), f.amount);
   list.splice(index, 1);
@@ -213,13 +224,13 @@ export function obligationsDaily(E: Econ): void {
         E.credit(lord?.household, due);
         E.save.paid[String(hh.id)] = term;
         E.touchSave();
-        E.notify(`You pay ${Math.round(due * 100) / 100}d rent.`, 'info', p.id);
+        E.notify(`You pay ${pd(Math.round(due * 100) / 100)} rent.`, 'info', p.id);
       } else if (last < term - 1) {
         // two terms behind: the lord takes the land back
         evictLand(E, hh, p);
         E.save.paid[String(hh.id)] = term;
       } else {
-        E.notify(`You cannot pay the ${Math.round(due * 100) / 100}d rent that is due. The bailiff will call again.`, 'warn', p.id);
+        E.notify(`You cannot pay the ${pd(Math.round(due * 100) / 100)} rent that is due. The bailiff will call again.`, 'warn', p.id);
       }
     }
   }
@@ -229,8 +240,8 @@ export function obligationsDaily(E: Econ): void {
     for (let i = fines.length - 1; i >= 0; i--) {
       const f = fines[i];
       if (f.due <= dayNo) {
-        if (payFine(E, p, i).ok) E.notify(`You pay the ${f.amount}d fine.`, 'loss', p.id);
-        else { f.amount = Math.round(f.amount * 1.1 * 100) / 100; f.due = dayNo + 4; E.touchSave(); E.notify(`The ${f.reason.toLowerCase()} fine grows to ${f.amount}d.`, 'warn', p.id); }
+        if (payFine(E, p, i).ok) E.notify(`You pay the ${pd(f.amount)} fine.`, 'loss', p.id);
+        else { f.amount = Math.round(f.amount * 1.1 * 100) / 100; f.due = dayNo + 4; E.touchSave(); E.notify(`The ${f.reason.toLowerCase()} fine grows to ${pd(f.amount)}.`, 'warn', p.id); }
       }
     }
   }
@@ -311,10 +322,10 @@ export function buyFreedom(E: Econ, p: Person): Result {
   if (!hh || hh.head !== p.id) return { ok: false, reason: 'Only the head of the household can buy its freedom' };
   const price = manumissionPrice(E, p);
   const lord = E.lordOf(p.settlement);
-  if (!E.spend(p, price, 'Manumission', true)) return { ok: false, reason: `Freedom costs ${price}d` };
+  if (!E.spend(p, price, 'Manumission', true)) return { ok: false, reason: `Freedom costs ${pd(price)}` };
   if (lord?.household) E.credit(lord.household, price);
   if (lord) E.social.adjustOpinion(lord.person.id, p.id, 3, 'bought freedom');
-  freeHousehold(E, p, `You buy your freedom for ${price}d. The lord's seal makes you and yours free.`);
+  freeHousehold(E, p, `You buy your freedom for ${pd(price)}. The lord's seal makes you and yours free.`);
   return { ok: true };
 }
 
@@ -375,7 +386,7 @@ export function attachObligationEvents(E: Econ): () => void {
     const involvesPlayer = E.isPlayer(father.id) || E.isPlayer(bride.id) || payerHH.members.some((id) => E.isPlayer(id));
     const taken = involvesPlayer && E.isPlayer(payerHH.head) ? (E.spend(E.person(payerHH.head) as Person, fee, 'Merchet', true) ? fee : 0) : E.debit(payerHH, fee);
     if (taken > 0 && lord?.household) E.credit(lord.household, taken);
-    if (involvesPlayer) E.notify(`Merchet: ${Math.round(taken)}d paid to the lord for the marriage of a serf's daughter.`, 'loss');
+    if (involvesPlayer) E.notify(`Merchet: ${pd(Math.round(taken))} paid to the lord for the marriage of a serf's daughter.`, 'loss');
   });
   const offDeath = E.sim.events.on('death', (e) => {
     if (!e.wasHead) return;

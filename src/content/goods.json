@@ -22,7 +22,7 @@
   "vegetables": { "name": "Vegetables", "unit": "pounds of vegetables", "unitOne": "pound of vegetables", "category": "produce", "basePrice": 0.15, "weight": 0.45, "spoilDays": 12, "food": 0.08, "macro": true, "sold": ["market"] },
   "cheese":  { "name": "Cheese",  "unit": "pounds of cheese", "unitOne": "pound of cheese", "category": "food", "basePrice": 0.6, "weight": 0.45, "spoilDays": 90, "food": 0.2, "macro": true, "sold": ["market"] },
   "milk":    { "name": "Milk",    "unit": "gallons of milk", "unitOne": "gallon of milk", "category": "food", "basePrice": 0.35, "weight": 3.9, "spoilDays": 1, "food": 0.2 },
-  "eggs":    { "name": "Eggs",    "unit": "dozens of eggs", "unitOne": "dozen eggs", "category": "food", "basePrice": 0.5, "weight": 0.7, "spoilDays": 10, "food": 0.2, "macro": true, "sold": ["market"] },
+  "eggs":    { "name": "Eggs",    "unit": "dozen eggs", "unitOne": "dozen eggs", "category": "food", "basePrice": 0.5, "weight": 0.7, "spoilDays": 10, "food": 0.2, "macro": true, "sold": ["market"] },
   "meat":    { "name": "Meat",    "unit": "pounds of meat", "unitOne": "pound of meat", "category": "food", "basePrice": 0.5, "weight": 0.45, "spoilDays": 6, "food": 0.3, "macro": true, "sold": ["market"] },
   "fish":    { "name": "Fish",    "unit": "pounds of fish", "unitOne": "pound of fish", "category": "food", "basePrice": 0.35, "weight": 0.45, "spoilDays": 4, "food": 0.25, "macro": true, "sold": ["market"] },
   "salt":    { "name": "Salt",    "unit": "pounds of salt", "unitOne": "pound of salt", "category": "misc", "basePrice": 0.25, "weight": 0.45, "sold": ["market"] },

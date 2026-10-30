@@ -11,9 +11,7 @@ import { skillLevel } from '../people';
 import { pickHome, setRank } from '../succession';
 import type { BuildingState, Household, Person } from '../state';
 import type { Econ } from './core';
-import {
-  APPRENTICE_TASKS, CAREER_ECON, GOODS, RECIPES, TOOL_SPEED, careerEcon, keyOf, recipesAt, type RecipeDef,
-} from './data';
+import { APPRENTICE_TASKS, CAREER_ECON, GOODS, RECIPES, TOOL_SPEED, careerEcon, keyOf, recipesAt, type RecipeDef, pd } from './data';
 import { bagAdd, bagGet } from './items';
 import { employmentOf } from './jobs';
 import { capacityOf, carriedWeight, weightOf } from './own';
@@ -289,10 +287,10 @@ function maybeMasterpiece(E: Econ, p: Person, b: BuildingState, out: ActionOptio
     for (const [g, q] of Object.entries(r.inputs)) if (haveIn(bags, g) + 1e-6 < q * 2) { reason = `The masterpiece needs ${q * 2} ${GOODS[g]?.unit ?? g}`; break; }
   }
   const fee = guildFee(E, p);
-  if (!reason && fee > 0 && !E.canAfford(p, fee)) reason = `Admission to the guild by redemption costs ${fee}d`;
+  if (!reason && fee > 0 && !E.canAfford(p, fee)) reason = `Admission to the guild by redemption costs ${pd(fee)}`;
   const o = option({
     id: 'craft.masterpiece', label: `Make your masterpiece (${r.name.toLowerCase()})`, seconds: secondsFor(r.work * 2.5, 1, 20, 120), anim: r.anim, mainHand: r.held,
-    preview: `The guild's masters judge it: fine work makes you a master${fee > 0 ? ` · ${fee}d guild fee by redemption` : ''}`, priority: 55, repeat: false, ...base,
+    preview: `The guild's masters judge it: fine work makes you a master${fee > 0 ? ` · ${pd(fee)} guild fee by redemption` : ''}`, priority: 55, repeat: false, ...base,
     data: { act: 'masterpiece', recipe: sig, building: b.id } as CraftAct,
   });
   if (reason) { o.enabled = false; o.reason = reason; } else if (block) { o.enabled = false; o.reason = block; }
@@ -375,7 +373,7 @@ function masterpiece(E: Econ, p: Person, d: MasterData): ActionOutcome {
   const bags = [p.inventory, ...(E.hhOf(p) ? [(E.hhOf(p) as Household).stores] : [])];
   for (const [g, q] of Object.entries(r.inputs)) if (haveIn(bags, g) + 1e-6 < q * 2) return { ok: false, message: 'You are short of materials for the masterpiece.' };
   const fee = guildFee(E, p);
-  if (fee > 0 && !E.canAfford(p, fee)) return { ok: false, message: `The guild wants ${fee}d.` };
+  if (fee > 0 && !E.canAfford(p, fee)) return { ok: false, message: `The guild wants ${pd(fee)}.` };
   for (const [g, q] of Object.entries(r.inputs)) takeIn(bags, g, q * 2);
   const tool = r.tool ? toolFor(E, p, r.tool) : null;
   const tier = qualityRoll(E, p, r, tool ? tool.quality : 1, 0.35);
@@ -429,7 +427,7 @@ function listScatter(E: Econ, p: Person, id: number, out: ActionOption[]): void 
     const fee = stumpage(E, p, it);
     const o = option({
       id: 'wood.fell', label: `Fell the ${it.kind}`, seconds: secondsFor(3, speed, 10, 80), anim: 'work_axe', mainHand: 'axe', carry: 'bundle_wood', priority: 40, repeat: false,
-      preview: `About ${timber} logs and ${Math.round(3 + 3 * it.scale)} bundles of firewood${fee > 0 ? ` · stumpage ${fee}d to the lord` : ''} · Woodcutting`, ...base,
+      preview: `About ${timber} logs and ${Math.round(3 + 3 * it.scale)} bundles of firewood${fee > 0 ? ` · stumpage ${pd(fee)} to the lord` : ''} · Woodcutting`, ...base,
       data: { act: 'fell', scatter: id, kind: it.kind, scale: it.scale } as CraftAct,
     });
     if (block) { o.enabled = false; o.reason = block; }

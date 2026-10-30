@@ -5,10 +5,10 @@ import type { AnimalKind } from '../../core/domain';
 import { hash01 } from '../../core/math';
 import { isHolyDay } from '../calendar';
 import { shiftFamilyRank } from '../succession';
-import { ageYears, type BuildingState, type Household, type Person, type PersonId } from '../state';
+import { ageYears, type BuildingState, type Household, type Person, type PersonId, type StripState } from '../state';
 import type { Econ } from './core';
-import { CAREER_ECON, careerEcon, goodOf } from './data';
-import { nextTask, taskLabel } from './farm';
+import { CAREER_ECON, careerEcon, goodOf, pd } from './data';
+import { nextTask, sowingNow, taskLabel } from './farm';
 import { aiTask, landLadder } from './jobs';
 import { bagEntries } from './items';
 import { rentOf, weekWorkDays } from './obligations';
@@ -54,6 +54,18 @@ export function tenureOf(E: Econ, hh: Household): Tenure {
   return hh.home >= 0 ? 'lodger' : 'none';
 }
 
+/** What a strip waits for when there is nothing to do on it today. */
+function idleLabel(st: StripState): string {
+  switch (st.state) {
+    case 'sown': case 'growing': return 'Growing: wait for the harvest';
+    case 'ripe': return 'Ready to reap';
+    case 'ploughed': return 'Ploughed: waiting for the sowing season';
+    case 'harvested': return 'Cut: bind the sheaves';
+    case 'stubble': return 'Stubble: waiting for the plough season';
+    default: return 'Fallow: waiting for the plough season';
+  }
+}
+
 export function holding(E: Econ, householdId: number): HoldingView | null {
   const hh = E.household(householdId);
   if (!hh) return null;
@@ -67,7 +79,7 @@ export function holding(E: Econ, householdId: number): HoldingView | null {
       const t = nextTask(E, st);
       strips.push({
         id, field: st.field, crop: st.crop, state: st.state, growth: st.growth, work: peekExtra(E.farm, id)?.p ?? 0,
-        nextTask: t ? taskLabel(t, st) : st.state === 'sown' || st.state === 'growing' ? 'Growing' : st.state === 'ripe' ? 'Reap' : 'Wait',
+        nextTask: t ? (t === 'sow' ? `Sow ${sowingNow(E, st)?.crop ?? ''}`.trim() : taskLabel(t, st)) : idleLabel(st),
       });
     }
   }
@@ -129,7 +141,7 @@ export function listingsAt(E: Econ, sid: number, forPerson: PersonId): PropertyL
       out.push({
         id: ids.house + b.id, kind: 'house', building: b.id, settlement: sid, label: `${BUILDINGS[b.kind].name}${b.level > 1 ? ' (improved)' : ''}`,
         price: free ? Math.round(buy * lvl) : null, rent: Math.round(rent * lvl * 100) / 100, seller,
-        requirements: [req('Aged 14 or more', adult), req(free ? 'Free to hold property' : 'Serfs rent only', true), req(`${Math.round(rent * lvl / 2 * 100) / 100}d for the first term`, cash >= rent * lvl / 2)],
+        requirements: [req('Aged 14 or more', adult), req(free ? 'Free to hold property' : 'Serfs rent only', true), req(`${pd(Math.round(rent * lvl / 2 * 100) / 100)} for the first term`, cash >= rent * lvl / 2)],
       });
     } else if (cat === 'work' || cat === 'trade' || cat === 'social') {
       const craft = careerEcon(p.career).workplace.includes(b.kind);
@@ -140,7 +152,7 @@ export function listingsAt(E: Econ, sid: number, forPerson: PersonId): PropertyL
         requirements: [
           req('A free craftsman or trader', free && adult),
           req(`Trained in the trade (a master, or skill ${cat === 'work' ? 5 : 3})`, craft || (p.careerStage >= 2 && CAREER_ECON[p.career].workplace.includes(b.kind)) || skillLevel(p.skills[CAREER_ECON[p.career].skill]) >= 5),
-          req(`${Math.round(rent * lvl / 2 * 100) / 100}d for the first term`, cash >= rent * lvl / 2),
+          req(`${pd(Math.round(rent * lvl / 2 * 100) / 100)} for the first term`, cash >= rent * lvl / 2),
         ],
       });
     }
@@ -157,7 +169,7 @@ export function listingsAt(E: Econ, sid: number, forPerson: PersonId): PropertyL
       price: free ? STRIP_PRICE : null, rent: STRIP_RENT, seller,
       requirements: [
         req('Aged 14 or more', adult), req('Head of a household', head),
-        req(`${STRIP_RENT / 2}d for the first term`, cash >= STRIP_RENT / 2),
+        req(`${pd(STRIP_RENT / 2)} for the first term`, cash >= STRIP_RENT / 2),
       ],
     });
   }
@@ -168,7 +180,7 @@ export function listingsAt(E: Econ, sid: number, forPerson: PersonId): PropertyL
     const rent = q.use === 'meadow' ? 4 : q.use === 'orchard' ? 3 : 2;
     out.push({
       id: ids.land + q.id, kind: 'land', settlement: sid, label: `A ${q.use}`, price: free ? rent * 18 : null, rent, seller,
-      requirements: [req('Head of a household', head), req('Aged 14 or more', adult), req(`${rent / 2}d for the first term`, cash >= rent / 2)],
+      requirements: [req('Head of a household', head), req('Aged 14 or more', adult), req(`${pd(rent / 2)} for the first term`, cash >= rent / 2)],
     });
   }
   // a manor house, for the gentry
@@ -177,7 +189,7 @@ export function listingsAt(E: Econ, sid: number, forPerson: PersonId): PropertyL
     const [buy] = PRICES.manor_house as readonly [number, number];
     out.push({
       id: ids.manor + manorHouse.id, kind: 'manor', building: manorHouse.id, settlement: sid, label: 'A small manor house', price: buy, rent: null, seller,
-      requirements: [req('Gentry or better (rank 4)', p.rankTier >= 4), req(`${buy}d`, cash >= buy)],
+      requirements: [req('Gentry or better (rank 4)', p.rankTier >= 4), req(`${pd(buy)}`, cash >= buy)],
     });
   }
   return out;
@@ -197,7 +209,7 @@ export function buyOrRent(E: Econ, personId: PersonId, listingId: number, mode: 
   if (mode === 'rent' && listing.rent === null) return { ok: false, reason: 'Only for sale' };
   const cost = mode === 'buy' ? (listing.price as number) : (listing.rent as number) / 2;
   const seller = listing.seller ? E.person(listing.seller) : undefined;
-  if (!E.spend(p, cost, `${mode === 'buy' ? 'Bought' : 'Rented'}: ${listing.label}`, true)) return { ok: false, reason: `You need ${Math.round(cost * 100) / 100}d` };
+  if (!E.spend(p, cost, `${mode === 'buy' ? 'Bought' : 'Rented'}: ${listing.label}`, true)) return { ok: false, reason: `You need ${pd(Math.round(cost * 100) / 100)}` };
   if (seller) E.credit(E.hhOf(seller), cost);
   const key = String(hh.id);
   const player = E.isPlayer(personId);
@@ -240,7 +252,7 @@ export function buyOrRent(E: Econ, personId: PersonId, listingId: number, mode: 
   }
   E.touchSave();
   if (player) {
-    E.notify(`${mode === 'buy' ? 'Bought' : 'Rented'}: ${listing.label} (${Math.round(cost * 100) / 100}d).`, 'gain', personId);
+    E.notify(`${mode === 'buy' ? 'Bought' : 'Rented'}: ${listing.label} (${pd(Math.round(cost * 100) / 100)}).`, 'gain', personId);
     landLadder(E, p);
     if (mode === 'buy' && p.rankTier < 3 && hh.head === p.id && listing.kind === 'workshop' && p.careerStage >= 2) shiftFamilyRank(E.sim, p, 3);
   }
@@ -297,12 +309,12 @@ export function hire(E: Econ, employerId: PersonId, workerId: PersonId, wage: nu
   if (E.isHired(workerId)) return { ok: false, reason: 'They are already hired' };
   if (ageYears(w, E.day) < 12) return { ok: false, reason: 'Too young to hire' };
   const min = Math.round(standardWage(E, w) * 0.8 * 100) / 100;
-  if (wage < min) return { ok: false, reason: `They want at least ${min}d a day` };
+  if (wage < min) return { ok: false, reason: `They want at least ${pd(min)} a day` };
   if (wage > 20) return { ok: false, reason: 'That is more than a master earns' };
-  if (hh.purse + emp.money < wage * 4) return { ok: false, reason: `You need ${Math.ceil(wage * 4)}d to keep a hand for a week` };
+  if (hh.purse + emp.money < wage * 4) return { ok: false, reason: `You need ${pd(Math.ceil(wage * 4))} to keep a hand for a week` };
   E.save.helpers.push({ w: workerId, e: employerId, hh: hh.id, wage, task, since: Math.floor(E.day) });
   E.touchSave();
-  if (E.isPlayer(employerId)) E.notify(`${w.first} works for you at ${wage}d a day.`, 'gain', employerId);
+  if (E.isPlayer(employerId)) E.notify(`${w.first} works for you at ${pd(wage)} a day.`, 'gain', employerId);
   E.social.adjustOpinion(workerId, employerId, 3, 'hired');
   return { ok: true };
 }

@@ -84,14 +84,16 @@ function householdDay(
   if (head && head.death) head = undefined;
   let any: Person | undefined;
   let playerHere = false;
+  let playerUnit = 0;
   const now = E.day;
   for (const id of hh.members) {
     const p = state.persons.get(id);
     if (!p || p.death) continue;
     any ??= p;
-    if (E.isPlayer(id)) { playerHere = true; continue; }
     const age = (now - p.birthDay) / 16;
-    units += age >= 14 ? 1 : age >= 8 ? 0.7 : age >= 3 ? 0.5 : 0.25;
+    const u = age >= 14 ? 1 : age >= 8 ? 0.7 : age >= 3 ? 0.5 : 0.25;
+    if (E.isPlayer(id)) { playerHere = true; playerUnit = u; continue; }
+    units += u;
   }
   if (!any) return;
   head ??= any;
@@ -144,7 +146,13 @@ function householdDay(
   E.probe?.('rent', tier, hh.purse - pRent);
   const pSell = hh.purse;
 
-  sellSurplus(E, s, hh, units, tier);
+  // the player's own household sells its grain, wool and ale only when the head has sent someone to market
+  let marketer = true;
+  if (playerHere && hh.head === E.playerId) {
+    marketer = false;
+    for (const id of hh.members) if (!E.isPlayer(id) && E.save.plan[String(id)] === 'market') { marketer = true; break; }
+  }
+  sellSurplus(E, s, hh, units + playerUnit, tier, marketer);
   E.probe?.('sales', tier, hh.purse - pSell);
 
   // ---- the purse of a household nobody plays pulls towards what its rank and size would hold ----
@@ -314,7 +322,7 @@ function produceFromTrade(E: Econ, s: Settlement, hh: Household, head: Person, w
 // Selling and dues
 // ---------------------------------------------------------------------------------------------
 
-function sellSurplus(E: Econ, s: Settlement, hh: Household, units: number, tier: number): void {
+function sellSurplus(E: Econ, s: Settlement, hh: Household, units: number, tier: number, full: boolean): void {
   if (E.marketFor(s.id) < 0) return;
   const st = hh.stores;
   const diet = dietOf(tier);
@@ -325,7 +333,7 @@ function sellSurplus(E: Econ, s: Settlement, hh: Household, units: number, tier:
   let have = 0;
   for (const g of STAPLE_GRAINS) have += st[g] ?? 0;
   let excess = have - keepTotal;
-  if (excess > 0.5) {
+  if (full && excess > 0.5) {
     // sell the dearest grain first; keep the household's own staples
     for (const g of DEAREST_FIRST) {
       if (excess <= 0.2) break;
@@ -357,7 +365,7 @@ function sellSurplus(E: Econ, s: Settlement, hh: Household, units: number, tier:
     }
   }
   // wool, hides and surplus ale go to dealers at the index price
-  for (const g of ['wool', 'hide', 'ale']) {
+  if (full) for (const g of ['wool', 'hide', 'ale']) {
     const v = st[g] ?? 0;
     if (g === 'ale' ? v > units * 2 : v > 0.5) {
       const spare = g === 'ale' ? v - units * 1.5 : v;
