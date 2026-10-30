@@ -4,4 +4,5 @@
 import './politics';
 import './combat';
 import './advancement';
+import './military';
 export {};
