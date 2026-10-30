@@ -81,7 +81,9 @@ export type UiRequest =
   | { panel: 'actions' }
   /** Sleep / wait-until menu. */
   | { panel: 'rest' }
-  | { panel: 'message'; title: string; text: string };
+  | { panel: 'message'; title: string; text: string }
+  /** A panel added by a later module (registered with `registerPanel` in src/ui/panels/registry.ts). */
+  | { panel: 'ext'; name: string; id?: number; data?: unknown };
 
 export type TradePartnerRef =
   | { kind: 'market'; settlement: number }

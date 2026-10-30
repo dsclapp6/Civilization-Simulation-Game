@@ -8,6 +8,7 @@
 // plus declaration merging on `CommandMap`) and by listening to `events`.
 import { EventBus } from '../core/events';
 import { ActionRegistry } from './actions';
+import type { Wave3Services } from './wave3';
 import type { Rng } from '../core/rng';
 import { SIM_DT, SPEEDS, type Speed } from '../core/time';
 import type { WorldGenOptions, WorldModel } from '../world/types';
@@ -88,6 +89,8 @@ export class Simulation implements SimContext {
   readonly score: ScoreKeeper;
   readonly profile: Profile;
   readonly view: SimViewImpl;
+  /** Wave 3 modules (combat, politics, military, advancement, happenings) register here (sim/wave3.ts). */
+  readonly services: Wave3Services = {};
   /** Player verbs (sim/actions.ts): providers register here; the player controller starts them. */
   readonly actions: ActionRegistry;
   readonly saver: RunSaver | null;

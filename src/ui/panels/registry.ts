@@ -17,9 +17,15 @@ import { restPanel } from './rest';
 import { tradePanel } from './trade';
 import { buildingPanel, chroniclePanel, encounterPanel, personPanel } from './world';
 import { confirmPanel, messagePanel, pausePanel, settingsPanel } from './system';
+import { extPanel } from './extRegistry';
+import './ext';
 
 export function createPanel(ctx: PanelCtx, req: PanelRequest, hooks: UiHooks): UiPanel {
   switch (req.panel) {
+    case 'ext': {
+      const f = extPanel(req.name);
+      return f ? f(ctx, req, hooks) : messagePanel(ctx, 'Not yet written', `The “${req.name}” page is still being illuminated.`);
+    }
     case 'message': return messagePanel(ctx, req.title, req.text);
     case 'confirm': return confirmPanel(ctx, req.options);
     case 'pause': return pausePanel(ctx, hooks);

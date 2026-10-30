@@ -45,6 +45,21 @@ export type SimEvents = {
   opinion: { of: PersonId; about: PersonId; delta: number; reason: string };
   travel: { phase: 'start' | 'arrive' | 'encounter' | 'cancel'; to: number; encounter?: string };
 
+  // ---- wave 3 (conflict, politics, happenings) ----
+  war: { phase: 'declared' | 'ended'; war: number; attackers: number[]; defenders: number[]; winner?: 'attackers' | 'defenders' | 'white_peace' };
+  battle: { war: number; x: number; z: number; settlement: number; attacker: number; defender: number; attackerWon: boolean; dead: number; playerPresent: boolean };
+  siege: { phase: 'start' | 'fell' | 'lifted'; settlement: number; besieger: number };
+  raid: { settlement: number; raider: number; burned: number; stolen: number; captives: number };
+  fightEnded: import('./wave3').FightResult;
+  captured: { captive: PersonId; captor: PersonId; ransom: number };
+  /** A House changed its stance to another (oaths, alliances, truces). */
+  stance: { a: number; b: number; stance: import('./wave3').Stance };
+  office: { person: PersonId; office: string; place: number; gained: boolean };
+  happening: { phase: 'start' | 'end'; id: number; kind: string; settlement: number; text: string };
+  /** An NPC asks the player for something (SPEC §18). */
+  request: { id: number; from: PersonId; text: string };
+  tech: { house: number; tech: string; person: PersonId };
+
   /** Something worth an immediate autosave happened. */
   important: { reason: string };
   saved: { records: number; bytes: number; ms: number };
