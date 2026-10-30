@@ -221,7 +221,7 @@ export function makeFamily(g: GenContext, spec: FamilySpec): Household {
   state.setHead(hh, head);
   const house = spec.house ?? foundHouse(state, rng, head, spec.houseKind);
   if (head.house !== house.id) state.setHouse(head, house.id);
-  if (spec.office) head.offices.push({ office: spec.office, place: s.id, since: Math.round(day - rng.range(0, 6) * 16) });
+  if (spec.office) head.offices.push({ office: spec.office, place: s.id, since: Math.round(day - rng.range(0, 6) * 16) + 0 });
 
   const wealth = spec.wealth ?? 1;
   head.money = rollMoney(rng, spec.tier, wealth);
@@ -246,7 +246,7 @@ export function makeFamily(g: GenContext, spec: FamilySpec): Household {
     });
     spouse.money = rollMoney(rng, spec.tier, wealth * 0.4);
     const yearsMarried = Math.max(0.5, Math.min(30, (partnerSex === 'f' ? partnerAge : headAge) - meanMarriageAge('f', spec.tier) + rng.gauss(0, 1.5)));
-    state.marry(head, spouse, Math.round(day - yearsMarried * 16));
+    state.marry(head, spouse, Math.round(day - yearsMarried * 16) + 0);
     if (headSex === 'm') motherPerson = spouse; else fatherPerson = spouse;
     womanAge = headSex === 'f' ? headAge : partnerAge;
   } else if (headAge >= 28 && rng.chance(headSex === 'f' ? 0.8 : 0.5)) {
@@ -305,7 +305,7 @@ export function makeFamily(g: GenContext, spec: FamilySpec): Household {
       if (motherPerson) state.addChild(motherPerson, kid.id);
     }
     if (motherPerson && lastBirthWomanAge >= 0) {
-      motherPerson.lastBirth = Math.round(day - (womanAge - lastBirthWomanAge) * 16);
+      motherPerson.lastBirth = Math.round(day - (womanAge - lastBirthWomanAge) * 16) + 0;
     }
   }
 

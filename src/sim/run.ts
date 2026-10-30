@@ -167,7 +167,7 @@ function rollBirth(state: GameState, upgrades: StatUpgrades): void {
 
   let player = twelveYearOldIn(state, hh);
   if (!player) player = createTwelveYearOld(state, rng, hh);
-  else player.birthDay = Math.round(day - START_AGE * DAYS_PER_YEAR);
+  else player.birthDay = Math.round(day - START_AGE * DAYS_PER_YEAR) + 0;
 
   // stat upgrades are applied after the birth is rolled (SPEC §1)
   for (const s of STATS) {

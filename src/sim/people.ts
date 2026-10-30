@@ -115,7 +115,7 @@ export function careerSkills(rng: Rng, career: CareerId, stage: number, age: num
   // a little general experience for everyone
   const hobbies: SkillId[] = ['farming', 'husbandry', 'hunting', 'woodcutting', 'archery', 'melee', 'persuasion', 'stealth'];
   for (let i = 0; i < 2; i++) sk[rng.pick(hobbies)] += Math.max(0, age - 8) * rng.range(5, 30);
-  for (const k of Object.keys(sk) as SkillId[]) sk[k] = Math.round(sk[k]);
+  for (const k of Object.keys(sk) as SkillId[]) sk[k] = Math.round(sk[k]) + 0;
   return sk;
 }
 
@@ -288,7 +288,7 @@ export function createPerson(state: GameState, rng: Rng, spec: PersonSpec): Pers
     first, byname,
     sex: spec.sex,
     culture: spec.culture,
-    birthDay: Math.round(spec.day - spec.age * DAYS_PER_YEAR),
+    birthDay: Math.round(spec.day - spec.age * DAYS_PER_YEAR) + 0,
     death: null,
     father: father ? father.id : NONE,
     mother: mother ? mother.id : NONE,

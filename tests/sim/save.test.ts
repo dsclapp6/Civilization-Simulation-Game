@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DAYS_PER_YEAR } from '../../src/core/time';
 import { newProfile } from '../../src/sim/legacy';
 import { RunSaver, loadRun } from '../../src/sim/save';
 import { MemorySaveStore } from '../../src/sim/save-memory';
@@ -60,6 +61,26 @@ describe('save and load', () => {
     for (let i = 0; i < 400; i++) { sim.step(1 / 20); loaded.step(1 / 20); }
     expect(loaded.absDay).toBe(sim.absDay);
     expect(hashState(loaded.state)).toBe(hashState(sim.state));
+  });
+
+  it('keeps state free of negative zero and NaN, which would not survive a JSON round trip', () => {
+    const sim = newSim({ seed: 'zeros', preset: 'small' });
+    sim.advanceDays(DAYS_PER_YEAR * 6);
+    let numbers = 0;
+    const walk = (v: unknown, path: string): void => {
+      if (typeof v === 'number') {
+        numbers++;
+        if (Object.is(v, -0) || Number.isNaN(v) || !Number.isFinite(v)) throw new Error(`bad number at ${path}: ${String(v)}`);
+      } else if (Array.isArray(v)) v.forEach((x, i) => walk(x, `${path}[${i}]`));
+      else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) walk(x, `${path}.${k}`);
+    };
+    for (const p of sim.state.persons.values()) walk(p, `person ${p.id}`);
+    for (const h of sim.state.households.values()) walk(h, `household ${h.id}`);
+    for (const h of sim.state.houses.values()) walk(h, `house ${h.id}`);
+    for (const t of sim.state.titles.values()) walk(t, `title ${t.id}`);
+    for (const b of sim.state.buildings.values()) walk(b, `building ${b.id}`);
+    walk(sim.state.run, 'run'); walk(sim.state.score, 'score'); walk(sim.state.stats, 'stats'); walk(sim.state.clock, 'clock');
+    expect(numbers).toBeGreaterThan(100_000);
   });
 
   it('returns null when there is no saved run', async () => {
