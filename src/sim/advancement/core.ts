@@ -11,6 +11,8 @@ import type { Simulation } from '../sim';
 import { ageYears, fullName, type GameState, type HouseId, type Person, type PersonId } from '../state';
 import type { Wave3Deps } from '../wave3deps';
 import { BY_CAREER, BY_ESTATE, BY_FIELD, BY_TITLE, TECHS, TECH_BY_ID } from './data';
+
+const ORDER = new Map(TECHS.map((t, i) => [t.id, i]));
 import type { TechDef } from './types';
 
 export const TECH_KEY = 'tech';
@@ -115,9 +117,11 @@ export class Adv {
   }
 
   knows(person: PersonId, tech: string): boolean { return this.knownBy.get(person)?.has(tech) ?? false; }
+  /** In the order of the tech table, so that everything walking a person's techniques is the same after a load. */
   techsOf(person: PersonId): readonly string[] {
     const s = this.knownBy.get(person);
-    return s ? Array.from(s) : EMPTY;
+    if (!s) return EMPTY;
+    return s.size < 2 ? Array.from(s) : Array.from(s).sort((a, b) => (ORDER.get(a) ?? 0) - (ORDER.get(b) ?? 0));
   }
   holdersOf(tech: string): readonly number[] { return this.save.holders[tech] ?? EMPTY as unknown as number[]; }
   knownAnywhere(tech: string): boolean { return (this.save.holders[tech]?.length ?? 0) > 0; }
@@ -221,7 +225,8 @@ export class Adv {
     add(BY_FIELD.get(CAREERS[p.career]?.field ?? 'none'));
     add(BY_ESTATE.get(p.estate));
     const held = this.state.titlesHeldBy(p.id);
-    if (held.size > 0) for (const t of held) add(BY_TITLE.get(t.kind));
+    // title sets iterate in insertion order, which differs between a live game and a loaded save
+    if (held.size > 0) for (const t of Array.from(held).sort((a, b) => a.id - b.id)) add(BY_TITLE.get(t.kind));
     return out.length ? out : NO_TECHS;
   }
 
@@ -234,13 +239,29 @@ export class Adv {
     if (l.minTier !== undefined && p.rankTier < l.minTier) return false;
     if (l.minStage !== undefined && p.careerStage < l.minStage) return false;
     if (l.building && l.building.length > 0) {
-      const kinds = this.buildingKinds(p.settlement);
       let any = false;
-      for (const k of l.building) if (kinds.has(k)) { any = true; break; }
+      for (const place of this.placesOf(p)) {
+        const kinds = this.buildingKinds(place);
+        for (const k of l.building) if (kinds.has(k)) { any = true; break; }
+        if (any) break;
+      }
       if (!any) return false;
     }
-    if (l.market && !this.settlementById.get(p.settlement)?.market) return false;
+    if (l.market) {
+      let any = false;
+      for (const place of this.placesOf(p)) if (this.settlementById.get(place)?.market) { any = true; break; }
+      if (!any) return false;
+    }
     return true;
+  }
+
+  /** Where the person's work happens: their home and the places whose titles they hold (a lord's town, manor or abbey). */
+  placesOf(p: Person): readonly number[] {
+    const held = this.state.titlesHeldBy(p.id);
+    if (held.size === 0) return [p.settlement];
+    const out = [p.settlement];
+    for (const t of held) if ((t.kind === 'town' || t.kind === 'manor' || t.kind === 'abbey') && !out.includes(t.place)) out.push(t.place);
+    return out;
   }
 
   /** The person knows every prerequisite. */

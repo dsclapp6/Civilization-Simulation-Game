@@ -8,7 +8,7 @@ import { DAYS_PER_YEAR } from '../../core/time';
 import type { Simulation } from '../sim';
 import { fullName, type PersonId } from '../state';
 import type { Wave3Deps } from '../wave3deps';
-import { installHappenings, type HappeningsRuntime } from '../happenings';
+import { installHappenings, type HappeningsInstall } from '../happenings';
 import { Adv } from './core';
 import { BRANCHES, TECHS, TECH_BY_ID } from './data';
 import { canLearn, libraryLost, onDeath, settlementYear } from './learning';
@@ -19,7 +19,7 @@ import type { AdvancementRuntime, TechState, TechView } from './types';
 export type { AdvancementRuntime, BranchDef, BranchId, TechDef, TechView, TechState } from './types';
 export { TECHS, BRANCHES } from './data';
 
-export type AdvancementInstall = AdvancementRuntime & { happenings: HappeningsRuntime; adv: Adv };
+export type AdvancementInstall = AdvancementRuntime & { happenings: HappeningsInstall; adv: Adv };
 
 const installed = new WeakMap<Simulation, AdvancementInstall>();
 
@@ -54,7 +54,10 @@ export function installAdvancement(sim: Simulation, deps: Wave3Deps): Advancemen
         if (counts.size === 0) continue;
         const pop = Math.max(3, sim.state.residentsOf(s.id).length * 0.1);
         let lift = 0;
-        for (const [id, n] of counts) lift += (TECH_BY_ID.get(id)?.effects.prosperity ?? 0) * Math.min(1, n / pop);
+        for (const t of TECHS) {
+          const n = counts.get(t.id);
+          if (n && t.effects.prosperity) lift += t.effects.prosperity * Math.min(1, n / pop);
+        }
         if (lift > 0) {
           ss.prosperity = Math.min(1.35, Math.round((ss.prosperity + lift) * 1000) / 1000);
           sim.state.touchSettlement(ss);
@@ -69,7 +72,7 @@ export function installAdvancement(sim: Simulation, deps: Wave3Deps): Advancemen
 
   const api: AdvancementInstall = {
     adv: A,
-    happenings: undefined as unknown as HappeningsRuntime,
+    happenings: undefined as unknown as HappeningsInstall,
     knows: (person, tech) => A.knows(person, tech),
     houseHas: (house, tech) => A.houseHas(house, tech),
     bonus: (house, key) => A.effectOf(A.houseTechs(house), key),

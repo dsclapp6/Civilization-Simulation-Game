@@ -176,7 +176,7 @@ function plagueDaily(H: Hap): void {
     if (level > 0.25) {
       for (const e of H.roads.get(sid) ?? []) {
         if (H.activeAtOf('plague', e.to) || H.cooling(`plague:${e.to}`, 32)) continue;
-        const lenF = clamp(3000 / (e.len + 1500), 0.4, 1.6);
+        const lenF = clamp(4500 / (e.len + 2000), 0.5, 1.6);
         const trade = (H.settlementById.get(e.to)?.market || H.settlementById.get(sid)?.market) ? 1.4 : 1;
         if (rng.chance(cfg.spread * level * lenF * trade * (0.6 + 0.4 * H.diff('plague')))) {
           if (wave) wave.strength = Math.max(0.3, wave.strength * 0.985);
@@ -492,17 +492,24 @@ export function startBandits(H: Hap, sid: number): HappeningRec | null {
   return rec;
 }
 
-function resolveBandits(H: Hap, rec: HappeningRec): void {
+/** Chance the village drives the bandits off: the garrison, the lord's raised men and a watch the player kept, against the gang. */
+export function banditOdds(H: Hap, rec: HappeningRec): number {
   const sid = rec.settlement;
-  const rng = H.rng();
   const strength = Number(rec.data?.strength ?? 6);
   let defence = garrison(H, sid) + (rec.data?.raised ? 6 : 0);
   // villagers who stood watch with the player fight better prepared
   for (const r of H.save.reqs) if (r.type === 'watch' && r.settlement === sid && r.state === 'done' && H.day - (r.resolved ?? -99) < 6) defence += 3;
   const lord = lordOf(H, sid);
   if (lord && lord.settlement === sid) defence += 2;
-  const pDefend = defence / (defence + strength * 0.9);
-  if (rng.chance(pDefend)) {
+  return defence / (defence + strength * 0.9);
+}
+
+function resolveBandits(H: Hap, rec: HappeningRec): void {
+  const sid = rec.settlement;
+  const rng = H.rng();
+  const strength = Number(rec.data?.strength ?? 6);
+  const lord = lordOf(H, sid);
+  if (rng.chance(banditOdds(H, rec))) {
     H.end(rec, {}, true);
     const text = `The bandits near ${H.placeName(sid)} were driven off.`;
     if (H.relevant(sid, -1)) { H.notifyPlayer(text, 'info'); H.state.log(H.day, 'happening', text, [H.playerId]); }
@@ -614,12 +621,13 @@ function successionWatch(H: Hap): void {
     if (t.kind !== 'kingdom' && t.kind !== 'county' && t.kind !== 'barony') continue;
     const trouble = t.holder === 0 ? 'vacant' : t.regent !== 0 ? 'regency' : t.coholders.length > 1 ? 'coheiresses' : '';
     if (!trouble) continue;
-    if (H.save.active.some((r) => r.kind === 'succession' && r.data?.title === t.id) || H.cooling(`succession:${t.id}`, 24)) continue;
+    if (H.save.active.some((r) => r.kind === 'succession' && r.data?.title === t.id) || H.cooling(`succession:t${t.id}`, 64)) continue;
     const seat = t.kind === 'kingdom' ? H.world.kingdoms.find((k) => k.id === t.place)?.capital
       : t.kind === 'county' ? H.world.counties.find((c) => c.id === t.place)?.seat : t.place;
     if (seat === undefined || !H.settlementById.has(seat)) continue;
     const holder = H.state.persons.get(t.holder);
     const who = holder ? (trouble === 'regency' ? `The young ${fullName(holder)}` : fullName(holder)) : `The ${t.name}`;
+    H.save.cool[`succession:t${t.id}`] = H.day;
     H.begin('succession', { settlement: seat, days: 8, level: t.kind === 'kingdom' ? 1 : 0.5, vars: { who, place: t.name }, data: { title: t.id }, important: t.kind !== 'barony' });
   }
   for (const rec of H.activeOf('succession')) if (H.day >= rec.end) H.end(rec, { place: H.placeName(rec.settlement) });

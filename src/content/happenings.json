@@ -9,7 +9,7 @@
   "rates": { "plague": 0.1, "drought": 0.2, "flood": 0.3, "fire": 3, "bandits": 3.5, "winter": 0.4, "tournament": 1, "progress": 1 },
   "calendar": { "midsummer": 6, "harvest": 9, "christmas": 12, "fair": 5, "tournament": 6, "progress": 9, "yearEnd": 15 },
   "famine": { "start": 0.78, "end": 0.92 },
-  "plague": { "duration": [6, 10], "infect": 0.04, "recover": 0.3, "spread": 0.22 },
+  "plague": { "duration": [6, 10], "infect": 0.04, "recover": 0.3, "spread": 0.4 },
   "names": {
     "plague": "Plague", "famine": "Famine", "fire": "Fire", "flood": "Flood", "drought": "Drought", "winter": "Hard winter",
     "bandits": "Bandits", "revolt": "Peasant revolt", "succession": "Succession crisis", "tournament": "Tournament", "fair": "Fair",
@@ -82,9 +82,9 @@
     "christening": { "start": ["{name} is christened at the font of {place}."], "end": ["The christening is over."] }
   },
   "requests": {
-    "maxOpen": 3,
-    "minGapDays": 1.5,
-    "dailyChance": 0.32,
+    "maxOpen": 4,
+    "minGapDays": 1.2,
+    "dailyChance": 0.45,
     "offerDays": 4,
     "weights": { "fetch": 3, "loan": 1.4, "work": 3, "message": 1.6, "lost_animal": 1.3, "watch": 0.5, "godparent": 0.5, "marriage": 0.25 },
     "fetch": {

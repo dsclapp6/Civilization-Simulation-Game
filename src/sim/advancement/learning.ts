@@ -90,11 +90,12 @@ function teachAll(A: Adv, s: Settlement, res: readonly Person[]): void {
     for (const id of known) {
       const def = TECH_BY_ID.get(id);
       if (!def || !isMaster(A, m, def) || !rng.chance(TEACH_TRY)) continue;
-      // candidates: household members and apprentices first, then colleagues of the same trade
-      const pool: Person[] = [];
+      // candidates: household members, then a handful of colleagues of the same trade (a sample keeps big towns cheap)
+      const pool = new Set<Person>();
       const hh = A.state.households.get(m.household);
-      if (hh) for (const pid of hh.members) { const q = A.state.persons.get(pid); if (q && q !== m) pool.push(q); }
-      for (const q of byCareer.get(m.career) ?? []) if (q !== m && !pool.includes(q)) pool.push(q);
+      if (hh) for (const pid of hh.members) { const q = A.state.persons.get(pid); if (q && q !== m) pool.add(q); }
+      const peers = byCareer.get(m.career);
+      if (peers) for (let i = 0; i < Math.min(10, peers.length); i++) { const q = peers.length <= 10 ? peers[i] : peers[Math.floor(rng.next() * peers.length)]; if (q !== m) pool.add(q); }
       let apprentice = false;
       const eligible: Person[] = [];
       for (const q of pool) {

@@ -58,8 +58,8 @@
     {
       "id": "fair_charter", "branch": "economy", "name": "Fair charter", "points": 40,
       "desc": "A yearly fair of several days draws merchants from far off. The town keeps the tolls and the crowds fill the inns.",
-      "requires": ["market_charter"], "start": 0.5, "heritable": true,
-      "learn": { "titles": ["town"], "market": true, "rate": 0.03 },
+      "requires": ["market_charter"], "start": 0.8, "heritable": true,
+      "learn": { "titles": ["town"], "market": true, "rate": 0.06 },
       "teach": { "fee": 480 },
       "effects": { "fair": 1 }
     },
