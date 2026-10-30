@@ -155,14 +155,17 @@ export function buildQuadruped(q: QuadDims, tack?: TackOpts): GeometryData {
   b.push().translate(0, bodyY, 0).rotate(Math.PI / 2, 0, 0);
   // after Rx(+90°): loft y → +z (forward), ring z → -y (down), ring x → x
   const ring = (z: number, rx: number, ry: number, cy: number, c?: number, bind?: Bind): Ring => ({ y: z, rx, rz: ry, z: -cy, c, b: bind });
+  // ring "back" (theta = PI → world up) raises the topline at the withers; rounded rump and breast
   const bodyRings: Ring[] = [
-    ring(-len * 0.56, bw * 0.24, bh * 0.22, bh * 0.12 + rumpY * 0.5, coat, QB.body),
-    ring(-len * 0.47, bw * 0.43, bh * 0.42, bh * 0.08 + rumpY * 0.5, coat, QB.body),
-    ring(-len * 0.3, bw * 0.5, bh * 0.5, bh * 0.03 + rumpY * 0.3, coat, QB.body),
-    ring(-len * 0.05, bw * 0.52, bh * 0.52, 0, coat, QB.body),
-    ring(len * 0.2, bw * 0.5, bh * 0.52, bh * 0.03 + hump * 0.4, coat, [QB.body, QB.chest, 0.5]),
-    ring(len * 0.4, bw * 0.44, bh * 0.5, bh * 0.08 + hump, coat, QB.chest),
-    ring(len * 0.53, bw * 0.3, bh * 0.36, bh * 0.1 + hump * 0.6, coat, QB.chest),
+    ring(-len * 0.575, bw * 0.18, bh * 0.18, bh * 0.15 + rumpY * 0.5, coat, QB.body),
+    ring(-len * 0.535, bw * 0.36, bh * 0.36, bh * 0.1 + rumpY * 0.5, coat, QB.body),
+    ring(-len * 0.45, bw * 0.47, bh * 0.47, bh * 0.07 + rumpY * 0.45, coat, QB.body),
+    ring(-len * 0.28, bw * 0.5, bh * 0.49, bh * 0.06 + rumpY * 0.3, coat, QB.body),
+    ring(-len * 0.04, bw * 0.53, bh * 0.53, 0, coat, QB.body),
+    ring(len * 0.2, bw * 0.51, bh * 0.53, bh * 0.03 + hump * 0.4, coat, [QB.body, QB.chest, 0.5]),
+    { ...ring(len * 0.38, bw * 0.46, bh * 0.51, bh * 0.07 + hump, coat, QB.chest), back: bh * 0.07 },
+    ring(len * 0.5, bw * 0.37, bh * 0.44, bh * 0.1 + hump * 0.6, coat, QB.chest),
+    ring(len * 0.565, bw * 0.2, bh * 0.26, bh * 0.12 + hump * 0.3, coat, QB.chest),
   ];
   if (s.wool) for (const r of bodyRings) { r.rx *= 1.12; r.rz *= 1.1; }
   b.color(coat).loft(bodyRings, { seg: 10, capStart: true, capEnd: true, phase: Math.PI / 10 });

@@ -30,6 +30,8 @@ export interface SceneOptions {
   animalAnim?: AnimalAnim | '';
   count?: number;
   animals?: number;
+  /** solo scene: subject description (URL params). */
+  solo?: { tier: RankTier; sex: Sex; age: number; culture: CultureId; animal?: AnimalKind; main?: HeldItem; off?: HeldItem; arm?: 'levy' | 'archer' | 'crossbow' | 'man_at_arms' | 'knight'; speed?: number; yaw?: number };
 }
 
 let nextId = 1;
@@ -262,12 +264,12 @@ export function actionScene(o: SceneOptions): SceneDef {
   // 1. smith at the anvil (x 0, z 0)
   {
     const look = peasant('m', 3);
-    look.clothing.apron = 0x5a3b26; look.clothing.headwear = 'none'; look.clothing.cloak = undefined; look.clothing.tunicStyle = 'short'; look.beard = 2; look.build = 0.8; look.hairStyle = 0;
+    look.clothing.apron = 0x5a3b26; look.clothing.headwear = 'none'; look.clothing.cloak = undefined; look.clothing.tunicStyle = 'short'; look.beard = 2; look.build = 0.8; look.hairStyle = 0; look.hair = 0x3a281c;
     const it = makeChar(look, 0, 0, 0, { anim: 'work_hammer', mainHand: 'hammer', offHand: 'tongs' });
     add(it);
     const a = P.anvil(); a.position.set(0.04, 0, 0.56); props.push(a);
     const f = P.forge(); f.position.set(-1.5, 0, -1.3); f.rotation.y = 0.5; props.push(f);
-    VIGNETTES.push({ name: 'smith', cam: { pos: [1.9, 1.7, 2.7], target: [0.05, 1.0, 0.3] } });
+    VIGNETTES.push({ name: 'smith', cam: { pos: [-1.95, 1.65, 2.55], target: [0.0, 1.0, 0.3] } });
   }
   // 2. mower in the wheat (x 8)
   {
@@ -310,10 +312,10 @@ export function actionScene(o: SceneOptions): SceneDef {
     const l1 = peasant('m', 3); armLook(rng, l1, 'man_at_arms'); l1.helmet = 'nasal';
     const l2 = peasant('m', 3); armLook(rng, l2, 'man_at_arms'); l2.helmet = 'kettle'; l2.armour = 'mail';
     l2.clothing.tunicStyle = 'surcoat'; l2.heraldry = heraldryFor(rng);
-    const a = makeChar(l1, 16, 0, 0, { anim: 'attack_slash', mainHand: 'sword', offHand: 'shield_round', animTime: 0.36 });
-    const b = makeChar(l2, 16.1, 1.7, Math.PI, { anim: 'block', mainHand: 'sword', offHand: 'shield_heater' });
+    const a = makeChar(l1, 16.1, 1.7, Math.PI, { anim: 'attack_slash', mainHand: 'sword', offHand: 'shield_round' });
+    const b = makeChar(l2, 16, 0, 0, { anim: 'block', mainHand: 'sword', offHand: 'shield_heater' });
     add(a); add(b);
-    VIGNETTES.push({ name: 'swordfight', cam: { pos: [19.4, 1.8, 0.9], target: [16.05, 1.05, 0.85] } });
+    VIGNETTES.push({ name: 'swordfight', cam: { pos: [19.3, 1.75, 1.2], target: [16.05, 1.1, 0.85] } });
   }
   // 6. the fallen (x 22)
   {
@@ -504,7 +506,8 @@ export function animalsScene(o: SceneOptions): SceneDef {
       const y = makeAnimal(kind, x - rowW[ri] * 0.32, z + (ri === 0 ? 1.0 : 0.7), Math.PI / 2, { anim, young: true, coat: it.coat });
       y.moveSpeed = it.moveSpeed;
       animals.push({ item: y, tick: (_t, dt) => { y.animTime += dt; }, subject: true });
-      labels.push({ text: kind, x, y: 0.02, z: z + (ri === 0 ? 1.7 : 1.25), small: true });
+      const top: Record<string, number> = { horse: 2.0, ox: 1.9, cow: 1.75, deer: 2.0, boar: 1.2, pig: 1.05, sheep: 1.0, goat: 1.15, wolf: 1.1, dog: 0.9, fox: 0.6, cat: 0.45, hare: 0.55, chicken: 0.55, goose: 0.95 };
+      labels.push({ text: kind, x, y: top[kind] ?? 1, z, small: true });
     });
   });
   const f2 = P.fence(24); f2.position.set(0, 0, -5.2); props.push(f2);
@@ -518,8 +521,43 @@ export function animalsScene(o: SceneOptions): SceneDef {
   };
 }
 
+// ------------------------------------------------------------------------------------------------ one subject (inspection, film strips)
+export function soloScene(o: SceneOptions): SceneDef {
+  resetIds();
+  const rng = new Rng(`solo-${o.seed}`);
+  const so = o.solo ?? { tier: 3 as RankTier, sex: 'm' as Sex, age: 30, culture: 'anglo' as CultureId };
+  const yaw = so.yaw ?? Math.PI / 2;
+  const chars: CharActor[] = [];
+  const animals: AnimalActor[] = [];
+  if (so.animal) {
+    const anim = o.animalAnim || 'idle';
+    const it = makeAnimal(so.animal, 0, 0, yaw, { anim, coat: coatFor(rng, so.animal) });
+    it.male = true;
+    it.moveSpeed = so.speed ?? (anim === 'walk' ? 1.2 : anim === 'trot' ? 3 : anim === 'run' ? 8 : 0);
+    animals.push({ item: it, tick: (_t, dt) => { it.animTime += dt; }, subject: true });
+  } else {
+    const look = generateLook(rng, { tier: so.tier, sex: so.sex, age: so.age, culture: so.culture });
+    if (so.arm) armLook(rng, look, so.arm);
+    const it = makeChar(look, 0, 0, yaw);
+    const anim = o.anim || 'idle';
+    applyAnim(it, anim);
+    if (o.items !== false) equipFor(it, anim);
+    if (so.main) it.mainHand = so.main;
+    if (so.off) it.offHand = so.off;
+    if (so.speed !== undefined) it.moveSpeed = so.speed;
+    if (it.mount && o.gait) it.mount.anim = o.gait;
+    chars.push({ item: it, tick: (_t, dt) => { it.animTime += dt; if (it.mount) it.mount.animTime += dt; }, subject: true });
+  }
+  return {
+    name: 'solo', chars, animals, props: [], labels: [],
+    camera: { pos: [0, 1.1, 4.2], target: [0, 0.85, 0] },
+    shadow: { x: 0, z: 0, r: 4 },
+  };
+}
+
 export function buildScene(name: string, o: SceneOptions): SceneDef {
   switch (name) {
+    case 'solo': return soloScene(o);
     case 'faces': return facesScene(o);
     case 'anims': return animsScene(o);
     case 'riders': return ridersScene(o);

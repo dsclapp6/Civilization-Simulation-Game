@@ -122,8 +122,9 @@ function gaitPose(out: Float32Array, st: QuadState, q: QuadDims, anim: QuadAnim,
   out[QB.neck2 * 3] = g.neck * 0.5 * D * nod;
   out[QB.head * 3] = -(out[0] + out[QB.neck1 * 3]) * 0.7;
   // tail streams with speed
-  out[QB.tail1 * 3] = -Math.min(0.6, v * 0.05) + 0.08 * Math.sin(TAU * ph);
-  out[QB.tail2 * 3] = -Math.min(0.3, v * 0.03) + 0.1 * Math.sin(TAU * ph - 0.8);
+  // tails hang along -y: +X lifts them backwards (streaming behind at speed)
+  out[QB.tail1 * 3] = Math.min(0.95, v * 0.07) + 0.08 * Math.sin(TAU * ph);
+  out[QB.tail2 * 3] = Math.min(0.35, v * 0.03) + 0.12 * Math.sin(TAU * ph - 0.8);
   out[QB.tail1 * 3 + 2] = 0.1 * Math.sin(TAU * ph);
   // ears forward when moving fast
   out[QB.earL * 3] = anim === 'run' ? 0.25 : 0; out[QB.earR * 3] = out[QB.earL * 3];
@@ -143,6 +144,8 @@ function idleQuad(out: Float32Array, st: QuadState, q: QuadDims, dt: number): vo
   const sw = Math.max(0, noise(t * 0.4 + 2, st.seed + 5));
   out[QB.tail1 * 3 + 2] = Math.sin(t * 6) * sw * 0.5;
   out[QB.tail2 * 3 + 2] = Math.sin(t * 6 - 1) * sw * 0.6;
+  // a soft curve rather than a rigid rod
+  out[QB.tail1 * 3] = 0.12; out[QB.tail2 * 3] = -0.22;
   // ear flicks
   const ef = noise(t * 0.9, st.seed + 9);
   out[QB.earL * 3] = ef > 0.6 ? (ef - 0.6) * 1.2 : 0;
@@ -257,7 +260,7 @@ function attackQuad(out: Float32Array, st: QuadState, q: QuadDims, dt: number): 
     out[QB.hl1 * 3] = (-25 * crouch + 20 * spring) * D; out[QB.hr1 * 3] = out[QB.hl1 * 3];
     out[QB.hl2 * 3] = (-50 * crouch) * D; out[QB.hr2 * 3] = out[QB.hl2 * 3];
     out[QB.earL * 3] = 0.5; out[QB.earR * 3] = 0.5;
-    out[QB.tail1 * 3] = -0.3;
+    out[QB.tail1 * 3] = 0.6;
   } else if (style === 'charge' || style === 'butt') {
     // head down, rush/thrust, upward toss
     const lower = smooth(Math.min(1, t / 0.3));
@@ -268,7 +271,7 @@ function attackQuad(out: Float32Array, st: QuadState, q: QuadDims, dt: number): 
     out[RZ] = (0.18 * smooth(Math.max(0, Math.min(1, (t - 0.3) / 0.2))) * (1 - toss * 0.5)) * q.scale;
     out[0] = (4 * lower - 6 * toss) * D;
     out[QB.fl1 * 3] = (-15 * toss) * D; out[QB.hl1 * 3] = 12 * lower * D; out[QB.hr1 * 3] = 12 * lower * D;
-    out[QB.tail1 * 3] = -0.4;
+    out[QB.tail1 * 3] = 0.5;
   } else if (style === 'rear') {
     rearQuad(out, st, q, t * T);
   } else {

@@ -170,7 +170,7 @@ export function locomotionPose(out: Float32Array, st: LocoState, d: HumanDims, g
   out[2] = rollAmp * Math.cos(TAU * (ph - duty / 2));     // hip drop
 
   // ---- spine / chest / head ----
-  const lean = gait === 'sprint' ? 16 : gait === 'run' ? 9 : gait === 'carry' ? 3 : 3 + Math.max(0, speed - 1.2) * 3;
+  const lean = gait === 'sprint' ? 20 : gait === 'run' ? 12 : gait === 'carry' ? 3 : 3 + Math.max(0, speed - 1.2) * 3;
   const twist = (running ? 13 : 9) * D * amp * kVar;
   out[HB.spine * 3] = lean * 0.6 * D + d.elder * 10 * D;
   out[HB.chest * 3] = lean * 0.4 * D + d.elder * 7 * D + (running ? 2 * D * Math.cos(TAU * 2 * ph) : 0);
@@ -183,14 +183,16 @@ export function locomotionPose(out: Float32Array, st: LocoState, d: HumanDims, g
   out[HB.head * 3 + 1] = -twist * 0.45 * cyc;
 
   // ---- arms (free swing; hold layers may override) ----
-  const swingA = (gait === 'sprint' ? 58 : gait === 'run' ? 42 : gait === 'carry' ? 6 : 16 + Math.max(0, speed - 1) * 9) * D * amp * kVar * (1 - d.elder * 0.4);
+  const swingA = (gait === 'sprint' ? 60 : gait === 'run' ? 46 : gait === 'carry' ? 6 : 21 + Math.max(0, speed - 1) * 9) * D * amp * kVar * (1 - d.elder * 0.4);
   const elbow = (gait === 'sprint' ? 88 : gait === 'run' ? 78 : 14) * D;
   const lag = 0.04;
   const ca = Math.cos(TAU * (ph - lag));
   const abd = (running ? 10 : 6) * D;
-  out[HB.uaL * 3] = swingA * ca;
+  // arms reach a little further back than forward (hands pass the hips)
+  const back = running ? 1.25 : 1.1;
+  out[HB.uaL * 3] = swingA * ca * (ca > 0 ? back : 1);
   out[HB.uaL * 3 + 2] = abd;
-  out[HB.uaR * 3] = -swingA * ca;
+  out[HB.uaR * 3] = -swingA * ca * (ca < 0 ? back : 1);
   out[HB.uaR * 3 + 2] = -abd;
   const elbowExtra = (running ? 14 : 16) * D;
   out[HB.faL * 3] = -(elbow + elbowExtra * Math.max(0, -ca));

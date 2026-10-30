@@ -119,11 +119,12 @@ const FRAG_EMISSIVE = /* glsl */`
   if ( crowdFlagI == 7 ) { totalEmissiveRadiance += diffuseColor.rgb * 1.6; diffuseColor.rgb *= 0.2; }
   float crowdHl = vCrowdParams.x;
   if ( crowdHl > 0.5 ) {
+    // silhouette rim: only faces turned away from the viewer glow
     float crowdRim = 1.0 - saturate( dot( normal, normalize( vViewPosition ) ) );
-    crowdRim = crowdRim * crowdRim * ( 3.0 - 2.0 * crowdRim );
-    vec3 crowdHc = crowdHl < 1.5 ? vec3( 1.0, 0.92, 0.75 ) : ( crowdHl < 2.5 ? vec3( 1.0, 0.72, 0.22 ) : vec3( 0.85, 0.8, 0.55 ) );
-    float crowdK = crowdHl < 1.5 ? 0.55 : ( crowdHl < 2.5 ? 0.9 : 0.35 );
-    totalEmissiveRadiance += crowdHc * ( crowdRim * crowdK + 0.04 * crowdK );
+    crowdRim = smoothstep( 0.45, 0.95, crowdRim );
+    vec3 crowdHc = crowdHl < 1.5 ? vec3( 1.0, 0.94, 0.8 ) : ( crowdHl < 2.5 ? vec3( 1.0, 0.74, 0.25 ) : vec3( 0.9, 0.82, 0.55 ) );
+    float crowdK = crowdHl < 1.5 ? 0.7 : ( crowdHl < 2.5 ? 1.2 : 0.45 );
+    totalEmissiveRadiance += crowdHc * crowdRim * crowdK;
   }
   // per-actor tint/flash (params.y: hit flash, params.z: darken for dead/night ghosts)
   totalEmissiveRadiance += vec3( 0.6, 0.12, 0.08 ) * vCrowdParams.y;

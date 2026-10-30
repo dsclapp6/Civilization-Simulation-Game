@@ -209,13 +209,14 @@ const SPECS: Record<string, ClipDef> = {
   },
   // ------------------------------------------------------------------ combat
   attack_slash: {
-    dur: 1.0, loop: true, stance: GUARD_STANCE, base: GUARD, ikLAuto: true,
+    dur: 1.1, loop: true, stance: GUARD_STANCE, base: GUARD, ikLAuto: true,
     keys: [
       { t: 0, p: {} },
-      { t: 0.28, p: { root: [3, -30, 0], spine: [2, -14, 0], chest: [0, -24, 0], uaR: [-88, -62, -42], faR: [-74, 0, 0], handR: [-30, 0, -40], head: [-3, 18, 0] } },
-      { t: 0.42, p: { root: [6, 6, 0], spine: [8, 12, 0], chest: [6, 24, 0], uaR: [-86, 46, -22], faR: [-16, 0, 0], handR: [30, 0, 40], r: [0, -0.04, 0.035], head: [0, -6, 0] } },
-      { t: 0.56, p: { chest: [8, 32, 0], uaR: [-62, 66, -14], faR: [-22, 0, 0], handR: [48, 0, 34] } },
-      { t: 1.0, p: { ...GUARD } },
+      { t: 0.3, p: { root: [3, -32, 0], spine: [0, -14, 0], chest: [-4, -26, 0], uaR: [-118, -50, -38], faR: [-72, 0, 0], handR: [-46, 0, -40], head: [-4, 20, 0], r: [0, -0.025, -0.01] } },
+      { t: 0.41, p: { root: [5, -6, 0], spine: [6, 2, 0], chest: [4, 8, 0], uaR: [-84, 18, -30], faR: [-28, 0, 0], handR: [18, 0, 36], r: [0, -0.04, 0.03], head: [0, 2, 0] } },
+      { t: 0.5, p: { root: [6, 10, 0], spine: [10, 10, 0], chest: [8, 28, 0], uaR: [-58, 62, -16], faR: [-16, 0, 0], handR: [52, 0, 48], r: [0, -0.05, 0.045], head: [2, -10, 0] } },
+      { t: 0.68, p: { chest: [8, 30, 0], uaR: [-54, 64, -16], handR: [56, 0, 50] } },
+      { t: 1.1, p: { ...GUARD } },
     ],
   },
   attack_overhead: {
@@ -485,7 +486,7 @@ const SPECS: Record<string, ClipDef> = {
   },
   ride_charge: {
     dur: 2, loop: true, riding: true, ispace: 'ground', special: 'couch',
-    base: { ...RIDE, r: [0, 0.02, 0.01], spine: [16, 0, 0], chest: [8, 4, 0], neck: [-8, 0, 0], head: [-12, -4, 0],
+    base: { ...RIDE, r: [0, 0.02, 0.01], spine: [11, 0, 0], chest: [5, 4, 0], neck: [-6, 0, 0], head: [-10, -4, 0],
       uaL: [-42, -22, 14], faL: [-72, 10, 0], thL: [-34, 6, 33], thR: [-34, -6, -33], shL: [24, 0, 0], shR: [24, 0, 0],
       ip: [-0.105, 0.745, 0.13], ir: [-2, 9, 0], ch: { ifw: 1, ikR: 1 } },
     keys: [{ t: 0, p: {} }],

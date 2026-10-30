@@ -64,6 +64,7 @@ const _v = new THREE.Vector3();
 const HUMAN_TEX_BONES = HUMAN_BONES;
 /** Far-LOD switch distances (m): out beyond LOD_OUT, back in under LOD_IN. */
 const LOD_OUT = 32, LOD_IN = 27;
+const GEO_CACHE_MAX = 900;
 
 /** Appearance of the body chunk (everything that only changes with the look). */
 function buildBodyChunk(look: CharacterLook, lod: 0 | 1): GeometryData {
@@ -131,12 +132,19 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
   /** Tunables (not part of the CharacterLayer contract): time budget for building new appearances per frame. */
   const options = { buildBudgetMs: 4, lodBudgetMs: 1, lod: true, animLod: true };
 
+  /** LRU cache of built appearances (≈25–50 KB each); keeps both LODs of everyone nearby. */
   function cacheGet(key: string, make: () => GeometryData): GeometryData {
     let g = geoCache.get(key);
-    if (!g) {
-      g = make();
-      if (geoCache.size > 600) geoCache.clear();
+    if (g) {
+      geoCache.delete(key); // refresh recency
       geoCache.set(key, g);
+      return g;
+    }
+    g = make();
+    geoCache.set(key, g);
+    while (geoCache.size > GEO_CACHE_MAX) {
+      const oldest = geoCache.keys().next().value as string;
+      geoCache.delete(oldest);
     }
     return g;
   }

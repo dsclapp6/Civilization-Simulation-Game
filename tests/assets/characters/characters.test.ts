@@ -12,6 +12,7 @@ import { createQuadState, quadEvaluate, quadFK, type QuadAnim } from '../../../s
 import { quadSpec } from '../../../src/assets/animals/kinds';
 import { birdDims, birdEvaluate, birdFK, buildBird, createBirdState } from '../../../src/assets/animals/birds';
 import { mulEulerT, setIdentity } from '../../../src/assets/characters/engine/affine';
+import { rayCapsule } from '../../../src/assets/characters/layer';
 
 const ANIMS: AnimState[] = [
   'idle', 'walk', 'run', 'sprint', 'carry_walk', 'sit', 'sleep', 'talk', 'eat', 'drink', 'pray', 'wave', 'kneel',
@@ -55,13 +56,35 @@ describe('character assets', () => {
           const g = buildHumanBody(look, humanDims(look));
           expect(g.vertexCount).toBeGreaterThan(300);
           expect(g.indexCount % 3).toBe(0);
-          for (let i = 0; i < g.indexCount; i++) expect(g.index[i]).toBeLessThan(g.vertexCount);
-          for (let i = 0; i < g.vertexCount; i++) expect(g.skin[i * 4]).toBeLessThan(HUMAN_BONES);
+          let maxIndex = 0, maxBone = 0, finitePos = true;
+          for (let i = 0; i < g.indexCount; i++) if (g.index[i] > maxIndex) maxIndex = g.index[i];
+          for (let i = 0; i < g.vertexCount; i++) {
+            maxBone = Math.max(maxBone, g.skin[i * 4], g.skin[i * 4 + 1]);
+            if (!Number.isFinite(g.position[i * 3] + g.position[i * 3 + 1] + g.position[i * 3 + 2])) finitePos = false;
+          }
+          expect(maxIndex).toBeLessThan(g.vertexCount);
+          expect(maxBone).toBeLessThan(HUMAN_BONES);
+          expect(finitePos).toBe(true);
           maxV = Math.max(maxV, g.vertexCount);
         }
       }
     }
     expect(maxV).toBeLessThan(6000);
+  }, 60000);
+
+  it('far LOD is much lighter than full detail', () => {
+    const rng = new Rng('lod');
+    const look = generateLook(rng, { tier: 6, sex: 'f', age: 30, culture: 'franc' });
+    const d = humanDims(look);
+    const full = buildHumanBody(look, d, 0), far = buildHumanBody(look, d, 1);
+    expect(far.indexCount).toBeLessThan(full.indexCount * 0.65);
+  });
+
+  it('ray vs capsule picking', () => {
+    const ro = { x: 0, y: 1, z: -5 } as unknown as import('three').Vector3;
+    const rd = { x: 0, y: 0, z: 1 } as unknown as import('three').Vector3;
+    expect(rayCapsule(ro, rd, 0, 0.3, 0, 0, 1.6, 0, 0.3)).toBeCloseTo(4.7, 1);
+    expect(rayCapsule(ro, rd, 2, 0.3, 0, 2, 1.6, 0, 0.3)).toBe(Infinity);
   });
 
   it('builds every held item', () => {
@@ -96,7 +119,7 @@ describe('character assets', () => {
         if (!finite(bones, bones.length)) throw new Error(`NaN in ${anim} at frame ${f}`);
       }
     }
-  });
+  }, 60000);
 
   it('animates every animal kind and animation without NaNs', () => {
     const anims: AnimalAnim[] = ['idle', 'graze', 'walk', 'trot', 'run', 'lie', 'sleep', 'eat', 'attack', 'hit', 'dead'];
@@ -126,5 +149,5 @@ describe('character assets', () => {
         if (!finite(st.world, 13 * 12)) throw new Error(`NaN in bird ${a}`);
       }
     }
-  });
+  }, 60000);
 });

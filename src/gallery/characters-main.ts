@@ -16,11 +16,11 @@ type LayerStats = { updateMs: number; animated: number; culled: number; built: n
 declare global {
   interface Window {
     __charsReady?: boolean;
-    __chars?: { stats(): Record<string, number>; frame(dt?: number): void; setCamera(p: number[], t: number[]): void };
+    __chars?: { stats(): Record<string, number>; frame(dt?: number): void; setCamera(p: number[], t: number[]): void; pick(nx: number, ny: number): { person: number; animal: number } };
   }
 }
 
-const SCENES = ['lineup', 'faces', 'anims', 'riders', 'action', 'crowd', 'animals'] as const;
+const SCENES = ['lineup', 'faces', 'anims', 'riders', 'action', 'crowd', 'animals', 'solo'] as const;
 
 export function start(root: AppRoot): void {
   const params = root.params;
@@ -44,6 +44,18 @@ export function start(root: AppRoot): void {
     items: params.get('items') !== '0',
     count: params.get('count') ? Number(params.get('count')) : undefined,
     animals: params.get('animals') ? Number(params.get('animals')) : undefined,
+    solo: {
+      tier: Number(params.get('tier') ?? 3) as 1,
+      sex: params.get('sex') === 'f' ? 'f' : 'm',
+      age: Number(params.get('age') ?? 30),
+      culture: (params.get('culture') ?? 'anglo') as 'anglo',
+      animal: (params.get('animal') ?? undefined) as undefined,
+      main: (params.get('main') ?? undefined) as undefined,
+      off: (params.get('off') ?? undefined) as undefined,
+      arm: (params.get('arm') ?? undefined) as undefined,
+      speed: params.get('speed') ? Number(params.get('speed')) : undefined,
+      yaw: params.get('yaw') ? Number(params.get('yaw')) : undefined,
+    },
   };
   let sceneName: string = params.get('scene') ?? 'lineup';
   let current: SceneDef | null = null;
@@ -106,6 +118,11 @@ export function start(root: AppRoot): void {
     if (!camParam || !VIGNETTES.find((x) => x.name === camParam)) stage.setShadowFocus(current.shadow.x, current.shadow.z, current.shadow.r);
     buildLabels();
     simTime = 0;
+    if (params.get('hl')) {
+      // preview highlight states: 0 none, 1 hover, 2 selected, 3 player
+      current.chars.forEach((c, i) => { c.item.highlight = (i % 4) as 0 | 1 | 2 | 3; });
+      current.animals.forEach((a, i) => { a.item.highlight = (i % 3) as 0 | 1 | 2; });
+    }
     refreshUi();
   }
 
@@ -160,7 +177,7 @@ export function start(root: AppRoot): void {
   function refreshUi(): void {
     panel.innerHTML = '<div style="font:bold 16px Georgia,serif;margin-bottom:4px;color:#6a1a1a">Millennia — People &amp; Beasts</div>';
     panel.appendChild(select('Scene', SCENES, sceneName, (v) => load(v)));
-    if (sceneName === 'lineup' || sceneName === 'faces') {
+    if (sceneName === 'lineup' || sceneName === 'faces' || sceneName === 'solo') {
       panel.appendChild(select('Animation', ['', ...ALL_ANIMS], opts.anim ?? '', (v) => { opts.anim = v as AnimState; load(sceneName); }));
     }
     if (sceneName === 'riders') {
@@ -229,6 +246,11 @@ export function start(root: AppRoot): void {
     stats: statsNow,
     frame: (dt = 1 / 30) => { step(dt); renderer.render(scene, camera); },
     setCamera: (p, t) => setCam(p, t),
+    pick: (nx, ny) => {
+      camera.updateMatrixWorld();
+      ray.setFromCamera(new THREE.Vector2(nx, ny), camera);
+      return { person: chars.pick(ray), animal: animals.pick(ray) };
+    },
   };
 
   if (shot) {
@@ -244,7 +266,8 @@ export function start(root: AppRoot): void {
       for (let i = 0; i < bench; i++) { step(1 / 60); cs.push(chars.stats.updateMs); as.push(animals.stats.updateMs); }
       const avg = (a: number[]): number => a.reduce((x, y) => x + y, 0) / a.length;
       const p95 = (a: number[]): number => [...a].sort((x, y) => x - y)[Math.floor(a.length * 0.95)];
-      benchStats = { benchFrames: bench, charAvg: avg(cs), charP95: p95(cs), animalAvg: avg(as), animalP95: p95(as) };
+      const med = (a: number[]): number => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)];
+      benchStats = { benchFrames: bench, charAvg: avg(cs), charMed: med(cs), charP95: p95(cs), animalAvg: avg(as), animalMed: med(as), animalP95: p95(as) };
     }
     renderer.render(scene, camera);
     placeLabels();
