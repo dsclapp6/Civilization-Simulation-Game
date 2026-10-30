@@ -132,6 +132,8 @@ export interface FarmSave {
   fert: Record<string, number>;
   /** Household id → garden beds (see economy/farm.ts). */
   g: Record<string, GardenBed[]>;
+  /** Settlement id → yield scale (about 0.7..1.35): land and effort follow the price of bread-corn from year to year (economy/farm.ts). */
+  scale?: Record<string, number>;
 }
 
 export interface GardenBed {

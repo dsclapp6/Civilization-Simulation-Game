@@ -20,7 +20,8 @@ import type { Household, Person, StripState } from '../state';
 import type { Econ } from './core';
 import { GRAIN_PER_UNIT_DAY } from './diet';
 import { bagAdd, bagGet } from './items';
-import { addStock, marketBuy } from './market';
+import { GOODS } from './data';
+import { addStock, marketBuy, postedPrice } from './market';
 
 export const TITHE = 0.1;
 /** Work units (bouts at speed 1) each strip task takes for a player; see work.ts. */
@@ -66,7 +67,7 @@ export function yieldBase(E: Econ, sid: number): number {
   const s = E.settlementById.get(sid);
   if (!s) return 20;
   const c = calib(E);
-  return c.yg * (soilOf(E, s) / c.meanFert) * (1 + 0.16 * (hash01(sid, 5, 9) - 0.5));
+  return c.yg * (soilOf(E, s) / c.meanFert) * (1 + 0.16 * (hash01(sid, 5, 9) - 0.5)) * (E.farm.scale?.[sid] ?? 1);
 }
 
 export function fieldFert(E: Econ, sid: number, field: number): number {
@@ -508,8 +509,26 @@ export function initFarm(E: Econ): void {
 }
 
 /** New year: draw the harvest quality, let the soil settle back towards its norm. */
+/**
+ * Land comes into cultivation and goes out of it, and farmers put in more or less effort, as the price of
+ * bread-corn tells them: each year a settlement's yield scale drifts (at most 3%) towards the level at which
+ * its market holds the usual price. Without it a shrinking population would sit on a permanent glut.
+ */
+function adaptYields(E: Econ): void {
+  const base = GOODS.wheat.basePrice;
+  const scale = (E.farm.scale ??= {});
+  for (const s of E.world.settlements) {
+    if (s.strips.length === 0) continue;
+    const price = postedPrice(E, s.id, 'wheat', 'buy', 0) / base;
+    const cur = scale[s.id] ?? 1;
+    const drift = Math.max(-0.03, Math.min(0.03, (price - 0.95) * 0.12));
+    scale[s.id] = Math.round(Math.max(0.7, Math.min(1.35, cur * (1 + drift))) * 1000) / 1000;
+  }
+}
+
 export function yearlyFarm(E: Econ, year: number): void {
   drawHarvest(E, year - 1);
+  adaptYields(E);
   for (const k of Object.keys(E.farm.fert)) {
     const v = E.farm.fert[k];
     E.farm.fert[k] = Math.round((v + (1 - v) * 0.12) * 1000) / 1000;
