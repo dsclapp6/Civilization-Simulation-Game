@@ -149,7 +149,7 @@ export class Relations {
   /** "your father", "your lord", "Agnes, the alewife" — how `viewer` would describe `other`. */
   relationLabel(viewerId: PersonId, otherId: PersonId): string {
     const v = this.core.person(viewerId), o = this.core.person(otherId);
-    if (!v || !o) return '';
+    if (!v || !o || v.id === o.id) return '';
     return this.label(v, o, this.kinds(v, o), true);
   }
 

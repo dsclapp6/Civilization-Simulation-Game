@@ -173,9 +173,10 @@ export class OpinionModel {
       const id = Number(key);
       const v = ops[id];
       if (!this.core.state.persons.has(id)) { delete ops[id]; touched = true; continue; }
-      const next = v * OPINION.decayPerSeason;
+      let next = round1(v * OPINION.decayPerSeason);
+      if (next === v) next = round1(v - Math.sign(v) * 0.1); // rounding must not freeze a faint memory
       if (Math.abs(next) < OPINION.forgetBelow) delete ops[id];
-      else ops[id] = round1(next);
+      else ops[id] = next;
       touched = true;
     }
     if (touched) this.core.state.touch(p);

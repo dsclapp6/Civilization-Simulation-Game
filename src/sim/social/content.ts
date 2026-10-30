@@ -21,6 +21,9 @@ import actions from '../../content/dialogue/actions.json';
 export interface Cond {
   culture?: string | string[];
   sex?: 'm' | 'f';
+  /** The listener's sex and age band (when the line is addressed to someone). */
+  lsex?: 'm' | 'f';
+  lage?: string | string[];
   /** child < 12, youth 12–17, adult 18–49, elder 50+ */
   age?: string | string[];
   /** The speaker's rank band: low (tiers 1–2), mid (3–4), high (5+). */

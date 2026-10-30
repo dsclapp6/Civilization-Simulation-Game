@@ -1,1 +1,293 @@
-{}
+{
+  "_doc": "Speaking your mind. 'ask' pools are YOUR lines ({first} = them, {addr} how you address them, {ltrade} their trade); win/lose are theirs. Boast vars: {skill} {stat} {statname} {rank} {office}. Threaten win has tag 'paid' with {money}.",
+  "say": {
+    "flatter": {
+      "ask": {
+        "skill": [
+          "They say there's no better {ltrade} in all the shire, {addr}. I see why.",
+          "Your craft is a wonder, {first}. I've never seen finer.",
+          "I could watch you work all day, {addr}. You make it look easy.",
+          "Whatever the trade, {first}, it's plain you were born to it.",
+          { "t": "A hand like yours, {first}! The whole parish should come to learn.", "if": { "trait": "deceitful" } },
+          { "t": "I mean it, {first}: you're the best at your craft that I've met.", "if": { "trait": "honest" } }
+        ],
+        "looks": [
+          "You're looking well today, {first}. Very well indeed.",
+          "I don't think I've ever seen a fairer face in {place}.",
+          "God took particular care over you, {first}.",
+          "Forgive me, I was staring. I couldn't help it.",
+          { "t": "Your beauty does the whole village credit, {addr}.", "if": { "rank": ["mid", "high"] } }
+        ],
+        "wit": [
+          "You've the sharpest wits in the parish, {first}.",
+          "I never leave your company without learning something.",
+          "They say you could talk a fox out of a henhouse — and then back in again.",
+          "A clever head on you, {first}. I wish I had half of it."
+        ],
+        "strength": [
+          "They say you could carry an ox on your back, {first}.",
+          "Strong as three men, and twice as modest.",
+          "I wouldn't wrestle you for a purse of gold.",
+          "That's a back that built half this village."
+        ],
+        "charm": [
+          "You've a way with folk, {first}. Everyone's glad of your company.",
+          "There's not a soul in {place} who doesn't speak well of you.",
+          "Charm like yours is a gift of God, {first}.",
+          "You could win a smile from the stone saints in the church."
+        ],
+        "station": [
+          "A person of your standing honours us by speaking at all, {addr}.",
+          "Your name is spoken with respect from here to the next parish.",
+          "{Addr}, your fine reputation precedes you.",
+          "We are fortunate to have such as you among us."
+        ],
+        "piety": [
+          "You set us all an example in the church, {first}.",
+          "Folk say your prayers must be heard by God Himself.",
+          "A devout soul like yours is a blessing to the parish.",
+          "I try to follow your example at Mass, {first}, though I fall short."
+        ],
+        "generous": [
+          "No one has ever left your door hungry, {first}. We all know it.",
+          "Your generosity is the pride of {place}.",
+          "A hand as open as yours is rare, {addr}. God will repay it.",
+          "They say you'd give your last crust to a stranger."
+        ],
+        "bold": [
+          "They say you fear nothing, {first}. I believe it.",
+          "A heart like a lion's. We're lucky to have you.",
+          "I've heard of your courage, {addr}. I'd follow you anywhere.",
+          "A brave soul, {first}. I wish I had your nerve."
+        ],
+        "general": [
+          "You're a credit to this place, {first}.",
+          "I'm glad of your company, {addr}. Truly.",
+          "There's something about you, {first} — one can't help but like you.",
+          "It's a good day when I meet you.",
+          "If everyone were like you, the world would be a kinder place.",
+          { "t": "Honestly, {first}, I enjoy our talks more than I should say.", "if": { "trait": "honest" } },
+          { "t": "You deserve more than this village could ever give you, {addr}.", "if": { "trait": "deceitful" } }
+        ]
+      },
+      "win": [
+        { "t": "Ha! You're too kind, {first}. But I'll not stop you.", "tone": "pleased" },
+        { "t": "Is that so? Well, I'll admit I'm glad to hear it.", "tone": "pleased" },
+        { "t": "You do know how to put a person at ease, {first}.", "tone": "warm" },
+        { "t": "Go on, go on... no, I mean it, go on.", "tone": "pleased", "if": { "trait": "ambitious" } },
+        { "t": "Kind of you, {addr}. Few say such things aloud.", "tone": "warm", "if": { "trait": "content" } },
+        { "t": "Well! One doesn't hear such words every day.", "tone": "pleased", "if": { "rank": ["mid", "high"] } },
+        { "t": "Careful, {first}, or I'll start to believe you.", "tone": "friendly", "if": { "trait": "patient" } }
+      ],
+      "lose": [
+        { "t": "I know flattery when I hear it, {first}. Save your breath.", "tone": "cold" },
+        { "t": "Butter on bread is fine; butter on my ears is not.", "tone": "cold" },
+        { "t": "You'll be wanting something, then. Out with it or leave.", "tone": "wary" },
+        { "t": "I'll not be buttered up like a loaf, {addr}.", "tone": "cold", "if": { "trait": "honest" } },
+        { "t": "Mm. I've heard that tune from better singers.", "tone": "cold", "if": { "trait": "deceitful" } },
+        { "t": "That's a fine speech. It isn't true, but it's fine.", "tone": "wary", "if": { "trait": "patient" } },
+        { "t": "Mind your tongue. I'm not a fool.", "tone": "angry", "if": { "trait": "hot_tempered" } }
+      ]
+    },
+
+    "boast": {
+      "ask": {
+        "skill": [
+          "I'll have you know, I'm as good at {skill} as anyone in these parts.",
+          "Ask anyone about my {skill}, {addr}. They'll tell you.",
+          "There's few who can match me at {skill}.",
+          "A man — or woman — learns {skill} their whole life. I've started early and I'm already ahead."
+        ],
+        "stat": [
+          "Nobody here can match my {stat}, and I'll prove it if you like.",
+          "I've {stat} enough for two. Ask anyone.",
+          "Good {stat} runs in my blood, {addr}.",
+          "You won't find better {stat} in the whole shire."
+        ],
+        "rank": [
+          "I am of the {rank} sort, I'll have you know, and I'd thank you to remember it.",
+          "My family is of the {rank} rank. We're not nobody.",
+          "You're speaking to someone of {rank} standing, {addr}.",
+          "We are a {rank} house, and proud of it."
+        ],
+        "office": [
+          "I hold the office of {office} here, you know. It's no small thing.",
+          "As {office}, I've the ear of everyone who matters.",
+          "Folk come to me, as {office}, for justice.",
+          "Being {office} has its burdens, and its honours."
+        ],
+        "wealth": [
+          "I'm not poor, {addr}. I've a little put by, and I'll not hide it.",
+          "My purse is heavier than most hereabouts.",
+          "If it's coin you're measuring, I'll not be shamed.",
+          "A man — or woman — with silver doesn't want for friends."
+        ],
+        "valour": [
+          "I have never turned my back on danger and I never will.",
+          "Ask any who saw me: I stand when others run.",
+          "Courage is the one thing I've plenty of.",
+          "I've faced worse than you'd think, {addr}, and come back whole."
+        ],
+        "generous": [
+          "No one has gone hungry at my door, not once.",
+          "I give where there's need. It's what I'm known for.",
+          "Ask the poor of {place} who fed them last winter.",
+          "My hand is open and always has been."
+        ],
+        "piety": [
+          "I have not missed a Mass in months, and prayed for every soul in the parish.",
+          "God knows my devotion, and so does the priest.",
+          "I fast on every day it is due, {addr}.",
+          "Few in {place} are as faithful as I."
+        ],
+        "fame": [
+          "My name is not unknown in these parts, {addr}.",
+          "You may have heard of me. Folk do tend to.",
+          "There are stories told of me, and not all of them lies.",
+          "I've made a name, and I intend to keep it."
+        ],
+        "empty": [
+          "Well, I'm... I'm planning a great many things, {addr}.",
+          "I'm not as nobody as I look. You'll see, one day.",
+          "Don't judge me yet. My time is coming.",
+          "There's more to me than meets the eye, I swear it."
+        ]
+      },
+      "win": [
+        { "t": "Is that so? Well, that's something worth knowing.", "tone": "pleased" },
+        { "t": "I'd heard as much. It's good to hear it from your own lips.", "tone": "pleased" },
+        { "t": "Not bad, {first}. Not bad at all.", "tone": "friendly" },
+        { "t": "You've a right to be proud, then.", "tone": "friendly" },
+        { "t": "Hm! I'll remember that.", "tone": "friendly" },
+        { "t": "A bold claim, and I think it's honest.", "tone": "friendly", "if": { "trait": "honest" } },
+        { "t": "Ha, spoken like one who has done it.", "tone": "pleased", "if": { "trait": "brave" } }
+      ],
+      "lose": [
+        { "t": "Is that all? I've heard louder from a rooster.", "tone": "cold" },
+        { "t": "Words are cheap, {first}. Show me.", "tone": "cold" },
+        { "t": "Boast what you like. It won't fill my belly.", "tone": "cold" },
+        { "t": "I'd hold my tongue, if I were you, until I'd earned it.", "tone": "cold" },
+        { "t": "Ha! That's rich.", "tone": "angry", "if": { "trait": "hot_tempered" } },
+        { "t": "A modest soul would have said less.", "tone": "cold", "if": { "trait": "content" } },
+        { "t": "I know the truth of that, and so do you.", "tone": "wary", "if": { "trait": "honest" } }
+      ]
+    },
+
+    "insult": {
+      "ask": {
+        "coward": [
+          "You're a coward, {first}, and the whole village knows it.",
+          "I've seen braver sheep.",
+          "Hide behind your mother's skirts, then, {first}."
+        ],
+        "liar": [
+          "You're a liar, {first}. A liar and a cheat.",
+          "Every word out of your mouth is dressed in lies.",
+          "Does the truth ever pass your lips, {first}? I doubt it."
+        ],
+        "miser": [
+          "You'd skin a flea for its hide, {first}.",
+          "A miser, that's what you are. A miser and a shame to your house.",
+          "Your purse is shut tighter than your heart."
+        ],
+        "hothead": [
+          "Calm yourself, {first}. You're about as steady as a spilled pail.",
+          "That temper of yours will be the death of you.",
+          "Does your tongue ever wait for your head?"
+        ],
+        "ugly": [
+          "I've seen prettier faces on a gatepost.",
+          "God made you, and I'd say He was in a hurry.",
+          "Put a sack over your head, {first}; you'd improve the view."
+        ],
+        "beggar": [
+          "Look at you. A beggar in rags, giving himself airs.",
+          "Wash, {first}, before you speak to your betters.",
+          "You've the look of someone who sleeps in ditches."
+        ],
+        "prig": [
+          "Spare us the sermon, {first}. You're no saint.",
+          "All that praying — and still as mean as a stoat.",
+          "Holier-than-thou is a poor look, {first}."
+        ],
+        "fool": [
+          "You're a fool, {first}.",
+          "I've met stones with more wit than you.",
+          "Did your mother drop you, or did you fall?",
+          "I'd say you've the brains of a goose, but that would insult the goose."
+        ]
+      },
+      "reply": [
+        { "t": "That was uncalled for.", "tone": "cold" },
+        { "t": "I'll remember that, {first}.", "tone": "cold" },
+        { "t": "Say what you like. It tells me more about you than me.", "tone": "cold", "if": { "trait": "patient" } },
+        { "t": "Hm. You'll want to apologise for that, I think.", "tone": "cold" },
+        { "t": "Well, that's one way to make an enemy.", "tone": "wary" },
+        { "t": "A harsh word, and not deserved.", "tone": "sad" }
+      ],
+      "angry": [
+        { "t": "How dare you! I'll not be spoken to so!", "tone": "angry" },
+        { "t": "You'll take that back, or you'll be sorry!", "tone": "angry" },
+        { "t": "My God, {first}, one more word!", "tone": "angry" },
+        { "t": "You've a mouth that'll get you hurt, {first}.", "tone": "angry" }
+      ],
+      "noble": [
+        { "t": "Guard! Remove this wretch from my sight.", "tone": "angry" },
+        { "t": "You insult me? You? Know your place, and be gone.", "tone": "angry" },
+        { "t": "I'll have you whipped for that. Away!", "tone": "angry" }
+      ]
+    },
+
+    "threaten": {
+      "ask": [
+        "Mark me, {first}. I'll not be crossed.",
+        "You'd do well to remember who you're talking to.",
+        "Give way, or I'll make you.",
+        "One more word and you'll regret it.",
+        { "t": "Cross me, and you'll learn what these arms can do.", "if": { "trait": "brave" } },
+        { "t": "I know where you live, {first}.", "if": { "trait": "deceitful" } }
+      ],
+      "win": [
+        { "t": "A-all right! All right. There's no need for this.", "tone": "afraid" },
+        { "t": "Mercy! I'll do as you say.", "tone": "afraid" },
+        { "t": "Take it — {money} — and go, for the love of God!", "tone": "afraid", "if": { "tag": "paid" } },
+        { "t": "Here, here's {money}. Just leave me be.", "tone": "afraid", "if": { "tag": "paid" } },
+        { "t": "I'll keep out of your way. You have my word.", "tone": "afraid", "if": { "notTag": "paid" } },
+        { "t": "Please, {addr}. I meant no harm.", "tone": "afraid", "if": { "rel": "up" } }
+      ],
+      "lose": [
+        { "t": "You threaten me? That's almost funny.", "tone": "angry" },
+        { "t": "Try it, then. I'll be waiting.", "tone": "angry" },
+        { "t": "I've seen bigger fools than you hanged.", "tone": "angry" },
+        { "t": "Get out of my sight before I call the reeve.", "tone": "angry" },
+        { "t": "Threats to a person of my standing? You'll hang for this.", "tone": "angry", "if": { "tag": "above" } },
+        { "t": "Blustering, blustering. Go home.", "tone": "cold", "if": { "tag": "equal" } }
+      ]
+    },
+
+    "apologise": {
+      "ask": [
+        "I'm sorry, {first}. I was wrong, and I know it.",
+        "Forgive me. I spoke in anger and regret it.",
+        "I owe you an apology, {addr}.",
+        "Let there be peace between us. I was in the wrong.",
+        { "t": "I'd have bitten my tongue if I could. Forgive me.", "if": { "trait": "hot_tempered" } },
+        { "t": "On my honour, I am sorry.", "if": { "trait": "honest" } }
+      ],
+      "win": [
+        { "t": "Well. Not every person has the courage to say that. I forgive you.", "tone": "warm" },
+        { "t": "It's forgotten, then — or nearly. Thank you, {first}.", "tone": "warm" },
+        { "t": "Let's say no more of it. Come, we're neighbours.", "tone": "friendly" },
+        { "t": "A fair word. A fair word is all I wanted.", "tone": "friendly" },
+        { "t": "Handsomely said, {first}. I accept.", "tone": "warm", "if": { "rel": "up" } }
+      ],
+      "lose": [
+        { "t": "Words, {first}. Just words.", "tone": "cold" },
+        { "t": "Sorry doesn't mend it. Not yet.", "tone": "cold" },
+        { "t": "I'll think on it. Don't hurry me.", "tone": "cold" },
+        { "t": "It's too soon. Come back when I've cooled.", "tone": "cold", "if": { "trait": "hot_tempered" } },
+        { "t": "I'd like to believe you.", "tone": "wary", "if": { "trait": "patient" } }
+      ]
+    }
+  }
+}

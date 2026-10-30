@@ -144,8 +144,8 @@ function loanChance(t: TopicCtx, amount: number): number {
 
 function loan(t: TopicCtx, amount: number): TopicReply {
   const { core, actor, other } = t;
+  t.npc.vars.money = formatMoney(amount); t.me.vars.money = formatMoney(amount);
   const lines = iSay(t, 'favour.loan.ask');
-  t.npc.vars.money = formatMoney(amount);
   if (core.store.debtsOwedBy(actor.id).some((d) => d.from === other.id)) return { lines: [...lines, ...npcSays(t, 'favour.loan.owing', 'cold')] };
   const yes = core.rng().next() < loanChance(t, amount);
   gainSkill(core.sim, actor, 'persuasion', yes ? 5 : 3);
@@ -162,8 +162,8 @@ function repay(t: TopicCtx): TopicReply {
   const d = core.store.debtsOwedBy(actor.id).find((x) => x.from === other.id);
   if (!d) return { lines: [] };
   const pay = Math.min(d.v, actor.money);
+  t.npc.vars.money = formatMoney(pay); t.me.vars.money = formatMoney(pay);
   const lines: DialogueLine[] = iSay(t, 'favour.repay.ask');
-  t.npc.vars.money = formatMoney(pay);
   const r = transferMoney(core, actor, other, pay);
   if (!r.ok) return { lines };
   const store = core.store.write();

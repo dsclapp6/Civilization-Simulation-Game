@@ -242,7 +242,7 @@ export class NewsEngine {
     if (!text) return '';
     if (it.origin !== at) {
       const lead = core.speech.text('news.far', local);
-      if (lead) return `${lead} ${text.charAt(0).toLowerCase()}${text.slice(1)}`;
+      if (lead) return `${lead} ${capitalise(text)}`;
     }
     return capitalise(text);
   }

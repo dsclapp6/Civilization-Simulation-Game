@@ -1,1 +1,122 @@
-{}
+{
+  "_doc": "News and rumour. news.item.* are gossip lines about events read from the world (speaker = whoever tells it); vars: {who} {whofull} {baby} {mother} {mothfirst} {father} {age} {cause} {widow} {groom} {bride} {groomfull} {bridefull} {title} {from} {ill} {good} {there}. Tags: great (rank 5+), far, died, infant, young, old, childbed, plague, widowed, woman, man. news.deed.* are rumours of what someone did; vars {who} {whofull} {other}.",
+  "news": {
+    "ask": [
+      "What news?",
+      "Any word from round about?",
+      "Heard anything worth telling?",
+      "What's the talk of {place} these days?",
+      "Anything I ought to know?",
+      { "t": "Come, {addr}, what's the gossip?", "if": { "tag": "friend" } }
+    ],
+    "lead": [
+      { "t": "Well, let me think...", "tone": "neutral" },
+      { "t": "News? A little, {addr}.", "tone": "neutral" },
+      { "t": "Gossip's cheap, so here's some:", "tone": "friendly" },
+      { "t": "I'll tell you what I've heard.", "tone": "friendly" },
+      { "t": "Only what the wind brings, but:", "tone": "friendly", "if": { "age": "elder" } },
+      { "t": "Listen close, then.", "tone": "friendly", "if": { "tag": "fond" } }
+    ],
+    "none": [
+      { "t": "Nothing worth the telling, {addr}.", "tone": "neutral" },
+      { "t": "Quiet times, thank God. Not a word to report.", "tone": "neutral" },
+      { "t": "A dull week. If I hear anything, you'll be the first.", "tone": "neutral" },
+      { "t": "I've heard nothing new since the last holy day.", "tone": "neutral" }
+    ],
+    "far": [
+      "Word from {there}:",
+      "Travellers out of {there} say:",
+      "They are saying in {there}:",
+      "From {there}, I hear:"
+    ],
+
+    "item": {
+      "birth": [
+        "{Mother} was brought to bed of {baby}, {who}, and both are doing well.",
+        "A child was born to {mother}: {baby}, they've named {who}.",
+        "There's a new babe at {mothfirst}'s hearth — {baby}, called {who}.",
+        "God has sent {mother} {baby}; {who} is the name.",
+        { "t": "Great news from the hall: {baby} is born to {mother}, and the house rejoices.", "if": { "tag": "great" } },
+        { "t": "Poor {mothfirst} bore {baby}, {who}, but the little one did not live.", "if": { "tag": "died" } },
+        { "t": "{Who} came into the world this week, a squalling {baby}, they say. Strong lungs.", "if": { "not": "pious" } }
+      ],
+      "death": [
+        "{Whofull} has passed on, aged {age}. God rest the soul.",
+        "{Whofull} died {cause}, aged {age}. The bell has tolled.",
+        "We buried {whofull} this week. {Age} years. God keep them.",
+        { "t": "Old {who} is gone to God at last, aged {age}. A long life.", "if": { "tag": "old" } },
+        { "t": "{Who} died in childbed. God comfort the household.", "if": { "tag": "childbed" } },
+        { "t": "The plague took {whofull}. Folk are afraid.", "if": { "tag": "plague" } },
+        { "t": "A babe, {who}, was lost this week. God keep the little one.", "if": { "tag": "infant" } },
+        { "t": "{Whofull} is dead, so young. Barely {age}. What a pity.", "if": { "tag": "young" } },
+        { "t": "{Whofull} is dead, and {widow} is left alone. Be kind to them.", "if": { "tag": "widowed" } },
+        { "t": "A lord has died: {whofull}. The land will not be quiet for long.", "if": { "tag": "great" } }
+      ],
+      "wedding": [
+        "{Groomfull} and {bridefull} were wed, and the whole street feasted.",
+        "{Groom} has taken {bride} to wife. They say it was a good match.",
+        "There's been a wedding: {bridefull} and {groomfull}. The ale ran freely.",
+        { "t": "A great match: {groomfull} and {bridefull}, with the lords of both houses present.", "if": { "tag": "great" } },
+        "{Bride} is married, God bless her, to {groom}. Mark my words, there'll be a baby by Michaelmas."
+      ],
+      "expecting": [
+        "{Who} is with child, they say, and due before long.",
+        "There'll be a new voice in {who}'s house soon; she's expecting.",
+        "{Who} is great with child. The midwife has been twice."
+      ],
+      "sick": [
+        "{Who} lies sick of {ill}. Pray for them.",
+        "Poor {who} has {ill}, and no one holds out much hope.",
+        "{Who} has taken to bed with {ill}. Keep clear, if you're wise."
+      ],
+      "reeve": [
+        "{Who} is chosen reeve for the year. May he be fair.",
+        "We have a new reeve: {who}. Let's see how long the goodwill lasts.",
+        "{Who} carries the reeve's staff now. They say he'll not be bought."
+      ],
+      "inherit": [
+        "{Who} now holds {title}, after {from}. We shall see what manner of lord that makes.",
+        "{Who} has inherited {title}. The old order changes.",
+        "{Title} has a new master: {who}. May God guide his hand."
+      ],
+      "price_dear": [
+        "{Good} is dear at market this week. Folk grumble.",
+        "The price of {good} climbs. Buy early.",
+        "Dear, the {good}. Dearer than last season."
+      ],
+      "price_cheap": [
+        "{Good} is cheap at market. A bargain for the quick.",
+        "There's plenty of {good} about, and the price shows it.",
+        "The price of {good} has fallen. Good for buyers, bad for sellers."
+      ]
+    },
+
+    "deed": {
+      "alms": [
+        "They say {whofull} gave alms at the church door; a good soul.",
+        "{Whofull} has been generous to the poor. Folk speak well of it.",
+        "Someone left coin for the poor, and the name whispered is {who}."
+      ],
+      "insult": [
+        "They say {whofull} spoke ill to {other} before witnesses. A hot head.",
+        "{Whofull} and {other} had words, and not kind ones.",
+        "Did you hear? {Who} insulted {other} to their face."
+      ],
+      "threat": [
+        "{Whofull} threatened {other}, folk say. Best keep clear.",
+        "There was ugly talk between {who} and {other}. Threats were made.",
+        "{Who} has a hard way with {other}, they say. Mind your tongue near them."
+      ],
+      "wed": [
+        "{Whofull} and {other} are wed, the talk of the week.",
+        "{Who} has married {other}. Half the parish is still singing.",
+        "A wedding! {Whofull} and {other}. Long life to them."
+      ],
+      "other": [
+        "Folk are talking of {whofull}.",
+        "There's gossip about {who}, but I'll not repeat it.",
+        "They say {whofull} is a name to watch."
+      ]
+    }
+  }
+}

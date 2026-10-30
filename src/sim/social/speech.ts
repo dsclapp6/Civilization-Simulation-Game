@@ -23,6 +23,8 @@ export interface SpeechCtx {
   readonly sex: 'm' | 'f';
   readonly age: AgeBand;
   readonly rank: RankBand;
+  /** The listener's age band, or null when nobody is addressed. */
+  readonly listenerAge: AgeBand | null;
   readonly rel: 'up' | 'down' | 'peer';
   readonly op: OpinionBucket;
   readonly part: DayPart;
@@ -123,10 +125,10 @@ export class Speech {
     else if (speaker.children.length > 0 && speaker.sex === 'f') tags.add('widowed');
     if (speaker.children.length > 0) tags.add('parent_of_children');
     if (speaker.career === 'beggar') tags.add('beggar');
-    if (speaker.ambition && speaker.ambition !== 'content') tags.add(`ambition_${speaker.ambition}`);
+    if (speaker.ambition) tags.add(`ambition_${speaker.ambition}`);
     return {
       speaker, listener, culture: speaker.culture, sex: speaker.sex, age: ageBand(core.age(speaker)),
-      rank: rankBand(speaker.rankTier), rel, op, part, season: date.season, weather: this.weatherWord(), roles,
+      rank: rankBand(speaker.rankTier), listenerAge: listener ? ageBand(core.age(listener)) : null, rel, op, part, season: date.season, weather: this.weatherWord(), roles,
       place: core.settlement(speaker.settlement)?.kind ?? 'village', tags, vars: opts.vars ?? {}, cache: {},
     };
   }
@@ -183,7 +185,7 @@ export class Speech {
     let total = 0;
     const eff: number[] = new Array(cand.length);
     for (let k = 0; k < cand.length; k++) {
-      const seen = recent ? recent.indexOf(cand[k]) : -1;
+      const seen = recent ? recent.lastIndexOf(cand[k]) : -1;
       // the more recently used, the less likely; the last one used is excluded when there is a choice
       const damp = seen < 0 ? 1 : seen === recent!.length - 1 ? (cand.length > 1 ? 0 : 1) : 0.25;
       eff[k] = weights[k] * damp;
@@ -273,6 +275,7 @@ export class Speech {
       case 'reeve': { const r = core.scene(sp.settlement).reeve; return r ? `Reeve ${r.first}` : 'the reeve'; }
       case 'season': return ['spring', 'summer', 'autumn', 'winter'][ctx.season];
       case 'part': return ctx.part === 'dawn' ? 'dawn' : ctx.part === 'dusk' ? 'dusk' : ctx.part === 'midday' ? 'noon' : ctx.part === 'night' ? 'night' : ctx.part;
+      case 'daygreet': return ctx.part === 'dawn' || ctx.part === 'morning' ? 'morning' : ctx.part === 'midday' ? 'day' : ctx.part === 'afternoon' ? 'afternoon' : ctx.part === 'night' ? 'night' : 'evening';
       case 'weather': return ctx.weather;
       case 'crop': return core.scene(sp.settlement).crop;
       case 'trade': return tradeWord(sp);
@@ -402,6 +405,8 @@ export function matchScore(c: Cond, ctx: SpeechCtx): number {
   let score = 0;
   if (c.culture !== undefined) { if (!anyOf(c.culture, (v) => v === ctx.culture)) return -1; score++; }
   if (c.sex !== undefined) { if (c.sex !== ctx.sex) return -1; score++; }
+  if (c.lsex !== undefined) { if (!ctx.listener || ctx.listener.sex !== c.lsex) return -1; score++; }
+  if (c.lage !== undefined) { if (ctx.listenerAge === null || !anyOf(c.lage, (v) => v === ctx.listenerAge)) return -1; score++; }
   if (c.age !== undefined) { if (!anyOf(c.age, (v) => v === ctx.age)) return -1; score++; }
   if (c.rank !== undefined) { if (!anyOf(c.rank, (v) => v === ctx.rank)) return -1; score++; }
   if (c.rel !== undefined) { if (!anyOf(c.rel, (v) => v === ctx.rel)) return -1; score++; }

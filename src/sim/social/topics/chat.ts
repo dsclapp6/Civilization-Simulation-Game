@@ -101,7 +101,7 @@ export const chatGroup: TopicGroup = {
       }
       case 'church': {
         const priest = sc.priest;
-        if (priest && priest.id === other.id) t.npc.tags.add('self_priest');
+        if (priest && priest.id === other.id) { t.npc.tags.add('self_priest'); t.me.tags.add('self_priest'); }
         else if (priest) t.npc.tags.add(core.opinion.total(other, priest) >= 8 ? 'priest_liked' : core.opinion.total(other, priest) <= -8 ? 'priest_disliked' : 'priest_fair');
         else t.npc.tags.add('no_priest');
         if (other.rep.piety >= 15 || other.traits.includes('pious')) t.npc.tags.add('devout');
@@ -126,7 +126,8 @@ function familyTalk(t: TopicCtx, lines: ReturnType<typeof iSay>): TopicReply {
     if (c && !c.death) kids.push(c); else lost = true;
   }
   const tags = t.npc.tags;
-  tags.add(spouse && kids.length > 0 ? 'fam_both' : kids.length > 0 ? 'fam_kids' : spouse ? 'fam_spouse' : 'fam_alone');
+  const others = kids.filter((k) => k.id !== t.actor.id).length;
+  tags.add(spouse && others > 0 ? 'fam_both' : others > 0 ? 'fam_kids' : spouse ? 'fam_spouse' : 'fam_alone');
   if (lost) tags.add('fam_lost');
   if (other.pregnancy) tags.add('fam_expecting');
   const age = core.age(other);
@@ -137,10 +138,13 @@ function familyTalk(t: TopicCtx, lines: ReturnType<typeof iSay>): TopicReply {
   }
   const v = t.npc.vars;
   if (spouse) v.spouse = spouse.first;
-  v.kids = joinNames(kids.slice(0, 4).map((k) => k.first));
-  v.nkids = numberWord(kids.length);
-  v.kidword = kids.length === 1 ? (kids[0].sex === 'm' ? 'son' : 'daughter') : 'children';
-  v.theyword = kids.length === 1 ? 'is' : 'are';
+  // speaking to one of their own children, the rest of the brood are "the others"
+  const rest = kids.filter((k) => k.id !== t.actor.id);
+  const shown = rest.length > 0 ? rest : kids;
+  v.kids = joinNames(shown.slice(0, 4).map((k) => k.first));
+  v.nkids = numberWord(shown.length);
+  v.kidword = shown.length === 1 ? (shown[0].sex === 'm' ? 'son' : 'daughter') : 'children';
+  v.theyword = shown.length === 1 ? 'is' : 'are';
   const gain = chatGain(t, BASE_GAIN.family, interest(other, 'family'));
   return { lines: [...lines, ...npcSays(t, 'chat.family.reply', gain >= 1.8 ? 'warm' : 'friendly')], opinion: gain, reason: 'chat', mood: 0.01 };
 }
