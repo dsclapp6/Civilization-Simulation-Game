@@ -1,0 +1,25 @@
+{
+  "_doc": "Field crops of the three-field system (SPEC §10) and garden crops. season: 'winter' corn is sown in autumn (day of year 8.4-12) and ripens early next summer; 'spring' crops are sown in spring (0-3.6). grow = growing-season days from sowing to ripe (SPEC §2: 3-5); the season rate (spring 0.8, summer 1.2, autumn 0.7, winter 0) is applied by sim/farming.ts. ratio scales the settlement's calibrated strip yield (barley and oats crop heavier than wheat); seed = share of the gross yield kept back as seed corn; straw = bundles of straw per gallon of grain; fert = change to the field's fertility when harvested (legumes restore it, cereals deplete it).",
+  "crops": {
+    "wheat":  { "season": "winter", "good": "wheat",  "sheaf": "wheat_sheaf",  "grow": 5.0, "ratio": 0.85, "seed": 0.28, "straw": 0.9,  "fert": -0.07 },
+    "rye":    { "season": "winter", "good": "rye",    "sheaf": "rye_sheaf",    "grow": 4.5, "ratio": 1.0,  "seed": 0.26, "straw": 1.1,  "fert": -0.05 },
+    "barley": { "season": "spring", "good": "barley", "sheaf": "barley_sheaf", "grow": 4.0, "ratio": 1.15, "seed": 0.25, "straw": 0.8,  "fert": -0.06 },
+    "oats":   { "season": "spring", "good": "oats",   "sheaf": "oats_sheaf",   "grow": 4.2, "ratio": 1.2,  "seed": 0.25, "straw": 0.9,  "fert": -0.05 },
+    "peas":   { "season": "spring", "good": "peas",   "sheaf": "legume_sheaf", "grow": 3.6, "ratio": 0.8,  "seed": 0.3,  "straw": 0.5,  "fert": 0.05 },
+    "beans":  { "season": "spring", "good": "beans",  "sheaf": "legume_sheaf", "grow": 4.4, "ratio": 0.85, "seed": 0.3,  "straw": 0.5,  "fert": 0.05 },
+    "flax":   { "season": "spring", "good": "flax",   "sheaf": "legume_sheaf", "grow": 4.0, "ratio": 0.5,  "seed": 0.3,  "straw": 0.0,  "fert": -0.08 }
+  },
+  "garden": {
+    "cabbage": { "good": "vegetables", "grow": 2.6, "yield": 16 },
+    "onions":  { "good": "vegetables", "grow": 2.8, "yield": 10 },
+    "leeks":   { "good": "vegetables", "grow": 3.0, "yield": 10 },
+    "turnips": { "good": "vegetables", "grow": 2.4, "yield": 14 }
+  },
+  "calendar": {
+    "winterSow": [8.4, 12.0],
+    "springSow": [0.0, 3.6],
+    "seasonRate": [0.8, 1.2, 0.7, 0.0],
+    "winterCrops": ["wheat", "rye"],
+    "springCrops": ["barley", "barley", "oats", "peas", "beans"]
+  }
+}
