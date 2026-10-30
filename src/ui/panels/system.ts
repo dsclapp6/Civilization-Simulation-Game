@@ -55,6 +55,7 @@ export function pausePanel(ctx: PanelCtx, hooks: UiHooks): UiPanel {
   win.body.append(
     h('div.mu-col.mu-gap-8', null,
       button('Resume', { variant: 'primary', size: 'big', icon: 'play', class: 'mu-wide', onClick: () => ctx.close() }),
+      button('Help and controls', { size: 'big', icon: 'help', class: 'mu-wide', onClick: () => ctx.open({ panel: 'help' }) }),
       button('Settings', { size: 'big', icon: 'cog', class: 'mu-wide', onClick: () => ctx.open({ panel: 'settings' }) }),
       button('Save and quit to menu', { size: 'big', icon: 'door', class: 'mu-wide', onClick: () => hooks.quitToMenu() }),
       button('Abandon run', { size: 'big', icon: 'skull', variant: 'danger', class: 'mu-wide', onClick: abandon }),

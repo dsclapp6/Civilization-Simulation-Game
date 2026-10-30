@@ -22,6 +22,8 @@ export const KEYMAP = {
   ui: {
     menu: 'Escape', character: 'Tab', inventory: 'KeyI', ledger: 'KeyJ', map: 'KeyM', command: 'KeyC',
     family: 'KeyH', chronicle: 'KeyL', rest: 'KeyZ',
+    /** Wave 4 (UI): realm and politics, House techniques, the requests journal, wounds, help and controls. */
+    politics: 'KeyK', techs: 'KeyT', requests: 'KeyR', wounds: 'KeyB', help: 'F1',
   },
 } as const;
 
@@ -112,6 +114,20 @@ export interface PlayerHud {
   gait?: string;
   /** The person being followed (walking after them), if any. */
   following?: string | null;
+  /** What the body is doing in a fight (wave 4: the HUD's reticle, hit flash and "you are down" state); absent without the combat module. */
+  combat?: PlayerCombatHud;
+}
+
+/** The fighting state the HUD shows. */
+export interface PlayerCombatHud {
+  /** Weapon out: in a fight or just after one. */
+  engaged: boolean;
+  /** Which bow-or-blade stance the body is in. */
+  state: 'ready' | 'attack' | 'guard' | 'draw' | 'aim' | 'shoot' | 'reload' | 'roll' | 'hit' | 'stagger' | 'down';
+  /** A bow or crossbow is the weapon in hand (the reticle is shown). */
+  ranged: boolean;
+  /** Counts up while a blow lands or a hit is taken (so the HUD can flash on each). */
+  hitSeq: number;
 }
 
 export interface Result { ok: boolean; reason?: string }

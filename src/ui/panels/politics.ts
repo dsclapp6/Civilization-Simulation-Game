@@ -11,6 +11,7 @@ import { icon, type IconName } from '../core/icons';
 import { bar, button, chip, empty, heading, tabs } from '../components/widgets';
 import { createWindow } from '../components/window';
 import type { PanelCtx, UiPanel } from '../app/panel';
+import { tabKeys } from '../core/tabkeys';
 import { panelOf } from './base';
 import { registerPanel } from './extRegistry';
 
@@ -160,7 +161,7 @@ export function politicsPanel(ctx: PanelCtx, startTab: Tab | undefined): UiPanel
   const warsView = (): HTMLElement => {
     const mine = myHouse();
     const wars = api.wars().slice().sort((a, b) => Number(b.attackers.includes(mine) || b.defenders.includes(mine)) - Number(a.attackers.includes(mine) || a.defenders.includes(mine)) || a.id - b.id);
-    if (!wars.length) return scroll(empty('The land is at peace.'), historyView());
+    if (!wars.length) return scroll(empty('No House of the realm is at war. Rivals watch for weakness, and claims, insults and old grudges are how wars begin.', { icon: 'swords', title: 'The land is at peace' }), historyView());
     const rows = wars.slice(0, 10).map((w) => {
       const side = w.attackers.includes(mine) ? 'attackers' : w.defenders.includes(mine) ? 'defenders' : null;
       const goal = sim.state.titles.get(w.goal);
@@ -324,7 +325,7 @@ export function politicsPanel(ctx: PanelCtx, startTab: Tab | undefined): UiPanel
   // ---------------------------------------------------------------- petitions
   const petitionsView = (): HTMLElement => {
     const list = api.petitions(ctx.playerId());
-    if (!list.length) return scroll(empty('No one waits at your door. Lords hear petitions from their villagers; hold a manor and they will come.'));
+    if (!list.length) return scroll(empty('Lords hear petitions from their villagers; hold a manor and they will come.', { icon: 'quill', title: 'No one waits at your door' }));
     return scroll(heading('Petitions', 'quill'), h('div.mu-list', null, list.map((pt) => h('div.mu-li', null,
       h('div.mu-grow', null, h('b', null, pt.text), h('div.mu-small.mu-dim', null, `${ctx.placeName(pt.place)} · asked ${dateText(pt.day)}${pt.amount ? ` · ${formatMoney(pt.amount)} at stake` : ''}`)),
       button('Grant', { size: 'small', variant: 'primary', icon: 'check', onClick: () => { const r = api.resolvePetition(pt.id, 'grant'); say(r.ok, 'Granted.', r.reason); render(); } }),
@@ -343,7 +344,10 @@ export function politicsPanel(ctx: PanelCtx, startTab: Tab | undefined): UiPanel
   for (const ev of ['war', 'stance', 'office', 'request'] as const) ctx.listen(ev, () => render());
   render();
   void TITLE_RANK;
-  return panelOf({ id: 'politics', group: 'main', pauses: 'menu', backdropCloses: ctx }, win.el);
+  const TAB_IDS: Tab[] = ['standing', 'houses', 'wars', 'claims', 'offices', 'manage', 'petitions'];
+  return panelOf({ id: 'politics', group: 'main', pauses: 'menu', backdropCloses: ctx }, win.el, {
+    key: tabKeys(TAB_IDS, () => tab, (id) => { tab = id as Tab; tabsEl.set(tab); render(); }, { scroller: () => content.querySelector<HTMLElement>('.mu-scroll') }),
+  });
 }
 
 registerPanel('politics', (ctx, req) => politicsPanel(ctx, (req.data as { tab?: Tab } | undefined)?.tab));

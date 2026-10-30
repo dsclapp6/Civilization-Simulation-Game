@@ -31,6 +31,7 @@ export function settingsBody(host: UiHost, onChange: () => void): HTMLElement {
       field('Names and labels', toggle(s.labels, (v) => set({ labels: v }), 'Names and labels'), undefined, 'Names over people and place names on the map'),
       field('Interface size', slider(0.8, 1.4, 0.05, s.uiScale, (v) => { scale.textContent = `${Math.round(v * 100)}%`; set({ uiScale: v }); }), scale),
       field('Pause in menus', toggle(s.pauseInMenus ?? true, (v) => set({ pauseInMenus: v }), 'Pause in menus'), undefined, 'Time stands still while the character sheet, inventory and similar panels are open'),
+      field('Hints for new players', toggle(s.hints ?? true, (v) => set({ hints: v }), 'Hints for new players'), undefined, 'Small notes in the first minutes: what to do and which key does it'),
       h('div.mu-row.mu-end', { style: { marginTop: '10px' } },
         button('Restore defaults', { size: 'small', onClick: () => { host.setSettings({ ...DEFAULT_SETTINGS }); host.renderer()?.setQuality(DEFAULT_SETTINGS.quality); onChange(); render(); } })),
     );

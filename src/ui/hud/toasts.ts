@@ -42,6 +42,10 @@ export class Toasts {
   /** The most recent toast that carries an action, if still showing. */
   pendingAction(): PanelRequest | null {
     for (let i = this.live.length - 1; i >= 0; i--) {
+      const l = this.live[i].input;
+      if (l.action && l.urgent) return l.action.request;
+    }
+    for (let i = this.live.length - 1; i >= 0; i--) {
       const a = this.live[i].input.action;
       if (a) return a.request;
     }
