@@ -75,6 +75,15 @@ export function gearOf(env: GearEnv, p: Person): Gear {
   const age = ageYears(p, env.absDay);
   const kit = careerKit(p.career);
   if (!hasSlots || (!weapon && !ranged)) {
+    if (!weapon && !ranged) {
+      // a weapon carried but not equipped is still the one that comes to hand (the best of them)
+      let best = 0;
+      for (const [key, n] of Object.entries(p.inventory)) {
+        if (!(n > 0)) continue;
+        const w = weaponOfKey(key);
+        if (w) { const v = w.def.attacks.slash.dmg + w.def.reach * 2; if (v > best) { best = v; weapon = w.def; weaponQ = w.quality; } }
+      }
+    }
     if (!weapon) {
       if (age < 12) weapon = WEAPONS.fists;
       else if (kit) {

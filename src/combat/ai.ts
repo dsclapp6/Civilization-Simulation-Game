@@ -350,7 +350,7 @@ function beastThink(a: Arena, f: Fighter, t: Fighter, g: number, fight: Fight): 
   }
   if (f.cooldown <= 0 && f.stamina > 3) {
     if (a.startAttack(f, 'slash')) {
-      f.cooldown = 1.1 + a.rng.next() * 1.6;
+      f.cooldown = 1.3 + a.rng.next() * 1.8;
       return;
     }
   }

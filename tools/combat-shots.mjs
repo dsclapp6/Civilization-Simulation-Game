@@ -125,18 +125,55 @@ const clearing = () => page.evaluate(() => {
   return best ?? { x: b0.x, z: b0.z };
 });
 
+/** The heading with the most open ground ahead of the character (probing the zone's navigation). */
+const openHeading = () => page.evaluate(() => {
+  const s = window.__game.session; const nav = s.services.zone.nav; const b = s.services.player.body();
+  const out = { x: 0, z: 0, blocked: false, wading: false };
+  let best = { yaw: b.yaw, free: 0 };
+  for (let k = 0; k < 48; k++) {
+    const yaw = (k / 48) * Math.PI * 2;
+    let x = b.x, z = b.z, free = 0;
+    for (let d = 0; d < 90; d++) {
+      nav.move(x, z, Math.sin(yaw), Math.cos(yaw), 0.8, out);
+      if (out.blocked || Math.hypot(out.x - x, out.z - z) < 0.5) break;
+      x = out.x; z = out.z; free++;
+    }
+    if (free > best.free) best = { yaw, free };
+  }
+  return best;
+});
+
+/** Puts the character at the clearing facing the most open way (and returns the heading). */
+async function stage(x, z) {
+  await put(x, z, 0);
+  await advance(0.2);
+  const h = await openHeading();
+  await put(x, z, h.yaw);
+  await face(h.yaw);
+  await advance(0.3);
+  console.log(`open ground: ${h.free} m along yaw ${h.yaw.toFixed(2)}`);
+  return h;
+}
+
 const put = (x, z, yaw) => page.evaluate(([px, pz, py]) => { window.__game.session.services.player.placeAt(px, pz, py); }, [x, z, yaw]);
 
 /** Gives the player a kit and the foes theirs, then raises the fight. Returns the fight id. */
 const staged = (kind, count, me, foes) => page.evaluate(([k, n, mine, theirs]) => {
   const s = window.__game.session; const sim = s.sim; const combat = sim.services.combat; const pid = sim.state.run.playerId;
   const me = sim.state.persons.get(pid);
-  // a grown, fit character for the screenshots
-  me.trained.str = 13; me.trained.end = 12; me.trained.agi = 12; me.skills.melee = Math.max(me.skills.melee, 40);
+  // a grown, fit character for the screenshots (the run starts with a twelve-year-old)
+  me.birthDay = Math.floor(sim.absDay) - 16 * 26; me.trained.str = 14; me.trained.end = 13; me.trained.agi = 12; me.skills.melee = Math.max(me.skills.melee, 120);
+  me.health.hp = 1;
   combat.arena.setKitOverride(pid, mine);
   const id = combat.debug.skirmish(k, n);
   const fight = combat.arena.fights.get(id);
-  if (fight && theirs) for (const side of fight.sides) for (const f of side.members) if (f.person && f.personId !== pid) combat.arena.setKitOverride(f.personId, theirs);
+  if (fight && theirs) {
+    let i = 0;
+    for (const side of fight.sides) for (const f of side.members) if (f.person && f.personId !== pid) {
+      const kit = Array.isArray(theirs) ? theirs[i++ % theirs.length] : theirs;
+      combat.arena.setKitOverride(f.personId, kit);
+    }
+  }
   return id;
 }, [kind, count, me, foes]);
 
@@ -168,6 +205,15 @@ async function shootHits(name, { slices = 40, step = 0.1, max = 6, input = () =>
   return taken;
 }
 
+/** Ends whatever fight is going and makes the character whole again, for the next scene. */
+const resetScene = () => page.evaluate(() => {
+  const sim = window.__game.session.sim; const combat = sim.services.combat; const pid = sim.state.run.playerId;
+  for (const f of [...combat.arena.fights.values()]) combat.arena.endFight(f, 'dispersed');
+  const me = sim.state.persons.get(pid);
+  combat.book.forget(pid); me.health.hp = 1; me.health.conditions.length = 0;
+  combat.port.reset();
+});
+
 /** The camera close behind the character, looking along the fight. */
 const closeIn = (n) => zoom(n);
 
@@ -175,30 +221,28 @@ try {
   await load('autostart=1&time=0.42');
   const c = await clearing();
   console.log('clearing at', JSON.stringify(c));
-  await put(c.x, c.z, 0.6);
-  await face(0.6);
-  await advance(0.5);
+  await stage(c.x, c.z);
 
   // -------------------------------------------------------------------------------------------
   if (want('road')) {
-    await closeIn(-1.2);
-    const id = await staged('bandits', 3, { weapon: 'sword', shield: 'shield_heater', armour: ['padded_armour', 'cap_helmet'] }, { weapon: 'axe', armour: [] });
+    await closeIn(-3.2);
+    const id = await staged('bandits', 3, { weapon: 'sword', shield: 'shield_heater', armour: ['mail_hauberk', 'kettle_hat'] }, [{ weapon: 'axe', armour: [] }, { weapon: 'staff', armour: ['cap_helmet'] }, { weapon: 'spear', armour: ['padded_armour'] }]);
     console.log('fight', id);
     await advance(1.0, { block: true });
     await shot('road-1-approach', { settle: true });
     let k = 0;
-    const n = await shootHits('road', { slices: 90, step: 0.1, max: 6, input: (i) => ({ attack: i % 9 === 2 || i % 9 === 3, block: i % 9 >= 6 }) });
+    const n = await shootHits('road', { slices: 140, step: 0.1, max: 6, input: (i) => ({ attack: i % 9 === 2 || i % 9 === 3, block: i % 9 >= 6 }) });
     console.log('road shots', n, JSON.stringify(await fighters()));
   }
 
   // -------------------------------------------------------------------------------------------
   if (want('wolves')) {
-    await advance(8, {});
+    await resetScene();
+    await closeIn(-1);
+    await advance(4, {});
     await setClock(3, 0.96);
-    await closeIn(-0.4);
-    await put(c.x, c.z, 2.2); await face(2.2);
-    await advance(0.4);
-    await staged('wolves', 3, { weapon: 'sword', armour: ['padded_armour'] }, null);
+    await stage(c.x, c.z);
+    await staged('wolves', 3, { weapon: 'sword', shield: 'shield', armour: ['padded_armour', 'cap_helmet'] }, null);
     await advance(1.6, { block: true });
     await shot('wolves-1', { settle: true });
     await shootHits('wolves', { slices: 90, step: 0.1, max: 5, input: (i) => ({ attack: i % 8 === 1 || i % 8 === 2, block: i % 8 >= 5 }) });
@@ -207,11 +251,11 @@ try {
 
   // -------------------------------------------------------------------------------------------
   if (want('armour')) {
-    await advance(6, {});
+    await resetScene();
+    await advance(4, {});
     await setClock(0, 0.45);
-    await put(c.x, c.z, 4.0); await face(4.0);
-    await advance(0.4);
-    await staged('bandits', 3, { weapon: 'sword', shield: 'shield_heater', armour: ['plate_harness', 'bascinet'] }, { weapon: 'mace', armour: ['mail_hauberk', 'kettle_hat'] });
+    await stage(c.x, c.z);
+    await staged('bandits', 3, { weapon: 'sword', shield: 'shield_heater', armour: ['plate_harness', 'bascinet'] }, [{ weapon: 'mace', armour: ['mail_hauberk', 'kettle_hat'] }, { weapon: 'bill', armour: ['padded_armour', 'cap_helmet'] }, { weapon: 'sword', armour: ['mail_hauberk', 'kettle_hat'] }]);
     await advance(2.0, { block: true });
     await shot('armour-1', { settle: true });
     await shootHits('armour', { slices: 90, step: 0.1, max: 4, input: (i) => ({ attack: i % 8 === 1 || i % 8 === 2, block: i % 8 >= 5 }) });
@@ -219,12 +263,14 @@ try {
 
   // -------------------------------------------------------------------------------------------
   if (want('archery')) {
-    await advance(6, {});
-    await put(c.x, c.z, 1.0); await face(1.0);
-    await advance(0.4);
+    await resetScene();
+    await advance(4, {});
+    await setClock(0, 0.45);
+    await stage(c.x, c.z);
+    await closeIn(-1.5);
     await page.evaluate(() => {
       const s = window.__game.session; const sim = s.sim; const combat = sim.services.combat; const pid = sim.state.run.playerId;
-      const me = sim.state.persons.get(pid); me.trained.str = 13; me.trained.per = 13; me.skills.archery = 90;
+      const me = sim.state.persons.get(pid); me.birthDay = Math.floor(sim.absDay) - 16 * 26; me.trained.str = 14; me.trained.per = 13; me.skills.archery = 400;
       combat.arena.setKitOverride(pid, { weapon: 'dagger', ranged: 'longbow', armour: [] });
       const b = s.services.player.body();
       const id = combat.debug.skirmish('bandits', 3);
@@ -252,14 +298,15 @@ try {
 
   // -------------------------------------------------------------------------------------------
   if (want('charge')) {
-    await advance(10, {});
-    await put(c.x - 40, c.z - 30, 0.8); await face(0.8);
-    await advance(0.4);
+    await resetScene();
+    await advance(6, {});
+    await setClock(0, 0.45);
+    await stage(c.x - 40, c.z - 30);
     await page.evaluate(() => window.__game.session.services.player.debug.forceMount(0x2a2220));
     await advance(2.2);
     await page.evaluate(() => {
       const s = window.__game.session; const sim = s.sim; const combat = sim.services.combat; const pid = sim.state.run.playerId;
-      const me = sim.state.persons.get(pid); me.trained.str = 13; me.trained.agi = 12; me.skills.riding = 60;
+      const me = sim.state.persons.get(pid); me.birthDay = Math.floor(sim.absDay) - 16 * 26; me.trained.str = 14; me.trained.agi = 12; me.skills.riding = 400;
       combat.arena.setKitOverride(pid, { weapon: 'lance', armour: ['mail_hauberk', 'kettle_hat'] });
       const b = s.services.player.body();
       const id = combat.debug.skirmish('bandits', 3);
@@ -281,7 +328,8 @@ try {
 
   // -------------------------------------------------------------------------------------------
   if (want('wounds', 'wheel')) {
-    await advance(6, {});
+    await resetScene();
+    await advance(4, {});
     await page.evaluate(() => {
       const s = window.__game.session; const sim = s.sim; const combat = sim.services.combat; const pid = sim.state.run.playerId;
       const me = sim.state.persons.get(pid);

@@ -388,12 +388,12 @@ export class WoundBook {
     const rest = 0.6 + 0.4 * p.needs.rest;
     const food = 0.45 + 0.55 * p.needs.hunger;
     const warm = 0.7 + 0.3 * p.needs.warmth;
-    const base = 0.16 * rest * food * warm * (1 + 0.04 * (p.trained.end - 10)) * (1 + 0.05 * medicine);
+    const base = 0.16 * rest * food * warm * (1 + 0.04 * (p.trained.end - 10)) * (1 + 0.02 * Math.min(20, medicine));
     let died = false;
     for (let i = rec.wounds.length - 1; i >= 0 && !died; i--) {
       const w = rec.wounds[i];
       const age = dayNow - w.since;
-      const careMul = w.care === 0 ? 1 : w.care === 1 ? 1.5 : 2.1;
+      const careMul = w.care === 0 ? 1 : w.care === 1 ? 1.4 : 1.8;
       // open wounds fester
       const open = w.kind !== 'blunt' || w.severity > 0.55;
       if (open && !w.infected && age >= 0.2) {

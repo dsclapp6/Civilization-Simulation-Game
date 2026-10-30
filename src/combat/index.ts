@@ -1,6 +1,6 @@
 // Wave 3 COMBAT: one wound model for everyone, melee and archery in the detail zone, an AI for fighters, the
 // player's controls and the training yard. `installCombat` registers `sim.services.combat` (src/sim/wave3.ts)
-// and chains its corpses, arrows and sparks onto the view. See docs/COMBAT.md.
+// and chains its corpses, arrows and sparks onto the view.
 import type { P2 } from '../core/math';
 import { dist } from '../core/math';
 import { isNight } from '../core/time';
@@ -229,8 +229,14 @@ export function installCombat(sim: Simulation, deps: Wave3Deps): CombatModule {
   offs.push(sim.registerSystem({
     name: 'combat.step', phase: 'perStep', order: 65,
     run: (_c, info) => {
-      arena.step(info.dt);
-      ambush(info.dt);
+      try {
+        arena.step(info.dt);
+        ambush(info.dt);
+      } catch (err) {
+        // a fight must never take the simulation down with it: break everything off and carry on
+        console.error('[combat] step failed, fights dispersed', err);
+        arena.reset();
+      }
       checkT -= info.dt;
       if (checkT <= 0) { checkT = 1; if (arena.fightNearPlayer() !== actionTimeOwned) syncFightState(); }
     },
@@ -263,7 +269,7 @@ export function installCombat(sim: Simulation, deps: Wave3Deps): CombatModule {
     ev.on('playerSwitched', () => { port.reset(); }),
     ev.on('playerDied', () => { arena.dropPlayer(); }),
     ev.on('gameOver', () => { arena.reset(); }),
-    ev.on('death', (e) => { book.forget(e.person); }),
+    ev.on('death', (e) => { book.forget(e.person); arena.onDeath(e.person); }),
   );
 
   // ---- wolves close in on a lone traveller ----
@@ -299,10 +305,21 @@ export function installCombat(sim: Simulation, deps: Wave3Deps): CombatModule {
     const pid = sim.state.run.playerId;
     if (!body) return 0;
     const ahead = (r: number, spread: number): P2 => ({ x: body.x + Math.sin(body.yaw + spread) * r, z: body.z + Math.cos(body.yaw + spread) * r });
+    // what the scene summoned goes when the fight is over
+    const tidy = (fightId: number, people: PersonId[], animals: number[]): number => {
+      if (fightId === 0) { for (const id of people) zone?.dismiss?.(id); for (const id of animals) zone?.dismissAnimal?.(id); return 0; }
+      const off = api.onFightEnded((r) => {
+        if (r.id !== fightId) return;
+        off();
+        for (const id of people) zone?.dismiss?.(id);
+        for (const id of animals) zone?.dismissAnimal?.(id);
+      });
+      return fightId;
+    };
     if (kind === 'wolves' && zone?.summonAnimal) {
       const ids: number[] = [];
       for (let i = 0; i < count; i++) { const at = ahead(14 + i * 1.2, (i - (count - 1) / 2) * 0.5); ids.push(zone.summonAnimal('wolf', at.x, at.z, true)); }
-      return arena.engage([{ faction: 'player', people: [pid] }, { faction: 'wolves', people: [], animals: ids }], { at: body, reason: 'wolves' });
+      return tidy(arena.engage([{ faction: 'player', people: [pid] }, { faction: 'wolves', people: [], animals: ids }], { at: body, reason: 'wolves' }), [], ids);
     }
     const people: PersonId[] = [];
     const me = sim.state.persons.get(pid);
@@ -313,7 +330,7 @@ export function installCombat(sim: Simulation, deps: Wave3Deps): CombatModule {
       if (zone?.summon) { const at = ahead(11 + people.length * 0.8, (people.length - (count - 1) / 2) * 0.55); zone.summon(r.id, at.x, at.z, body.yaw + Math.PI); }
       people.push(r.id);
     }
-    return arena.engage([{ faction: 'player', people: [pid] }, { faction: 'bandits', people }], { at: body, reason: 'bandits' });
+    return tidy(arena.engage([{ faction: 'player', people: [pid] }, { faction: 'bandits', people }], { at: body, reason: 'bandits' }), people, []);
   }
   api.debug.giveKit = (person, kit) => arena.setKitOverride(person, kit);
 

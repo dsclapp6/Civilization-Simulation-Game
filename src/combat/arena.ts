@@ -399,7 +399,7 @@ export class Arena {
 
   step(dt: number): void {
     const env = this.env;
-    if (this.fighters.length === 0 && env.proj.count === 0 && this.corpses.length === 0 && env.proj.landed.length === 0) return;
+    if (this.fighters.length === 0 && env.proj.count === 0 && this.corpses.length === 0 && this.beastCorpses.length === 0 && env.proj.landed.length === 0) return;
     this.time += dt;
     const list = this.fighters;
     // who acts first rotates every step, so neither side gets the first blow of every exchange
@@ -488,11 +488,13 @@ export class Arena {
     }
   }
 
-  private addCorpse(f: Fighter): void {
+  /** A body lying where a fighter fell (dead, or struck down and left when the fight ends). */
+  addCorpse(f: Fighter): void {
     const zone = this.env.zone;
     const agent = zone ? zone.agent(f.personId) : null;
     const p = f.person;
     if (!p) return;
+    if (this.corpses.some((c) => c.person === p.id)) return;
     const base = agent?.draw;
     const look = base ? base.look : this.env.gearEnv.appearance.get(this.env.ctx.state, p, this.absDay).look;
     const draw: CharacterDrawItem = {
@@ -522,6 +524,22 @@ export class Arena {
     out.length = 0;
     for (const c of this.beastCorpses) { c.draw.animTime = 0; out.push(c.draw); }
     return out;
+  }
+
+  /** Somebody died near the player: their body stays where it fell (violence, battle, accidents). */
+  onDeath(personId: PersonId): void {
+    const p = this.env.ctx.state.persons.get(personId);
+    const zone = this.env.zone;
+    if (!p || !p.death || !zone) return;
+    const cause = p.death.cause;
+    if (cause !== 'violence' && cause !== 'battle' && cause !== 'accident') return;
+    const a = zone.agent(personId);
+    if (!a || this.corpses.some((c) => c.person === personId)) return;
+    const draw: CharacterDrawItem = {
+      id: personId, x: a.x, y: a.y, z: a.z, yaw: a.yaw, look: a.draw.look, lookVersion: a.draw.lookVersion,
+      mainHand: 'none', offHand: 'none', back: 'none', carry: 'none', anim: 'fall', animTime: 0, moveSpeed: 0, highlight: 0,
+    };
+    this.corpses.push({ draw, until: this.time + CORPSE_SECONDS, born: this.time, person: personId });
   }
 
   corpseDraws(): readonly CharacterDrawItem[] {
@@ -918,8 +936,9 @@ export class Arena {
       env.ctx.events.emit('captured', { captive: c.captive, captor: c.captor, ransom });
       state.log(this.absDay, 'captured', `${fullName(captive)} yielded and was taken for ransom.`, [c.captive, c.captor]);
     }
-    // everyone goes back to their lives
+    // everyone goes back to their lives; those struck down are left lying a while
     for (const side of fight.sides) for (const f of side.members) {
+      if (f.st === S.Down && f.person && !f.person.death && !f.isPlayer && (f.summonedByUs || !this.env.zone?.agent(f.personId))) this.addCorpse(f);
       f.fight = 0;
       if (f.isPlayer) { f.target = null; if (f.st !== S.Dead && f.st !== S.Down) this.toIdle(f); continue; }
       this.free(f);
