@@ -516,15 +516,25 @@ export function spawnNoble(ctx: SimContext, settlementId: number, tier: RankTier
   return knight;
 }
 
+/** Wave 3 (politics): lets the politics module hold the monks' vote when an abbot or prior dies. */
+export interface SuccessionHooks {
+  /** The person the community elects, or null to fall back on the built-in choice. */
+  religiousHead?(ctx: SimContext, title: Title, dead: Person, now: number): Person | null;
+}
+const successionHooks = new WeakMap<GameState, SuccessionHooks>();
+export function setSuccessionHooks(state: GameState, hooks: SuccessionHooks | null): void {
+  if (hooks) successionHooks.set(state, hooks); else successionHooks.delete(state);
+}
+
 /** Abbots, abbesses and priors are chosen by the community: the senior, ablest member. */
 function electReligiousHead(ctx: SimContext, t: Title, from: Person, now: number): void {
   const state = ctx.state;
   const rng = ctx.rng('succession');
   const s = ctx.world.settlements.find((x) => x.id === t.place);
   const abbatial = !s || s.kind === 'abbey' || s.kind === 'nunnery';
-  let best: Person | null = null;
+  let best: Person | null = successionHooks.get(state)?.religiousHead?.(ctx, t, from, now) ?? null;
   let bestKey = -Infinity;
-  for (const p of state.residentList(t.place)) {
+  for (const p of best ? [] : state.residentList(t.place)) {
     if (p.estate !== 'clergy' || p.id === from.id || ageYears(p, now) < 24) continue;
     if (p.career !== 'monk' && p.career !== 'nun') continue;
     if (from.sex !== p.sex) continue;
