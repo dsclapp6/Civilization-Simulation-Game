@@ -67,6 +67,7 @@ export function newRun(opts: NewRunOptions): NewRun {
   }
   const world = opts.generateWorld(opts.seed, opts.worldOptions);
   const state = GameState.fromWorld(world, opts.seed, opts.difficulty);
+  state.worldOptions = opts.worldOptions ? { ...opts.worldOptions } : undefined;
   state.clock.absDay = START_DAY;
   state.clock.firedHour = Math.floor(START_DAY * 24);
   generatePopulation(state, world);

@@ -5,6 +5,7 @@ import type { SaveBatch, SaveStore } from './save';
 export class MemorySaveStore implements SaveStore {
   profile: string | null = null;
   readonly run = new Map<string, string>();
+  /** True once a run has been committed (and not cleared). */
   hasRun = false;
   commits = 0;
   lastBatch: SaveBatch | null = null;
@@ -41,6 +42,8 @@ export class MemorySaveStore implements SaveStore {
       this.lastBatch = batch;
     });
   }
+
+  runExists(): Promise<boolean> { return this.later(() => this.hasRun); }
 
   clearRun(): Promise<void> {
     return this.later(() => { this.run.clear(); this.hasRun = false; });

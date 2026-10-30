@@ -8,7 +8,7 @@ import type { BuildingKind } from '../content/types';
 import type { CultureId, Difficulty, Estate, RankTier, SkillId } from '../core/domain';
 import { SKILLS, STATS } from '../core/domain';
 import type { StripState as StripStage } from '../core/view';
-import type { WorldModel } from '../world/types';
+import type { WorldGenOptions, WorldModel } from '../world/types';
 import type { CareerId } from './careers';
 import { refreshStrips } from './farming';
 import { emptySkills, emptyStats } from './people';
@@ -56,6 +56,8 @@ interface MetaRec {
   v: number;
   seed: string;
   difficulty: Difficulty;
+  /** Options passed to the world generator. */
+  wo?: WorldGenOptions;
   clock: ClockState;
   rngs: Record<string, number[]>;
   run: RunState;
@@ -244,6 +246,7 @@ export function serializeMeta(state: GameState): string {
     v: SAVE_VERSION,
     seed: state.seed,
     difficulty: state.difficulty,
+    wo: state.worldOptions,
     clock: state.clock,
     rngs,
     run: state.run,
@@ -373,6 +376,7 @@ export function migrate(raw: RawSave, table: Record<number, Migration> = MIGRATI
 export function rawToState(raw: RawSave, world: WorldModel): GameState {
   const meta = raw.meta;
   const state = GameState.fromWorld(world, meta.seed, meta.difficulty);
+  state.worldOptions = meta.wo;
   state.clock = meta.clock;
   state.run = meta.run;
   state.score = meta.score;

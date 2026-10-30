@@ -5,7 +5,7 @@
 //
 // While a cycle is serialising, the simulation must not fire calendar hooks (`holdingHooks`), so the
 // records of one cycle describe one consistent moment. The cycle only lasts a handful of frames.
-import type { WorldModel } from '../world/types';
+import type { WorldGenOptions, WorldModel } from '../world/types';
 import { newProfile, PROFILE_VERSION, type Profile } from './legacy';
 import {
   chunkKey, migrate, parseRecords, rawToState, serializeChunk, serializeExt, serializeMeta,
@@ -28,6 +28,15 @@ export interface SaveStore {
   commitRun(batch: SaveBatch): Promise<void>;
   /** Deletes the current run (game over / abandon). */
   clearRun(): Promise<void>;
+  /** Cheap check for the main menu's "Continue" (optional; falls back to loading the run). */
+  runExists?(): Promise<boolean>;
+}
+
+/** Is there a saved run to continue? */
+export async function hasSavedRun(store: SaveStore): Promise<boolean> {
+  if (store.runExists) return store.runExists();
+  const records = await store.loadRun();
+  return !!records && !!records['meta'];
 }
 
 // ---- profile ----
@@ -57,11 +66,11 @@ export function saveProfile(store: SaveStore, profile: Profile): Promise<void> {
 export interface LoadedRun { world: WorldModel; state: GameState; keys: string[] }
 
 /** Loads the saved run: regenerates the world from its seed and lays the saved state over it. */
-export async function loadRun(store: SaveStore, generateWorld: (seed: string) => WorldModel): Promise<LoadedRun | null> {
+export async function loadRun(store: SaveStore, generateWorld: (seed: string, options?: WorldGenOptions) => WorldModel): Promise<LoadedRun | null> {
   const records = await store.loadRun();
   if (!records || !records['meta']) return null;
   const raw = migrate(parseRecords(records));
-  const world = generateWorld(raw.meta.seed);
+  const world = generateWorld(raw.meta.seed, raw.meta.wo);
   const state = rawToState(raw, world);
   return { world, state, keys: Object.keys(records) };
 }

@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { newProfile } from '../../src/sim/legacy';
 import { IdbSaveStore } from '../../src/sim/save-idb';
-import { loadProfile, saveProfile } from '../../src/sim/save';
+import { hasSavedRun, loadProfile, saveProfile } from '../../src/sim/save';
 import { Simulation } from '../../src/sim/sim';
 import { hashState } from '../../src/sim/serialize';
 import { killPerson } from '../../src/sim/succession';
@@ -48,6 +48,7 @@ class FakeStore {
   get(key: string): FakeRequest<unknown> { return this.tx.schedule(() => this.data.get(key)); }
   getAll(): FakeRequest<unknown[]> { return this.tx.schedule(() => [...this.data.keys()].sort().map((k) => this.data.get(k))); }
   getAllKeys(): FakeRequest<string[]> { return this.tx.schedule(() => [...this.data.keys()].sort()); }
+  count(): FakeRequest<number> { return this.tx.schedule(() => this.data.size); }
 }
 
 class FakeDb {
@@ -93,7 +94,9 @@ describe('IdbSaveStore (fake IndexedDB)', () => {
   it('commits batches atomically: puts, deletes and clear', async () => {
     const store = new IdbSaveStore();
     expect(await store.loadRun()).toBeNull();
+    expect(await hasSavedRun(store)).toBe(false);
     await store.commitRun({ puts: { meta: '{"a":1}', 'p:0': '[1]', 'p:1': '[2]' }, deletes: [] });
+    expect(await hasSavedRun(store)).toBe(true);
     expect(await store.loadRun()).toEqual({ meta: '{"a":1}', 'p:0': '[1]', 'p:1': '[2]' });
     await store.commitRun({ puts: { 'p:2': '[3]' }, deletes: ['p:0'] });
     expect(await store.loadRun()).toEqual({ meta: '{"a":1}', 'p:1': '[2]', 'p:2': '[3]' });

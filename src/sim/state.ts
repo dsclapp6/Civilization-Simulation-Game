@@ -15,7 +15,7 @@ import type {
 import { Rng } from '../core/rng';
 import type { Heraldry, StripState as StripStage } from '../core/view';
 import type { Speed } from '../core/time';
-import type { WorldModel } from '../world/types';
+import type { WorldGenOptions, WorldModel } from '../world/types';
 import type { CareerId } from './careers';
 
 export const NONE = 0;
@@ -417,6 +417,8 @@ export class GameState {
   readonly seed: string;
   difficulty: Difficulty;
   readonly level: LevelId = 'medieval';
+  /** Options the world was generated with; a load must regenerate exactly the same continent. */
+  worldOptions: WorldGenOptions | undefined = undefined;
 
   clock: ClockState = { absDay: 0, firedHour: 0, speed: 1, paused: false, actionTime: false };
   readonly persons = new Registry<Person>();

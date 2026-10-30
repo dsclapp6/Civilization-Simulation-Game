@@ -14,7 +14,7 @@ export {
 } from './legacy';
 export type { LevelProfile, Profile, StatUpgrades } from './legacy';
 export { BIRTH_CLASS_MULTIPLIER, RANK_MILESTONES, ScoreKeeper } from './score';
-export { loadProfile, loadRun, saveProfile, RunSaver } from './save';
+export { hasSavedRun, loadProfile, loadRun, saveProfile, RunSaver } from './save';
 export type { SaveStore } from './save';
 export { IdbSaveStore } from './save-idb';
 export { MemorySaveStore } from './save-memory';

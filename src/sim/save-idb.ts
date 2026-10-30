@@ -77,6 +77,11 @@ export class IdbSaveStore implements SaveStore {
     await transactionDone(tx);
   }
 
+  async runExists(): Promise<boolean> {
+    const db = await this.open();
+    return (await request(db.transaction(RUN_STORE, 'readonly').objectStore(RUN_STORE).count())) > 0;
+  }
+
   async clearRun(): Promise<void> {
     const db = await this.open();
     const tx = db.transaction(RUN_STORE, 'readwrite');

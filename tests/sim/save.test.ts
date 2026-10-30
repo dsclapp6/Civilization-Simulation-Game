@@ -83,6 +83,19 @@ describe('save and load', () => {
     expect(numbers).toBeGreaterThan(100_000);
   });
 
+  it('regenerates the world with the options it was created with', async () => {
+    const store = new MemorySaveStore();
+    const seen: Array<{ seed: string; options: unknown }> = [];
+    const generate = (seed: string, options?: { kingdoms?: number; sparse?: boolean }) => {
+      seen.push({ seed, options });
+      return mockGenerator('tiny')(seed);
+    };
+    const sim = Simulation.newGame({ seed: 'opts', difficulty: 'knight', generateWorld: generate, worldOptions: { kingdoms: 7, sparse: true }, store, profile: newProfile(), autosave: { intervalMs: 0 } });
+    await sim.flush();
+    await Simulation.load(store, generate);
+    expect(seen).toEqual([{ seed: 'opts', options: { kingdoms: 7, sparse: true } }, { seed: 'opts', options: { kingdoms: 7, sparse: true } }]);
+  });
+
   it('returns null when there is no saved run', async () => {
     expect(await Simulation.load(new MemorySaveStore(), gen)).toBeNull();
     expect(await loadRun(new MemorySaveStore(), gen)).toBeNull();

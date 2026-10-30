@@ -156,7 +156,7 @@ export class Simulation implements SimContext {
   }
 
   /** Continues the saved run, or resolves to null when there is none. */
-  static async load(store: SaveStore, generateWorld: (seed: string) => WorldModel, autosave?: SaverOptions): Promise<Simulation | null> {
+  static async load(store: SaveStore, generateWorld: (seed: string, options?: WorldGenOptions) => WorldModel, autosave?: SaverOptions): Promise<Simulation | null> {
     const loaded = await loadRun(store, generateWorld);
     if (!loaded) return null;
     const profile = await loadProfile(store);
