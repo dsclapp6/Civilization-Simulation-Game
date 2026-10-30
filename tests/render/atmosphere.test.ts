@@ -43,11 +43,15 @@ describe('atmosphere', () => {
     expect(a.night).toBe(0);
   });
 
-  it('uses dim bluish moonlight at night with stars', () => {
+  it('uses moonlit-blue night lighting (docs/ART.md section 6) with stars', () => {
     const a = computeAtmosphere(base(0.02), PALETTE, createAtmosphereState());
     expect(a.lightIsMoon).toBe(true);
-    expect(a.lightIntensity).toBeLessThan(0.6);
+    expect(a.lightIntensity).toBeGreaterThan(0.55);
+    expect(a.lightIntensity).toBeLessThanOrEqual(0.9);
     expect(a.lightColor.b).toBeGreaterThan(a.lightColor.r);
+    expect(a.hemiIntensity).toBeCloseTo(0.27 + 0.75, 1);
+    expect(a.hemiSky.getHex()).toBe(PALETTE.ambient.night);
+    expect(a.exposure).toBeCloseTo(1.0, 2);
     expect(a.starAlpha).toBeGreaterThan(0.5);
     expect(a.nightLight).toBeGreaterThan(0.9);
   });

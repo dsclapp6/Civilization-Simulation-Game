@@ -20,6 +20,7 @@ import { WaterSystem } from './water/waterSystem';
 import { VegetationSystem } from './vegetation/vegetationSystem';
 import { BuildingSystem } from './buildings';
 import { FieldSystem } from './fields';
+import { RoadSystem } from './roads';
 import { DynamicLayers } from './dynamicLayers';
 import { Precipitation } from './weather/precipitation';
 import { buildMapBase, buildMapOverlay } from './map/mapOverlay';
@@ -79,6 +80,8 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
   bootSea.dispose();
   const vegetation = new VegetationSystem(world, assets, vegSettings(quality));
   const buildings = new BuildingSystem(world, assets, { detailDistance: quality.buildingDetail, drawBudget: quality.buildingDrawBudget });
+  const roads = new RoadSystem(world, palette, quality.roadRadius);
+  roads.weather = { uSnowCover: terrain.uniforms.uSnowCover, uWetness: terrain.uniforms.uWetness };
   const fields = new FieldSystem(world, assets, terrain.uniforms, { stripDistance: quality.stripDistance, cropRadius: quality.cropRadius, cropMax: quality.cropMax, cropTris: quality.cropTris });
   const dynamic = new DynamicLayers(assets, heightAt, showLabels);
   const occRay = new THREE.Ray();
@@ -109,7 +112,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
   const lighting = new Lighting(scene);
   lighting.configure(quality.shadows, quality.shadowMapSize, quality.shadowRadius);
 
-  scene.add(sky.stars, sky.dome, terrain.root, water.root, vegetation.root, buildings.root, fields.root, dynamic.root, precip.rain, precip.snow);
+  scene.add(sky.stars, sky.dome, terrain.root, water.root, roads.root, vegetation.root, buildings.root, fields.root, dynamic.root, precip.rain, precip.snow);
 
   let post: PostFx | null = null;
   const atmo = createAtmosphereState();
@@ -135,7 +138,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
   let disposed = false;
 
   function terrainSettings(q: QualitySettings) {
-    return { maxLevel: q.terrainMaxLevel, splitFactor: q.terrainSplit, drawDistance: q.terrainDistance, cacheNodes: q.terrainCacheNodes };
+    return { maxLevel: q.terrainMaxLevel, splitFactor: q.terrainSplit, drawDistance: q.terrainDistance, cacheNodes: q.terrainCacheNodes, roadRibbons: true };
   }
   function vegSettings(q: QualitySettings) {
     return { near: q.vegNear, mid: q.vegMid, far: q.vegFar, grass: q.vegGrass, maxPerKind: q.vegMaxPerKind, kindTris: q.vegKindTris };
@@ -167,6 +170,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     vegetation.configure(vegSettings(quality));
     buildings.configure({ detailDistance: quality.buildingDetail, drawBudget: quality.buildingDrawBudget });
     fields.configure({ stripDistance: quality.stripDistance, cropRadius: quality.cropRadius, cropMax: quality.cropMax, cropTris: quality.cropTris });
+    roads.radius = quality.roadRadius;
     if (quality.postFx && !post) {
       post = new PostFx(renderer, scene, camera, width, height);
       post.setSize(width, height, renderer.getPixelRatio());
@@ -224,7 +228,12 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     ap[3] = atmo.sunFogExponent;
     sky.cloudOffsetMetres(cloudOff);
     const ag = atmoUniforms.atmoGrade.value;
-    ag[0] = atmo.gradeDesat; ag[1] = atmo.gradeTint.r; ag[2] = atmo.gradeTint.g; ag[3] = atmo.gradeTint.b;
+    // the lift is display-space (fog runs after tone mapping); post-processing renders linear HDR
+    const gt = atmo.gradeTint;
+    ag[0] = atmo.gradeDesat;
+    ag[1] = linearOut ? Math.pow(gt.r, 2.2) : gt.r;
+    ag[2] = linearOut ? Math.pow(gt.g, 2.2) : gt.g;
+    ag[3] = linearOut ? Math.pow(gt.b, 2.2) : gt.b;
     const ac = atmoUniforms.atmoCloud.value;
     ac[0] = atmo.cloudCover; ac[1] = cloudOff.x; ac[2] = cloudOff.y; ac[3] = atmo.cloudShadow;
 
@@ -246,7 +255,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     const tint = terrain.uniforms.uGrassTint.value.setHex(seasonHex[season]).lerp(tmpColor.setHex(seasonHex[next]), smoothstep(0.6, 1, seasonProgress));
     const lum = tint.r * 0.2126 + tint.g * 0.7152 + tint.b * 0.0722;
     tint.multiplyScalar(1 / Math.max(1e-3, lum));
-    terrain.uniforms.uGrassTintStrength.value = 0.5;
+    terrain.uniforms.uGrassTintStrength.value = 0.38;
     terrain.uniforms.uSnowCover.value = weather.snowCover;
     const targetWet = clamp(weather.rain * 1.3, 0, 1);
     wetness += (targetWet - wetness) * (1 - Math.exp(-dt * (targetWet > wetness ? 0.25 : 0.04)));
@@ -268,12 +277,16 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
 
     // streaming (time-sliced)
     const budget = (opts.generationBudgetMs ?? quality.generationBudgetMs) * budgetScale;
-    let g = terrain.update(camera, frustum, budget);
+    // one streaming budget per frame: terrain first (3/4), scatter, roads and fields share the rest
+    let g = terrain.update(camera, frustum, budget * 0.75);
     terrainMs = g;
-    g += vegetation.update(camera, Math.max(0.6 * budgetScale, budget - g));
+    g += vegetation.update(camera, Math.max(0.4 * budgetScale, budget - g));
     vegetation.setFelled(view.felledVersion(), view.felled());
-    water.update(atmo, time, weather.rain);
-    const bfx = buildings.update(view.buildings(), view.buildingsVersion(), camera, time, dt, atmo.nightLight, Math.max(1.5, budget * 0.6));
+    // angle of one screen pixel, so thin water ribbons can fade before they alias
+    const pixelAngle = (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) / Math.max(1, height * renderer.getPixelRatio());
+    water.update(atmo, time, weather.rain, mapBlend, pixelAngle);
+    g += roads.update(camera, Math.max(0.5 * budgetScale, budget - g));
+    const bfx = buildings.update(view.buildings(), view.buildingsVersion(), camera, time, dt, Math.max(1.5, budget * 0.6), budgetScale > 1);
     g += fields.update(view.strips(), view.stripsVersion(), camera, Math.max(0.5 * budgetScale, budget - g));
     genMs = g;
 
@@ -355,6 +368,28 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     setCameraPose(position: GroundPoint, lookAt: GroundPoint, transitionSeconds = 0): void { rig.setPose(position, lookAt, transitionSeconds); },
     focusMap(x: number, z: number, altitude?: number): void { rig.focusMap(x, z, altitude); },
     getCamera(): THREE.PerspectiveCamera { return camera; },
+    debugBreakdown() {
+      const draw = () => {
+        renderer.info.reset();
+        if (post) post.render(0); else renderer.render(scene, camera);
+        return { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
+      };
+      const all = draw();
+      const out: Record<string, { calls: number; triangles: number }> = { total: all };
+      const groups: [string, THREE.Object3D][] = [
+        ['terrain', terrain.root], ['water', water.root], ['roads', roads.root], ['vegetation', vegetation.root],
+        ['buildings', buildings.root], ['fields', fields.root], ['dynamic', dynamic.root], ['sky', sky.dome],
+      ];
+      for (const [name, obj] of groups) {
+        const was = obj.visible;
+        obj.visible = false;
+        const r = draw();
+        obj.visible = was;
+        out[name] = { calls: all.calls - r.calls, triangles: all.triangles - r.triangles };
+      }
+      draw();
+      return out;
+    },
     screenToGround(x: number, y: number): GroundPoint | null {
       const hit = groundHit(screenRay(x, y));
       return hit ? { x: hit.point.x, y: hit.point.y, z: hit.point.z } : null;
@@ -401,6 +436,10 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
         if (terrain.pending === 0 || performance.now() - t0 > maxMs) break;
       }
       for (let i = 0; i < 4; i++) frame(view, 0, 40, false);
+      // bodies are built a few per frame in play; build them all now
+      dynamic.warm(view.characters(), view.animals(), camera, 60);
+      // a few seconds of animation so chimney smoke, mill wheels and flags have settled in
+      for (let i = 0; i < 30; i++) frame(view, 0.1, 1, false);
     },
     dispose(): void {
       if (disposed) return;
@@ -412,6 +451,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
       vegetation.dispose();
       buildings.dispose();
       fields.dispose();
+      roads.dispose();
       dynamic.dispose();
       precip.dispose();
       mapLabels.dispose();

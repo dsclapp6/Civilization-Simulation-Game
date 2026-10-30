@@ -60,7 +60,7 @@ describe('building system', () => {
     let fx: readonly { kind: string }[] = [];
     let smoke = 0;
     for (let i = 0; i < 30; i++) {
-      fx = bs.update(views, 1, cam, i * 0.1, 0.1, 1, 1000);
+      fx = bs.update(views, 1, cam, i * 0.1, 0.1, 1000, true);
       smoke += fx.filter((e) => e.kind === 'hearth_smoke').length;
     }
     expect(bs.count).toBe(views.length);
@@ -68,11 +68,11 @@ describe('building system', () => {
     expect(smoke).toBeGreaterThan(0);
     // a changed request rebuilds that building; removing one drops it
     const changed = views.slice(1).map((b, i) => (i === 0 ? { ...b, damage: 1 } : b));
-    bs.update(changed, 2, cam, 3, 0.1, 1, 1000);
+    bs.update(changed, 2, cam, 3, 0.1, 1000, true);
     expect(bs.count).toBe(views.length - 1);
     // a tight draw budget falls back to proxies for distant buildings
     bs.configure({ detailDistance: 800, drawBudget: 6 });
-    bs.update(changed, 2, cam, 3.1, 0.1, 0, 1000);
+    bs.update(changed, 2, cam, 3.1, 0.1, 1000, true);
     expect(bs.detailedCount).toBeLessThan(changed.length);
     const ray = new THREE.Ray(new THREE.Vector3(views[3].x, 200, views[3].z), new THREE.Vector3(0, -1, 0));
     expect(bs.raycast(ray, 1000)?.id).toBe(views[3].id);

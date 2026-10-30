@@ -77,6 +77,8 @@ export interface GameRenderer {
   /** Centre the map camera on a point (map mode). */
   focusMap(x: number, z: number, altitude?: number): void;
   getCamera(): THREE.PerspectiveCamera;
+  /** Dev aid: draw calls / triangles attributed to each scene system (re-renders the frame). */
+  debugBreakdown?(): Record<string, { calls: number; triangles: number }>;
 
   // ---- queries ----
   screenToGround(x: number, y: number): GroundPoint | null;
