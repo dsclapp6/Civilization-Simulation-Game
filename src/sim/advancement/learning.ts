@@ -27,12 +27,32 @@ const MAX_RECORDS = 4;
 // Yearly pass of one settlement
 // ---------------------------------------------------------------------------------------------
 
-export function settlementYear(A: Adv, s: Settlement): void {
+/** The yearly pass of a settlement. `part` runs one third of it (discovery, teaching, books and prosperity): the clock hook
+ *  calls the three in successive hours so no single frame carries a whole big town; without it all three run. */
+export function settlementYear(A: Adv, s: Settlement, part?: 0 | 1 | 2): void {
   const res = A.state.residentList(s.id);
   if (res.length === 0) return;
-  discover(A, res);
-  teachAll(A, s, res);
-  library(A, s, res);
+  if (part === undefined || part === 0) discover(A, res);
+  if (part === undefined || part === 1) teachAll(A, s, res);
+  if (part === undefined || part === 2) { library(A, s, res); lift(A, s, res.length); }
+}
+
+/** Better ploughs and rotations feed more mouths: a small lift to the settlement's prosperity, once a year on its own day
+ *  (after the economy has set the year's figure), in proportion to how many of its folk have the technique. */
+function lift(A: Adv, s: Settlement, residents: number): void {
+  const ss = A.state.settlements.get(s.id);
+  const counts = A.settlementCounts(s.id);
+  if (!ss || counts.size === 0) return;
+  const pop = Math.max(3, residents * 0.1);
+  let sum = 0;
+  for (const t of TECHS) {
+    const n = counts.get(t.id);
+    if (n && t.effects.prosperity) sum += t.effects.prosperity * Math.min(1, n / pop);
+  }
+  if (sum > 0) {
+    ss.prosperity = Math.min(1.35, Math.round((ss.prosperity + sum) * 1000) / 1000);
+    A.state.touchSettlement(ss);
+  }
 }
 
 function discover(A: Adv, res: readonly Person[]): void {

@@ -39,29 +39,9 @@ export function installAdvancement(sim: Simulation, deps: Wave3Deps): Advancemen
     name: 'tech.settlements', phase: 'hourly', order: 60,
     run: (_ctx, info) => {
       for (const s of sim.world.settlements) {
-        if (info.day % DAYS_PER_YEAR === s.id % DAYS_PER_YEAR && info.hour === (s.id * 5) % 24) settlementYear(A, s);
-      }
-    },
-  }));
-  // better ploughs and rotations feed more mouths: a small lift to prosperity after the economy has set it
-  offs.push(sim.registerSystem({
-    name: 'tech.prosperity', phase: 'yearly', order: 25,
-    run: () => {
-      for (const s of sim.world.settlements) {
-        const ss = sim.state.settlements.get(s.id);
-        if (!ss) continue;
-        const counts = A.settlementCounts(s.id);
-        if (counts.size === 0) continue;
-        const pop = Math.max(3, sim.state.residentsOf(s.id).length * 0.1);
-        let lift = 0;
-        for (const t of TECHS) {
-          const n = counts.get(t.id);
-          if (n && t.effects.prosperity) lift += t.effects.prosperity * Math.min(1, n / pop);
-        }
-        if (lift > 0) {
-          ss.prosperity = Math.min(1.35, Math.round((ss.prosperity + lift) * 1000) / 1000);
-          sim.state.touchSettlement(ss);
-        }
+        if (info.day % DAYS_PER_YEAR !== s.id % DAYS_PER_YEAR) continue;
+        const part = (info.hour - ((s.id * 5) % 24) + 24) % 24;
+        if (part < 3) settlementYear(A, s, part as 0 | 1 | 2);
       }
     },
   }));

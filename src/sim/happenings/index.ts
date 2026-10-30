@@ -5,7 +5,7 @@ import type { Simulation } from '../sim';
 import type { Wave3Deps } from '../wave3deps';
 import type { AdvancementRuntime } from '../advancement/types';
 import { Hap } from './core';
-import { disastersDaily, disastersYearly, fireHourly, trigger, wolvesHourly } from './disasters';
+import { disastersYearly, fireHourly, hazardsDaily, plagueDailyPass, trigger, wolvesHourly } from './disasters';
 import { festivalsDaily, gatheringsHourly, schedule } from './festivals';
 import {
   acceptRequest, allRequests, declineRequest, listenWork, offerRequest, openRequests, requestTopics, requestsDaily, requestsHourly, requestsStep,
@@ -23,10 +23,14 @@ export function installHappenings(sim: Simulation, deps: Wave3Deps, _adv?: Advan
   if (existing) return existing;
   const H = new Hap(sim, deps);
 
-  sim.registerSystem({
-    name: 'happenings.daily', phase: 'daily', order: 70,
-    run: (_ctx, info) => { disastersDaily(H, info); festivalsDaily(H, info); requestsDaily(H, info); },
-  });
+  // the daily work runs in separate hours of the night so that no single frame carries all of it
+  const daily = (name: string, hour: number, fn: (day: { day: number; absDay: number }) => void): void => {
+    sim.registerSystem({ name, phase: 'hourly', order: 71, run: (_ctx, info) => { if (info.hour === hour) fn({ day: info.day, absDay: info.absDay }); } });
+  };
+  daily('happenings.hazards', 1, (d) => hazardsDaily(H, d));
+  daily('happenings.plague', 2, () => plagueDailyPass(H));
+  daily('happenings.festivals', 3, (d) => festivalsDaily(H, d));
+  daily('happenings.requests', 4, (d) => requestsDaily(H, d));
   sim.registerSystem({
     name: 'happenings.hourly', phase: 'hourly', order: 70,
     run: (_ctx, info) => { fireHourly(H, info); wolvesHourly(H, info); gatheringsHourly(H, info); requestsHourly(H, info); },

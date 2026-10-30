@@ -55,13 +55,17 @@ function pickRequester(H: Hap, me: Person, ok: (p: Person) => boolean, from?: Pe
   const rng = H.rng();
   const busy = new Set<number>();
   for (const r of H.save.reqs) if (r.state === 'offered' || r.state === 'accepted') busy.add(r.from);
-  const res = H.state.residentList(me.settlement).filter((p) => !p.death && p.id !== me.id && plainAge(H, p) >= 14 && !busy.has(p.id) && p.household !== me.household && ok(p));
-  if (res.length === 0) return null;
-  // a random sample keeps the opinion lookups cheap in a big town
-  const sample = res.length > 50 ? Array.from({ length: 50 }, () => res[Math.floor(rng.next() * res.length)]) : res;
+  // a random sample of the village keeps the opinion lookups cheap in a big town
+  const all = H.state.residentsOf(me.settlement);
+  const eligible = (p: Person): boolean => !p.death && p.id !== me.id && plainAge(H, p) >= 14 && !busy.has(p.id) && p.household !== me.household && ok(p);
+  const sample: Person[] = [];
+  if (all.length <= 24) { for (const p of all) if (eligible(p)) sample.push(p); }
+  else for (let i = 0; i < 60 && sample.length < 24; i++) { const p = all[Math.floor(rng.next() * all.length)]; if (eligible(p) && !sample.includes(p)) sample.push(p); }
+  if (sample.length === 0) return null;
   const w = sample.map((p) => {
     const op = H.deps.social.opinion(p.id, me.id);
-    return 1 + Math.max(0, op) / 25 + (isCloseKin(H.state, p, me) ? 1.5 : 0) + (Math.abs(p.rankTier - me.rankTier) <= 1 ? 1 : 0);
+    const kin = (p.father !== 0 && (p.father === me.father || p.father === me.id)) || (p.mother !== 0 && (p.mother === me.mother || p.mother === me.id)) || me.father === p.id || me.mother === p.id;
+    return 1 + Math.max(0, op) / 25 + (kin ? 1.5 : 0) + (Math.abs(p.rankTier - me.rankTier) <= 1 ? 1 : 0);
   });
   return rng.weighted(sample, w);
 }

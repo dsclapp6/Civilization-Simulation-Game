@@ -40,16 +40,20 @@ export function trigger(H: Hap, kind: string, settlement: number): number {
   return rec ? rec.id : 0;
 }
 
-export function disastersDaily(H: Hap, info: DayInfo): void {
+/** The daily rolls and housekeeping of disasters: hazards drawn, events ended, repairs, the cold, succession crises. */
+export function hazardsDaily(H: Hap, info: DayInfo): void {
   const doy = toDate(info.absDay).dayOfYear;
   expire(H);
   rollHazards(H, doy);
-  plagueDaily(H);
-  epidemicDecay(H);
   winterDaily(H);
   repairDaily(H);
   successionWatch(H);
-  void info;
+}
+
+/** Plague waves and the fading of epidemics (a separate hour, so a bad day does not pile everything on one frame). */
+export function plagueDailyPass(H: Hap): void {
+  plagueDaily(H);
+  epidemicDecay(H);
 }
 
 export function disastersYearly(H: Hap, _info: YearInfo): void {
@@ -200,7 +204,7 @@ function plagueDaily(H: Hap): void {
 
 /** A few residents a day fall ill with a fatal plague; herbal medicine and the infirmary let more of them recover. */
 function infectResidents(H: Hap, sid: number, level: number): void {
-  const res = H.state.residentList(sid);
+  const res = H.state.residentsOf(sid);
   if (res.length === 0 || level <= 0) return;
   const rng = H.rng();
   const adv = H.adv;

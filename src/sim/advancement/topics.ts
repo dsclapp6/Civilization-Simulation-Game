@@ -7,7 +7,7 @@ import { gainSkill } from '../skills';
 import { formatMoney } from '../money';
 import { ageYears, type Person, type PersonId } from '../state';
 import type { Adv } from './core';
-import { PLAYER_ACTION_TECHS, STUDY_BY_BUILDING, TECH_BY_ID, TECHS, actionMatches } from './data';
+import { PLAYER_ACTION_TECHS, STUDY_BY_BUILDING, TECH_BY_ID, actionMatches } from './data';
 import { canLearn, isMaster, practice } from './learning';
 import type { Result, TechDef } from './types';
 
@@ -160,4 +160,3 @@ export function listenToActions(A: Adv): () => void {
   });
 }
 
-export const ALL_TECHS = TECHS;

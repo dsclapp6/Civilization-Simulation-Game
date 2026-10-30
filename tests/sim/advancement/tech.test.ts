@@ -248,14 +248,13 @@ describe('what techniques do', () => {
     const ss = sim.state.settlements.get(village.id)!;
     for (const p of sim.state.residentsOf(village.id)) adv.adv.removeHolder(p.id, 'heavy_plough');
     ss.prosperity = 1;
-    const sys = sim.scheduler.list('yearly').find((s) => s.name === 'tech.prosperity')!;
-    sys.run(sim, { year: 2, day: 16 });
+    settlementYear(adv.adv, village);
     const before = ss.prosperity;
     for (const p of sim.state.residentsOf(village.id).slice(0, 12)) adv.adv.addHolder(p, 'heavy_plough');
     ss.prosperity = 1;
-    sys.run(sim, { year: 3, day: 32 });
-    expect(before).toBe(1);
-    expect(ss.prosperity).toBeGreaterThan(1.001);
+    settlementYear(adv.adv, village);
+    expect(before).toBeLessThan(1.01);
+    expect(ss.prosperity).toBeGreaterThan(before + 0.005);
     expect(ss.prosperity).toBeLessThan(1.1);
   });
 });

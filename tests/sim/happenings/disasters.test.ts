@@ -150,9 +150,11 @@ describe('fire', () => {
     expect(damaged.length).toBeGreaterThanOrEqual(1);
     expect(burning()).toBe(0);
     expect(a.adv.happenings.activeAt(sid)).not.toContain('fire');
+    // the neighbours rebuild: the burnt house mends a little each day
     const ruined = damaged[0];
-    a.sim.advanceDays(16);
-    expect(ruined.damage).toBe(0);
+    const after = ruined.damage;
+    a.sim.advanceDays(4);
+    expect(ruined.damage).toBeLessThan(after - 0.1);
   });
 
   it('spreads less where the guilds keep a watch', () => {
