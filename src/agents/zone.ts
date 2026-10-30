@@ -168,7 +168,7 @@ export class Zone {
     if (this.modeOff || this.needResync) { this.modeOff = false; this.resync(); }
     // navigation upkeep (tiles around the focus, new buildings, felled trees)
     const speedScale = 1 / Math.sqrt(Math.max(1, this.clockSpeed));
-    this.nav.update(this.focusX, this.focusZ, NAV_BUILD_BUDGET_MS * speedScale);
+    this.nav.update(this.focusX, this.focusZ, NAV_BUILD_BUDGET_MS * speedScale, this.stepCount % 40 === 0);
     this.updatePlayer(dt);
     // bodies
     const tA = performance.now();
@@ -495,7 +495,7 @@ export class Zone {
 
   agents(): readonly ZoneAgent[] { return this.agentsArr; }
   agent(person: PersonId): ZoneAgent | null { return this.byPerson.get(person) ?? null; }
-  getAnimals(): readonly ZoneAnimal[] { return this.fauna.list(); }
+  animals(): readonly ZoneAnimal[] { return this.fauna.list(); }
 
   whereabouts(person: PersonId, absDay?: number): Whereabouts {
     const p = this.state.persons.get(person);
@@ -546,13 +546,13 @@ export class Zone {
   attachPlayer(person: PersonId, draw: CharacterDrawItem): void {
     const a = this.byPerson.get(person);
     if (a) { a.dead = true; this.compact(); }
+    const far = Math.hypot(draw.x - this.focusX, draw.z - this.focusZ) > 60;
     this.player = { person, draw, x: draw.x, z: draw.z, yaw: draw.yaw, vx: 0, vz: 0, tier: 2, who: this.state.persons.get(person) ?? null };
-    this.needResync = true;
+    if (far) this.needResync = true;
   }
 
   detachPlayer(): void {
     this.player = null;
-    this.needResync = true;
   }
 
   propsFor(person: PersonId, activity: Activity) {

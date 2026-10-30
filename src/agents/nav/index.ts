@@ -103,8 +103,8 @@ export class Nav implements NavApi {
   }
 
   /** Per-frame upkeep: building changes, felled trees, incremental tile building around the focus. */
-  update(fx: number, fz: number, budgetMs = NAV_BUILD_BUDGET_MS): void {
-    if (this.obstacles.refreshBuildings()) {
+  update(fx: number, fz: number, budgetMs = NAV_BUILD_BUDGET_MS, checkBuildings = true): void {
+    if (checkBuildings && this.obstacles.refreshBuildings()) {
       const d = this.obstacles.dirty;
       for (let i = 0; i < d.length; i += 4) this.grid.invalidateRect(d[i], d[i + 1], d[i + 2], d[i + 3]);
     }
@@ -154,6 +154,24 @@ export class Nav implements NavApi {
   }
 
   move(x: number, z: number, dx: number, dz: number, radius: number, out: MoveResult): MoveResult {
+    // large steps (a gallop, a dropped frame) are taken in pieces so a thin obstacle cannot be jumped
+    const len = Math.sqrt(dx * dx + dz * dz);
+    if (len > 0.16) {
+      const n = Math.min(16, Math.ceil(len / 0.14));
+      const sx = dx / n, sz = dz / n;
+      let blocked = false, cx = x, cz = z;
+      for (let i = 0; i < n; i++) {
+        this.move1(cx, cz, sx, sz, radius, out);
+        if (out.blocked) blocked = true;
+        cx = out.x; cz = out.z;
+      }
+      out.blocked = blocked;
+      return out;
+    }
+    return this.move1(x, z, dx, dz, radius, out);
+  }
+
+  private move1(x: number, z: number, dx: number, dz: number, radius: number, out: MoveResult): MoveResult {
     const p = this.tmp;
     let blocked = false;
     let nx = x + dx, nz = z + dz;
