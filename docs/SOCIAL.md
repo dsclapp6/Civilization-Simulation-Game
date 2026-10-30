@@ -288,18 +288,24 @@ Everything an NPC says lives in JSON; code only picks and fills in.
 
 | | mean | p99 |
 |---|---|---|
-| `social.hourly` (decay, weddings) | 0.07–0.10 ms | max 0.7–6 ms (GC) |
-| `social.daily` | 0.10 ms | max 0.7 ms |
+| `social.hourly` (decay, weddings) | 0.10–0.12 ms | see below |
+| `social.daily` | 0.10 ms | max 0.9–1.3 ms |
 | `opinion(a, b)` | 4 µs | 13 µs |
-| `relations(person)` | 0.14 ms | 1.0 ms |
-| `start` + `end` | 0.14 ms | 1.0 ms |
-| `start`, small talk, `end` | 0.4 ms | 2.0 ms |
-| `bark` (silent / speaking) | 1 µs / 13 µs | 24 / 48 µs |
-| `news(settlement, 5)` | 0.13 ms | 1.2 ms |
-| `matchCandidates` | 0.5 ms | 1.9 ms |
-| `actions.list` on a person | 9 µs | 36 µs |
+| `relations(person)` | 0.14 ms | 0.9 ms |
+| `start` + `end` | 0.14 ms | 0.9 ms |
+| `start`, small talk, `end` | 0.3 ms | 1.4 ms |
+| `bark` (silent / speaking) | 1 µs / 11 µs | 14 / 45 µs |
+| `news(settlement, 5)` | 0.11 ms | 1.0 ms |
+| `matchCandidates` | 0.4 ms | 2.4 ms |
+| `actions.list` on a person | 15 µs | 55 µs |
 
-No per-step system; nothing runs per frame.
+No per-step system; nothing runs per frame. The hourly system decays one settlement per hour of its own day
+(every fourth day) and the weddings of holy-day mornings; the largest settlement of this world has 366 people and
+its decay takes 0.1–0.3 ms warm, 0.9 ms on the very first call, so one call is bounded by the size of one
+settlement. Whole-run profiles (`perf.ts` prints the maximum of the 768 hourly calls) sometimes show a single call of
+5–15 ms on an ordinary 25–100-person settlement; which call it is changes from run to run and a forced collection
+before the call does not remove it, which points to scheduling noise rather than the algorithm: the other builders' jobs
+were sharing four cores (load average ≈ 8) while this was measured. Re-measure on a quiet machine before trusting that maximum.
 
 ## 12. Tests and tools
 
