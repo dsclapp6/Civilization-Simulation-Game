@@ -308,9 +308,12 @@ try {
       const A = M.army(id); A.x = cx - 380; A.z = cz + 60; A.px = A.x; A.pz = A.z;
       A.supplies = A.men.length * 40;
       window.__m.mil.order(id, { kind: 'siege', settlement: window.__m.sim.services.military.armies().length ? castleId : castleId });
-      window.__m.passDays(1);
       // a patient siege: no storm for this scene, the engines and hunger do their work
-      const rec = M.sieges.recOf(castleId); if (rec) rec.lastAssault = window.__m.sim.absDay + 60;
+      for (let i = 0; i < 12; i++) {
+        window.__m.passDays(0.15);
+        const rec = M.sieges.recOf(castleId);
+        if (rec) { rec.lastAssault = window.__m.sim.absDay + 60; break; }
+      }
       window.__m.passDays(5);
     }, [info.id, info.castle.x, info.castle.z, info.castle.id]);
     console.log('armies', JSON.stringify(await page.evaluate(() => window.__m.sim.services.military.armies().map((a) => [a.id, a.task, Math.round(a.x), Math.round(a.z), a.target]))));
@@ -320,8 +323,20 @@ try {
     // stand between the camp and the walls, looking at the keep
     const camp = await page.evaluate((id) => { const a = window.__m.sim.services.military.armies().find((x) => x.id === id); return a ? { x: a.x, z: a.z } : null; }, info.id);
     if (camp) {
-      await standNear(info.castle.id, 120, 1);
-      await advance(14);
+      // afternoon light for the picture
+      await page.evaluate(() => { const c = window.__m.sim.clock; const d = Math.floor(c.absDay); const t = c.absDay - d; c.state.absDay = d + (t > 0.3 ? 1 : 0) + 0.3; });
+      await advance(1);
+      // stand a little behind the camp, looking over it at the walls
+      await page.evaluate(([cx, cz, kx, kz]) => {
+        const { s } = window.__m; const p = s.services.player; const nav = s.services.zone.nav;
+        let dx = kx - cx, dz = kz - cz; const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
+        let x = kx + dx * 34, z = kz + dz * 34; const out = { x: 0, z: 0 };
+        if (!nav.walkable(x, z) && nav.nearestWalkable(x, z, 20, out)) { x = out.x; z = out.z; }
+        const yaw = Math.atan2(cx - x, cz - z);
+        p.placeAt(x, z, yaw);
+        const r = s.renderer; r.orbit(Math.atan2(Math.sin(yaw - r.getCameraYaw()), Math.cos(yaw - r.getCameraYaw())), 0.12); r.zoom(1.2);
+      }, [info.castle.x, info.castle.z, camp.x, camp.z]);
+      await advance(12);
       await shot('siege');
       // the map with the siege marker
       await page.evaluate(([x, z]) => { const { s } = window.__m; window.__ui.openPanel({ panel: 'map' }); s.controls.focusMap(x, z, 2600); }, [info.castle.x, info.castle.z]);

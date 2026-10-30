@@ -103,6 +103,16 @@ export class SiegeSystem {
     M.data.stats.sieges++;
     a.task = 'siege';
     a.intent = 'siege';
+    // the camp lies outside the walls, on the side the army came from
+    const place = M.settlementById.get(sid);
+    if (place) {
+      let dx = a.px - place.x, dz = a.pz - place.z;
+      let len = Math.hypot(dx, dz);
+      if (len < 1) { dx = 0; dz = 1; len = 1; }
+      const r = place.radius + 70;
+      a.x = place.x + (dx / len) * r; a.z = place.z + (dz / len) * r;
+      a.px = a.x; a.pz = a.z;
+    }
     M.touch();
     M.sim.events.emit('siege', { phase: 'start', settlement: sid, besieger: a.house });
     M.log('siege', `${M.houseName(a.house)} laid siege to ${M.placeName(sid)}.`, [a.commander]);
