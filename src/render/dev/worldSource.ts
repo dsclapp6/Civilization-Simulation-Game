@@ -1,8 +1,7 @@
-// The world the dev viewer renders. Integrator: switch this one import to the real generator,
-// e.g. `export { generateWorld as makeWorld } from '../../world/generate';`
+// The world the dev viewer renders: the real continent generator (src/world/generate.ts).
 import type { WorldModel } from '../../world/types';
-import { createStubWorld } from './stubWorld';
+import { generateWorld } from '../../world/generate';
 
 export function makeWorld(seed: string): WorldModel {
-  return createStubWorld(seed);
+  return generateWorld(seed);
 }

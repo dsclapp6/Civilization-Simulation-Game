@@ -1,6 +1,6 @@
 // Headless simulation: builds a continent, populates it, runs N years of macro life and prints
 // demographics. Usage:
-//   npx tsx tools/headless.ts --seed x --years 100 [--preset large|small|tiny] [--difficulty knight]
+//   npx tsx tools/headless.ts --seed x --years 100 [--preset large|small|tiny (mock world)] [--difficulty knight]
 //                             [--save] [--quiet] [--player]
 // By default the run has no player (a demographic study must not stop when the player's line dies
 // out); with --player the character is kept alive by taking over the youngest adult relative.
@@ -12,13 +12,12 @@ import { newProfile } from '../src/sim/legacy';
 import { MemorySaveStore } from '../src/sim/save-memory';
 import { Simulation } from '../src/sim/sim';
 import { createMockWorld } from '../src/sim/testing/mockWorld';
+import { generateWorld } from '../src/world/generate';
 import { ageYears, type GameState } from '../src/sim/state';
 
-// ---------------------------------------------------------------------------------------------
-// >>> WORLD SWITCH — replace the next line with the real generator once src/world/generate.ts lands:
-//     import { generateWorld } from '../src/world/generate';   const buildWorld = (seed: string) => generateWorld(seed);
-const buildWorld = (seed: string, preset: 'tiny' | 'small' | 'large'): WorldModel => createMockWorld({ seed, preset });
-// ---------------------------------------------------------------------------------------------
+// The real continent by default; `--preset tiny|small|large` uses a fast mock world instead.
+const buildWorld = (seed: string, preset: 'tiny' | 'small' | 'large' | ''): WorldModel =>
+  preset ? createMockWorld({ seed, preset }) : generateWorld(seed);
 
 function arg(name: string, fallback: string): string {
   const i = process.argv.indexOf(`--${name}`);
@@ -28,7 +27,7 @@ const flag = (name: string): boolean => process.argv.includes(`--${name}`);
 
 const seed = arg('seed', 'headless');
 const years = Number(arg('years', '100'));
-const preset = arg('preset', 'large') as 'tiny' | 'small' | 'large';
+const preset = arg('preset', '') as 'tiny' | 'small' | 'large' | '';
 const difficulty = arg('difficulty', 'knight') as Difficulty;
 const quiet = flag('quiet');
 const withSave = flag('save');
