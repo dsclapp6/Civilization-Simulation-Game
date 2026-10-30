@@ -110,6 +110,8 @@ export interface PlayerCombatPose {
   aimPitch: number | null;
   /** Stamina spent this step. */
   staminaCost: number;
+  /** Stamina drained per second while fighting (and no regeneration). */
+  effort: number;
   /** The body may not sprint (drawing a bow, swinging). */
   noSprint: boolean;
   /** A bow is drawn and the camera should look along the shot. */

@@ -27,6 +27,8 @@ export interface Gear {
   ammoKey: string | null;
   /** Total weight of what is worn (kg): heavy mail tires. */
   worn: number;
+  /** A bow or crossbow is the equipped main-hand weapon (the player's bow is out). */
+  rangedMain: boolean;
 }
 
 export interface GearEnv {
@@ -109,7 +111,8 @@ export function gearOf(env: GearEnv, p: Person): Gear {
   let worn = 0;
   for (const a of armour) worn += a.def.weight;
   if (shield) worn += shield.weight;
-  return { weapon: w, weaponQ, shield, shieldQ, ranged, rangedQ, armour, ammo, ammoKey, worn };
+  const rangedMain = !!eq.main && !!rangedOfKey(eq.main);
+  return { weapon: w, weaponQ, shield, shieldQ, ranged, rangedQ, armour, ammo, ammoKey, worn, rangedMain };
 }
 
 /** Armour only, for off-screen harm: the pieces a person is wearing or seen wearing. */
