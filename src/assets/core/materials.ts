@@ -288,6 +288,7 @@ attribute vec3 aCenter;
 varying float vLeaf;
 varying float vInst;
 varying vec3 vWPos;
+varying float vLodDist;
 `;
 
 const GLSL_VEG_VERTEX = /* glsl */ `
@@ -300,6 +301,7 @@ const GLSL_VEG_VERTEX = /* glsl */ `
   #endif
   vec3 wO = (modelMatrix * vec4(instO, 1.0)).xyz;
   vInst = fract(sin(dot(wO.xz, vec2(12.9898, 78.233))) * 43758.5453);
+  vLodDist = distance(wO.xz, cameraPosition.xz);
   vLeaf = aLeaf;
   if (aLeaf >= 2.0) {
     // Petals (wildflowers): open with the blossom season.
@@ -354,8 +356,13 @@ function bindVegUniforms(s: THREE.WebGLProgramParametersWithUniforms, u: SharedU
 export function createVegetationMaterial(u: SharedUniforms, f: FoliageUniforms, doubleSided = false, soft = false): THREE.MeshLambertMaterial {
   const m = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: !soft, side: doubleSided ? THREE.DoubleSide : THREE.FrontSide });
   m.name = soft ? 'ml-vegetation-soft' : 'ml-vegetation';
+  // Distance cross-fade window (x..y fades in, z..w fades out, metres from the camera, per
+  // instance) for LOD bands: the renderer sets it per draw (onBeforeRender) and resets it after.
+  const lodFade = { value: new THREE.Vector4(...LOD_FADE_NONE) };
+  m.userData.lodFade = lodFade;
   m.onBeforeCompile = (s) => {
     bindVegUniforms(s, u, f);
+    s.uniforms.uLodFade = lodFade;
     if (soft) {
       // Thin plants keep their up-bent normals on both sides so they light like the ground.
       s.fragmentShader = s.fragmentShader.replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin.replace('normal *= faceDirection;', ''));
@@ -379,8 +386,20 @@ uniform float uSnowHold;
 varying float vLeaf;
 varying float vInst;
 varying vec3 vWPos;
+uniform vec4 uLodFade;
+varying float vLodDist;
 ${GLSL_NOISE}
 ${GLSL_SNOW}`)
+      .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+{
+  // dithered LOD cross-fade: a 4x4 ordered pattern, offset per instance
+  float lf = smoothstep(uLodFade.x, uLodFade.y, vLodDist) * (1.0 - smoothstep(uLodFade.z, uLodFade.w, vLodDist));
+  if (lf < 0.999) {
+    vec2 fc = mod(floor(gl_FragCoord.xy), 4.0);
+    float bayer = mod(fc.x * 4.0 + fc.y * 7.0 + floor(vInst * 16.0), 16.0) / 16.0 + 1.0 / 32.0;
+    if (lf <= bayer) discard;
+  }
+}`)
       .replace('#include <color_fragment>', `
 {
   vec3 base = vColor.rgb;
@@ -408,6 +427,9 @@ diffuseColor.rgb = mix(diffuseColor.rgb, uSnowColor, mlSnowMask(normal, vWPos, u
   m.customProgramCacheKey = () => (soft ? 'ml-vegetation-soft' : 'ml-vegetation');
   return m;
 }
+
+/** uLodFade value meaning "always drawn". */
+export const LOD_FADE_NONE: [number, number, number, number] = [-2, -1, 1e9, 2e9];
 
 /** Depth material for vegetation shadows that follows sway and leaf fall. */
 export function createVegetationDepthMaterial(u: SharedUniforms, f: FoliageUniforms, doubleSided = false): THREE.MeshDepthMaterial {
