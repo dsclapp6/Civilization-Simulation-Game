@@ -85,8 +85,18 @@ export function trainedFor(potential: StatBlock, age: number, career: CareerId):
   return out;
 }
 
+/** Trained stats from age and career, plus any training bonus earned by use (sim/skills.ts),
+ *  never above potential × the age decline. */
 export function refreshTrained(p: Person, age: number): void {
-  p.trained = trainedFor(p.potential, age, p.career);
+  const base = trainedFor(p.potential, age, p.career);
+  const bonus = p.statBonus;
+  if (bonus) {
+    for (const s of STATS) {
+      const b = bonus[s] ?? 0;
+      if (b > 0) base[s] = round2(Math.min(p.potential[s] * declineFactor(s, age), base[s] + b));
+    }
+  }
+  p.trained = base;
 }
 
 // ---------------------------------------------------------------------------------------------

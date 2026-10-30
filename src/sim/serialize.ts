@@ -5,7 +5,7 @@
 // Record keys:  meta · p:<n> persons · hh:<n> households · hs:<n> houses · t:<n> titles ·
 //               b:<n> buildings · st:<n> strips · s:<n> settlements · x:<name> ext sections
 import type { BuildingKind } from '../content/types';
-import type { CultureId, Difficulty, Estate, RankTier, SkillId } from '../core/domain';
+import type { CultureId, Difficulty, Estate, RankTier, SkillId, StatId } from '../core/domain';
 import { SKILLS, STATS } from '../core/domain';
 import type { StripState as StripStage } from '../core/view';
 import type { WorldGenOptions, WorldModel } from '../world/types';
@@ -39,6 +39,8 @@ interface PersonRec {
   nd: number[]; hp: number; cd?: Condition[];
   mn?: number; inv?: Record<string, number>; pr?: number; rp: number[]; op?: Record<number, number>;
   am: string; fl?: FlagId[]; ge: number[]; pg?: Pregnancy; lb?: number; md?: number;
+  /** Stat training bonus (sim/skills.ts). */
+  sb?: Partial<Record<StatId, number>>;
 }
 
 interface HouseholdRec { i: number; k: HouseholdKind; hd: number; m: number[]; h?: number; s: number; p?: number; st?: Record<string, number>; t?: number; hs?: number }
@@ -117,6 +119,7 @@ function personToRec(p: Person): PersonRec {
   if (p.pregnancy) r.pg = p.pregnancy;
   if (p.lastBirth !== -99999) r.lb = p.lastBirth;
   if (p.marriedDay !== -1) r.md = p.marriedDay;
+  if (p.statBonus && Object.keys(p.statBonus).length) r.sb = p.statBonus;
   return r;
 }
 
@@ -142,6 +145,7 @@ function recToPerson(r: PersonRec): Person {
     rep: { honour: r.rp[0], generosity: r.rp[1], piety: r.rp[2], cruelty: r.rp[3], valour: r.rp[4] },
     opinions: r.op ?? {}, ambition: r.am, flags, genes,
     pregnancy: r.pg ?? null, lastBirth: r.lb ?? -99999, marriedDay: r.md ?? -1,
+    ...(r.sb ? { statBonus: r.sb } : {}),
   };
 }
 

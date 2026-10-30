@@ -132,6 +132,8 @@ export interface Person {
   lastBirth: number;
   /** Day the current marriage began, -1 if unmarried. */
   marriedDay: number;
+  /** Stat points gained by training on top of natural growth (sim/skills.ts). */
+  statBonus?: Partial<StatBlock>;
 }
 
 export const OPINION_CAP = 16;

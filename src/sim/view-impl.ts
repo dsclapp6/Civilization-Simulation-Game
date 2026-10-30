@@ -16,6 +16,18 @@ import type { BuildingState, GameState, Person } from './state';
 import { fullName } from './state';
 import { weatherView, type WeatherSample } from './weather';
 
+/** Wave 2 modules plug their live data into the view (agents, player, travel…). Unset = built-in fallback. */
+export interface ViewSources {
+  characters?: () => readonly CharacterDrawItem[];
+  animals?: () => readonly AnimalDrawItem[];
+  projectiles?: () => readonly ProjectileDrawItem[];
+  drainFx?: () => readonly FxEvent[];
+  player?: () => PlayerView | null;
+  focus?: () => P2;
+  mode?: () => ViewMode;
+  mapMarkers?: () => readonly MapMarker[];
+}
+
 export interface ViewHost {
   readonly state: GameState;
   readonly world: WorldModel;
@@ -35,6 +47,12 @@ export function doorPoint(b: BuildingState, extra = 1.5): { x: number; z: number
 
 export class SimViewImpl implements SimView {
   readonly appearance = new AppearanceCache();
+  private readonly sources: ViewSources = {};
+
+  /** Install (or with undefined, remove) a live data source for one part of the view. */
+  setSource<K extends keyof ViewSources>(key: K, fn: ViewSources[K] | undefined): void {
+    if (fn) this.sources[key] = fn; else delete this.sources[key];
+  }
 
   private readonly clockView: ClockView = {
     absDay: 0, dayFraction: 0, season: 0, year: 1, dayOfSeason: 1, isNight: false, calendarRate: 1, speed: 1, paused: false, skipping: null,
@@ -101,7 +119,7 @@ export class SimViewImpl implements SimView {
     return this.weatherViewObj;
   }
 
-  mode(): ViewMode { return 'street'; }
+  mode(): ViewMode { return this.sources.mode ? this.sources.mode() : 'street'; }
 
   // ---- player ----
   private playerPerson(): Person | undefined {
@@ -122,6 +140,7 @@ export class SimViewImpl implements SimView {
   }
 
   player(): PlayerView | null {
+    if (this.sources.player) return this.sources.player();
     const st = this.host.state;
     const p = this.playerPerson();
     if (!p) return null;
@@ -139,6 +158,7 @@ export class SimViewImpl implements SimView {
   }
 
   focus(): P2 {
+    if (this.sources.focus) return this.sources.focus();
     const pos = this.playerPosition();
     if (pos) { this.focusPoint.x = pos.x; this.focusPoint.z = pos.z; }
     return this.focusPoint;
@@ -158,6 +178,7 @@ export class SimViewImpl implements SimView {
   }
 
   characters(): readonly CharacterDrawItem[] {
+    if (this.sources.characters) return this.sources.characters();
     const st = this.host.state;
     const list = this.drawList;
     list.length = 0;
@@ -210,9 +231,9 @@ export class SimViewImpl implements SimView {
     return list;
   }
 
-  animals(): readonly AnimalDrawItem[] { return EMPTY_ANIMALS; }
-  projectiles(): readonly ProjectileDrawItem[] { return EMPTY_PROJECTILES; }
-  drainFx(): readonly FxEvent[] { return EMPTY_FX; }
+  animals(): readonly AnimalDrawItem[] { return this.sources.animals ? this.sources.animals() : EMPTY_ANIMALS; }
+  projectiles(): readonly ProjectileDrawItem[] { return this.sources.projectiles ? this.sources.projectiles() : EMPTY_PROJECTILES; }
+  drainFx(): readonly FxEvent[] { return this.sources.drainFx ? this.sources.drainFx() : EMPTY_FX; }
 
   // ---- buildings ----
   private refreshBuildings(): void {
@@ -289,6 +310,7 @@ export class SimViewImpl implements SimView {
 
   // ---- map ----
   mapMarkers(): readonly MapMarker[] {
+    if (this.sources.mapMarkers) return this.sources.mapMarkers();
     const p = this.playerPerson();
     const pos = this.playerPosition();
     const m = this.markers[0];

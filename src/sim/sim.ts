@@ -7,6 +7,7 @@
 // Later waves extend it by registering systems (`registerSystem`), commands (`registerCommand`,
 // plus declaration merging on `CommandMap`) and by listening to `events`.
 import { EventBus } from '../core/events';
+import { ActionRegistry } from './actions';
 import type { Rng } from '../core/rng';
 import { SIM_DT, SPEEDS, type Speed } from '../core/time';
 import type { WorldGenOptions, WorldModel } from '../world/types';
@@ -87,6 +88,8 @@ export class Simulation implements SimContext {
   readonly score: ScoreKeeper;
   readonly profile: Profile;
   readonly view: SimViewImpl;
+  /** Player verbs (sim/actions.ts): providers register here; the player controller starts them. */
+  readonly actions: ActionRegistry;
   readonly saver: RunSaver | null;
   readonly store: SaveStore | null;
   /** Wave 2 sets this: fast speeds and skips are refused while a hostile is near the player. */
@@ -107,6 +110,17 @@ export class Simulation implements SimContext {
       add: (gold) => { levelProfile(this.profile).legacyGold += gold; this.state.dirty.profile = true; },
     });
     this.view = new SimViewImpl(this);
+    this.actions = new ActionRegistry(this);
+    this.actions.onEvent((e) => {
+      this.events.emit('action', e);
+      if (e.type === 'completed') {
+        if (e.outcome.message) this.events.emit('notify', { kind: e.outcome.ok ? 'gain' : 'warn', text: e.outcome.message, person: e.actor });
+        if (e.outcome.ui) this.events.emit('ui', e.outcome.ui);
+      } else if (e.type === 'cancelled' && e.reason !== 'cancelled' && e.reason !== 'replaced' && e.reason !== 'moved') {
+        this.events.emit('notify', { kind: 'warn', text: e.reason, person: e.actor });
+      }
+    });
+    this.scheduler.register({ name: 'actions', phase: 'perStep', order: 50, run: (_ctx, info) => this.actions.tick(info.dt) });
 
     registerWeatherSystem(this.scheduler);
     registerLifeSystems(this.scheduler);
