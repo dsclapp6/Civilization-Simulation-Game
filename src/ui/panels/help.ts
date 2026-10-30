@@ -31,7 +31,7 @@ function controls(): HTMLElement {
 export function helpPanel(ctx: PanelCtx, start: Tab | undefined): UiPanel {
   const win = createWindow({ title: 'Help', subtitle: 'Controls and how to play', icon: 'help', size: 'xl', tall: true, onClose: () => ctx.close() });
   let tab: Tab = start ?? 'controls';
-  const content = h('div.mu-scroll.mu-help', { style: { padding: '14px 20px', maxHeight: '100%' } });
+  const content = h('div.mu-scroll.mu-help', { style: { padding: '14px 20px 30px', maxHeight: '100%' } });
   const t = tabs(TABS, tab, (id) => select(id as Tab));
   win.body.classList.add('flush');
   win.body.append(t.el, h('div.mu-tabbar-rule'), content);

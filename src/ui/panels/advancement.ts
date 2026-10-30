@@ -69,7 +69,7 @@ function statusChip(v: TechView): HTMLElement {
 function techsPanel(ctx: PanelCtx): UiPanel {
   const a = adv(ctx);
   const win = createWindow({ title: 'House tree', subtitle: 'What your House knows, and who holds it', icon: 'scroll', size: 'xl', tall: true, onClose: () => ctx.close() });
-  const content = h('div.mu-scroll', { style: { padding: '12px 16px', maxHeight: '100%' } });
+  const content = h('div.mu-scroll', { style: { padding: '12px 16px 28px', maxHeight: '100%' } });
   if (!a) {
     win.body.append(empty('The learned folk are not yet at work.'));
     return panelOf({ id: 'techs', group: 'main', pauses: 'menu', backdropCloses: ctx }, win.el);
@@ -157,7 +157,7 @@ const STATE_CHIP: Record<RequestView['state'], [string, '' | 'gold' | 'green' | 
 function requestsPanel(ctx: PanelCtx): UiPanel {
   const H = hap(ctx);
   const win = createWindow({ title: 'Favours & notices', subtitle: 'What is asked of you, and what is happening near by', icon: 'quill', size: 'lg', tall: true, onClose: () => ctx.close() });
-  const content = h('div.mu-scroll', { style: { padding: '12px 16px', maxHeight: '100%' } });
+  const content = h('div.mu-scroll', { style: { padding: '12px 16px 28px', maxHeight: '100%' } });
   if (!H) {
     win.body.append(empty('Nobody has anything to ask of you yet.'));
     return panelOf({ id: 'requests', group: 'main', pauses: 'menu', backdropCloses: ctx }, win.el);
@@ -239,7 +239,7 @@ function requestsPanel(ctx: PanelCtx): UiPanel {
       const past = reqs.filter((r) => r.state !== 'offered' && r.state !== 'accepted').slice(0, 8);
       replace(content,
         heading('Asked of you', 'hand'),
-        open.length ? h('div.mu-col.mu-gap-8', null, open.map(requestCard)) : empty('Nobody has asked anything of you just now. Speak with your neighbours: they may need a hand.'),
+        open.length ? h('div.mu-col.mu-gap-8', null, open.map(requestCard)) : empty('Speak with your neighbours: they may need a hand. Somebody will ask in time, and a dot appears on the book in the dock.', { icon: 'hand', title: 'Nothing is asked of you' }),
         past.length ? heading('Settled', 'ledger') : null,
         past.length ? h('div.mu-col.mu-gap-8', null, past.map(requestCard)) : null,
         h('p.mu-tiny.mu-dim', { style: { marginTop: '10px' } }, 'Promises kept are remembered; promises broken are remembered longer. Talk to the person who asked to hear them out, agree, and bring what they need.'));
@@ -247,7 +247,7 @@ function requestsPanel(ctx: PanelCtx): UiPanel {
       const recent = H!.recent(8).filter(near);
       replace(content,
         heading('Happening near you', 'bell'),
-        act.length ? h('div.mu-list', null, act.map((r) => noticeRow(r, true))) : empty('All is quiet in the district.'),
+        act.length ? h('div.mu-list', null, act.map((r) => noticeRow(r, true))) : empty('Fires, fairs, plague and outlaws are announced here when they touch the district.', { icon: 'bell', title: 'All is quiet' }),
         recent.length ? heading('Lately', 'scroll') : null,
         recent.length ? h('div.mu-list', null, recent.map((r) => noticeRow(r, false))) : null);
     }

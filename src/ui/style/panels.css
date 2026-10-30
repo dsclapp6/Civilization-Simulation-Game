@@ -1,6 +1,10 @@
 /* Panel-specific styles. Shared pieces live in theme.css. */
 
 .mu-empty { color: var(--ink-3); font-style: italic; text-align: center; padding: 22px 12px; }
+.mu-empty.big { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 260px; font-style: normal; }
+.mu-empty.big svg { color: var(--gold-lo, #9a7a2e); opacity: 0.75; }
+.mu-empty-title { font-size: 20px; font-weight: 700; color: var(--ink-2); letter-spacing: 0.02em; }
+.mu-empty.big p { max-width: 460px; margin: 0; font-size: 15px; line-height: 1.5; font-style: italic; }
 
 /* ---- stat bars (character sheet, birth reveal) ---- */
 .mu-bar.stat { height: 11px; overflow: visible; }

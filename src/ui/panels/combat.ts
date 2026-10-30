@@ -109,6 +109,7 @@ export function woundsPanel(ctx: PanelCtx, req: { id?: number }): UiPanel {
   const note = h('p.mu-wounds-note');
   const msg = h('p.mu-small.mu-bold.mu-hide');
   let sig = '';
+  let bindBtn: HTMLButtonElement | undefined;
 
   body.append(
     h('div.mu-wounds-fig', null, fig.el, h('div.mu-small.mu-dim.mu-ital', null, 'Each part is shaded by its worst wound')),
@@ -142,6 +143,7 @@ export function woundsPanel(ctx: PanelCtx, req: { id?: number }): UiPanel {
         h('div.mu-wound-tags', null, tags(w))))
       : [h('p.mu-small.mu-good', null, `${id === ctx.playerId() ? 'You are' : 'They are'} unhurt.`)];
     list.replaceChildren(...rows);
+    if (bindBtn) bindBtn.disabled = wounds.length === 0;
     const marks: string[] = [];
     if (p.traits.includes('lame')) marks.push('a lasting limp');
     if (p.traits.includes('scarred')) marks.push('scars that will not fade');
@@ -159,7 +161,7 @@ export function woundsPanel(ctx: PanelCtx, req: { id?: number }): UiPanel {
   const mine = id === ctx.playerId();
   const me = sim.state.persons.get(ctx.playerId());
   const skill = me ? skillOf(me, 'medicine') : 0;
-  const bindBtn = button(mine ? 'Bind your wounds' : 'Bind their wounds', {
+  bindBtn = button(mine ? 'Bind your wounds' : 'Bind their wounds', {
     variant: 'primary', icon: 'heart', tip: `Medicine ${skill}: binding stops the bleeding and helps the wounds mend`,
     onClick: () => {
       if (!combat?.tend) { msg.textContent = 'There is no one to tend wounds.'; msg.classList.remove('mu-hide'); return; }
@@ -173,12 +175,14 @@ export function woundsPanel(ctx: PanelCtx, req: { id?: number }): UiPanel {
     },
   });
   foot.push(bindBtn);
+  sig = '';
+  render();
   foot.push(h('div.mu-grow'));
   foot.push(button('Close', { onClick: () => ctx.close() }));
   win.showFoot(...foot);
   return panelOf({ id: 'wounds', group: 'main', pauses: 'menu', backdropCloses: ctx }, win.el, {
     tick: every(0.5, render),
-    key: (intent) => { if (intent.type === 'enter') { bindBtn.click(); return true; } return false; },
+    key: (intent) => { if (intent.type === 'enter') { bindBtn?.click(); return true; } return false; },
   });
 }
 

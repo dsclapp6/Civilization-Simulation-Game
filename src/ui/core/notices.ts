@@ -37,7 +37,7 @@ export function noticeForWar(e: SimEvents['war'], ctx: NoticeCtx): ToastInput | 
   const att = e.attackers.map((h) => `House ${ctx.houseName(h)}`).slice(0, 2).join(' and ');
   const def = e.defenders.map((h) => `House ${ctx.houseName(h)}`).slice(0, 2).join(' and ');
   if (e.phase === 'declared') {
-    return { tone: 'vermilion', icon: 'swords', title: 'War is declared', text: `${att} against ${def}.`, ttl: 12, key: `war:${e.war}`, action: { label: 'See the wars', request: politics('wars') } };
+    return { tone: 'vermilion', icon: 'swords', title: 'War is declared', text: `${att} against ${def}.`, ttl: 12, key: `war:${e.war}`, urgent: true, action: { label: 'See the wars', request: politics('wars') } };
   }
   const how = e.winner === 'attackers' ? `${att} prevail` : e.winner === 'defenders' ? `${def} prevail` : 'a white peace is made';
   return { tone: 'lapis', icon: 'scroll', title: 'The war is over', text: `${how}.`, ttl: 9, key: `war:${e.war}:end`, action: { label: 'See the wars', request: politics('wars') } };
@@ -90,5 +90,5 @@ export function noticeForHappening(e: SimEvents['happening'], ctx: NoticeCtx): T
 
 /** The lord calls the levy: the military module asks for its panel to open; as a toast it does not seize the screen. */
 export function noticeForCall(): ToastInput {
-  return { tone: 'vermilion', icon: 'flag', title: 'The levy is called', text: 'Your lord summons the fighting men to the muster.', ttl: 16, key: 'levy-call', action: { label: 'Answer the call', request: { panel: 'ext', name: 'army' } } };
+  return { tone: 'vermilion', icon: 'flag', title: 'The levy is called', text: 'Your lord summons the fighting men to the muster.', ttl: 16, key: 'levy-call', urgent: true, action: { label: 'Answer the call', request: { panel: 'ext', name: 'army' } } };
 }
