@@ -2,11 +2,11 @@
 // kingdoms, settlements of every kind with plots and open-field strips. It stands in for the real
 // generator (src/world/generate.ts) — the sim must only rely on the WorldModel contract.
 import type { BuildingKind } from '../../content/types';
-import { CULTURES, type CultureId, type SettlementKind } from '../../core/domain';
+import type { CultureId, SettlementKind } from '../../core/domain';
 import { dist2, yawTo } from '../../core/math';
 import { Rng } from '../../core/rng';
 import {
-  Biome, CHUNK_SIZE, Ground, WORLD_SIZE,
+  Biome, Ground, WORLD_SIZE,
   type BiomeId, type County, type GroundId, type Kingdom, type LandParcel, type MacroGrid, type Plot, type Road,
   type RoadGraph, type Settlement, type Strip, type WorldModel,
 } from '../../world/types';
@@ -356,6 +356,5 @@ export function createMockWorld(opts: MockWorldOptions = {}): WorldModel {
     kingdomAt: (x, z) => kingdoms[settlements[nearestIdx(x, z)].kingdom] ?? null,
     countyAt: (x, z) => counties[settlements[nearestIdx(x, z)].county] ?? null,
   };
-  void CHUNK_SIZE; void CULTURES;
   return world;
 }

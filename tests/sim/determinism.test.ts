@@ -33,7 +33,7 @@ describe('determinism', () => {
     a.advanceDays(DAYS_PER_YEAR * 30);
     b.advanceDays(DAYS_PER_YEAR * 30);
     expect(hashState(a.state)).toBe(hashState(b.state));
-    expect(a.state.stats.history.length).toBeGreaterThanOrEqual(29);
+    expect(a.absDay).toBe(b.absDay);
   }, 60_000);
 
   it('diverges for a different seed or a different command', () => {

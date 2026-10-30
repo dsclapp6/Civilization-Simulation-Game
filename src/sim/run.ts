@@ -103,12 +103,15 @@ function twelveYearOldIn(state: GameState, hh: Household): Person | null {
   return best;
 }
 
-/** Picks the social class by period odds, then a household of that class (families with children
- *  of about the player's age are likelier). Pure: only reads the state. */
-export function chooseBirth(state: GameState, rng: Rng): { household: Household; birthClass: BirthClass } {
-  const day = state.clock.absDay;
+/** Households a child could be born into, grouped by social class, with their weights. */
+export interface BirthPools {
+  classes: BirthClass[];
+  classWeights: number[];
+  pools: Map<BirthClass, { households: Household[]; weights: number[] }>;
+}
 
-  // candidate households grouped by social class
+export function birthPools(state: GameState): BirthPools {
+  const day = state.clock.absDay;
   const byClass = new Map<BirthClass, Household[]>();
   for (const hh of state.households.values()) {
     if (hh.kind === 'monastic' || hh.kind === 'garrison' || hh.kind === 'service') continue;
@@ -121,18 +124,34 @@ export function chooseBirth(state: GameState, rng: Rng): { household: Household;
   }
   const available = BIRTH_CLASS_WEIGHTS.filter(([c]) => (byClass.get(c)?.length ?? 0) > 0);
   if (available.length === 0) throw new Error('population has no household to be born into');
-  const cls = rng.weighted(available.map(([c]) => c), available.map(([, w]) => w));
-  const pool = (byClass.get(cls) as Household[]).filter((hh) => twelveYearOldIn(state, hh) || canHaveChildOfAge(state, hh, START_AGE));
-  const households = pool.length ? pool : (byClass.get(cls) as Household[]);
-  const weights = households.map((hh) => {
-    let w = 1;
-    for (const id of hh.members) {
-      const p = state.persons.get(id);
-      if (p && !p.death) { const a = ageYears(p, day); if (a >= 8 && a < 16) w += 2; }
-    }
-    return twelveYearOldIn(state, hh) ? w + 3 : w;
-  });
-  return { household: rng.weighted(households, weights), birthClass: cls };
+  const pools = new Map<BirthClass, { households: Household[]; weights: number[] }>();
+  for (const [cls] of available) {
+    const all = byClass.get(cls) as Household[];
+    // families with a child of about the right age are likelier; those that could have had one are kept
+    const fitting = all.filter((hh) => twelveYearOldIn(state, hh) || canHaveChildOfAge(state, hh, START_AGE));
+    const households = fitting.length ? fitting : all;
+    const weights = households.map((hh) => {
+      let w = 1;
+      for (const id of hh.members) {
+        const p = state.persons.get(id);
+        if (p && !p.death) { const a = ageYears(p, day); if (a >= 8 && a < 16) w += 2; }
+      }
+      return twelveYearOldIn(state, hh) ? w + 3 : w;
+    });
+    pools.set(cls, { households, weights });
+  }
+  return { classes: available.map(([c]) => c), classWeights: available.map(([, w]) => w), pools };
+}
+
+/** Picks the social class by period odds, then a household of that class. */
+export function drawBirth(pools: BirthPools, rng: Rng): { household: Household; birthClass: BirthClass } {
+  const cls = rng.weighted(pools.classes, pools.classWeights);
+  const pool = pools.pools.get(cls) as { households: Household[]; weights: number[] };
+  return { household: rng.weighted(pool.households, pool.weights), birthClass: cls };
+}
+
+export function chooseBirth(state: GameState, rng: Rng): { household: Household; birthClass: BirthClass } {
+  return drawBirth(birthPools(state), rng);
 }
 
 function rollBirth(state: GameState, upgrades: StatUpgrades): void {

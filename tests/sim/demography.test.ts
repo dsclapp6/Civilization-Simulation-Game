@@ -4,7 +4,7 @@ import {
   BASE_Q, CONCEPTION_PER_DAY, SURVIVAL, dailyHazard, lifeExpectancyAtBirth, sampleStationaryAge, survivalTo,
 } from '../../src/sim/demography';
 import { Rng } from '../../src/core/rng';
-import { autoSuccessor, newSim } from './helpers';
+import { newSim, noPlayer } from './helpers';
 import { ageYears, type Person } from '../../src/sim/state';
 import type { Simulation } from '../../src/sim/sim';
 
@@ -66,8 +66,8 @@ describe('100 years of macro life', () => {
   for (const seed of ['alpha', 'beta']) {
     it(`keeps the population stable within +-0.5%/yr and the society intact (seed ${seed})`, () => {
       const sim = newSim({ seed, preset: 'small' });
-      // the player may die in a century; take over the first relative so the run goes on
-      autoSuccessor(sim);
+      // a pure demography run: no player whose death could end it
+      noPlayer(sim);
       const start = census(sim);
       const startPop = sim.state.living;
       const decades: number[] = [startPop];
@@ -117,7 +117,7 @@ describe('100 years of macro life', () => {
 
   it('leaves a consistent world after a century: titles held by the living, no empty households, rank order', () => {
     const sim = newSim({ seed: 'gamma', preset: 'small' });
-    autoSuccessor(sim);
+    noPlayer(sim);
     sim.advanceDays(DAYS_PER_YEAR * 100);
     const st = sim.state;
     for (const t of st.titles.values()) {

@@ -64,3 +64,11 @@ export function autoSuccessor(sim: Simulation): () => void {
     sim.dispatch({ type: 'switchCharacter', personId: pick.id });
   });
 }
+
+/** Detaches the player so a long demographic run cannot end in game over. */
+export function noPlayer(sim: Simulation): void {
+  const st = sim.state;
+  const p = st.persons.get(st.run.playerId);
+  if (p) { delete p.flags.player; st.touch(p); }
+  st.run.playerId = 0;
+}

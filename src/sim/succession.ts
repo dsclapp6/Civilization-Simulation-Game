@@ -411,10 +411,7 @@ function grantTitle(ctx: SimContext, t: Title, heir: Person, from: Person, cohol
   }
   const tier = titleTier(t);
   if (tier > heir.rankTier) setRank(ctx, heir, tier);
-  if (heir.sex === 'm') {
-    if (tier >= 6 && heir.career !== 'abbot') heir.career = 'lord';
-    else if (heir.career !== 'lord') heir.career = 'knight';
-  } else heir.career = 'lady';
+  heir.career = heir.sex === 'm' ? (heir.rankTier >= 6 ? 'lord' : 'knight') : 'lady';
   heir.offices.push({ office: t.kind === 'manor' ? 'lord' : t.kind, place: t.place, since: Math.round(now) });
   heir.prestige += tier * 2;
   state.touch(heir);

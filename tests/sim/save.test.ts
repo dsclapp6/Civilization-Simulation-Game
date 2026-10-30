@@ -173,7 +173,9 @@ describe('save slices never spend long on one frame', () => {
     serializeAll(state);
     state.markAllDirty();
     const store = new MemorySaveStore();
-    const saver = new RunSaver(state, store, () => newProfile(), { budgetMs: 2, intervalMs: 0 }, true);
+    // CPU time of this thread, so other test workers competing for the machine do not distort the measurement
+    const cpuNow = (): number => { const u = process.cpuUsage(); return (u.user + u.system) / 1000; };
+    const saver = new RunSaver(state, store, () => newProfile(), { budgetMs: 2, intervalMs: 0, now: cpuNow }, true);
     saver.requestNow();
     const slices: number[] = [];
     let guard = 0;

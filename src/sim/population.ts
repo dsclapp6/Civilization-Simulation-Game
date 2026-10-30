@@ -145,7 +145,7 @@ function buildNobility(g: GenContext, world: WorldModel, byId: Map<number, Settl
       nob.lordHouse.set(seat.id, house);
       nob.countyTitle.set(cid, makeTitle(state, 'county', `Earldom of ${county.name}`, cid, earl, kTitle));
       addOffice(earl, 'earl', cid, g.day);
-      makeHouseholdKnights(g, seat, house, rng.int(2, 3));
+      makeHouseholdKnights(g, seat, rng.int(2, 3));
     }
   }
 
@@ -169,7 +169,7 @@ function buildNobility(g: GenContext, world: WorldModel, byId: Map<number, Settl
     const t = makeTitle(state, 'barony', `Barony of ${s.name}`, s.id, baron, countyTitle);
     nob.baronTitle.set(s.id, t);
     addOffice(baron, 'baron', s.id, g.day);
-    makeHouseholdKnights(g, s, house, rng.int(1, 3));
+    makeHouseholdKnights(g, s, rng.int(1, 3));
   }
 
   // ---- manors: a knight holds each village, sometimes several ----
@@ -236,7 +236,7 @@ function addOffice(p: Person, office: string, place: number, day: number): void 
 }
 
 /** Landless household knights of a castle: knight, wife, a few children. */
-function makeHouseholdKnights(g: GenContext, s: Settlement, lordHouse: House, n: number): void {
+function makeHouseholdKnights(g: GenContext, s: Settlement, n: number): void {
   for (let i = 0; i < n; i++) {
     const name = g.rng.chance(0.6) ? locativeByname(s.culture, s.name) : nobleHouseName(g.rng, s.culture);
     const house = newNobleHouse(g, s, name, 'noble');
@@ -249,7 +249,6 @@ function makeHouseholdKnights(g: GenContext, s: Settlement, lordHouse: House, n:
     const knight = g.state.persons.get(hh.head) as Person;
     claimHouse(g.state, house, knight);
     addOffice(knight, 'household_knight', s.id, g.day);
-    void lordHouse;
   }
 }
 
@@ -260,7 +259,7 @@ function makeHouseholdKnights(g: GenContext, s: Settlement, lordHouse: House, n:
 function populateSettlement(g: GenContext, world: WorldModel, s: Settlement, nob: Nobility): void {
   switch (s.kind) {
     case 'hamlet': case 'village': populateVillage(g, s); break;
-    case 'town': case 'city': populateTown(g, world, s, nob); break;
+    case 'town': case 'city': populateTown(g, s); break;
     case 'castle': populateCastle(g, s, nob); break;
     case 'abbey': case 'priory': case 'nunnery': populateMonastery(g, s); break;
   }
@@ -335,7 +334,7 @@ function populateVillage(g: GenContext, s: Settlement): void {
   fillRecipes(g, s, recipes, target);
 }
 
-function populateTown(g: GenContext, world: WorldModel, s: Settlement, nob: Nobility): void {
+function populateTown(g: GenContext, s: Settlement): void {
   const { state, rng } = g;
   const target = s.population;
   const isCity = s.kind === 'city';
@@ -366,8 +365,7 @@ function populateTown(g: GenContext, world: WorldModel, s: Settlement, nob: Nobi
     // cathedral chapter: canons living as one community
     const house = foundCommunityHouse(g, s, `Chapter of ${s.name}`);
     const n = Math.max(5, Math.round(target / 60));
-    const hh = makeCommunity(g, s, house, 'monk', 'priest', n, ['cloister', 'church', 'townhouse']);
-    void hh;
+    makeCommunity(g, s, house, 'monk', 'priest', n, ['cloister', 'church', 'townhouse']);
   }
 
   const crafts = CRAFT_CAREERS;
@@ -404,7 +402,6 @@ function populateTown(g: GenContext, world: WorldModel, s: Settlement, nob: Nobi
     { weight: 0.07, make: () => base(s, { career: rng.pick(['weaver', 'alewife', 'servant', 'cook'] as CareerId[]), stage: 0, tier: 2, estate: 'free', headSex: 'f', wealth: 0.7 }) },
     { weight: isCity ? 0.01 : 0.003, make: () => base(s, { career: 'bailiff', stage: 0, tier: 3, estate: 'free', headSex: 'm', headAgeRange: [28, 58], wealth: 1.4, servants: [{ career: 'servant', count: [0, 1], ageRange: [14, 30], tier: 1 }] }) },
   ];
-  void world; void nob;
   fillRecipes(g, s, recipes, target);
 }
 
@@ -527,7 +524,7 @@ function makeCommunity(g: GenContext, s: Settlement, house: House, headCareer: C
 }
 
 function populateMonastery(g: GenContext, s: Settlement): void {
-  const { state, rng } = g;
+  const { state } = g;
   const target = s.population;
   const female = s.kind === 'nunnery';
   const kindName = s.kind === 'abbey' ? 'Abbey' : s.kind === 'priory' ? 'Priory' : 'Nunnery';
@@ -544,7 +541,6 @@ function populateMonastery(g: GenContext, s: Settlement): void {
   // lay servants and farmhands attached to the house
   const staff = Math.max(2, target - have(state, s));
   makeServiceStaff(g, s, house, staff, ['barn', 'hovel', 'cottage']);
-  void rng;
 }
 
 // ---------------------------------------------------------------------------------------------

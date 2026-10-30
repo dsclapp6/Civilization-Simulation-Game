@@ -699,7 +699,14 @@ export class GameState {
     this.householdsAt.get(h.settlement)?.delete(h);
     this.households.delete(h.id);
     const b = this.buildings.get(h.home);
-    if (b && b.household === h.id) { b.household = NONE; b.occupied = false; this.touchBuilding(b); }
+    if (b && b.household === h.id) {
+      // another household may share the building
+      let other: Household | undefined;
+      for (const o of this.householdsAt.get(h.settlement) ?? []) if (o.home === b.id && (!other || o.id < other.id)) other = o;
+      b.household = other ? other.id : NONE;
+      b.occupied = !!other;
+      this.touchBuilding(b);
+    }
     this.touchHousehold(h);
   }
 

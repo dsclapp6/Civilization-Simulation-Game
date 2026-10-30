@@ -1,7 +1,9 @@
 // Headless simulation: builds a continent, populates it, runs N years of macro life and prints
 // demographics. Usage:
 //   npx tsx tools/headless.ts --seed x --years 100 [--preset large|small|tiny] [--difficulty knight]
-//                             [--save] [--quiet]
+//                             [--save] [--quiet] [--player]
+// By default the run has no player (a demographic study must not stop when the player's line dies
+// out); with --player the character is kept alive by taking over the youngest adult relative.
 import { performance } from 'node:perf_hooks';
 import type { Difficulty } from '../src/core/domain';
 import { DAYS_PER_YEAR } from '../src/core/time';
@@ -29,6 +31,7 @@ const preset = arg('preset', 'large') as 'tiny' | 'small' | 'large';
 const difficulty = arg('difficulty', 'knight') as Difficulty;
 const quiet = flag('quiet');
 const withSave = flag('save');
+const keepPlayer = flag('player');
 
 function pct(n: number, total: number): string { return `${((n / Math.max(1, total)) * 100).toFixed(1)}%`; }
 
@@ -78,7 +81,12 @@ async function main(): Promise<void> {
   }
   composition(sim, 'Start');
 
-  // the headless player keeps going: take over the first eligible relative whenever the character dies
+  if (!keepPlayer) {
+    const p = sim.state.persons.get(sim.state.run.playerId);
+    if (p) { delete p.flags.player; sim.state.touch(p); }
+    sim.state.run.playerId = 0;
+  }
+  // with --player: take over a young relative whenever the character dies
   sim.events.on('playerDied', (e) => {
     if (e.eligible.length === 0) return;
     const people = e.eligible.map((id) => sim.state.persons.get(id)).filter((p): p is NonNullable<typeof p> => !!p);

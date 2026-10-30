@@ -3,7 +3,7 @@ import { Rng } from '../../src/core/rng';
 import { STAT_CAP, STATS } from '../../src/core/domain';
 import { DAYS_PER_YEAR } from '../../src/core/time';
 import { newProfile } from '../../src/sim/legacy';
-import { BIRTH_CLASS_WEIGHTS, MIN_PLAYABLE_AGE, birthClassOf, chooseBirth, eligibleSwitchTargets, newRun } from '../../src/sim/run';
+import { BIRTH_CLASS_WEIGHTS, MIN_PLAYABLE_AGE, birthClassOf, birthPools, drawBirth, eligibleSwitchTargets, newRun } from '../../src/sim/run';
 import { MemorySaveStore } from '../../src/sim/save-memory';
 import { Simulation } from '../../src/sim/sim';
 import { BIRTH_CLASS_MULTIPLIER } from '../../src/sim/score';
@@ -59,9 +59,10 @@ describe('newRun: the player\'s birth (SPEC §6)', () => {
     const state = GameState.fromWorld(world, 'odds', 'knight');
     generatePopulation(state, world);
     const counts: Record<string, number> = {};
-    const n = 2500;
+    const n = 4000;
+    const pools = birthPools(state);
     for (let i = 0; i < n; i++) {
-      const { birthClass, household } = chooseBirth(state, new Rng(`draw${i}`));
+      const { birthClass, household } = drawBirth(pools, new Rng(`draw${i}`));
       counts[birthClass] = (counts[birthClass] ?? 0) + 1;
       expect(state.households.has(household.id)).toBe(true);
     }

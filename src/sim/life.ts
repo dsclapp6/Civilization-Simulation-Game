@@ -92,7 +92,6 @@ function settlementTick(ctx: SimContext, s: Settlement, day: number, now: number
 function tickPerson(
   ctx: SimContext, rng: Rng, ss: SettlementState, p: Person, day: number, now: number, rho: number, famine: number,
 ): void {
-  const state = ctx.state;
   const sinceBirth = day - p.birthDay;
   const ageInt = sinceBirth < 0 ? 0 : (sinceBirth / AGE) | 0;
   if (sinceBirth > 0 && sinceBirth % AGE === 0) onBirthday(ctx, rng, p, ageInt, now);
@@ -123,7 +122,6 @@ function tickPerson(
   } else if (p.sex === 'f' && p.spouse !== NONE && ageInt >= 15 && ageInt < 45) {
     tryConceive(ctx, rng, ss, p, ageInt, now, rho);
   }
-  void state;
 }
 
 /** Compensates the trigger rate for deaths that are skipped (accident share is immediate, recovery
@@ -308,7 +306,11 @@ function onBirthday(ctx: SimContext, rng: Rng, p: Person, age: number, now: numb
     comeOfAge(ctx, rng, p);
     // regency ends when a ward comes of age
     for (const t of state.titlesHeldBy(p.id)) {
-      if (t.regent) { t.regent = NONE; state.touchTitle(t); }
+      if (!t.regent) continue;
+      const regent = state.persons.get(t.regent);
+      if (regent) { delete regent.flags.regent; state.touch(regent); }
+      t.regent = NONE;
+      state.touchTitle(t);
     }
     if (p.house === state.run.houseId && p.id !== state.run.playerId) ctx.score.award('generation', 20, 'An heir came of age');
   }
