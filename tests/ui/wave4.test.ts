@@ -76,6 +76,8 @@ const ctx = (over: Partial<NoticeCtx> = {}): NoticeCtx => ({
   houseConcerns: (h) => h === 1,
   houseName: (h) => `H${h}`,
   placeName: (s) => `Place${s}`,
+  personName: (p) => `Person${p}`,
+  inFight: () => false,
   requestPage: () => 'journal',
   ...over,
 });
@@ -87,6 +89,8 @@ describe('notices', () => {
     expect(noticeForRequest(e, ctx({ requestPage: () => 'letters' }))!.action!.request).toEqual({ panel: 'ext', name: 'politics', data: { tab: 'standing' } });
     expect(noticeForRequest(e, ctx({ requestPage: () => 'petitions' }))!.action!.request).toEqual({ panel: 'ext', name: 'politics', data: { tab: 'petitions' } });
     expect(noticeForRequest(e, ctx({ requestPage: () => null }))).toBeNull();
+    expect(noticeForRequest(e, ctx())!.title).toBe('Person9 asks a favour');
+    expect(noticeForRequest(e, ctx({ inFight: () => true }))).toBeNull();
   });
 
   it('tells of wars that concern the player and opens the wars page', () => {

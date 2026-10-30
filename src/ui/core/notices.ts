@@ -13,6 +13,9 @@ export interface NoticeCtx {
   houseConcerns(house: number): boolean;
   houseName(house: number): string;
   placeName(settlement: number): string;
+  personName(person: number): string;
+  /** Steel is out: favours can wait (the dock still shows the dot). */
+  inFight(): boolean;
   /** Which page a `request` event belongs on: the journal (a villager), the letters (a House) or the petitions (a tenant). */
   requestPage(e: SimEvents['request']): 'journal' | 'letters' | 'petitions' | null;
 }
@@ -21,9 +24,10 @@ const politics = (tab: string): PanelRequest => ({ panel: 'ext', name: 'politics
 
 export function noticeForRequest(e: SimEvents['request'], ctx: NoticeCtx): ToastInput | null {
   const page = ctx.requestPage(e);
-  if (!page) return null;
+  if (!page || ctx.inFight()) return null;
   if (page === 'journal') {
-    return { tone: 'gold', icon: 'quill', title: 'Someone asks a favour', text: e.text, ttl: 12, key: `req:${e.id}`, action: { label: 'Open the journal', request: { panel: 'ext', name: 'requests' } } };
+    // one notice at a time for favours: a newer one replaces an older one that is still showing
+    return { tone: 'gold', icon: 'quill', title: `${ctx.personName(e.from)} asks a favour`, text: e.text, ttl: 12, key: 'journal-request', action: { label: 'Open the journal', request: { panel: 'ext', name: 'requests' } } };
   }
   if (page === 'letters') {
     return { tone: 'gold', icon: 'scroll', title: 'A letter has come', text: e.text, ttl: 14, key: `letter:${e.id}`, action: { label: 'Read the letters', request: politics('standing') } };

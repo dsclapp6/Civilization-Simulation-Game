@@ -437,6 +437,8 @@ export class UiApp implements GameUIExt {
       homeSettlement: me()?.settlement ?? 0,
       houseName: (id) => sim.state.houses.get(id)?.name ?? 'unknown',
       placeName: (id) => this.placeName(id),
+      personName: (id) => this.nameOf(id),
+      inFight: () => !!g.player.hud()?.combat?.engaged,
       houseConcerns: (id) => {
         const p = me();
         if (!p) return false;

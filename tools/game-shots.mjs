@@ -334,19 +334,22 @@ try {
   // -------------------------------------------------------------------------------------------
   // Wave 4: the HUD and pages for the new modules (hint, help, notices, fight, bow, down, panels)
   // -------------------------------------------------------------------------------------------
-  const W4 = ['hint', 'help', 'notice', 'fight', 'bow', 'down', 'wounds-hud', 'command', 'politics', 'techs', 'requests', 'fair'];
+  const W4 = ['hint', 'help', 'notice', 'fight', 'bow', 'down', 'wounds-hud', 'command', 'politics', 'techs', 'requests', 'market-day'];
   if (want(...W4)) {
     await load('autostart=1&time=0.42');
     const put = (x, z, yaw) => page.evaluate(([px, pz, py]) => { window.__game.session.services.player.placeAt(px, pz, py); }, [x, z, yaw]);
     const ui = (fn, arg) => page.evaluate(fn, arg);
     const pause = (ms = 500) => page.waitForTimeout(ms);
     const closeAll = () => page.evaluate(() => { for (const id of window.__ui.openPanels()) window.__ui.closePanel(id); });
+    const hints = (on) => page.evaluate((v) => window.__game.host.setSettings({ hints: v }), on);
+    await hints(false);
 
     if (want('hint')) {
+      await hints(true);
       await ui(() => window.__ui.showHint('interact'));
       await pause(600);
       await shot('hint', { settle: false });
-      await ui(() => window.__ui.showHint('work'));
+      await hints(false);
       await pause(300);
     }
 
@@ -526,15 +529,29 @@ try {
       await closeAll();
     }
 
-    if (want('fair')) {
-      const ok = await page.evaluate(() => {
-        const s = window.__game.session; const sim = s.sim; const hap = sim.services.happenings; const me = sim.state.persons.get(sim.state.run.playerId);
-        return hap.trigger('fair', me.settlement);
+    if (want('fair', 'market-day')) {
+      // market day in the market town (festivals are calendar-driven and cannot be started by hand): stalls, shoppers, the town square
+      const info = await page.evaluate(() => {
+        const s = window.__game.session; const sim = s.sim; const p = s.services.player; const nav = s.services.zone.nav;
+        const me = sim.state.persons.get(sim.state.run.playerId);
+        const town = sim.world.settlements.find((x) => x.id === me.settlement);
+        // day 2 of the season is Dromore's market day (calendar.marketDayOf)
+        const c = sim.state.clock; c.absDay = 1 + 0.45; c.firedHour = Math.floor(c.absDay * 24);
+        p.placeAt(town.x + 20, town.z + 20, 0.8);
+        window.__game.advance(6);
+        const near = s.services.zone.agents().filter((a) => Math.hypot(a.x - town.x, a.z - town.z) < 60);
+        let cx = 0, cz = 0; for (const a of near) { cx += a.x; cz += a.z; } cx /= Math.max(1, near.length); cz /= Math.max(1, near.length);
+        let best = null;
+        for (let r = 7; r <= 14 && !best; r += 3) for (let k = 0; k < 16; k++) {
+          const ang = (k / 16) * Math.PI * 2; const px = cx + Math.sin(ang) * r, pz = cz + Math.cos(ang) * r;
+          if (nav.walkable(px, pz) && Math.hypot(px - town.x, pz - town.z) > 12) { best = { px, pz, yaw: Math.atan2(cx - px, cz - pz) }; break; }
+        }
+        if (best) { p.placeAt(best.px, best.pz, best.yaw); const r = s.renderer; const d = Math.atan2(Math.sin(best.yaw - r.getCameraYaw()), Math.cos(best.yaw - r.getCameraYaw())); r.orbit(d, 0); }
+        return { name: town.name, near: near.length };
       });
-      console.log('fair', ok);
-      await advance(1.0);
-      await pause(800);
-      await shot('fair', { settle: true });
+      console.log('market', JSON.stringify(info));
+      await advance(3);
+      await shot('market-day', { settle: true });
     }
 
     if (want('politics')) {
