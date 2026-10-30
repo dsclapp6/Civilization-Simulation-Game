@@ -114,6 +114,16 @@ export class Zone {
     this.places = new Places(sim.state, sim.world);
     this.sched = new Schedule({ state: sim.state, world: sim.world, places: this.places, economy: deps.economy });
     this.fauna = new AnimalSystem(this);
+    // conversations refuse people the schedules have asleep indoors (SocialApi.setHooks merges into the current hooks)
+    deps.social.setHooks?.({
+      awakeHook: (person) => {
+        const p = sim.state.persons.get(person);
+        if (!p || p.death) return false;
+        const a = this.byPerson.get(person);
+        if (a) return true;
+        return this.sched.whereabouts(p, sim.absDay).activity !== 'sleep';
+      },
+    });
     sim.events.on('skip', (e) => { if (e.phase !== 'start') this.needResync = true; });
     sim.events.on('playerSwitched', () => { this.needResync = true; });
     sim.events.on('runStarted', () => { this.needResync = true; });
@@ -507,9 +517,10 @@ export class Zone {
     return findInteractables(this, x, z, yaw, range, out);
   }
 
+  /** Idempotent: holding an agent already held just refreshes who they face and the safety timeout. */
   hold(person: PersonId, face?: PersonId): void {
     const a = this.byPerson.get(person);
-    if (!a) return;
+    if (!a || a.control === 'script') return;
     a.control = 'held'; a.heldFace = face ?? 0; a.heldUntil = this.zoneT + 900;
     a.st = St.Idle; a.pathN = a.pathI = 0; a.overlay = '';
     this.nav.queue.cancel(person);
