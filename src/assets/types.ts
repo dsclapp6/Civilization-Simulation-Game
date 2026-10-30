@@ -19,6 +19,8 @@ export interface BuildingRequest {
   damage?: number;
   /** Banner colour for keeps, gatehouses, manor houses. */
   ownerColor?: number;
+  /** Optional detail level: 0 = full (default), 1 = mid (no small decals/decor), 2 = far silhouette. */
+  lod?: 0 | 1 | 2;
 }
 
 export interface BuildingAsset {
@@ -34,6 +36,14 @@ export interface BuildingAsset {
   /** Night lighting: 0 = windows dark, 1 = lit. */
   setLit?(amount: number): void;
   dispose(): void;
+  /** Chimney / smoke-hole tops (local space): emit 'hearth_smoke' FX here while occupied. */
+  smokePoints?: THREE.Vector3[];
+  /** Other continuous FX anchors (forge sparks, mill splash; local space) with a suggested rate per second. */
+  emitters?: { kind: FxEvent['kind']; position: THREE.Vector3; rate: number }[];
+  /** Where to spawn 'fire' FX when the building burns (local space). */
+  firePoints?: THREE.Vector3[];
+  /** Triangle count of this asset (all meshes). */
+  triangles?: number;
 }
 
 /** Geometry + material for GPU instancing (vegetation, crops, props in bulk). */
@@ -42,6 +52,12 @@ export interface InstancedKit {
   material: THREE.Material;
   /** Approximate bounding radius at scale 1 (for culling). */
   radius: number;
+  /** Shadow depth material that follows wind sway / leaf fall; assign to mesh.customDepthMaterial. */
+  depthMaterial?: THREE.Material;
+  /** Triangles in the geometry. */
+  triangles?: number;
+  /** Approximate height at scale 1 (m). */
+  height?: number;
 }
 
 export type PropKind =
@@ -128,4 +144,6 @@ export interface AssetLibrary {
   createAnimalLayer(): AnimalLayer;
   createProjectileLayer(): ProjectileLayer;
   createFxLayer(): FxLayer;
+  /** Free all cached geometry and shared materials. */
+  dispose?(): void;
 }
