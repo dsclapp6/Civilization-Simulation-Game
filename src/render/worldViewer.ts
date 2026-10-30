@@ -42,6 +42,38 @@ const lookFrom = (w: WorldModel, tx: number, tz: number, dirYaw: number, dist: n
   return { pos: { x, y: Math.max(g(w, x, z), 0) + height, z }, look: { x: tx, y: Math.max(g(w, tx, tz), 0) + lookUp, z: tz } };
 };
 
+const TREE_KINDS = new Set(['oak', 'beech', 'birch', 'ash', 'willow', 'pine', 'spruce', 'apple', 'deadtree', 'bush']);
+/** No tree, bush or hedgerow within r metres of (x, z) (a camera there would look through leaves). */
+function clearOfTrees(w: WorldModel, x: number, z: number, r: number): boolean {
+  const C = 64;
+  for (let cz = Math.floor((z - r) / C); cz <= Math.floor((z + r) / C); cz++) {
+    for (let cx = Math.floor((x - r) / C); cx <= Math.floor((x + r) / C); cx++) {
+      if (cx < 0 || cz < 0 || cx * C >= w.size || cz * C >= w.size) continue;
+      for (const it of w.scatterInChunk(cx, cz)) if (TREE_KINDS.has(it.kind) && Math.hypot(it.x - x, it.z - z) < r * Math.max(1, it.scale)) return false;
+    }
+  }
+  const h = w.hedges;
+  if (h) {
+    for (let i = 0; i < h.length; i += 4) {
+      const ax = h[i], az = h[i + 1], bx = h[i + 2], bz = h[i + 3];
+      const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz || 1;
+      const t = clamp(((x - ax) * dx + (z - az) * dz) / l2, 0, 1);
+      if (Math.hypot(ax + dx * t - x, az + dz * t - z) < r) return false;
+    }
+  }
+  return true;
+}
+/** lookFrom, trying nearer/farther and slightly swung positions until the camera is clear of trees. */
+function lookFromClear(w: WorldModel, tx: number, tz: number, dirYaw: number, dist: number, height: number, lookUp = 0): Pose {
+  for (const k of [1, 0.8, 1.25, 0.6, 1.5]) {
+    for (const dy of [0, 0.25, -0.25, 0.5, -0.5]) {
+      const pose = lookFrom(w, tx, tz, dirYaw + dy, dist * k, height, lookUp);
+      if (clearOfTrees(w, pose.pos.x, pose.pos.z, 7)) return pose;
+    }
+  }
+  return lookFrom(w, tx, tz, dirYaw, dist, height, lookUp);
+}
+
 const plotsOf = (w: WorldModel, s: Settlement) => s.plots.map((id) => w.plots[id]);
 const firstPlot = (w: WorldModel, s: Settlement, kinds: string[]): Plot | undefined => {
   for (const k of kinds) { const p = plotsOf(w, s).find((q) => q.kind === k); if (p) return p; }
@@ -194,7 +226,7 @@ const PRESETS: Record<string, PresetDef> = {
       const st = w.strips[(ripe[Math.floor(ripe.length / 2)] ?? v.strips()[0]).id];
       const a = st.poly[0], b = st.poly[2];
       const mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2;
-      return lookFrom(w, mx, mz, Math.atan2(b.x - a.x, b.z - a.z), 60, 5, 0);
+      return lookFromClear(w, mx, mz, Math.atan2(b.x - a.x, b.z - a.z), 60, 5, 0);
     },
   },
   mill: {
@@ -215,10 +247,10 @@ const PRESETS: Record<string, PresetDef> = {
       const bx = br.x - best.x, bz = br.z - best.z, bl = Math.hypot(bx, bz) || 1;
       const side = Math.sign(-wz * bx + wx * bz) || 1;
       const px = -wz * side, pz = wx * side;
-      const dist = 30, lat = Math.min(22, bl * 0.3);
+      const dist = 38, lat = Math.min(22, bl * 0.3);
       const x = best.x + wx * dist + px * lat, z = best.z + wz * dist + pz * lat;
       const lookX = best.x * 0.62 + br.x * 0.38, lookZ = best.z * 0.62 + br.z * 0.38;
-      return { pos: { x, y: Math.max(g(c.w, x, z), 0) + 8.5, z }, look: { x: lookX, y: Math.max(g(c.w, lookX, lookZ), 0) + 1.5, z: lookZ } };
+      return { pos: { x, y: Math.max(g(c.w, x, z), 0) + 13, z }, look: { x: lookX, y: Math.max(g(c.w, lookX, lookZ), 0) + 1.5, z: lookZ } };
     },
   },
   coast: {

@@ -49,8 +49,15 @@ float mlSnowMask(vec3 nView, vec3 wpos, float snow, float hold) {
 }
 `;
 
+/**
+ * LOD cross-fade of building meshes (x = progress 0..1, y = 0 off, 1 incoming, 2 outgoing). One
+ * shared value: the renderer sets it per draw (Mesh.onBeforeRender) and clears it afterwards.
+ */
+export const BUILDING_FADE = { value: new THREE.Vector2(0, 0) };
+
 function patchBuildingShader(shader: THREE.WebGLProgramParametersWithUniforms, u: SharedUniforms): void {
   shader.uniforms.uSnow = u.uSnow;
+  shader.uniforms.uBFade = BUILDING_FADE;
   shader.uniforms.uGrassTint = u.uGrassTint;
   shader.uniforms.uSnowColor = u.uSnowColor;
   shader.vertexShader = shader.vertexShader
@@ -72,10 +79,19 @@ vSurf = aSurf;
 uniform float uSnow;
 uniform vec3 uGrassTint;
 uniform vec3 uSnowColor;
+uniform vec2 uBFade;
 varying vec2 vSurf;
 varying vec3 vWPos;
 ${GLSL_NOISE}
 ${GLSL_SNOW}`)
+    .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+if (uBFade.y > 0.5) {
+  // screen-door LOD cross-fade: the incoming model takes the pattern cells below the progress,
+  // the outgoing one keeps the rest, so the pair always covers the building exactly once
+  vec2 bfc = mod(floor(gl_FragCoord.xy), 4.0);
+  float bth = mod(bfc.x * 4.0 + bfc.y * 7.0, 16.0) / 16.0 + 1.0 / 32.0;
+  if (uBFade.y < 1.5 ? bth > uBFade.x : bth <= uBFade.x) discard;
+}`)
     .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
 diffuseColor.rgb *= mix(vec3(1.0), uGrassTint, vSurf.y);
 diffuseColor.rgb = mix(diffuseColor.rgb, uSnowColor, mlSnowMask(normal, vWPos, uSnow, vSurf.x));`);
@@ -109,9 +125,19 @@ export function createWindowMaterial(u: SharedUniforms, glow: { value: number })
   m.onBeforeCompile = (s) => {
     s.uniforms.uGlow = glow;
     s.uniforms.uSnow = u.uSnow;
+    s.uniforms.uBFade = BUILDING_FADE;
     s.fragmentShader = s.fragmentShader
       .replace('#include <common>', `#include <common>
-uniform float uGlow;`)
+uniform float uGlow;
+uniform vec2 uBFade;`)
+      .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+if (uBFade.y > 0.5) {
+  // screen-door LOD cross-fade: the incoming model takes the pattern cells below the progress,
+  // the outgoing one keeps the rest, so the pair always covers the building exactly once
+  vec2 bfc = mod(floor(gl_FragCoord.xy), 4.0);
+  float bth = mod(bfc.x * 4.0 + bfc.y * 7.0, 16.0) / 16.0 + 1.0 / 32.0;
+  if (uBFade.y < 1.5 ? bth > uBFade.x : bth <= uBFade.x) discard;
+}`)
       .replace('#include <color_fragment>', '')
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
 totalEmissiveRadiance += vColor.rgb * uGlow;`);

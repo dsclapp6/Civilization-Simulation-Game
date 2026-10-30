@@ -234,7 +234,8 @@ export function computeAtmosphere(input: AtmosphereInput, palette: Palette, out:
   const artNight = 1 - smoothstep(-0.1, 0.1, sh);
   // one DirectionalLight serves sun and moon: the sun fades out just below the horizon, then the
   // moon fades in ("moonlit blue": moon 0.9, phase only trims it slightly)
-  const sunI = SUN_NOON * dayAmt * (0.75 + 0.25 * (1 - golden)) * (1 - overcast * 0.72);
+  // golden hour keeps a strong, warm key so sunlit walls and fields glow instead of going dull
+  const sunI = SUN_NOON * dayAmt * (0.92 + 0.08 * (1 - golden)) * (1 - overcast * 0.72);
   if (sh > -0.02) {
     out.lightDir.copy(out.sunDir);
     if (out.lightDir.y < 0.02) out.lightDir.y = 0.02;
@@ -254,10 +255,10 @@ export function computeAtmosphere(input: AtmosphereInput, palette: Palette, out:
   }
 
   // ---- hemisphere: cool sky fill, warmed at golden hour, deep blue at night ----
-  out.hemiSky.setHex(0xbfd9ef).lerp(_a.setHex(0xe8b896), golden * dayAmt * 0.45).lerp(_b.setHex(palette.ambient.night), artNight);
-  out.hemiGround.setHex(HEMI_GROUND).lerp(_a.setHex(0x1e2433), artNight);
+  out.hemiSky.setHex(0xbfd9ef).lerp(_a.setHex(0xe8b896), golden * dayAmt * 0.6).lerp(_b.setHex(palette.ambient.night), artNight);
+  out.hemiGround.setHex(HEMI_GROUND).lerp(_c.setHex(0xa8764a), golden * dayAmt * 0.45).lerp(_a.setHex(0x1e2433), artNight);
   // overcast skies are one big soft light: the fill rises as the sun goes
-  out.hemiIntensity = (HEMI_DAY * (0.3 + 0.7 * dayAmt) * (1 + overcast * 0.45)) * (1 - artNight) + 1.02 * artNight;
+  out.hemiIntensity = (HEMI_DAY * (0.3 + 0.7 * dayAmt) * (1 + overcast * 0.3)) * (1 - artNight) + 1.02 * artNight;
 
   // ---- sky fill: the bright sky opposite the sun (bluer at golden hour), none at night ----
   {
@@ -267,7 +268,7 @@ export function computeAtmosphere(input: AtmosphereInput, palette: Palette, out:
     out.fillColor.setHex(0xc9dcf0).lerp(_a.setHex(0x9fb2dc), golden * 0.7);
     out.fillIntensity = FILL_DAY * dayAmt * (1 - overcast * 0.6);
   }
-  out.exposure = 1.0 + overcast * 0.06;
+  out.exposure = 1.0 + overcast * 0.06 + golden * dayAmt * 0.12 * (1 - overcast);
 
   // ---- clouds ----
   out.cloudCover = clamp(0.34 + input.cloud * 0.6 + input.rain * 0.3 + input.snow * 0.2, 0, 1);

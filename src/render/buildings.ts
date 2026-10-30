@@ -13,6 +13,11 @@ import type { BuildingView, FxEvent } from '../core/view';
 import type { AssetLibrary, BuildingAsset, Palette } from '../assets/types';
 import type { WorldModel } from '../world/types';
 import { adoptObject } from './sky/atmospherePatch';
+import { BUILDING_FADE } from '../assets/core/materials';
+
+/** Seconds a building takes to cross-fade from one detail level (lod) to the next. */
+const LOD_FADE_S = 0.6;
+interface Fade { e: Entry; old: BuildingAsset; oldKey: string; t0: number; t: number }
 
 interface Entry {
   id: number;
@@ -48,6 +53,8 @@ interface Entry {
   /** Slots in the wall / roof / tower proxy buffers (-1 = none) and whether they are shown. */
   proxySlots: [number, number, number];
   proxyShown: boolean;
+  /** Cross-fading from a previous lod (kept out of instanced batches meanwhile). */
+  fade: Fade | null;
 }
 
 /** Identical static buildings drawn as one InstancedMesh per sub-mesh (docs/ART.md section 11). */
@@ -191,6 +198,10 @@ export class BuildingSystem {
   private readonly poolMesh: THREE.InstancedMesh;
   private readonly poolMat: THREE.ShaderMaterial;
   private poolFrame = -100;
+  private readonly fades: Fade[] = [];
+  private now = 0;
+  /** Lod swaps may cross-fade (off while settling: nothing moves then). */
+  private fadeSwaps = false;
 
   constructor(private readonly world: WorldModel, private readonly assets: AssetLibrary, private settings: BuildingSettings) {
     this.root.name = 'buildings';
@@ -313,7 +324,7 @@ export class BuildingSystem {
           id: b.id, kind: b.kind, key, x: b.x, y: 0, z: b.z, rot: b.rot, occupied: b.occupied, onFire: b.onFire,
           construction: b.construction, view: b, asset: null, assetLod: -1, assetKey: '', meshes: 3, detailed: false,
           dist: Infinity, smoke: [], emitters: [], fire: [], smokeTimer: hash01(b.id, 7) * 0.5, lit: -1, height: 6, lastDetailed: -1,
-          isStatic: false, batched: false, proxySlots: [-1, -1, -1], proxyShown: false,
+          isStatic: false, batched: false, proxySlots: [-1, -1, -1], proxyShown: false, fade: null,
         };
         this.entries.set(b.id, e);
         moved = true;
@@ -370,7 +381,15 @@ export class BuildingSystem {
     });
     const old = e.asset;
     const wasVisible = old ? old.object.visible : false;
-    if (old) {
+    if (e.fade) this.endFade(e.fade);
+    let fade: Fade | null = null;
+    if (old && wasVisible && this.fadeSwaps && !e.batched && e.assetLod !== lod && e.assetLod >= 0) {
+      // keep the outgoing model and dither one into the other (no pop at the lod thresholds)
+      fade = { e, old, oldKey: e.assetKey, t0: this.now, t: 0 };
+      this.fades.push(fade);
+      e.fade = fade;
+      this.hookFade(old.object, fade, 2);
+    } else if (old) {
       this.detailRoot.remove(old.object);
       old.dispose();
       this.ref(e.assetKey, -1);
@@ -395,9 +414,45 @@ export class BuildingSystem {
     e.lit = -1;
     asset.object.visible = wasVisible;
     this.detailRoot.add(asset.object);
+    if (fade) this.hookFade(asset.object, fade, 1);
+  }
+
+  private hookFade(obj: THREE.Object3D, f: Fade, mode: 1 | 2): void {
+    obj.traverse((o) => {
+      if (!(o as THREE.Mesh).isMesh) return;
+      o.onBeforeRender = () => { BUILDING_FADE.value.set(f.t, mode); };
+      o.onAfterRender = () => { BUILDING_FADE.value.set(0, 0); };
+    });
+  }
+
+  private static readonly NOOP = (): void => {};
+
+  private endFade(f: Fade): void {
+    const e = f.e;
+    this.detailRoot.remove(f.old.object);
+    f.old.dispose();
+    this.ref(f.oldKey, -1);
+    if (e.fade === f) {
+      e.fade = null;
+      e.asset?.object.traverse((o) => { o.onBeforeRender = BuildingSystem.NOOP; o.onAfterRender = BuildingSystem.NOOP; });
+    }
+    const i = this.fades.indexOf(f);
+    if (i >= 0) this.fades.splice(i, 1);
+    this.batchDirty = true;
+  }
+
+  private stepFades(): void {
+    for (let i = this.fades.length - 1; i >= 0; i--) {
+      const f = this.fades[i];
+      f.t = Math.min(1, (this.now - f.t0) / LOD_FADE_S);
+      const vis = f.e.asset ? f.e.asset.object.visible : false;
+      f.old.object.visible = vis;
+      if (f.t >= 1 || !vis || f.e.fade !== f) this.endFade(f);
+    }
   }
 
   private dropAsset(e: Entry): void {
+    if (e.fade) this.endFade(e.fade);
     if (!e.asset) return;
     this.detailRoot.remove(e.asset.object);
     e.asset.dispose();
@@ -425,6 +480,8 @@ export class BuildingSystem {
   update(list: readonly BuildingView[], version: number, camera: THREE.Camera, time: number, dt: number,
     budgetMs: number, generous = false): readonly FxEvent[] {
     this.frame++;
+    this.now = time;
+    this.fadeSwaps = dt > 0 && !generous;
     this.fxOut.length = 0;
     const s = this.settings;
     const cp = camera.position;
@@ -477,6 +534,7 @@ export class BuildingSystem {
       }
     }
     if (created) this.applyVisibility();
+    this.stepFades();
     let detailed = 0;
     for (const e of this.detailedList) {
       if (!e.asset || !e.detailed) continue;
@@ -629,7 +687,7 @@ export class BuildingSystem {
     const groups = new Map<string, Entry[]>();
     for (const e of this.ordered) {
       e.batched = false;
-      if (!e.detailed || !e.asset || !e.isStatic) continue;
+      if (!e.detailed || !e.asset || !e.isStatic || e.fade) continue;
       const key = `${e.assetKey}|${e.lit}`;
       let list = groups.get(key);
       if (!list) { list = []; groups.set(key, list); }
