@@ -178,7 +178,7 @@ export function createAnimalLayer(palette: Palette): AnimalLayer {
         else { build(st, item); built++; }
       }
       _sphere.center.set(item.x, item.y + st.height * 0.5, item.z);
-      _sphere.radius = Math.max(0.5, st.len) + 0.6;
+      _sphere.radius = Math.max(0.5, st.len) + 0.6 + 3; // + shadow margin
       if (!_frustum.intersectsSphere(_sphere)) {
         if (!st.hidden) { crowd.hideSlot(st.slot); st.hidden = true; }
         culled++;

@@ -65,6 +65,8 @@ const HUMAN_TEX_BONES = HUMAN_BONES;
 /** Far-LOD switch distances (m): out beyond LOD_OUT, back in under LOD_IN. */
 const LOD_OUT = 32, LOD_IN = 27;
 const GEO_CACHE_MAX = 900;
+/** Extra culling radius (m) so shadows of actors just outside the view still render. */
+const SHADOW_MARGIN = 3;
 
 /** Appearance of the body chunk (everything that only changes with the look). */
 function buildBodyChunk(look: CharacterLook, lod: 0 | 1): GeometryData {
@@ -398,7 +400,8 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
       syncEquipment(st, item);
       // culling
       _sphere.center.set(item.x, item.y + (item.mount ? 1.4 : 0.9), item.z);
-      _sphere.radius = item.mount ? 2.6 : 1.6;
+      // generous radius: actors just off-screen still cast shadows into view
+      _sphere.radius = (item.mount ? 2.6 : 1.6) + SHADOW_MARGIN;
       const visible = _frustum.intersectsSphere(_sphere);
       if (!visible) {
         if (!st.hidden) {
