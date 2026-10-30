@@ -241,6 +241,8 @@ try {
   await tick(0.2);
   await page.getByRole('button', { name: 'Save and quit to menu' }).click();
   await page.waitForFunction(() => window.__game.session === null && window.__game.host.screen === 'menu', null, { timeout: 60000 });
+  // the menu adds "Continue" once its async saved-run lookup returns
+  await page.locator('.mu-menu-card .mu-btn', { hasText: 'Continue' }).first().waitFor({ timeout: 15000 }).catch(() => {});
   check('saving and quitting returns to the menu with no session', await page.locator('.mu-menu-card .mu-btn', { hasText: 'Continue' }).count() === 1);
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.waitForFunction(() => window.__game.session !== null && window.__game.host.screen === 'game', null, { timeout: 240000 });

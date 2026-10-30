@@ -467,7 +467,10 @@ export class UiApp implements GameUIExt {
     p.dispose?.();
     this.tooltips.hide();
     if (this.root.classList.contains('mu-still')) { p.el.remove(); return; }
+    // fading out: no longer clickable or focusable, so a panel opened right after cannot be confused with it
     p.el.classList.add('leaving');
+    p.el.inert = true;
+    p.el.setAttribute('aria-hidden', 'true');
     window.setTimeout(() => p.el.remove(), 130);
   }
 
