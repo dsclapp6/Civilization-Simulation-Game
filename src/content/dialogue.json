@@ -1,0 +1,11 @@
+{
+  "_doc": "Dialogue tables for src/sim/social. Pools of lines live in src/content/dialogue/*.json.",
+  "tables": {
+    "address": { "default": { "peer.low": { "any": ["friend"] } } },
+    "ambition": {},
+    "reasons": {},
+    "work": {},
+    "traitWords": {},
+    "placeWords": {}
+  }
+}
