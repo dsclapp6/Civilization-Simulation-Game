@@ -53,12 +53,18 @@ export function installPolitics(sim: Simulation, deps: Pick<Wave3Deps, 'economy'
   const offs: Array<() => void> = [];
   offs.push(sim.registerSystem({
     name: 'politics.daily', phase: 'daily', order: 70,
-    run: (_ctx, info) => {
+    run: () => {
       core.invalidate();
       wars.daily();
-      realms.coalitionsDaily();
-      diplo.expire();
-      unrest.slice(Math.floor(info.absDay));
+    },
+  }));
+  // the rest of the day's politics is dealt out over three hours (even hours are the Houses' thinking, odd the offices)
+  offs.push(sim.registerSystem({
+    name: 'politics.slices', phase: 'hourly', order: 72,
+    run: (_ctx, info) => {
+      if (info.hour === 6) unrest.slice(Math.floor(info.absDay));
+      else if (info.hour === 10) { core.invalidate(); realms.coalitionsDaily(); }
+      else if (info.hour === 14) diplo.expire();
     },
   }));
   // the Houses think and the posts are reviewed a little each hour, so no frame carries the whole day
