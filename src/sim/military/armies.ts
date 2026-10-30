@@ -84,7 +84,9 @@ export function raise(M: Mil, house: HouseId, reason: string, opts: RaiseOptions
       if (vh && !vh.extinct && vh.kind !== 'church') houses.push(v);
     }
   }
-  const fraction = opts.fraction ?? CFG.levyFraction[reason] ?? CFG.levyFraction.war;
+  // paid retinues (advancement `levy.retinue`) put more of the pool in the field; oaths (`vassal.levy`) bring the vassals' men
+  const fraction = (opts.fraction ?? CFG.levyFraction[reason] ?? CFG.levyFraction.war) * (1 + M.techBonus(house, 'levy.retinue'));
+  const vassalShare = 0.8 + M.techBonus(house, 'vassal.levy');
   const picks: Pick[] = [];
   const taken = new Set<PersonId>();
   const call: { self: boolean; house: HouseId } = { self: false, house: 0 };
@@ -107,7 +109,7 @@ export function raise(M: Mil, house: HouseId, reason: string, opts: RaiseOptions
     // the sergeant-captain and the first men stay; the rest take the field
     for (let i = keep; i < gar.length; i++) add(gar[i], gar[i].settlement, false, hid);
     if (!opts.retinueOnly) {
-      const frac = hid === house ? fraction : fraction * 0.8;
+      const frac = hid === house ? fraction : fraction * vassalShare;
       for (const p of levyMen(M, hid)) {
         if (taken.has(p.id)) continue;
         if (p.id === playerId) { if (rng.next() < frac) { taken.add(p.id); call.self = true; call.house = hid; } continue; }

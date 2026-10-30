@@ -82,6 +82,11 @@ export class Mil {
   get politics(): PoliticsApi | undefined { return this.sim.services.politics; }
   get advancement(): AdvancementApi | undefined { return this.sim.services.advancement; }
 
+  /** Sum of a technique effect the House commands (`arms.longbow`, `defence.keep`, …); 0 without the advancement module. */
+  techBonus(house: HouseId, key: string): number {
+    return house ? this.advancement?.bonus?.(house, key) ?? 0 : 0;
+  }
+
   get day(): number { return this.sim.absDay; }
   rng(name = 'military'): Rng { return this.sim.rng(name); }
   touch(): void { this.state.touchExt(EXT_KEY); }

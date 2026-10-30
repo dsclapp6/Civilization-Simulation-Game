@@ -174,7 +174,12 @@ export class Wars {
       c.notify(mineAttacker ? `War: ${text}` : `${c.houseLabel(house)} declares war on you! ${goalName ? `They want ${goalName}.` : ''}`, 'danger');
     }
     this.callToArms(war);
-    if (cause === 'raid' && !c.sim.services.military) this.abstractRaid(war);
+    if (cause === 'raid') {
+      // with a military the raiders really ride (burning, herds, captives); without one the raid is played on paper
+      const mil = c.sim.services.military;
+      const rid = mil?.raid && war.target >= 0 ? mil.raid(war.attackers[0], war.target) : 0;
+      if (!rid) this.abstractRaid(war);
+    }
     return { ok: true, war: war.id };
   }
 

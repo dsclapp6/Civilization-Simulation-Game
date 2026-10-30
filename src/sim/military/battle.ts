@@ -46,7 +46,7 @@ export function fightersOf(M: Mil, armies: Army[], exclude?: ReadonlySet<PersonI
       const p = M.alive(a.men[i]);
       if (!p) continue;
       const k = kindAt(a, i);
-      const w = fightingPower(M, p, k);
+      const w = fightingPower(M, p, k, undefined, a.house);
       people.push(p); kinds.push(k); power.push(w);
       total += w;
       if (isRanged(k)) ranged += w;
@@ -70,7 +70,7 @@ export function defendersOf(M: Mil, sid: number, house: HouseId): Fighters {
   const add = (p: Person, k: UnitKind): void => {
     if (seen.has(p.id) || M.armyOfPerson.has(p.id) && M.army(M.armyOfPerson.get(p.id) ?? 0)?.task !== 'garrison') return;
     seen.add(p.id);
-    const w = fightingPower(M, p, k);
+    const w = fightingPower(M, p, k, undefined, house);
     people.push(p); kinds.push(k); power.push(w);
     total += w;
     if (isRanged(k)) ranged += w;

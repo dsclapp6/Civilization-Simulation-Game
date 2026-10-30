@@ -250,6 +250,9 @@ export class PoliticsCore {
       }
       // deployed professional troops count half on top of the potential levy they came from
       w += Math.round((armyWeight.get(h) ?? 0) * 0.5);
+      // what the military knows of the House's real forces (retinue, garrisons, levy pool, militia, mercenaries): a House
+      // whose men were lost in the field or whose castles stand empty is weaker than its titles suggest
+      if (mil?.strength) w += Math.round(mil.strength(h) * 3);
       own.set(h, w);
     }
     const strength = new Map<HouseId, number>();

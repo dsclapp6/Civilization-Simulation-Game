@@ -142,13 +142,27 @@ export function unitKindOf(M: Mil, p: Person, ctx: { levy: boolean; town?: boole
 }
 
 /** Macro fighting value of one man (levy spearman = 1): kind, arms, skill, stats, health. */
-export function fightingPower(M: Mil, p: Person, kind: UnitKind, arms = armsQuality(M, p)): number {
+export function fightingPower(M: Mil, p: Person, kind: UnitKind, arms = armsQuality(M, p), house = 0): number {
   const melee = skillLevel(p.skills.melee), arch = skillLevel(p.skills.archery), ride = skillLevel(p.skills.riding);
   const ranged = kind === 'archer' || kind === 'crossbow';
   const skill = ranged ? 0.8 + 0.035 * arch : 0.85 + 0.03 * melee + (kind === 'sergeant' || kind === 'knight' ? 0.012 * ride : 0);
   const stat = 0.7 + 0.03 * (p.trained.str + p.trained.end);
   const health = 0.45 + 0.55 * Math.max(0, Math.min(1, p.health.hp));
-  return UNIT_POWER[kind] * (0.45 + 0.55 * arms) * skill * stat * health;
+  return UNIT_POWER[kind] * (0.45 + 0.55 * arms) * skill * stat * health * techEdge(M, house, kind);
+}
+
+/**
+ * What the House's techniques add to a kind of man: the drilled longbow, the crossbow, the destrier and plate armour
+ * (advancement effects `arms.*` and `armour.*`; 1 without the module or when the House lacks them).
+ */
+export function techEdge(M: Mil, house: HouseId, kind: UnitKind): number {
+  if (!house || !M.advancement?.bonus) return 1;
+  let e = 1;
+  if (kind === 'archer') e += 0.3 * M.techBonus(house, 'arms.longbow');
+  else if (kind === 'crossbow') e += 0.25 * M.techBonus(house, 'arms.crossbow');
+  if (kind === 'knight' || kind === 'sergeant') e += 0.18 * M.techBonus(house, 'arms.destrier');
+  if (kind === 'knight' || kind === 'sergeant' || kind === 'man_at_arms') e += 0.1 * M.techBonus(house, 'armour.plates') + 0.12 * M.techBonus(house, 'armour.plate');
+  return e;
 }
 
 // ---------------------------------------------------------------------------------------------
