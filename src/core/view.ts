@@ -189,7 +189,7 @@ export interface StripView {
 
 export interface MapMarker {
   id: number;
-  kind: 'player' | 'party' | 'army' | 'caravan' | 'bandits' | 'battle' | 'siege';
+  kind: 'player' | 'party' | 'army' | 'caravan' | 'bandits' | 'battle' | 'siege' | 'home' | 'work';
   x: number;
   z: number;
   color: number;

@@ -133,4 +133,11 @@ export interface ZoneApi {
   resync(): void;
   /** Carry-look and held items the routine gives a person for an activity (shared with the player). */
   propsFor(person: PersonId, activity: Activity): { mainHand: HeldItem; offHand: HeldItem; carry: CarryLook };
+
+  // ---- additive (player module): riding. Optional; without them the player still rides, but the
+  // household's animal keeps standing where it was (a second horse is drawn). ----
+  /** The player mounts this animal: the zone stops drawing it and keeps it out of its routines. False = cannot be ridden. */
+  claimAnimal?(id: number): boolean;
+  /** The player dismounted: the animal is a household animal again, standing here. */
+  releaseAnimal?(id: number, x: number, z: number, yaw: number): void;
 }

@@ -1,26 +1,19 @@
-// Placeholder (wave 2 PLAYER replaces this file): a player who stands still.
-import type { ZoneApi } from '../agents/types';
-import type { EconomyApi } from '../sim/economy/types';
+// Player module entry point (wave 2): possession of one character — movement, interaction, mounting,
+// map travel with road encounters, death and switching. See docs/PLAYING.md and src/player/types.ts.
 import type { Simulation } from '../sim/sim';
-import type { SocialApi } from '../sim/social/types';
+import { PlayerController, type PlayerDeps } from './controller';
 import type { PlayerApi } from './types';
 
-export interface PlayerDeps { zone: ZoneApi; economy: EconomyApi; social: SocialApi }
+export type { PlayerDeps } from './controller';
+export * from './types';
+export { planRoute, RouteCursor } from './route';
+export type { RoutePlan } from './route';
 
-export function installPlayer(_sim: Simulation, _deps: PlayerDeps): PlayerApi {
-  const none = { ok: false, reason: 'Not available yet' };
-  return {
-    setInput: () => {},
-    hud: () => null,
-    target: () => null,
-    options: () => [],
-    perform: () => ({ ok: false, message: 'Not available yet' }),
-    cancelAction: () => {},
-    talkTo: () => none,
-    travelTo: () => none,
-    cancelTravel: () => {},
-    travel: () => null,
-    body: () => null,
-    placeAt: () => {},
-  };
+/**
+ * Installs the player controller on a simulation: registers its sub-step system and action provider,
+ * installs the view sources `player`, `focus`, `mode` and `mapMarkers`, and puts the body at the
+ * player's home door (or where the saved run left them). Install after the agents (it attaches to the zone).
+ */
+export function installPlayer(sim: Simulation, deps: PlayerDeps): PlayerApi {
+  return new PlayerController(sim, deps);
 }
