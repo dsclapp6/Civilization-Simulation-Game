@@ -347,3 +347,14 @@
 @container win (max-width: 1000px) {
   .mu-dlg-lines { flex: none; min-height: 96px; max-height: 150px; }
 }
+
+/* ---- help page ---- */
+.mu-help-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 28px; align-items: start; }
+.mu-help-group h4, .mu-help-text h4 { font-size: 16px; font-weight: 700; letter-spacing: 0.03em; margin: 8px 0 6px; padding-bottom: 3px; border-bottom: 1px solid var(--rule); }
+.mu-help-group dl { display: grid; grid-template-columns: minmax(96px, auto) minmax(0, 1fr); gap: 5px 12px; align-items: baseline; margin: 0; }
+.mu-help-group dt { display: flex; flex-wrap: wrap; gap: 3px; justify-content: flex-end; }
+.mu-help-group dd { margin: 0; font-size: 14px; line-height: 1.35; color: var(--ink-2); }
+.mu-help-text { max-width: 760px; margin: 0 auto; }
+.mu-help-text p { font-size: 15.5px; line-height: 1.55; margin: 0 0 9px; }
+.mu-help-text section { margin-bottom: 8px; }
+@media (max-width: 900px) { .mu-help-controls { grid-template-columns: minmax(0, 1fr); } }

@@ -33,10 +33,12 @@ export interface Settings {
   uiScale: number;
   /** Browse panels (character, inventory, ledger…) pause the world while open. Default true. (UI addition) */
   pauseInMenus?: boolean;
+  /** First-minutes hints (wave 4). Default true. */
+  hints?: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  quality: 'medium', mouseSensitivity: 1, invertY: false, volume: 0.7, labels: true, uiScale: 1, pauseInMenus: true,
+  quality: 'medium', mouseSensitivity: 1, invertY: false, volume: 0.7, labels: true, uiScale: 1, pauseInMenus: true, hints: true,
 };
 
 /** Renderer controls the UI may use (map panel, settings). */

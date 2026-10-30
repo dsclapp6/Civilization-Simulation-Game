@@ -18,10 +18,15 @@ import { keyIntent, type KeyIntent, type PanelKey } from '../core/keys';
 import { goldDefs } from '../core/ornament';
 import { PauseController } from '../core/pause';
 import { effectiveScale } from '../core/scale';
-import type { PanelRequest } from '../core/requests';
+import { panelForKey, type PanelRequest } from '../core/requests';
 import { PanelStack } from '../core/stack';
+import {
+  noticeForBattle, noticeForCall, noticeForHappening, noticeForRaid, noticeForRequest, noticeForSiege, noticeForWar, type NoticeCtx,
+} from '../core/notices';
+import { hasModule } from '../core/modules';
 import { Hud } from '../hud/hud';
 import { Toasts } from '../hud/toasts';
+import { Guide } from '../hud/guide';
 import { createPanel } from '../panels/registry';
 import { LoadingLayer } from '../screens/loading';
 import { MenuLayer, type MenuView } from '../screens/menu';
@@ -47,6 +52,7 @@ export class UiApp implements GameUIExt {
   private readonly tipLayer = h('div.mu-layer');
   private readonly feed = new Feed(6);
   private readonly toasts: Toasts;
+  private readonly guide: Guide;
   private readonly hud: Hud;
   private readonly menu: MenuLayer;
   private readonly loading = new LoadingLayer();
@@ -76,11 +82,19 @@ export class UiApp implements GameUIExt {
 
   constructor(private readonly parent: HTMLElement, private readonly host: UiHost) {
     this.toasts = new Toasts((req) => this.openPanel(req));
+    this.guide = new Guide({
+      game: () => this.bound?.game ?? null,
+      open: (req) => this.openPanel(req),
+      enabled: () => this.host.settings().hints !== false,
+      disable: () => { this.host.setSettings({ hints: false }); this.say('info', 'Hints are off. You can turn them on again in the settings.'); },
+      suppressed: () => this.stack.all().length > 0,
+    });
     this.hud = new Hud({
       game: () => this.bound?.game ?? null,
       host,
       feed: this.feed,
       toasts: this.toasts,
+      guide: this.guide,
       open: (req) => this.toggleOrOpen(req),
       isOpen: (id) => this.stack.has(id),
       say: (kind, text) => this.say(kind, text),
@@ -194,7 +208,14 @@ export class UiApp implements GameUIExt {
     }
   }
 
-  open(req: UiRequest): void { this.openPanel(req); }
+  open(req: UiRequest): void {
+    // the military module opens its panel when the levy is called: as a notice it does not seize the screen mid-action
+    if (req.panel === 'ext' && req.name === 'army' && this.screen === 'game' && this.bound && !this.stack.has('army')) {
+      const call = (this.bound.game.sim.services.military as { service?: () => { call?: unknown } } | undefined)?.service?.().call;
+      if (call && !this.stack.top()) { this.toasts.push(noticeForCall(), this.clock); return; }
+    }
+    this.openPanel(req);
+  }
 
   onEscape(): boolean {
     return this.handleEscape();
@@ -324,13 +345,23 @@ export class UiApp implements GameUIExt {
         if (f) this.feed.push(f, this.clock);
       }),
       on('saved', () => this.hud.flashSaved(this.clock)),
+      on('action', (e) => this.guide.noteAction(e, pid())),
+      on('conversation', (e) => { if (e.phase === 'start' && e.actor === pid()) this.guide.noteConversation(); }),
+      on('speedChanged', () => this.guide.noteSpeed()),
       on('chronicle', (e) => this.feedChronicle(e)),
       on('playerDied', () => this.onPlayerDied()),
       on('playerSwitched', (e) => this.onPlayerSwitched(e)),
       on('gameOver', (e) => this.onGameOver(e)),
+      on('request', (e) => this.notice(noticeForRequest(e, this.noticeCtx()))),
+      on('war', (e) => this.notice(noticeForWar(e, this.noticeCtx()))),
+      on('siege', (e) => this.notice(noticeForSiege(e, this.noticeCtx()))),
+      on('raid', (e) => this.notice(noticeForRaid(e, this.noticeCtx()))),
+      on('battle', (e) => this.notice(noticeForBattle(e, this.noticeCtx()))),
+      on('happening', (e) => this.notice(noticeForHappening(e, this.noticeCtx()))),
     );
     this.seenChronicle.clear();
     this.hud.reset();
+    this.guide.reset(sim.state.seed);
   }
 
   private unbind(): void {
@@ -382,6 +413,45 @@ export class UiApp implements GameUIExt {
     if (key === this.lastEncounterKey) return;
     this.lastEncounterKey = key;
     if (!this.stack.has('encounter')) this.openPanel({ panel: 'encounter' });
+  }
+
+  private notice(t: ToastInput | null): void {
+    if (t && this.screen === 'game') this.toasts.push(t, this.clock);
+  }
+
+  /** Lookups the notice mappers need: who the player is, whose wars concern them, which page a request belongs on. */
+  private noticeCtx(): NoticeCtx {
+    const g = (this.bound as Bound).game;
+    const sim = g.sim;
+    const pid = sim.state.run.playerId;
+    const me = (): ReturnType<typeof sim.state.persons.get> => sim.state.persons.get(pid);
+    type Pol = { liegeOf?(h: number): number; inbox?(): ReadonlyArray<{ id: number; text: string; to: number }>; petitions?(p: number): ReadonlyArray<{ id: number; text: string }> };
+    type Hap = { requests?(): ReadonlyArray<{ id: number; text: string }> };
+    const pol = sim.services.politics as unknown as Pol | undefined;
+    const hap = sim.services.happenings as unknown as Hap | undefined;
+    const mil = sim.services.military as { lordHouse?(s: number): number } | undefined;
+    return {
+      homeSettlement: me()?.settlement ?? 0,
+      houseName: (id) => sim.state.houses.get(id)?.name ?? 'unknown',
+      placeName: (id) => this.placeName(id),
+      houseConcerns: (id) => {
+        const p = me();
+        if (!p) return false;
+        if (id === p.house) return true;
+        const lord = mil?.lordHouse?.(p.settlement) ?? 0;
+        const chain = new Set<number>([p.house, lord]);
+        for (const start of [p.house, lord]) { let x = start; for (let i = 0; i < 4 && x; i++) { x = pol?.liegeOf?.(x) ?? 0; if (x) chain.add(x); } }
+        chain.delete(0);
+        return chain.has(id) || (pol?.liegeOf?.(id) !== undefined && chain.has(pol.liegeOf(id) as number));
+      },
+      requestPage: (e) => {
+        if (hap?.requests?.().some((r) => r.id === e.id && r.text === e.text)) return 'journal';
+        const p = me();
+        if (p && pol?.inbox?.().some((l) => l.id === e.id && l.text === e.text && l.to === p.house)) return 'letters';
+        if (pol?.petitions?.(pid).some((x) => x.id === e.id && x.text === e.text)) return 'petitions';
+        return null;
+      },
+    };
   }
 
   private readonly seenChronicle = new Set<string>();
@@ -447,6 +517,7 @@ export class UiApp implements GameUIExt {
 
   private onPanelShown(p: UiPanel): void {
     this.panelLayer.appendChild(p.el);
+    this.guide.notePanel(p.id);
     p.mount?.();
     if (p.captures && document.pointerLockElement) document.exitPointerLock?.();
   }
@@ -580,16 +651,13 @@ export class UiApp implements GameUIExt {
   }
 
   private togglePanelKey(key: PanelKey): void {
+    const sim = this.bound?.game.sim;
+    if (!sim) return;
     // C opens the command panel (military module) when there is one, else the household page of the ledger
-    const army = key === 'command' && !!this.bound?.game.sim.services.military;
-    const req: PanelRequest =
-      army ? { panel: 'ext', name: 'army' } :
-      key === 'command' ? { panel: 'ledger', tab: 'household' } :
-      key === 'map' ? { panel: 'map' } :
-      { panel: key } as PanelRequest;
-    const id = army ? 'army' : key === 'command' ? 'ledger' : key;
-    if (this.stack.has(id)) this.stack.close(id);
-    else this.openPanel(req);
+    const target = panelForKey(key, (needs) => hasModule(sim, needs));
+    if (!target) return;
+    if (this.stack.has(target.panelId)) this.stack.close(target.panelId);
+    else this.openPanel(target.request);
   }
 
   /** Esc: wake from a skip, close the top panel (or step back inside it), else open the pause menu. */

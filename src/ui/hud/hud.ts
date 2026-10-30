@@ -11,17 +11,20 @@ import { clockText, dayPartLabel, formatMoney, minuteOfDay, pct } from '../core/
 import type { Feed, FeedLine, GainChip } from '../core/feed';
 import { actionView, dayFlags, healthLevel, needViews, promptView, secondsText, travelView, type NeedView } from '../core/hudModel';
 import { icon, type IconName } from '../core/icons';
-import { DOCK_PANELS, type PanelRequest } from '../core/requests';
+import { DOCK_ENTRIES, type DockEntry, type PanelRequest } from '../core/requests';
+import { dockBadges, hasModule } from '../core/modules';
 import type { GameServices, UiHost } from '../types';
 import { bar, button, chip, keycap, type BarHandle } from '../components/widgets';
 import { Dial } from './dial';
 import type { Toasts } from './toasts';
+import type { Guide } from './guide';
 
 export interface HudDeps {
   game(): GameServices | null;
   host: UiHost;
   feed: Feed;
   toasts: Toasts;
+  guide: Guide;
   open(req: PanelRequest): void;
   isOpen(id: string): boolean;
   say(kind: 'info' | 'warn', text: string): void;
@@ -78,6 +81,8 @@ export class Hud {
   private readonly feedLines = new Map<number, { el: HTMLElement; count: HTMLElement; shown: number }>();
   private readonly dockEl = h('div.mu-dock.mu-plate');
   private readonly dockBtns = new Map<string, HTMLButtonElement>();
+  private readonly dockEntries = new Map<string, DockEntry>();
+  private readonly dockSeps: HTMLElement[] = [];
   private readonly travelEl = h('div.mu-hud-travel.mu-plate.mu-hide');
   private readonly travelTitle = h('div.mu-hud-travel-title');
   private readonly travelBar: BarHandle = bar('lapis');
@@ -90,6 +95,19 @@ export class Hud {
   private readonly sleepTitle = h('div.mu-hud-sleep-title');
   private readonly sleepTime = h('div.mu-hud-sleep-time');
   private readonly savedEl = h('div.mu-hud-saved', null, icon('quill', 15), 'Saved');
+
+  // fighting: reticle, hit flash, the "you are down" state, the blood bar
+  private readonly reticle = h('div.mu-reticle.mu-hide', { 'aria-hidden': 'true' }, h('i.ring'), h('i.dot'), h('i.tick.t'), h('i.tick.b'), h('i.tick.l'), h('i.tick.r'));
+  private readonly hitFlash = h('div.mu-hud-hit');
+  private readonly downEl = h('div.mu-hud-down');
+  private readonly downText = h('div.mu-hud-down-text');
+  private readonly bloodRow = h('div.mu-hud-bar.mu-hud-blood.mu-hide', { tip: 'Blood: bleeding wounds drain it; bind them (B)' });
+  private readonly bloodBar: BarHandle = bar('vermilion');
+  private readonly bloodNum = h('span.mu-hud-num');
+  private readonly stRow = h('div.mu-hud-bar', { tip: 'Stamina' });
+  private readonly combatChip = h('div.mu-hud-combat.mu-hide');
+  private lastHitSeq = -1;
+  private lastCombatKey = '';
 
   // cached values
   private readonly setName = textBinder(this.nameEl);
@@ -148,8 +166,9 @@ export class Hud {
     );
     this.el.append(
       this.plate, this.clockPlate, this.dangerEl, this.deps.toasts.el, this.travelEl, this.gainsEl, this.actionEl, this.promptEl,
-      this.feedEl, this.dockEl, this.savedEl, this.sleepEl,
+      this.deps.guide.el, this.feedEl, this.dockEl, this.savedEl, this.reticle, this.hitFlash, this.downEl, this.combatChip, this.sleepEl,
     );
+    this.downEl.append(h('div.mu-hud-down-card', null, icon('skull', 30), h('div.mu-hud-down-title', null, 'You are down'), this.downText));
   }
 
   // ---------------------------------------------------------------- construction
@@ -163,13 +182,16 @@ export class Hud {
       this.setNeedTip.set(id, attrBinder(el, 'data-tip'));
       needs.appendChild(el);
     }
+    this.bloodRow.append(icon('drop', 15, 'blood'), this.bloodBar.el, this.bloodNum);
+    this.stRow.append(icon('bolt', 15, 'sta'), this.stBar.el, this.stNum);
     this.perkBadge.append(icon('star_f', 14), h('span', null, 'Perk ready'));
     this.perkBadge.addEventListener('click', () => this.openPerk());
     this.plate.append(
       h('div.mu-hud-namerow', null, this.nameEl, money),
       this.metaEl,
       h('div.mu-hud-bar', { tip: 'Health' }, icon('heart', 15, 'hp'), this.hpBar.el, this.hpNum),
-      h('div.mu-hud-bar', { tip: 'Stamina' }, icon('bolt', 15, 'sta'), this.stBar.el, this.stNum),
+      this.bloodRow,
+      this.stRow,
       h('div.mu-row.mu-between.mu-hud-lower', null, needs, this.perkBadge),
     );
   }
@@ -207,16 +229,46 @@ export class Hud {
   }
 
   private buildDock(): void {
-    for (const d of DOCK_PANELS) {
+    let lastGroup = '';
+    for (const d of DOCK_ENTRIES) {
+      if (lastGroup && d.group !== lastGroup) {
+        const sep = h('span.mu-dock-sep');
+        this.dockSeps.push(sep);
+        this.dockEl.appendChild(sep);
+      }
+      lastGroup = d.group;
       const b = h<HTMLButtonElement>('button.mu-dockbtn', { type: 'button', tip: `${d.label}  (${d.key})`, 'aria-label': d.label },
-        icon(dockIcon(d.id), 19));
-      b.addEventListener('click', () => this.deps.open({ panel: d.id } as PanelRequest));
-      this.dockBtns.set(d.id, b);
+        icon(dockIcon(d), 19));
+      b.addEventListener('click', () => this.deps.open(d.request));
+      this.dockBtns.set(d.panelId, b);
+      this.dockEntries.set(d.panelId, d);
       this.dockEl.appendChild(b);
     }
     const menu = h<HTMLButtonElement>('button.mu-dockbtn', { type: 'button', tip: 'Menu  (Esc)', 'aria-label': 'Menu' }, icon('cog', 19));
     menu.addEventListener('click', () => this.deps.open({ panel: 'pause' }));
     this.dockEl.append(h('span.mu-dock-sep'), menu);
+  }
+
+  /** Hides the buttons of modules this run does not have, and puts the little count dots on the others. */
+  private updateDock(game: GameServices): void {
+    const sim = game.sim;
+    const badges = dockBadges(sim, sim.state.run.playerId);
+    let anyRealm = false;
+    for (const [pid, b] of this.dockBtns) {
+      const d = this.dockEntries.get(pid) as DockEntry;
+      const present = hasModule(sim, d.needs);
+      b.classList.toggle('mu-hide', !present);
+      if (present && d.group === 'realm') anyRealm = true;
+      b.classList.toggle('on', this.deps.isOpen(pid));
+      const badge = badges.get(d.id);
+      let dot = b.querySelector('.mu-dockdot');
+      if (!badge || !present) { dot?.remove(); b.classList.remove('alert'); continue; }
+      if (!dot) { dot = h('span.mu-dockdot'); b.appendChild(dot); }
+      dot.textContent = badge.count > 9 ? '9+' : String(badge.count);
+      dot.className = `mu-dockdot ${badge.tone}`;
+      b.classList.toggle('alert', badge.tone === 'vermilion');
+    }
+    for (const sep of this.dockSeps) sep.classList.toggle('mu-hide', !anyRealm);
   }
 
   private buildTravel(): void {
@@ -311,8 +363,10 @@ export class Hud {
     this.updatePrompt(hud);
     this.updateAction(hud);
     this.updateTravel(hud);
+    this.updateCombat(game, hud);
     this.updateOverlays(clock, hud);
     this.updateFeed(now);
+    this.deps.guide.update(now);
     if (this.savedUntil && now > this.savedUntil) { this.savedUntil = 0; this.savedEl.classList.remove('on'); }
 
     if (now - this.lastSlow >= 0.5) {
@@ -374,6 +428,46 @@ export class Hud {
         el.style.setProperty('--v', `${Math.round(v.value * 100)}%`);
         this.setNeedTip.get(v.id)?.(`${v.hint} (${pct(v.value)})`);
       }
+    }
+  }
+
+  /** The reticle, the hit flash, "you are down", the blood row and the stance chip. */
+  private updateCombat(game: GameServices, hud: ReturnType<GameServices['player']['hud']>): void {
+    const c = hud?.combat;
+    const state = c?.state ?? 'ready';
+    // reticle: with a bow in hand and the weapon out
+    const showReticle = !!c && c.ranged && (c.engaged || state === 'draw' || state === 'aim' || state === 'shoot' || state === 'reload');
+    this.reticle.classList.toggle('mu-hide', !showReticle);
+    if (showReticle) this.reticle.className = `mu-reticle ${state}`;
+    // a blow taken: a red flash that fades
+    if (c && c.hitSeq !== this.lastHitSeq) {
+      if (this.lastHitSeq >= 0) { this.hitFlash.classList.remove('on'); void this.hitFlash.offsetWidth; this.hitFlash.classList.add('on'); }
+      this.lastHitSeq = c.hitSeq;
+    }
+    const down = state === 'down';
+    this.downEl.classList.toggle('on', down);
+    // blood and wounds
+    const cb = game.sim.services.combat;
+    const pid = game.sim.state.run.playerId;
+    const blood = cb?.blood?.(pid) ?? 1;
+    const wounds = cb?.wounds(pid) ?? [];
+    let bleeding = 0;
+    for (const w of wounds) if (w.bleeding) bleeding++;
+    const showBlood = blood < 0.995 || bleeding > 0;
+    this.bloodRow.classList.toggle('mu-hide', !showBlood);
+    this.plate.classList.toggle('bleeding', bleeding > 0);
+    if (showBlood) { this.bloodBar.set(blood); this.bloodNum.textContent = `${Math.round(blood * 100)}`; }
+    if (down) this.downText.textContent = bleeding > 0 || blood < 0.5 ? 'Bleeding. You cannot act until you are on your feet again.' : 'Winded and helpless. Stay down or struggle up when you can.';
+    // out of breath
+    this.stRow.classList.toggle('winded', !!hud?.exhausted);
+    // stance chip
+    const label = stateLabel(state, !!hud?.exhausted);
+    const key = `${c?.engaged ? 1 : 0}|${label}`;
+    if (key !== this.lastCombatKey) {
+      this.lastCombatKey = key;
+      this.combatChip.classList.toggle('mu-hide', !label);
+      if (label) this.combatChip.replaceChildren(icon(state === 'draw' || state === 'aim' || state === 'shoot' ? 'target' : state === 'guard' ? 'shield' : 'swords', 14), label);
+      this.combatChip.className = `mu-hud-combat${label ? '' : ' mu-hide'}${state === 'hit' || state === 'stagger' || state === 'down' ? ' hurt' : ''}`;
     }
   }
 
@@ -529,13 +623,29 @@ export class Hud {
       this.perkBadge.classList.toggle('mu-hide', perks === 0);
       this.perkBadge.setAttribute('data-tip', perks > 1 ? `${perks} perks waiting` : 'A perk is waiting: choose one of two');
     }
-    for (const [pid, b] of this.dockBtns) b.classList.toggle('on', this.deps.isOpen(pid));
+    this.updateDock(game);
   }
 
 }
 
-function dockIcon(id: (typeof DOCK_PANELS)[number]['id']): IconName {
-  switch (id) {
+function stateLabel(state: string, winded: boolean): string {
+  switch (state) {
+    case 'guard': return 'On guard';
+    case 'attack': return 'Striking';
+    case 'draw': return 'Drawing';
+    case 'aim': return 'Aiming';
+    case 'shoot': return 'Loosed';
+    case 'reload': return 'Spanning the crossbow';
+    case 'roll': return 'Rolling';
+    case 'hit': return 'Hit';
+    case 'stagger': return 'Staggered';
+    case 'down': return 'Down';
+    default: return winded ? 'Out of breath' : '';
+  }
+}
+
+function dockIcon(d: DockEntry): IconName {
+  switch (d.id) {
     case 'character': return 'user';
     case 'inventory': return 'bag';
     case 'family': return 'tree';
@@ -543,6 +653,11 @@ function dockIcon(id: (typeof DOCK_PANELS)[number]['id']): IconName {
     case 'map': return 'map';
     case 'chronicle': return 'scroll';
     case 'rest': return 'bed';
+    case 'requests': return 'quill';
+    case 'wounds': return 'heart';
+    case 'techs': return 'book';
+    case 'politics': return 'crown';
+    case 'army': return 'swords';
+    default: return 'dot';
   }
 }
-

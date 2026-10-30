@@ -2,7 +2,9 @@
 // KEYMAP.ui (Tab, I, J, M, C, H, L, Z, Esc) plus menu navigation (digits, arrows, Enter).
 import { KEYMAP } from '../../player/types';
 
-export type PanelKey = 'character' | 'inventory' | 'ledger' | 'map' | 'command' | 'family' | 'chronicle' | 'rest';
+export type PanelKey =
+  | 'character' | 'inventory' | 'ledger' | 'map' | 'command' | 'family' | 'chronicle' | 'rest'
+  | 'politics' | 'techs' | 'requests' | 'wounds' | 'help';
 
 export type KeyIntent =
   | { type: 'toggle'; panel: PanelKey }
@@ -29,6 +31,11 @@ const TOGGLES: ReadonlyArray<readonly [string, PanelKey]> = [
   [KEYMAP.ui.family, 'family'],
   [KEYMAP.ui.chronicle, 'chronicle'],
   [KEYMAP.ui.rest, 'rest'],
+  [KEYMAP.ui.politics, 'politics'],
+  [KEYMAP.ui.techs, 'techs'],
+  [KEYMAP.ui.requests, 'requests'],
+  [KEYMAP.ui.wounds, 'wounds'],
+  [KEYMAP.ui.help, 'help'],
 ];
 
 export function keyIntent(code: string, state: KeyState): KeyIntent | null {
