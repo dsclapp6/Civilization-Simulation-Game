@@ -172,8 +172,10 @@ export function resolve(M: Mil, att: Fighters, def: Fighters, terrain: { x: numb
   const sa = stanceFactors(att.stance), sd = stanceFactors(def.stance);
   const lead = (f: Fighters): number => Math.max(0.88, Math.min(1.3, 1 + 0.012 * (leadershipOf(f.leader) - 8)));
   const morale = (f: Fighters): number => 0.75 + 0.5 * f.morale;
-  const pa = att.total * lead(att) * morale(att) * (1 - att.mountedShare * (1 - t.horse) * 0.5);
-  const pd = def.total * lead(def) * morale(def) * def.bonus * t.def * (1 - def.mountedShare * (1 - t.horse) * 0.5);
+  // the fortune of the day: ground, surprise, who was ready — lognormal luck on each side
+  const luckA = Math.exp(rng.gauss(0, 0.22)), luckD = Math.exp(rng.gauss(0, 0.22));
+  const pa = att.total * luckA * lead(att) * morale(att) * (1 - att.mountedShare * (1 - t.horse) * 0.5);
+  const pd = def.total * luckD * lead(def) * morale(def) * def.bonus * t.def * (1 - def.mountedShare * (1 - t.horse) * 0.5);
   const result: Resolution = { attWon: false, attLoss: 0, defLoss: 0, attLeft: 1, defLeft: 1, routed: 'none', attCasualties: [], defCasualties: [], margin: 0 };
   if (att.total <= 0 && def.total <= 0) return result;
   if (att.total <= 0) { result.attLeft = 0; result.attLoss = 1; result.routed = 'att'; return result; }

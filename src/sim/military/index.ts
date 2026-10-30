@@ -25,11 +25,20 @@ import { Mil } from './store';
 import { MusterView } from './musterview';
 import { UNIT_CHAR, CHAR_UNIT, type MilitaryRuntime } from './types';
 
+const contexts = new WeakMap<Simulation, Mil>();
+/** The module's internal context (tests, tools and the dev pages). */
+export function militaryContext(sim: Simulation): Mil {
+  const m = contexts.get(sim);
+  if (!m) throw new Error('installMilitary has not run for this simulation');
+  return m;
+}
+
 export type { MilitaryRuntime } from './types';
 export * from './types';
 
 export function installMilitary(sim: Simulation, deps: Wave3Deps): MilitaryRuntime {
   const M = new Mil(sim, deps);
+  contexts.set(sim, M);
   M.realm = new Realm(M);
   M.forces = new ForceCache(M);
   M.sieges = new SiegeSystem(M);

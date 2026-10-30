@@ -168,7 +168,7 @@ function think(M: Mil, a: Army): void {
     if (a.task === 'siege' && (a.supplies < size * 0.5 && age > 30)) { const s = M.data.sieges.find((x) => x.army === a.id); if (s) M.sieges.lift(s, 'the besiegers ran out of food'); giveOrder(M, a, { kind: 'return' }); }
     return;
   }
-  if (a.intent === 'return') return;
+  if (a.intent === 'return' || a.intent === 'hold') return;
   // idle at a place: choose work
   const foe = nearestFoe(M, a, 3200);
   if (foe) {
