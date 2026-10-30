@@ -97,7 +97,11 @@ function rehome(core: PoliticsCore, t: Title, to: Person): void {
 // ---------------------------------------------------------------------------------------------
 
 /** Who outside the holder's House can press a claim on the title, strongest first. */
-export function claimsOnTitle(core: PoliticsCore, t: Title): Claim[] {
+export function claimsOnTitle(core: PoliticsCore, t: Title): readonly Claim[] {
+  return core.memo(`c:${t.id}`, () => computeClaims(core, t));
+}
+
+function computeClaims(core: PoliticsCore, t: Title): Claim[] {
   const state = core.state;
   const holder = t.holder ? state.persons.get(t.holder) : undefined;
   if (!holder || holder.death) return [];

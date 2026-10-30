@@ -294,7 +294,7 @@ export interface PoliticsRuntime extends PoliticsApi {
   stats(): PoliticsStats;
 
   // ---- claims ----
-  claimsOn(title: TitleId): Claim[];
+  claimsOn(title: TitleId): readonly Claim[];
   claimsOf(house: HouseId): Claim[];
 
   // ---- diplomacy ----

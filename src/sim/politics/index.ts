@@ -48,11 +48,17 @@ export function installPolitics(sim: Simulation, deps: Pick<Wave3Deps, 'economy'
     name: 'politics.daily', phase: 'daily', order: 70,
     run: () => {
       core.invalidate();
-      offices.daily();
       wars.daily();
       realms.coalitionsDaily();
-      ai.daily();
       diplo.expire();
+    },
+  }));
+  // the Houses think and the posts are reviewed a little each hour, so no frame carries the whole day
+  offs.push(sim.registerSystem({
+    name: 'politics.hourly', phase: 'hourly', order: 70,
+    run: (_ctx, info) => {
+      ai.hourly(info.hourIndex);
+      offices.hourly(info.hour);
     },
   }));
   offs.push(sim.registerSystem({
@@ -75,7 +81,7 @@ export function installPolitics(sim: Simulation, deps: Pick<Wave3Deps, 'economy'
   }));
 
   // ---- events ----
-  offs.push(sim.events.on('marriage', (e) => { core.invalidate(); diplo.onMarriage(e); }));
+  offs.push(sim.events.on('marriage', (e) => diplo.onMarriage(e)));
   offs.push(sim.events.on('inheritance', (e) => realms.onInheritance(e)));
   offs.push(sim.events.on('siege', (e) => wars.onSiege(e)));
   offs.push(sim.events.on('playerSwitched', () => core.invalidate()));

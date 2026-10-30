@@ -19,12 +19,12 @@ const DISASTER = /famine|plague|pestilence|blight|drought|flood|murrain|sickness
 export class Ai {
   constructor(private readonly core: PoliticsCore, private readonly wars: Wars, private readonly diplo: Diplomacy) {}
 
-  /** Daily slice: a quarter of the Houses think today. */
-  daily(): void {
+  /** Hourly slice: each House thinks once every THINK_PERIOD days, at its own hour (about one House per hour). */
+  hourly(hourIndex: number): void {
     const c = this.core;
-    const di = Math.floor(c.day);
+    const cycle = THINK_PERIOD * 24;
     for (const h of c.actors()) {
-      if ((h + di) % THINK_PERIOD !== 0) continue;
+      if (h % cycle !== hourIndex % cycle) continue;
       this.think(h);
     }
   }
@@ -83,19 +83,21 @@ export class Ai {
   private seekMarriages(h: HouseId, head: Person): void {
     const c = this.core;
     const mind = c.mindOf(h);
-    const wards = this.unwed(h);
+    const wards = this.unwed(h).filter((w) => c.day - (mind.matched[String(w.id)] ?? -999) >= YEAR / 2);
     if (wards.length === 0) return;
     const rng = c.rng('ai.marry');
     const mine = Math.max(1, c.strengthOf(h));
     // best partner Houses: not hostile, near enough, strong enough; a ruling heiress or a stronger line is the prize
+    for (const k of Object.keys(mind.matched)) if (c.day - mind.matched[k] > 2 * YEAR) delete mind.matched[k];
+    const only = new Set(wards.map((w) => w.id));
     const targets = c.neighbours(h).filter((o) => {
       const s = c.stance(h, o);
-      return s !== 'war' && s !== 'hostile' && s !== 'vassal' || (s === 'vassal' && false);
+      return s !== 'war' && s !== 'hostile';
     });
     let tried = 0;
     for (const o of targets) {
       if (tried >= 2) break;
-      const opts = this.diplo.matchOptions(h, o);
+      const opts = this.diplo.matchOptions(h, o, only);
       if (opts.length === 0) continue;
       const pick = opts[0];
       const last = mind.matched[String(pick.ward)] ?? -999;
@@ -212,6 +214,10 @@ export class Ai {
 
   /** 0..~1: how ripe the House is for the picking (SPEC §16: famine, plague, winter, war elsewhere, a child heir). */
   weakness(o: HouseId): number {
+    return this.core.memo(`w:${o}`, () => this.computeWeakness(o));
+  }
+
+  private computeWeakness(o: HouseId): number {
     const c = this.core;
     const head = c.headOf(o);
     let w = 0;
@@ -240,9 +246,11 @@ export class Ai {
   /** Friends fight beside a House: half of every ally's strength counts. */
   private withAllies(h: HouseId): number {
     const c = this.core;
-    let s = c.strengthOf(h);
-    for (const o of c.neighbours(h)) if (c.tie(h, o).alliance) s += c.strengthOf(o) * 0.5;
-    return s;
+    return c.memo(`a:${h}`, () => {
+      let s = c.strengthOf(h);
+      for (const o of c.neighbours(h)) if (c.tie(h, o).alliance) s += c.strengthOf(o) * 0.5;
+      return s;
+    });
   }
 
   /** Desire to attack `o` (≈ −1 .. 1.5): strength, weakness, claims, grievance, temperament. */

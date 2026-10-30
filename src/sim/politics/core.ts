@@ -56,6 +56,7 @@ export interface Snapshot {
   titlesOf: Map<HouseId, Title[]>;
   /** Political actors: Houses that hold a secular title. */
   actors: HouseId[];
+  actorSet: Set<HouseId>;
   liege: Map<HouseId, HouseId>;
   vassals: Map<HouseId, HouseId[]>;
   top: Map<HouseId, HouseId>;
@@ -66,6 +67,11 @@ export interface Snapshot {
   /** Sum of the strength of every realm leader. */
   total: number;
   neighbours: Map<HouseId, HouseId[]>;
+  /** Per-snapshot cache for derived values (weakness, claims, demesnes…). */
+  memo: Map<string, unknown>;
+  pts: Map<HouseId, number[]>;
+  dem: Map<HouseId, number[]>;
+  pers: Map<HouseId, Personality>;
 }
 
 export class PoliticsCore {
@@ -243,7 +249,7 @@ export class PoliticsCore {
     let total = 0;
     for (const h of actors) if (top.get(h) === h) total += strength.get(h) ?? 0;
 
-    return { day, rev: this.rev, titlesOf, actors, liege, vassals, top, own, strength, total, neighbours: new Map() };
+    return { day, rev: this.rev, titlesOf, actors, actorSet: new Set(actors), liege, vassals, top, own, strength, total, neighbours: new Map(), memo: new Map(), pts: new Map(), dem: new Map(), pers: new Map() };
   }
 
   /** Troops a title's own land puts in the field, tenths of a man. */
@@ -270,8 +276,17 @@ export class PoliticsCore {
     return s ? s.kingdom : -1;
   }
 
+  /** Caches `make()` for the life of the current snapshot (a day, or until a title moves). */
+  memo<T>(key: string, make: () => T): T {
+    const m = this.snapshot().memo;
+    if (m.has(key)) return m.get(key) as T;
+    const v = make();
+    m.set(key, v);
+    return v;
+  }
+
   actors(): HouseId[] { return this.snapshot().actors; }
-  isActor(h: HouseId): boolean { return this.snapshot().titlesOf.has(h) && this.snapshot().actors.includes(h); }
+  isActor(h: HouseId): boolean { return this.snapshot().actorSet.has(h); }
   titlesOfHouse(h: HouseId): readonly Title[] { return this.snapshot().titlesOf.get(h) ?? EMPTY_TITLES; }
   liegeOf(h: HouseId): HouseId { return this.snapshot().liege.get(h) ?? 0; }
   vassalsOf(h: HouseId): readonly HouseId[] { return this.snapshot().vassals.get(h) ?? EMPTY_IDS; }
@@ -320,11 +335,16 @@ export class PoliticsCore {
   }
 
   /** Settlements held directly by a House (title demesnes). */
-  demesnes(h: HouseId): number[] {
-    const out: number[] = [];
-    for (const t of this.titlesOfHouse(h)) {
-      const p = this.demesnePlace(t);
-      if (p >= 0 && !out.includes(p)) out.push(p);
+  demesnes(h: HouseId): readonly number[] {
+    const snap = this.snapshot();
+    let out = snap.dem.get(h);
+    if (!out) {
+      out = [];
+      for (const t of this.titlesOfHouse(h)) {
+        const p = this.demesnePlace(t);
+        if (p >= 0 && !out.includes(p)) out.push(p);
+      }
+      snap.dem.set(h, out);
     }
     return out;
   }
@@ -334,27 +354,41 @@ export class PoliticsCore {
     const snap = this.snapshot();
     const memo = snap.neighbours.get(h);
     if (memo) return memo;
-    const mine = this.demesnes(h).map((id) => this.settlementById.get(id)).filter((s): s is Settlement => !!s);
-    const found = new Map<HouseId, number>();
+    const mine = this.points(h);
+    const found: Array<[HouseId, number]> = [];
     for (const o of snap.actors) {
       if (o === h) continue;
+      const theirs = this.points(o);
       let best = Infinity;
-      for (const s of mine) {
-        for (const id of this.demesnes(o)) {
-          const t = this.settlementById.get(id);
-          if (!t) continue;
-          const d = dist2(s.x, s.z, t.x, t.z);
+      for (let i = 0; i < mine.length; i += 2) {
+        for (let j = 0; j < theirs.length; j += 2) {
+          const d = dist2(mine[i], mine[i + 1], theirs[j], theirs[j + 1]);
           if (d < best) best = d;
         }
       }
+      if (best <= 4200 * 4200) { found.push([o, best]); continue; }
       const tie = this.save.ties[tieKey(h, o)];
-      const linked = this.liegeOf(h) === o || this.liegeOf(o) === h || (tie && (tie.kin > 0 || tie.alliance > 0));
-      if (best <= 4200 * 4200) found.set(o, Math.sqrt(best));
-      else if (linked) found.set(o, Math.sqrt(best === Infinity ? 9e6 : best));
+      if ((tie && (tie.kin > 0 || tie.alliance > 0)) || snap.liege.get(h) === o || snap.liege.get(o) === h) found.push([o, best === Infinity ? 9e12 : best]);
     }
-    const out = [...found.entries()].sort((a, b) => a[1] - b[1] || a[0] - b[0]).slice(0, 18).map((e) => e[0]);
+    found.sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+    const out = found.slice(0, 18).map((e) => e[0]);
     snap.neighbours.set(h, out);
     return out;
+  }
+
+  /** Flat [x, z, …] of a House's demesnes. */
+  private points(h: HouseId): number[] {
+    const snap = this.snapshot();
+    let p = snap.pts.get(h);
+    if (!p) {
+      p = [];
+      for (const id of this.demesnes(h)) {
+        const s = this.settlementById.get(id);
+        if (s) p.push(s.x, s.z);
+      }
+      snap.pts.set(h, p);
+    }
+    return p;
   }
 
   // ---- ties and stance ----
@@ -477,6 +511,12 @@ export class PoliticsCore {
   // ---- personality ----
   /** Temperament of a House, read from its head's traits, reputation and ambition (SPEC §16). */
   personality(h: HouseId): Personality {
+    const snap = this.snapshot();
+    let p = snap.pers.get(h);
+    if (!p) { p = this.computePersonality(h); snap.pers.set(h, p); }
+    return p;
+  }
+  private computePersonality(h: HouseId): Personality {
     const head = this.headOf(h);
     if (!head) return NEUTRAL_PERSONALITY;
     const t = head.traits;

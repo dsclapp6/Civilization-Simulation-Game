@@ -51,7 +51,7 @@ export class Offices {
     };
     for (const s of c.world.settlements) {
       if (s.kind === 'village' || s.kind === 'hamlet') {
-        add('reeve', s.id, 8 + (hash(s.id) % 4));
+        add('reeve', s.id, hash(s.id) % 16);
         add('bailiff', s.id, hash(s.id + 17) % 16);
       } else if (s.kind === 'town' || s.kind === 'city') {
         add('mayor', s.id, 12 + (hash(s.id) % 4));
@@ -417,20 +417,22 @@ export class Offices {
 
   // ---- the daily review ----
 
-  /** Daily: the posts whose review falls today are voted on or filled (spread across the year). */
-  daily(): void {
+  /** Hourly: the posts whose review falls today are voted on or filled — a few each hour, spread over the year. */
+  hourly(hour: number): void {
     const c = this.core;
     const slot = Math.floor(c.day) % YEAR;
     const list = this.bySlot.get(slot);
     // appointments the player left unchosen are made for him
-    for (const k of Object.keys(c.save.pending).sort()) {
-      if (c.save.pending[k] <= c.day) {
-        const [office, place] = k.split(':');
-        if (isManaged(office)) this.holdElection(office, Number(place));
+    if (hour === 6) {
+      for (const k of Object.keys(c.save.pending).sort()) {
+        if (c.save.pending[k] <= c.day) {
+          const [office, place] = k.split(':');
+          if (isManaged(office)) this.holdElection(office, Number(place));
+        }
       }
     }
     if (!list) return;
-    for (const seat of list) this.review(seat);
+    for (let i = 0; i < list.length; i++) if (i % 24 === hour) this.review(list[i]);
   }
 
   private review(seat: Seat): void {

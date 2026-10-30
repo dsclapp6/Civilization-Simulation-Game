@@ -170,9 +170,11 @@ export class Diplomacy {
   }
 
   /** Pairs (ward of `from`, partner in `to`), best first. */
-  matchOptions(from: HouseId, to: HouseId): Array<{ ward: PersonId; partner: PersonId }> {
+  matchOptions(from: HouseId, to: HouseId, only?: ReadonlySet<PersonId>): Array<{ ward: PersonId; partner: PersonId }> {
     const c = this.core;
-    const mine = this.marriageable(from), theirs = this.marriageable(to);
+    const mine = this.marriageable(from).filter((w) => !only || only.has(w.id));
+    if (mine.length === 0) return [];
+    const theirs = this.marriageable(to);
     const scored: Array<{ ward: PersonId; partner: PersonId; s: number }> = [];
     for (const a of mine) {
       for (const b of theirs) {
