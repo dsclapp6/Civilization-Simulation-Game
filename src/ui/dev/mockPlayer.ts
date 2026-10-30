@@ -154,7 +154,7 @@ export class MockPlayer implements PlayerApi {
         this.sim.events.emit('travel', { phase: 'arrive', to: t.to });
         const p = this.sim.state.persons.get(this.pid());
         if (p) this.sim.state.setSettlement(p, t.to);
-        window.setTimeout(() => { this.travelState = null; }, 1800);
+        setTimeout(() => { this.travelState = null; }, 1800);
       }
     }
   }
