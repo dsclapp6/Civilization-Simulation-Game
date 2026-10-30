@@ -109,6 +109,8 @@ export interface CharacterDrawItem {
   highlight: 0 | 1 | 2 | 3;
   /** Short floating label (name or role) shown when close. */
   label?: string;
+  /** For anim 'sit': seat height in metres above the feet (bench, stool, throne). Omit/0 = sit on the ground. */
+  seatHeight?: number;
 }
 
 export type AnimalAnim = 'idle' | 'graze' | 'walk' | 'trot' | 'run' | 'lie' | 'sleep' | 'eat' | 'attack' | 'hit' | 'dead';
@@ -125,6 +127,8 @@ export interface AnimalDrawItem {
   scale: number;
   coat: number;
   young?: boolean;
+  /** Sex where it changes the look (stag antlers, ram horns, rooster comb/tail). Omit = derived from id. */
+  male?: boolean;
   /** For horses carrying riders the character's MountLook is used instead. */
   highlight: 0 | 1 | 2;
 }
