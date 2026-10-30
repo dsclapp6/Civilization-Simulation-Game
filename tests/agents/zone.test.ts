@@ -265,6 +265,28 @@ describe('summoned people and animals', () => {
     expect(sim.hostileNear()).toBe(false);
   });
 
+  it('claims a horse for the player (no longer drawn or moved) and releases it where they dismount', () => {
+    const { zone, sim, focus } = rig;
+    focus.x = vil.x; focus.z = vil.z;
+    setClock(sim, 1, 2, 0.4);
+    zone.resync();
+    // a horse: summon one (household horses are not guaranteed in a village)
+    const id = zone.summonAnimal!('horse', vil.x + 5, vil.z + 5, false);
+    expect(zone.claimAnimal!(id)).toBe(true);
+    expect(sim.view.animals().some((d) => d.id === id)).toBe(false);
+    const a = zone.animals().find((q) => q.id === id)!;
+    const x0 = a.x;
+    run(sim, 2);
+    expect(a.x).toBe(x0);
+    expect(zone.claimAnimal!(id)).toBe(false);
+    zone.releaseAnimal!(id, vil.x + 9, vil.z + 3, 1);
+    run(sim, 0.2);
+    expect(sim.view.animals().some((d) => d.id === id)).toBe(true);
+    expect(Math.hypot(a.x - (vil.x + 9), a.z - (vil.z + 3))).toBeLessThan(1);
+    expect(zone.claimAnimal!(-12345)).toBe(false);
+    zone.dismissAnimal!(id);
+  });
+
   it('makes hold and release safe to repeat', () => {
     const { zone } = rig;
     const a = zone.agentsArr.find((q) => q.control === 'ai')!;

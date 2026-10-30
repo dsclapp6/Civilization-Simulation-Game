@@ -3,7 +3,7 @@
 // view. Each cell has a terrain cost byte (0 = impassable water/cliff, else walkCost × 16) and a
 // solid flag byte (buildings, trunks, rocks). Tiles are validated by a tag, built on demand when a
 // query touches them, and also built ahead of the focus within a time budget.
-import { WORLD_SIZE, type WorldModel } from '../../world/types';
+import { Ground, WORLD_SIZE, type WorldModel } from '../../world/types';
 import { CELL, NAV_KEEP_RADIUS, NAV_MASK, NAV_N, PLAN_MARGIN, TILE_CELLS, TILES_PER_SIDE } from '../config';
 import { obbNearest } from '../geometry';
 import type { Obstacles } from './obstacles';
@@ -156,7 +156,9 @@ export class NavGrid {
         const x = x0 + (i + 0.5) * CELL;
         solid[idx] = 0;
         if (x < 0 || z < 0 || x >= WORLD_SIZE || z >= WORLD_SIZE) { terrain[idx] = 0; continue; }
-        const c = world.walkCostAt(x, z);
+        let c = world.walkCostAt(x, z);
+        // yards and cobbles are trodden ground whatever biome they were laid in (a croft in a marsh is not mud)
+        if (c > 1.15 && c !== Infinity) { const gr = world.groundAt(x, z); if (gr === Ground.Yard || gr === Ground.Cobbles || gr === Ground.Road || gr === Ground.Path) c = 1; }
         terrain[idx] = c === Infinity || c !== c ? 0 : Math.max(1, Math.min(255, Math.round(c * 16)));
         if (terrain[idx] === 0) blockedCells++;
       }

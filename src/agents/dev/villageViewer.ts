@@ -165,7 +165,7 @@ export const SCENES: SceneSpec[] = [
     },
   },
   {
-    id: 'night', describe: 'night: the watch walks the streets, a few revellers go home', settlement: pickTown, season: 0, day: 2, time: 0.015, warm: 1,
+    id: 'night', describe: 'night: the watch walks the streets, a few revellers go home', settlement: pickWithButts, season: 0, day: 2, time: 0.015, warm: 1,
     frame: (c) => crowdPose(c, (a) => a.draw.mainHand === 'torch', 7, 1.7, 30),
     camera: (c) => {
       const sp = c.zone.places.of(c.s.id)!;

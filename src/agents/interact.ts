@@ -151,9 +151,10 @@ export function findInteractables(zone: Zone, x: number, z: number, yaw: number,
     const lx = (x - b.x) * c - (z - b.z) * s, lz = (x - b.x) * s + (z - b.z) * c;
     const ex = Math.max(0, Math.abs(lx) - def.w / 2), ez = Math.max(0, Math.abs(lz) - def.d / 2);
     const dFoot = Math.hypot(ex, ez);
-    const d = Math.min(dd, dFoot + 0.6);
-    if (d > range) return;
-    push({ kind: 'building', id: b.id }, dd < dFoot + 0.6 ? door.x : b.x, dd < dFoot + 0.6 ? door.z : b.z, d, def.name, 0.5);
+    // the point is always the door, so a caller checking its action range against (x, z) agrees with `distance`
+    void dFoot;
+    if (dd > range) return;
+    push({ kind: 'building', id: b.id }, door.x, door.z, dd, def.name, 0.5);
   });
   // trees and rocks
   zone.nav.obstacles.forSolids(x - range, z - range, x + range, z + range, (ch, i) => {
@@ -176,7 +177,8 @@ export function findInteractables(zone: Zone, x: number, z: number, yaw: number,
       if (!pointInPolygon(x, z, s.poly) && !pointInPolygon(fx, fz, s.poly)) continue;
       const ss = st.strips.get(id);
       const crop = ss ? CROP_NAMES[ss.crop] ?? ss.crop : 'fallow';
-      push({ kind: 'strip', id }, x, z, 0, ss && ss.crop === 'fallow' ? 'Fallow strip' : `Strip of ${crop}`, 3.4, false);
+      const inHere = pointInPolygon(x, z, s.poly);
+      push({ kind: 'strip', id }, inHere ? x : fx, inHere ? z : fz, inHere ? 0 : 1.1, ss && ss.crop === 'fallow' ? 'Fallow strip' : `Strip of ${crop}`, 3.4, false);
     }
   }
   const seenParcel = new Set<number>();
@@ -187,7 +189,8 @@ export function findInteractables(zone: Zone, x: number, z: number, yaw: number,
       seenParcel.add(id);
       const p = zone.world.parcels[id];
       if (!pointInPolygon(x, z, p.poly) && !pointInPolygon(fx, fz, p.poly)) continue;
-      push({ kind: 'parcel', id }, x, z, 0, PARCEL_NAMES[p.use], 3.8, false);
+      const inHere = pointInPolygon(x, z, p.poly);
+      push({ kind: 'parcel', id }, inHere ? x : fx, inHere ? z : fz, inHere ? 0 : 1.1, PARCEL_NAMES[p.use], 3.8, false);
     }
   }
   // best first

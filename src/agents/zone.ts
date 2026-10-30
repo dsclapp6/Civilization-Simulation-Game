@@ -572,6 +572,8 @@ export class Zone {
 
   summonAnimal(kind: AnimalKind, x: number, z: number, hostile: boolean): number { return this.fauna.summon(kind, x, z, hostile); }
   dismissAnimal(id: number): void { this.fauna.dismiss(id); }
+  claimAnimal(id: number): boolean { return this.fauna.claim(id); }
+  releaseAnimal(id: number, x: number, z: number, yaw: number): void { this.fauna.release(id, x, z, yaw); }
 
   say(person: PersonId, text: string, seconds = 3): void {
     const a = this.byPerson.get(person);

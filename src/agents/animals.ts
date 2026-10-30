@@ -97,6 +97,8 @@ export class Animal implements ZoneAnimal {
   circle = 0;
   spec: Spec | null = null;
   summoned = false;
+  /** The player rides it: not drawn, not simulated. */
+  claimed = false;
 
   constructor(id: number, kind: AnimalKind, draw: AnimalDrawItem) {
     this.id = id; this.kind = kind; this.draw = draw; this.info = KINDS[kind];
@@ -154,7 +156,7 @@ export class AnimalSystem {
   }
 
   clear(): void {
-    const keep = this.items.filter((a) => a.summoned && !a.dead);
+    const keep = this.items.filter((a) => (a.summoned || a.claimed) && !a.dead);
     this.items.length = 0;
     this.byId.clear();
     for (const a of keep) { this.items.push(a); this.byId.set(a.id, a); }
@@ -174,6 +176,23 @@ export class AnimalSystem {
     const a = this.spawn(spec, x, zz, true);
     if (a) a.summoned = true;
     return id;
+  }
+
+  /** The player mounts a horse: stop drawing and simulating it. */
+  claim(id: number): boolean {
+    const a = this.byId.get(id);
+    if (!a || a.dead || a.kind !== 'horse' || a.hostile || a.claimed) return false;
+    a.claimed = true; a.flee = 0;
+    return true;
+  }
+
+  /** The player dismounted: the horse stands here again. */
+  release(id: number, x: number, zz: number, yaw: number): void {
+    const a = this.byId.get(id);
+    if (!a || !a.claimed) return;
+    a.claimed = false;
+    a.x = x; a.z = zz; a.y = this.zone.nav.groundY(x, zz); a.yaw = yaw; a.dx = a.dz = a.dy = 0;
+    a.st = A.Idle; a.timer = 3; a.anchorX = x; a.anchorZ = zz; a.homeX = x; a.homeZ = zz;
   }
 
   dismiss(id: number): void {
@@ -201,7 +220,7 @@ export class AnimalSystem {
     const list = this.viewList;
     list.length = 0;
     for (const a of this.items) {
-      if (a.dead) continue;
+      if (a.dead || a.claimed) continue;
       const d = a.draw;
       d.x = a.x + a.dx * alpha; d.z = a.z + a.dz * alpha; d.y = a.y + a.dy * alpha;
       d.yaw = a.yaw;
@@ -226,8 +245,8 @@ export class AnimalSystem {
       const a = items[i];
       if (a.dead) { this.byId.delete(a.id); continue; }
       const dxf = a.x - fx, dzf = a.z - fz;
-      if (!a.summoned && dxf * dxf + dzf * dzf > LEAVE_RADIUS * LEAVE_RADIUS) { this.byId.delete(a.id); a.dead = true; continue; }
-      this.update(a, dt, night);
+      if (!a.summoned && !a.claimed && dxf * dxf + dzf * dzf > LEAVE_RADIUS * LEAVE_RADIUS) { this.byId.delete(a.id); a.dead = true; continue; }
+      if (!a.claimed) this.update(a, dt, night);
       if (a.dead) { this.byId.delete(a.id); continue; }
       items[w++] = a;
     }
