@@ -1,0 +1,203 @@
+{
+  "_doc": "Favours and gifts. Vars: {money} {item} {third} {thirdaddr}. 'ask'/'give' are YOUR lines; the rest are theirs.",
+  "favour": {
+    "loan": {
+      "ask": [
+        "I'm short, {first}. Could you lend me {money}? I'll make it good.",
+        "Might I borrow {money} until I'm on my feet?",
+        "I hate to ask, {addr}, but {money} would save me.",
+        "Would you lend me {money}? You have my word on repaying it.",
+        {"t": "I'm good for it, {first}, you know I am. {Money}?", "if": {"trait": "honest"}},
+        {"t": "A small loan, {addr} — {money}. Between friends.", "if": {"tag": "friend"}},
+        "I'm in a pinch, {first}. Could you spare {money}?",
+        "Would you lend {money} to a friend in need?"
+      ],
+      "yes": [
+        {"t": "Here — {money}. Pay me back when you can, {first}.", "tone": "friendly"},
+        {"t": "Take it. I'd rather you asked a friend than a usurer.", "tone": "friendly"},
+        {"t": "Of course. Don't make me regret it, {addr}.", "tone": "neutral"},
+        {"t": "Say no more. {Money}, and God speed.", "tone": "warm", "if": {"op": ["warm", "devoted"]}},
+        {"t": "Against my better judgement. But you've been good to me.", "tone": "neutral", "if": {"tag": "fond"}},
+        {"t": "This is for the kindness your father showed mine.", "tone": "warm", "if": {"tag": "kin"}},
+        {"t": "Here. I trust you.", "tone": "friendly"},
+        {"t": "A loan, mind. Not a gift.", "tone": "neutral"},
+        {"t": "I remember being short once myself. Take it.", "tone": "warm", "if": {"op": ["warm", "devoted"]}}
+      ],
+      "no": [
+        {"t": "I haven't the coin to spare, {first}. Truly.", "tone": "wary"},
+        {"t": "Ask me another time. Purses are thin just now.", "tone": "wary"},
+        {"t": "Lend? To you? No.", "tone": "cold", "if": {"op": ["cold", "hostile"]}},
+        {"t": "I've lent before and seen nothing in return. I'll not lend again.", "tone": "cold", "if": {"trait": "greedy"}},
+        {"t": "I'd like to, {addr}, but I've my own debts.", "tone": "sad"},
+        {"t": "A loan is a promise. I don't know yours well enough.", "tone": "wary", "if": {"tag": "stranger"}},
+        {"t": "My purse is as flat as yours.", "tone": "wary"},
+        {"t": "I don't lend. It's a rule, and a good one.", "tone": "cold"},
+        {"t": "Ask someone you've known longer.", "tone": "wary", "if": {"tag": "stranger"}}
+      ],
+      "owing": [
+        {"t": "You still owe me, {first}. Settle that before you ask for more.", "tone": "cold"},
+        {"t": "Pay what you owe first, {addr}. Then we'll talk.", "tone": "cold"},
+        {"t": "One loan at a time, {first}, and the first isn't repaid.", "tone": "cold"},
+        {"t": "I'm still waiting on the last, remember?", "tone": "cold"}
+      ]
+    },
+    "repay": {
+      "ask": [
+        "Here's what I owe you, {first}: {money}. With thanks.",
+        "I've not forgotten. {Money}, as I promised.",
+        "I always repay my debts. {Money}, {addr}.",
+        {"t": "Count it. {Money}. It's all there.", "if": {"trait": "honest"}},
+        "I've come to settle up, {first}: {money}.",
+        "Honest debts, honestly paid. {Money}."
+      ],
+      "full": [
+        {"t": "A person of your word! That's rare, and I'll remember it.", "tone": "pleased"},
+        {"t": "Thank you, {first}. We're square, and I think the better of you.", "tone": "warm"},
+        {"t": "Now that's how it's done. God keep you.", "tone": "pleased"},
+        {"t": "I'd not doubted you. But I'll not pretend it isn't welcome.", "tone": "friendly", "if": {"trait": "greedy"}},
+        {"t": "Fair dealing. You are a rarity.", "tone": "pleased"},
+        {"t": "My thanks. I'll lend to you again.", "tone": "warm"},
+        {"t": "That's what I like to see.", "tone": "pleased"}
+      ],
+      "part": [
+        {"t": "Something is better than nothing. The rest will keep.", "tone": "neutral"},
+        {"t": "A start. I'll not press you for the remainder yet.", "tone": "neutral"},
+        {"t": "Thank you. I know it's hard to part with.", "tone": "friendly", "if": {"trait": "patient"}},
+        {"t": "Every little helps.", "tone": "neutral"},
+        {"t": "Pay the rest as you can.", "tone": "neutral"}
+      ]
+    },
+    "meal": {
+      "ask": [
+        "I've not eaten since morning. Is there a crust to spare?",
+        "My belly is empty, {first}. Might I share your table?",
+        "Could you spare me a bite, {addr}? I'd be grateful.",
+        "I'm famished. Is there bread about?",
+        "Might there be a heel of bread, {first}?",
+        "I'd be grateful for a bowl of whatever's on.",
+        "Is there a bite to spare for a hungry traveller?"
+      ],
+      "yes": [
+        {"t": "Sit, sit. There's pottage on the fire and bread to go with it.", "tone": "warm"},
+        {"t": "Of course. No one goes hungry from my door.", "tone": "friendly"},
+        {"t": "Here — it isn't much, but it's hot.", "tone": "friendly"},
+        {"t": "Eat. We've a little more than most, thank God.", "tone": "friendly", "if": {"rank": ["mid", "high"]}},
+        {"t": "You're thin. Sit down at once.", "tone": "warm", "if": {"tag": "kin"}},
+        {"t": "There's pottage enough. Sit.", "tone": "friendly"},
+        {"t": "Come and eat; I'll not see a body hungry.", "tone": "warm"},
+        {"t": "Bread, cheese, a cup of ale. It's not much.", "tone": "friendly"}
+      ],
+      "no": [
+        {"t": "I've scarcely enough for my own. Not today, {first}.", "tone": "sad"},
+        {"t": "The larder's bare. Ask at the church door; they might help.", "tone": "neutral"},
+        {"t": "Cook for yourself like the rest of us.", "tone": "cold", "if": {"op": ["cold", "hostile"]}},
+        {"t": "I'd feed you gladly, but I've mouths enough.", "tone": "wary", "if": {"tag": "parent_of_children"}},
+        {"t": "Sorry, {first}. Nothing to spare today.", "tone": "sad"},
+        {"t": "We've barely enough for ourselves.", "tone": "sad"},
+        {"t": "Ask at the abbey gate. They give alms there.", "tone": "neutral"},
+        {"t": "Not from my table.", "tone": "cold", "if": {"op": ["cold", "hostile"]}}
+      ]
+    },
+    "vouch": {
+      "ask": [
+        "Would you put in a good word for me with {thirdaddr}?",
+        "I'd be grateful if you'd speak well of me to {thirdaddr}.",
+        "Could you mention my name to {thirdaddr}? Kindly, I mean.",
+        {"t": "You have {thirdaddr}'s ear, {first}. Would you use it for me?", "if": {"rel": "up"}},
+        "Would you tell {thirdaddr} I'm decent folk?",
+        "A good word from you would help, {first}."
+      ],
+      "yes": [
+        {"t": "I'll see what I can do, {first}. {Third} listens to me, sometimes.", "tone": "friendly"},
+        {"t": "Aye, I'll speak to {third}. Don't give me cause to regret it.", "tone": "neutral"},
+        {"t": "Consider it done. You've been decent to me.", "tone": "warm", "if": {"op": ["warm", "devoted"]}},
+        {"t": "I'll tell {third} you're honest. See that you are.", "tone": "friendly", "if": {"trait": "honest"}},
+        {"t": "I'll mention you, kindly.", "tone": "friendly"},
+        {"t": "{Third} will hear good of you from me.", "tone": "friendly"},
+        {"t": "I'll put in a word. Don't let me down.", "tone": "neutral"}
+      ],
+      "no": [
+        {"t": "I don't carry that much weight with {third}, I'm afraid.", "tone": "wary"},
+        {"t": "Better you ask yourself. It means more coming from you.", "tone": "neutral"},
+        {"t": "I'd not stake my name on you, {first}. Not yet.", "tone": "cold"},
+        {"t": "{Third} and I are not on speaking terms. Best not.", "tone": "wary"},
+        {"t": "It isn't my place, {first}.", "tone": "wary"},
+        {"t": "{Third} wouldn't take it from me.", "tone": "wary"},
+        {"t": "Let your deeds speak.", "tone": "neutral"}
+      ]
+    },
+    "lessons": {
+      "ask": [
+        "Would you teach me my letters, {addr}? I'd be a diligent pupil.",
+        "I should like to learn to read. Would you show me?",
+        "Might I sit with you and learn some Latin, {first}?",
+        "I've a mind to learn my letters. Would you teach me?",
+        "Would you teach me my letters?",
+        "May I learn from you, {addr}?",
+        "I'd give a great deal to be able to read."
+      ],
+      "yes": [
+        {"t": "Come, then. We'll start with the alphabet and the Paternoster.", "tone": "friendly"},
+        {"t": "A wish to learn is a gift. Sit, and pay attention.", "tone": "friendly"},
+        {"t": "Good. Take the slate. Say it after me: A, B, C...", "tone": "warm"},
+        {"t": "A quick mind. Let's see how far you can get today.", "tone": "friendly", "if": {"trait": "patient"}},
+        {"t": "Sit down, then, and mind the quill.", "tone": "friendly"},
+        {"t": "We'll begin with the Paternoster; everyone knows that.", "tone": "friendly"},
+        {"t": "Good. I'll set you a lesson now.", "tone": "friendly"}
+      ],
+      "no": [
+        {"t": "I haven't time for lessons today, {first}.", "tone": "neutral"},
+        {"t": "Letters are for those with the leisure. Do you have it?", "tone": "wary"},
+        {"t": "Another day. I'm busy with the Church's affairs.", "tone": "neutral", "if": {"role": "clergy"}},
+        {"t": "I'd not waste my breath. Come back when you're calmer.", "tone": "cold", "if": {"trait": "hot_tempered"}},
+        {"t": "I can't spare the time.", "tone": "neutral"},
+        {"t": "Letters? They'd only make you restless.", "tone": "wary"},
+        {"t": "Ask me when the harvest is in.", "tone": "neutral"}
+      ]
+    }
+  },
+  "gift": {
+    "give": [
+      "Here — a small gift for you, {first}.",
+      "Take this. I'd like you to have it.",
+      "A little something, {addr}. Please.",
+      "This is for you. No obligation.",
+      {"t": "I thought of you when I saw this.", "if": {"tag": "fond"}},
+      {"t": "For your kindness, {first}. Accept it.", "if": {"tag": "favoured"}},
+      {"t": "A token of my regard, {named}.", "if": {"rel": "up"}},
+      "This is yours, {first}, with my goodwill.",
+      "I'd like you to have this.",
+      "It's not much, but it's given freely."
+    ],
+    "thanks": [
+      {"t": "Why, thank you, {first}! That's kind indeed.", "tone": "pleased"},
+      {"t": "God bless you for it. I'll not forget this.", "tone": "warm"},
+      {"t": "You shouldn't have! But I'm glad you did.", "tone": "pleased"},
+      {"t": "That's generous, {addr}. Thank you.", "tone": "friendly"},
+      {"t": "Well! A good turn deserves another.", "tone": "friendly", "if": {"trait": "honest"}},
+      {"t": "Ah, a gift is a gift. I'll say my thanks and not ask why.", "tone": "pleased", "if": {"trait": "greedy"}},
+      {"t": "Careful, {first}, or I'll think you fond of me.", "tone": "warm", "if": {"op": ["warm", "devoted"]}},
+      {"t": "You are too good, {first}.", "tone": "pleased"},
+      {"t": "God bless your generous heart.", "tone": "warm"},
+      {"t": "Well! I'm not used to such kindness.", "tone": "pleased"},
+      {"t": "I'll think of you whenever I use it.", "tone": "warm"}
+    ],
+    "suspicious": [
+      {"t": "What's this for? I'll take it, but I'll be wondering.", "tone": "wary"},
+      {"t": "A gift? From you? Hm. What do you want?", "tone": "wary"},
+      {"t": "I don't know that I can accept this, {first}.", "tone": "cold"},
+      {"t": "I'll take it. It doesn't mean I've forgotten.", "tone": "cold"},
+      {"t": "Gifts don't come free. What's the catch?", "tone": "wary"},
+      {"t": "I'll keep it, and watch my back.", "tone": "cold"},
+      {"t": "Hmm. Odd, from you.", "tone": "wary"}
+    ],
+    "beggar": [
+      {"t": "God reward you, {addr}! God reward you a hundredfold!", "tone": "pleased"},
+      {"t": "Bless you. May your table never be bare.", "tone": "pleased"},
+      {"t": "I'll pray for you, {addr}, every night.", "tone": "warm"},
+      {"t": "A kind soul. They're few. I'll remember you.", "tone": "warm"},
+      {"t": "Heaven send you luck, {addr}!", "tone": "pleased"},
+      {"t": "You've saved my life this week.", "tone": "pleased"}
+    ]
+  }
+}
