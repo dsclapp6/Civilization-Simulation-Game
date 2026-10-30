@@ -418,9 +418,9 @@ export class Schedule {
     T.workEnd = sunset - 0.085 + 0.025 * j(3);
     T.bed = Math.min(0.985, sunset + 0.05 + 0.05 * j(4));
     T.massA = sunrise + 0.085 + 0.012 * hash01(p.settlement, 5);
-    T.massB = T.massA + 0.1;
+    T.massB = T.massA + 0.12;
     // everyone leaves for church and for the churchyard at their own moment, so no one moves in a block
-    T.gatherA = T.massA - 0.03 - 0.05 * j(8);
+    T.gatherA = Math.max(T.chore + 0.01, T.massA - 0.07 - 0.1 * j(8));
     T.afterB = T.massB + 0.025 + 0.05 * j(9);
     void absDay;
     return T;

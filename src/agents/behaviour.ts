@@ -97,7 +97,7 @@ export function replan(z: Zone, a: Agent, spawning: boolean): void {
   a.stuck = 0;
   const dist = Math.hypot(a.tx - a.x, a.tz - a.z);
   if (!hadSpot && !spawning) return;
-  if (dist > (a.wantIn || a.wantAway ? 0.9 : 1.3)) goTo(z, a, a.tx, a.tz, 1);
+  if (dist > (a.wantIn || a.wantAway ? 0.9 : 1.3)) goTo(z, a, a.tx, a.tz, I.activity === 'church' ? 1.5 : 1);
   else if (a.wantIn) { a.st = St.Door; } else { a.st = St.Idle; a.timer = 1 + 5 * rnd(a, 4); }
 }
 
@@ -116,7 +116,7 @@ function teleport(z: Zone, a: Agent, tx: number, tz: number): void {
 
 /** A path that starts out of sight: the walker joins it where it comes into view (or the trip is skipped). */
 function enterSeen(z: Zone, a: Agent): void {
-  const fx = z.focusX, fz = z.focusZ, R = SEEN_RADIUS;
+  const fx = z.focusX, fz = z.focusZ, R = SEEN_RADIUS * 0.75;
   let px = a.x, pz = a.z;
   for (let i = 0; i < a.pathN; i++) {
     const qx = a.path[i * 2], qz = a.path[i * 2 + 1];

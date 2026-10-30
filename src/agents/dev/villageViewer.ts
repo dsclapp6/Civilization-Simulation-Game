@@ -35,6 +35,8 @@ export interface SceneSpec {
   /** Simulated seconds to run before the picture, so people have settled into their day. */
   warm: number;
   camera: (ctx: SceneCtx) => Pose;
+  /** Refines the pose after the warm-up, from where the people really are. */
+  frame?: (ctx: SceneCtx) => Pose | null;
   weather?: 'clear' | 'rain' | 'snow';
 }
 
@@ -71,10 +73,39 @@ const lookFrom = (c: SceneCtx, tx: number, tz: number, yaw: number, dist: number
 
 const sunrise = (_s: Settlement, season: Season): number => daylight(season).sunrise;
 
+/**
+ * A camera for the biggest knot of agents matching `want`: looks at their centre from `dist` metres away at
+ * eye height, from whichever side is open (walkable ground with a clear line to them).
+ */
+function crowdPose(c: SceneCtx, want: (a: Zone['agentsArr'][number]) => boolean, dist = 11, height = 1.9, near = 18): Pose | null {
+  const list = c.zone.agentsArr.filter((a) => !a.dead && want(a) && Math.hypot(a.x - c.s.x, a.z - c.s.z) < c.s.radius * 1.3 + 60);
+  if (list.length === 0) return null;
+  let best = list[0], bn = -1;
+  for (const a of list) {
+    let n = 0;
+    for (const b of list) if (Math.hypot(a.x - b.x, a.z - b.z) < near) n++;
+    if (n > bn) { bn = n; best = a; }
+  }
+  let cx = 0, cz = 0, k = 0;
+  for (const b of list) if (Math.hypot(best.x - b.x, best.z - b.z) < near) { cx += b.x; cz += b.z; k++; }
+  cx /= k; cz /= k;
+  for (let i = 0; i < 16; i++) {
+    const ang = (i * 5 % 16) / 16 * Math.PI * 2;
+    for (const d of [dist, dist * 1.4, dist * 0.7]) {
+      const x = cx + Math.sin(ang) * d, z = cz + Math.cos(ang) * d;
+      if (c.zone.nav.walkable(x, z) && c.zone.nav.finder.lineClear(x, z, cx, cz)) {
+        return { pos: { x, y: Math.max(0, c.g(x, z)) + height, z }, look: { x: cx, y: Math.max(0, c.g(cx, cz)) + 1.1, z: cz } };
+      }
+    }
+  }
+  return null;
+}
+
 export const SCENES: SceneSpec[] = [
   {
-    id: 'dawn', describe: 'dawn: the village wakes and sets off to work', settlement: pickVillage, season: 1, day: 2,
-    time: (s, season) => sunrise(s, season) + 0.028, warm: 14,
+    id: 'dawn', describe: 'dawn: the village wakes and sets off to work', settlement: pickVillage, season: 0, day: 2,
+    time: (s, season) => sunrise(s, season) + 0.05, warm: 14,
+    frame: (c) => crowdPose(c, (a) => a.st === 1 || a.draw.carry !== 'none', 12, 1.8, 25),
     camera: (c) => {
       const sp = c.zone.places.of(c.s.id)!;
       const ch = sp.church!;
@@ -83,6 +114,7 @@ export const SCENES: SceneSpec[] = [
   },
   {
     id: 'midday-fields', describe: 'midday: field workers on the open-field strips', settlement: pickVillage, season: 1, day: 1, time: 0.43, warm: 6,
+    frame: (c) => crowdPose(c, (a) => a.draw.anim.startsWith('work_') && a.mode === 6, 8, 1.7, 40),
     camera: (c) => {
       const sp = c.zone.places.of(c.s.id)!;
       // the strip with the most work going on: look along it from a few metres off
@@ -95,15 +127,17 @@ export const SCENES: SceneSpec[] = [
     },
   },
   {
-    id: 'market', describe: 'market day in a town', settlement: pickTown, season: 1, day: 'market', time: 0.41, warm: 10,
+    id: 'market', describe: 'market day in a town', settlement: pickTown, season: 1, day: 'market', time: 0.41, warm: 2,
+    frame: (c) => crowdPose(c, (a) => a.activity === 'market', 9, 1.9, 14),
     camera: (c) => {
       const sp = c.zone.places.of(c.s.id)!;
       return lookFrom(c, sp.marketCentre.x, sp.marketCentre.z, 0.7, 20, 3.4, 1.2);
     },
   },
   {
-    id: 'mass', describe: 'holy day: the crowd gathers at the church before Mass', settlement: pickVillage, season: 1, day: 4,
-    time: (s, season) => sunrise(s, season) + 0.085 + 0.012 * hash01(s.id, 5) - 0.012, warm: 10,
+    id: 'mass', describe: 'holy day: the crowd gathers at the church before Mass', settlement: pickVillage, season: 2, day: 4,
+    time: (s, season) => sunrise(s, season) + 0.085 + 0.012 * hash01(s.id, 5) - 0.02, warm: 1.5,
+    frame: (c) => crowdPose(c, (a) => a.activity === 'church', 9, 1.8, 14),
     camera: (c) => {
       const sp = c.zone.places.of(c.s.id)!;
       const cy = sp.churchyard;
@@ -111,7 +145,8 @@ export const SCENES: SceneSpec[] = [
     },
   },
   {
-    id: 'butts', describe: 'holy day afternoon: archery at the butts', settlement: pickWithButts, season: 1, day: 4, time: 0.62, warm: 12,
+    id: 'butts', describe: 'holy day afternoon: archery at the butts', settlement: pickWithButts, season: 1, day: 4, time: 0.62, warm: 2,
+    frame: (c) => crowdPose(c, (a) => a.mode === 5, 11, 1.7, 14),
     camera: (c) => {
       const sp = c.zone.places.of(c.s.id)!;
       const b = sp.first('archery_butts')!;
@@ -119,7 +154,8 @@ export const SCENES: SceneSpec[] = [
     },
   },
   {
-    id: 'alehouse', describe: 'evening at the alehouse', settlement: pickVillage, season: 1, day: 2, time: 0.8, warm: 12,
+    id: 'alehouse', describe: 'evening at the alehouse', settlement: pickVillage, season: 1, day: 2, time: 0.93, warm: 1.5,
+    frame: (c) => crowdPose(c, (a) => a.activity === 'alehouse', 7, 1.7, 10),
     camera: (c) => {
       const sp = c.zone.places.of(c.s.id)!;
       const a = sp.alehouses[0];
@@ -129,7 +165,8 @@ export const SCENES: SceneSpec[] = [
     },
   },
   {
-    id: 'night', describe: 'night: the watch walks the streets, a few revellers go home', settlement: pickTown, season: 0, day: 2, time: 0.015, warm: 8,
+    id: 'night', describe: 'night: the watch walks the streets, a few revellers go home', settlement: pickTown, season: 0, day: 2, time: 0.015, warm: 1,
+    frame: (c) => crowdPose(c, (a) => a.draw.mainHand === 'torch', 7, 1.7, 30),
     camera: (c) => {
       const sp = c.zone.places.of(c.s.id)!;
       return lookFrom(c, sp.marketCentre.x, sp.marketCentre.z, 2.2, 24, 3.2, 1.3);
@@ -236,11 +273,13 @@ export function start(root: AppRoot): void {
     // start early enough that the warm-up ends at the wanted time of day
     setClock(spec.season, spec.day, time - spec.warm / 60);
     const ctx: SceneCtx = { world, zone, s, g };
-    const pose = spec.camera(ctx);
+    let pose = spec.camera(ctx);
     placeFocus(pose.look.x, pose.look.z);
     renderer.setCameraPose(pose.pos, pose.look, 0);
     zone.resync();
     run(spec.warm);
+    const refined = spec.frame?.(ctx) ?? null;
+    if (refined) { pose = refined; placeFocus(pose.look.x, pose.look.z); run(0.5); }
     placeFocus(pose.look.x, pose.look.z);
     renderer.setCameraPose(pose.pos, pose.look, 0);
     const t0 = performance.now();
