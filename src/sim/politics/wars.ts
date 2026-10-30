@@ -639,7 +639,7 @@ export class Wars {
             const to = recipientFor(c, winLead, t, w.claimant);
             const holder = t.holder ? c.person(t.holder) : undefined;
             if (to && holder && holder.house !== winLead) {
-              transferTitle(c, t, to, `won in the war with ${c.houseLabel(loseLead)}`);
+              transferTitle(c, t, to, `won in the war with ${c.houseLabel(loseLead)}`, { rehome: true });
               c.mindOf(loseLead).grudge = winLead;
             }
           } else {

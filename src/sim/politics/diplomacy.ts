@@ -2,7 +2,7 @@
 // conquest and vassalage, see wars.ts). Offers between Houses, how a House weighs an offer, marriage
 // alliances through the social system, and the proposals that reach the player's inbox.
 import { isCloseKin } from '../kin';
-import { ageYears, fullName, type HouseId, type Person, type PersonId } from '../state';
+import { ageYears, fullName, TITLE_RANK, type HouseId, type Person, type PersonId } from '../state';
 import { clamp, type PoliticsCore, YEAR } from './core';
 import type { ProposalKind, Result, Tie } from './types';
 import type { Wars } from './wars';
@@ -122,15 +122,15 @@ export class Diplomacy {
     switch (kind) {
       case 'truce':
         c.changeTie(from, to, (t) => { t.truce = Math.max(t.truce, now + TRUCE_PACT); t.grievance = Math.max(0, t.grievance - 15); });
-        c.log('diplomacy', `${c.houseLabel(from)} and ${c.houseLabel(to)} agree a truce.`, [hf?.id ?? 0, ht?.id ?? 0].filter((x) => x > 0));
+        if (this.worthLogging(from, to)) c.log('diplomacy', `${c.houseLabel(from)} and ${c.houseLabel(to)} agree a truce.`, [hf?.id ?? 0, ht?.id ?? 0].filter((x) => x > 0));
         break;
       case 'trade':
         c.changeTie(from, to, (t) => { t.trade = now; t.truce = Math.max(t.truce, now + TRUCE_PACT); t.grievance = Math.max(0, t.grievance - 10); });
-        c.log('diplomacy', `${c.houseLabel(from)} and ${c.houseLabel(to)} open trade between their lands.`);
+        if (this.worthLogging(from, to)) c.log('diplomacy', `${c.houseLabel(from)} and ${c.houseLabel(to)} open trade between their lands.`);
         break;
       case 'alliance':
         c.changeTie(from, to, (t) => { t.alliance = now; t.trade = t.trade || now; t.truce = Math.max(t.truce, now + TRUCE_PACT); t.grievance = 0; });
-        c.log('alliance', `${c.houseLabel(from)} and ${c.houseLabel(to)} swear an alliance.`, [hf?.id ?? 0, ht?.id ?? 0].filter((x) => x > 0));
+        if (this.worthLogging(from, to, 6)) c.log('alliance', `${c.houseLabel(from)} and ${c.houseLabel(to)} swear an alliance.`, [hf?.id ?? 0, ht?.id ?? 0].filter((x) => x > 0));
         break;
       case 'submit':
       case 'homage': {
@@ -143,6 +143,14 @@ export class Diplomacy {
     }
     if (hf && ht) c.social.adjustOpinion(ht.id, hf.id, kind === 'submit' ? -5 : 2, 'pact');
     c.touch();
+  }
+
+  /** The chronicle records pacts of the player's House and of the great: not every truce between knights. */
+  private worthLogging(a: HouseId, b: HouseId, minRank = 7): boolean {
+    const c = this.core;
+    if (c.isPlayerHouse(a) || c.isPlayerHouse(b)) return true;
+    const ra = c.primaryTitle(a), rb = c.primaryTitle(b);
+    return !!ra && !!rb && TITLE_RANK[ra.kind] >= minRank && TITLE_RANK[rb.kind] >= minRank;
   }
 
   // ---- marriage alliances ----
@@ -301,7 +309,7 @@ export class Diplomacy {
     const n = Math.max(1, this.linksOf(home).get(other) ?? 1);
     c.changeTie(home, other, (t: Tie) => { t.kin = n; t.grievance = Math.max(0, t.grievance - 20); t.truce = Math.max(t.truce, Math.floor(c.day) + TRUCE_PACT); });
     c.save.stats.marriages++;
-    if (!wasKin && (c.isPlayerHouse(home) || c.isPlayerHouse(other) || c.state.titlesHeldBy(pa.id).size + c.state.titlesHeldBy(pb.id).size > 0)) {
+    if (!wasKin && this.worthLogging(home, other, 7)) {
       c.log('diplomacy', `A marriage binds ${c.houseLabel(home)} to ${c.houseLabel(other)}.`, [pa.id, pb.id]);
     }
   }

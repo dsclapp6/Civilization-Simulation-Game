@@ -40,7 +40,7 @@ function dropOffice(core: PoliticsCore, p: Person, office: string, place: number
 }
 
 /** Moves a title to `to`: the holder's offices, the new holder's rank and the lieges stay consistent. */
-export function transferTitle(core: PoliticsCore, t: Title, to: Person, why: string): void {
+export function transferTitle(core: PoliticsCore, t: Title, to: Person, why: string, opts: { rehome?: boolean } = {}): void {
   const state = core.state;
   const old = t.holder ? state.persons.get(t.holder) : undefined;
   if (old && old.id === to.id) return;
@@ -54,6 +54,7 @@ export function transferTitle(core: PoliticsCore, t: Title, to: Person, why: str
     if (old.house && old.house !== to.house) core.save.deposed[String(t.id)] = [old.house, Math.floor(core.day) + 5 * 16];
     delete core.save.oaths[String(t.id)];
   }
+  if (opts.rehome) rehome(core, t, to);
   const tier = tierOf(t);
   if (tier > to.rankTier) setRank(core.sim, to, tier);
   if (to.sex === 'm' && to.career !== 'lord' && to.career !== 'knight') to.career = tier >= 6 ? 'lord' : 'knight';
@@ -72,6 +73,23 @@ export function transferTitle(core: PoliticsCore, t: Title, to: Person, why: str
   if (mine || tier >= 6) core.log('title', text, old ? [to.id, old.id] : [to.id]);
   refreshScore(core);
   core.sim.requestSave('title moved');
+}
+
+/** A conquered title is held from the conqueror's own higher title (or from no one), not from the old liege. */
+function rehome(core: PoliticsCore, t: Title, to: Person): void {
+  const state = core.state;
+  let best: Title | undefined;
+  for (const x of state.titlesHeldBy(to.id)) {
+    if (x.id === t.id || x.kind === 'abbey' || x.kind === 'see') continue;
+    if (TITLE_RANK[x.kind] <= TITLE_RANK[t.kind]) continue;
+    if (!best || TITLE_RANK[x.kind] < TITLE_RANK[best.kind] || (TITLE_RANK[x.kind] === TITLE_RANK[best.kind] && x.id < best.id)) best = x;
+  }
+  // the title's old liege is kept only if it already belongs to the conqueror's own realm
+  const old = t.liege ? state.titles.get(t.liege) : undefined;
+  const oldHolder = old && old.holder ? state.persons.get(old.holder) : undefined;
+  if (oldHolder && oldHolder.house === to.house) return;
+  const next = best ? best.id : 0;
+  if (t.liege !== next) { t.liege = next; state.touchTitle(t); }
 }
 
 // ---------------------------------------------------------------------------------------------

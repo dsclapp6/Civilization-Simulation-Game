@@ -45,7 +45,7 @@ export class Ai {
     if (!adult && !c.state.persons.get(c.primaryTitle(h)?.regent ?? 0)) return;
     if (this.answerRefusal(h)) return;
     if (this.rebel(h, head)) return;
-    if (c.day - mind.lastWar < YEAR) return; // a House rests a year between wars
+    if (c.day - mind.lastWar < 2 * YEAR) return; // a House rests two years between wars
     if (this.demandSubmission(h)) return;
     this.makeWar(h, head, adult);
   }
@@ -250,9 +250,12 @@ export class Ai {
     const c = this.core;
     const pw = c.personality(h);
     const mind = c.mindOf(h);
-    const sa = this.withAllies(h), sd = this.withAllies(o);
+    const sa = this.withAllies(h);
+    // a defender's overlord (if he is of another realm) and allies come to his aid
+    const lo = c.realmLeader(o) !== c.realmLeader(h) ? c.realmLeader(o) : o;
+    const sd = Math.max(this.withAllies(o), lo !== o ? this.withAllies(lo) : 0);
     const odds = sa / (sa + sd);
-    let d = (odds - 0.5) * 1.7 + this.weakness(o);
+    let d = (odds - 0.5) * 1.7 + this.weakness(o) - WAR_BASELINE;
     const claim = this.bestClaim(h, o);
     if (claim) d += 0.12 * claim;
     d += c.tie(h, o).grievance / 200;
@@ -289,7 +292,7 @@ export class Ai {
   private makeWar(h: HouseId, head: Person, adult: boolean): void {
     const c = this.core;
     if (!adult) return;
-    if (c.save.wars.length >= 3 + c.snapshot().actors.length / 12) return;
+    if (c.save.wars.length >= 2 + c.snapshot().actors.length / 25) return;
     if (this.wars.offensiveWar(h)) return;
     const rng = c.rng('ai.war');
     const pw = c.personality(h);
@@ -350,3 +353,5 @@ export class Ai {
 
 /** Global tuning of how many wars the continent sees (calibrated by the 50-year run in the tests). */
 export const WAR_RATE = 0.8;
+/** Rulers do not go to war for nothing: this much desire is lost before any reason is weighed. */
+const WAR_BASELINE = 0.25;

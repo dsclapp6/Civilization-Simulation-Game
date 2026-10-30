@@ -131,7 +131,12 @@ export class PoliticsCore {
     return house ? this.living(house.head) : undefined;
   }
   /** "House Falconer" with the head's name where useful. */
-  houseLabel(h: HouseId): string { return `House ${this.houseName(h)}`; }
+  houseLabel(h: HouseId): string {
+    const house = this.state.houses.get(h);
+    if (!house) return 'an unknown House';
+    const seat = this.settlementById.get(house.seat)?.name;
+    return seat && !house.name.includes(seat) ? `House ${house.name} of ${seat}` : `House ${house.name}`;
+  }
 
   // ---- snapshot ----
   invalidate(): void { this.rev++; this.snap = null; this.stanceMemo.clear(); }
@@ -163,16 +168,18 @@ export class PoliticsCore {
     }
     actors.sort((a, b) => a - b);
 
-    // lieges: the liege title of the House's highest title that is held from someone outside the House
+    // lieges: the first title (highest first) that is held from nobody (independent) or from another House
     const liege = new Map<HouseId, HouseId>();
     const vassals = new Map<HouseId, HouseId[]>();
     for (const h of actors) {
       let lh = 0;
       for (const t of titlesOf.get(h) ?? []) {
-        if (t.kind === 'abbey' || t.kind === 'see' || !t.liege) continue;
+        if (t.kind === 'abbey' || t.kind === 'see') continue;
+        if (!t.liege) break; // held from no one: the House is independent
         const lt = state.titles.get(t.liege);
         const holder = lt && lt.holder ? state.persons.get(lt.holder) : undefined;
-        if (!holder || holder.death || !holder.house || holder.house === h) continue;
+        if (!holder || holder.death || !holder.house) break;
+        if (holder.house === h) continue; // held from the House's own higher title
         lh = holder.house;
         break;
       }
