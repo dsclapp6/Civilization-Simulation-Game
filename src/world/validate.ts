@@ -4,9 +4,9 @@
 // The layout code already tries hard to satisfy all of this; this pass removes the rare leftovers deterministically
 // (important buildings are kept first) and compacts the id spaces so that ids stay equal to array indices.
 import { BUILDINGS, type BuildingKind } from '../content/types';
-import { distPointSeg, convexOverlap, makeObb, obbPoly, obbSignedDist, segSegIntersect, type Obb } from './geom';
-import { HashGrid } from './grid';
 import type { P2 } from '../core/math';
+import { convexOverlap, distPointSeg, makeObb, obbPoly, obbSignedDist, segSegIntersect, type Obb } from './geom';
+import { CELL, HashGrid, N, cellOf } from './grid';
 import type { LayoutCtx } from './layout/common';
 import type { GenState } from './state';
 import type { TerrainModel } from './terrainmodel';
@@ -41,51 +41,66 @@ export interface RepairReport { plotsRemoved: number; stripsRemoved: number; }
 
 export function repairLayout(s: GenState, tm: TerrainModel, ctx: LayoutCtx): RepairReport {
   const plots = s.plots;
-  // ---------- roads index ----------
+  // ---------- roads index (segments with bounding boxes) ----------
   const roadGrid = new HashGrid(48);
-  const segs: [number, number, number, number, number][] = [];
+  const sx0: number[] = [], sz0: number[] = [], sx1: number[] = [], sz1: number[] = [], shw: number[] = [];
   for (const r of s.roads) {
+    const hw = r.width / 2;
     for (let i = 0; i + 1 < r.points.length; i++) {
       const a = r.points[i], b = r.points[i + 1];
-      const hw = r.width / 2;
-      roadGrid.add(segs.length, Math.min(a.x, b.x) - hw, Math.min(a.z, b.z) - hw, Math.max(a.x, b.x) + hw, Math.max(a.z, b.z) + hw);
-      segs.push([a.x, a.z, b.x, b.z, hw]);
+      roadGrid.add(sx0.length, Math.min(a.x, b.x) - hw, Math.min(a.z, b.z) - hw, Math.max(a.x, b.x) + hw, Math.max(a.z, b.z) + hw);
+      sx0.push(a.x); sz0.push(a.z); sx1.push(b.x); sz1.push(b.z); shw.push(hw);
     }
   }
+  const stamp = new Int32Array(sx0.length + 1);
+  let stampId = 0;
   const tmp: number[] = [];
+  /** Does the road centre line come closer to the polygon than (half width - margin)? */
   const touchesRoad = (poly: P2[], o: Obb, margin: number): boolean => {
     let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
     for (const p of poly) { if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x; if (p.z < z0) z0 = p.z; if (p.z > z1) z1 = p.z; }
     roadGrid.query(x0 - 4, z0 - 4, x1 + 4, z1 + 4, tmp);
-    const seen = new Set<number>();
-    for (const id of tmp) {
-      if (seen.has(id)) continue;
-      seen.add(id);
-      const [ax, az, bx, bz, hw] = segs[id];
-      if (segPolyDist(ax, az, bx, bz, poly, o) < hw - margin) return true;
+    stampId++;
+    for (let t = 0; t < tmp.length; t++) {
+      const id = tmp[t];
+      if (stamp[id] === stampId) continue;
+      stamp[id] = stampId;
+      const hw = shw[id] - margin;
+      const ax = sx0[id], az = sz0[id], bx = sx1[id], bz = sz1[id];
+      if ((ax < bx ? ax : bx) - hw > x1 || (ax < bx ? bx : ax) + hw < x0 || (az < bz ? az : bz) - hw > z1 || (az < bz ? bz : az) + hw < z0) continue;
+      if (segPolyDist(ax, az, bx, bz, poly, o) < hw) return true;
     }
     return false;
   };
+  const { waterDist, coastDist } = s;
   const isWet = (p: Plot, o: Obb): boolean => {
+    // far from every river, lake and the sea: certainly dry
+    const k = cellOf(p.z) * N + cellOf(p.x);
+    if (waterDist[k] > 4 * CELL && coastDist[k] > 4 * CELL) return false;
     const def = BUILDINGS[p.kind];
     const c = Math.cos(p.rot), sn = Math.sin(p.rot);
-    const pts: [number, number][] = [[0, 0]];
-    if (!def.segment) for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) pts.push([a * o.hw, b * o.hd]);
-    for (const [lx, lz] of pts) {
+    const test = (lx: number, lz: number): boolean => {
       const x = p.x + lx * c + lz * sn, z = p.z - lx * sn + lz * c;
       const h = tm.baseHeight(x, z);
-      if (h < 0.12 || tm.waterSurface(x, z, h) !== null) return true;
-    }
-    return false;
+      return h < 0.12 || tm.waterSurface(x, z, h) !== null;
+    };
+    if (test(0, 0)) return true;
+    if (def.segment) return false; // wall pieces are judged at their centre
+    return test(-o.hw, -o.hd) || test(o.hw, -o.hd) || test(o.hw, o.hd) || test(-o.hw, o.hd);
   };
 
   // ---------- plots: keep important ones first ----------
-  const order = plots.map((_, i) => i).sort((a, b) => importance(plots[a].kind) - importance(plots[b].kind) || a - b);
+  const tStart = performance.now();
+  const imp = new Uint8Array(plots.length);
+  for (let i = 0; i < plots.length; i++) imp[i] = importance(plots[i].kind);
+  const order = Array.from({ length: plots.length }, (_, i) => i).sort((a, b) => imp[a] - imp[b] || a - b);
   const grid = new HashGrid(40);
-  const accepted: number[] = [];
   const polys: P2[][] = new Array(plots.length);
   const keep = new Uint8Array(plots.length);
   const cand: number[] = [];
+  const pStamp = new Int32Array(plots.length + 1);
+  let pStampId = 0;
+  let accepted = 0;
   for (const i of order) {
     const p = plots[i];
     const def = BUILDINGS[p.kind];
@@ -98,18 +113,19 @@ export function repairLayout(s: GenState, tm: TerrainModel, ctx: LayoutCtx): Rep
     for (const q of poly) { if (q.x < x0) x0 = q.x; if (q.x > x1) x1 = q.x; if (q.z < z0) z0 = q.z; if (q.z > z1) z1 = q.z; }
     grid.query(x0, z0, x1, z1, cand);
     let clash = false;
-    const seen = new Set<number>();
-    for (const j of cand) {
-      if (seen.has(j)) continue;
-      seen.add(j);
-      if (convexOverlap(poly, polys[j], -0.01)) { clash = true; break; }
+    pStampId++;
+    for (let t = 0; t < cand.length && !clash; t++) {
+      const j = cand[t];
+      if (pStamp[j] === pStampId) continue;
+      pStamp[j] = pStampId;
+      if (convexOverlap(poly, polys[j], -0.01)) clash = true;
     }
     if (clash) continue;
     keep[i] = 1;
-    accepted.push(i);
+    accepted++;
     grid.add(i, x0, z0, x1, z1);
   }
-  const plotsRemoved = plots.length - accepted.length;
+  const plotsRemoved = plots.length - accepted;
   if (plotsRemoved > 0) {
     // compact ids (ids are array indices)
     const remap = new Int32Array(plots.length).fill(-1);
@@ -122,46 +138,67 @@ export function repairLayout(s: GenState, tm: TerrainModel, ctx: LayoutCtx): Rep
   }
 
   // ---------- strips ----------
+  const tStrips = performance.now();
+  s.timings['l.repair.plots'] = tStrips - tStart;
   const strips = s.strips;
   const sGrid = new HashGrid(40);
   const plotGrid = new HashGrid(40);
-  s.plots.forEach((p, i) => {
+  const finalPlots = s.plots;
+  const pPolys: P2[][] = new Array(finalPlots.length);
+  const pb = new Float32Array(finalPlots.length * 4); // plot bounding boxes (x0, z0, x1, z1)
+  finalPlots.forEach((p, i) => {
     const def = BUILDINGS[p.kind];
     const poly = obbPoly(makeObb(p.x, p.z, def.w, def.d, p.rot), 0.2);
     let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
     for (const q of poly) { if (q.x < x0) x0 = q.x; if (q.x > x1) x1 = q.x; if (q.z < z0) z0 = q.z; if (q.z > z1) z1 = q.z; }
     plotGrid.add(i, x0, z0, x1, z1);
-    polys[i] = poly;
+    pPolys[i] = poly;
+    pb[i * 4] = x0; pb[i * 4 + 1] = z0; pb[i * 4 + 2] = x1; pb[i * 4 + 3] = z1;
   });
   const keepStrip = new Uint8Array(strips.length);
+  const sb = new Float32Array(strips.length * 4); // accepted strip bounding boxes
   let stripsKept = 0;
   const tmp2: number[] = [];
   strips.forEach((st, i) => {
+    const poly = st.poly;
     let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
-    for (const q of st.poly) { if (q.x < x0) x0 = q.x; if (q.x > x1) x1 = q.x; if (q.z < z0) z0 = q.z; if (q.z > z1) z1 = q.z; }
+    for (const q of poly) { if (q.x < x0) x0 = q.x; if (q.x > x1) x1 = q.x; if (q.z < z0) z0 = q.z; if (q.z > z1) z1 = q.z; }
     // against plots
     plotGrid.query(x0, z0, x1, z1, tmp2);
-    for (const j of tmp2) if (convexOverlap(st.poly, polys[j], -0.01)) return;
-    // against roads (corridor)
+    for (let t = 0; t < tmp2.length; t++) {
+      const j = tmp2[t], b = j * 4;
+      if (pb[b] > x1 || pb[b + 2] < x0 || pb[b + 1] > z1 || pb[b + 3] < z0) continue;
+      if (convexOverlap(poly, pPolys[j], -0.01)) return;
+    }
+    // against roads: the centre line must stay at least its half width away from the strip
     roadGrid.query(x0 - 3, z0 - 3, x1 + 3, z1 + 3, tmp);
-    for (const id of tmp) {
-      const [ax, az, bx, bz, hw] = segs[id];
-      // segment against the strip polygon: intersect or come within the half width
-      let bad = false;
-      for (let k = 0; k < 4 && !bad; k++) {
-        const c = st.poly[k], d = st.poly[(k + 1) % 4];
-        if (segSegIntersect(ax, az, bx, bz, c.x, c.z, d.x, d.z)) bad = true;
-        else if (distPointSeg(c.x, c.z, ax, az, bx, bz) < hw || distPointSeg(ax, az, c.x, c.z, d.x, d.z) < hw || distPointSeg(bx, bz, c.x, c.z, d.x, d.z) < hw) bad = true;
+    stampId++;
+    for (let t = 0; t < tmp.length; t++) {
+      const id = tmp[t];
+      if (stamp[id] === stampId) continue;
+      stamp[id] = stampId;
+      const hw = shw[id];
+      const ax = sx0[id], az = sz0[id], bx = sx1[id], bz = sz1[id];
+      if ((ax < bx ? ax : bx) - hw > x1 || (ax < bx ? bx : ax) + hw < x0 || (az < bz ? az : bz) - hw > z1 || (az < bz ? bz : az) + hw < z0) continue;
+      for (let k = 0; k < 4; k++) {
+        const c = poly[k], d = poly[(k + 1) & 3];
+        if (segSegIntersect(ax, az, bx, bz, c.x, c.z, d.x, d.z)
+          || distPointSeg(c.x, c.z, ax, az, bx, bz) < hw || distPointSeg(ax, az, c.x, c.z, d.x, d.z) < hw || distPointSeg(bx, bz, c.x, c.z, d.x, d.z) < hw) return;
       }
-      if (bad) return;
     }
     // against already accepted strips
     sGrid.query(x0, z0, x1, z1, tmp2);
-    for (const j of tmp2) if (convexOverlap(st.poly, strips[j].poly, -0.05)) return;
+    for (let t = 0; t < tmp2.length; t++) {
+      const j = tmp2[t], b = j * 4;
+      if (sb[b] > x1 || sb[b + 2] < x0 || sb[b + 1] > z1 || sb[b + 3] < z0) continue;
+      if (convexOverlap(poly, strips[j].poly, -0.05)) return;
+    }
     keepStrip[i] = 1; stripsKept++;
     sGrid.add(i, x0, z0, x1, z1);
+    sb[i * 4] = x0; sb[i * 4 + 1] = z0; sb[i * 4 + 2] = x1; sb[i * 4 + 3] = z1;
   });
   const stripsRemoved = strips.length - stripsKept;
+  s.timings['l.repair.strips'] = performance.now() - tStrips;
   if (stripsRemoved > 0) {
     const remap = new Int32Array(strips.length).fill(-1);
     const kept: Strip[] = [];

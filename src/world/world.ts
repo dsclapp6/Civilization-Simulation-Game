@@ -362,7 +362,8 @@ export class World implements WorldModel {
     const hit = this.tm.riverHit(x, z);
     if (hit.d <= hit.hw) return hit.surface > 90 ? Ground.Shingle : Ground.Mud;
     if (b0 === Biome.Sea) return s.coastDist[k] > -120 ? Ground.Sand : Ground.Mud;
-    if (b0 === Biome.Lake) return Ground.Mud;
+    // lake cells are coarse: only the water and a thin muddy margin are mud, the rest of the cell is ordinary shore ground
+    if (b0 === Biome.Lake && (this.tm.waterSurface(x, z) !== null || this.tm.waterClearance(x, z, 6) < 2.5)) return Ground.Mud;
     if (f === F_ROAD) return this.fRoadKind >= 2 ? Ground.Road : Ground.Path;
     if (f === F_YARD) return Ground.Yard;
     if (f === F_FIELD) return Ground.Field;
@@ -371,9 +372,12 @@ export class World implements WorldModel {
     const sl = s.slope[k];
     const n = softNoise(x * 0.055, z * 0.055);
     const forestHere = G.bilerp(s.forest, x, z);
-    // biome borders wander: sample the macro biome at a noise-warped position instead of the grid cell
-    const bw = s.biome[this.cell(x + 26 * (softNoise(x * 0.028 + 4.1, z * 0.028) - 0.5), z + 26 * (softNoise(x * 0.028, z * 0.028 + 9.3) - 0.5))];
-    const bn = bw === Biome.Sea || bw === Biome.Lake ? b0 : bw;
+    // biome borders wander: sample the macro biome at a noise-warped position (two octaves, about +-24 m) instead of the grid cell,
+    // so that patches of marsh, heath, snow and woodland floor do not show the 31 m raster
+    const wx = x + 34 * (softNoise(x * 0.012 + 4.1, z * 0.012) - 0.5) + 14 * (softNoise(x * 0.041 + 1.7, z * 0.041) - 0.5);
+    const wz = z + 34 * (softNoise(x * 0.012, z * 0.012 + 9.3) - 0.5) + 14 * (softNoise(x * 0.041, z * 0.041 + 5.9) - 0.5);
+    const bw = s.biome[this.cell(wx, wz)];
+    const bn = bw === Biome.Sea || bw === Biome.Lake ? (b0 === Biome.Lake || b0 === Biome.Sea ? Biome.Marsh : b0) : bw;
     switch (bn) {
       case Biome.Snow: return Ground.Snow;
       case Biome.Mountain: return sl > 0.32 || n < 0.42 ? Ground.Rock : Ground.Moor;

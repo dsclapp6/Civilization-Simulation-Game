@@ -169,13 +169,18 @@ function rectCorners(frame: { x: number; z: number; rot: number }, hw: number, h
 
 /** Waypoints that take a road from a to b around the compound corners when the straight line is blocked. */
 function routeAround(ctx: LayoutCtx, a: P2, b: P2, cx: number, cz: number, corners: P2[]): P2[] {
-  if (clearLine(ctx, a, b, 3.4)) return [];
+  return routeCandidates(ctx, a, b, cx, cz, corners)[0] ?? [];
+}
+
+/** All clear ways from a to b round the compound (waypoints only), shortest first; [[]] when the straight line is clear, [] when blocked. */
+function routeCandidates(ctx: LayoutCtx, a: P2, b: P2, cx: number, cz: number, corners: P2[], all = false): P2[][] {
+  if (clearLine(ctx, a, b, 3.4)) return [[]];
   const way = (c: P2): P2 => {
     const dx = c.x - cx, dz = c.z - cz, l = Math.hypot(dx, dz) || 1;
     return { x: c.x + (dx / l) * 16, z: c.z + (dz / l) * 16 };
   };
   const ws = corners.map(way);
-  let best: P2[] | null = null, bl = Infinity;
+  const found: { path: P2[]; len: number }[] = [];
   const consider = (path: P2[]): void => {
     let len = 0, prev = a;
     for (const p of [...path, b]) {
@@ -183,11 +188,12 @@ function routeAround(ctx: LayoutCtx, a: P2, b: P2, cx: number, cz: number, corne
       len += dist(prev.x, prev.z, p.x, p.z);
       prev = p;
     }
-    if (len < bl) { bl = len; best = path; }
+    found.push({ path, len });
   };
   for (let i = 0; i < ws.length; i++) consider([ws[i]]);
-  if (!best) for (let i = 0; i < ws.length; i++) { consider([ws[i], ws[(i + 1) % ws.length]]); consider([ws[(i + 1) % ws.length], ws[i]]); }
-  return best ?? [];
+  if (all || !found.length) for (let i = 0; i < ws.length; i++) { consider([ws[i], ws[(i + 1) % ws.length]]); consider([ws[(i + 1) % ws.length], ws[i]]); }
+  found.sort((p, q) => p.len - q.len);
+  return found.map((f) => f.path);
 }
 
 /**
@@ -206,6 +212,8 @@ export function cutRoadsAtCompound(ctx: LayoutCtx, id: number, cx: number, cz: n
   };
   roads.sort((a, b) => align(b) - align(a));
   let first = true;
+  let firstId = -1;
+  const stubs: Road[] = [];
   const gateOut: P2 = { x: gate.x + axis.x * 14, z: gate.z + axis.z * 14 };
   for (const r of roads) {
     const fromStart = r.from === id;
@@ -231,12 +239,48 @@ export function cutRoadsAtCompound(ctx: LayoutCtx, id: number, cx: number, cz: n
       }
       outward = [gate, gateOut, ...routeAround(ctx, gateOut, target, cx, cz, corners), target, ...rest];
       first = false;
-    } else if (keep.length >= 2) outward = keep;
-    else {
+      firstId = r.id;
+    } else if (keep.length >= 2) {
+      // further approaches join the main approach road where it passes close by (a junction, never an overlap);
+      // otherwise they end in a stub outside the ring
+      const excl = new Set(roads.filter((q) => q.id !== firstId).map((q) => q.id));
+      const np = firstId >= 0 ? ctx.roadIdx.nearest(keep[0].x, keep[0].z, 120, excl) : null;
+      if (np && dist(np.x, np.z, keep[0].x, keep[0].z) > 6 && clearLine(ctx, keep[0], { x: np.x, z: np.z }, 3.4)) outward = [{ x: np.x, z: np.z }, ...keep];
+      else { outward = keep; stubs.push(r); }
+    } else {
       const dx = far.x - cx, dz = far.z - cz, l = Math.hypot(dx, dz) || 1;
       outward = [far, { x: far.x + (dx / l) * 3, z: far.z + (dz / l) * 3 }];
     }
     ctx.setRoadPoints(r, fromStart ? outward : outward.slice().reverse());
+  }
+  // stubs that still hang loose reach the gate spur by a clear way round the compound, unless that would run alongside another road
+  for (const r of stubs) {
+    const fromStart = r.from === id;
+    const pts = fromStart ? r.points.slice() : r.points.slice().reverse();
+    const end = pts[0];
+    const options = routeCandidates(ctx, gateOut, end, cx, cz, corners, true);
+    if (!options.length) { ctx.bump('castle.stub.noroute'); continue; }
+    let chosen: P2[] | null = null;
+    for (const around of options) {
+      const path = [gateOut, ...around, end];
+      let len = 0;
+      for (let i = 0; i + 1 < path.length; i++) len += dist(path[i].x, path[i].z, path[i + 1].x, path[i + 1].z);
+      if (len > 560) continue;
+      let ok = true, acc = 0;
+      for (let i = 0; i + 1 < path.length && ok; i++) {
+        const a = path[i], b = path[i + 1], l = dist(a.x, a.z, b.x, b.z), n = Math.max(1, Math.ceil(l / 4));
+        for (let q = 0; q <= n; q++) {
+          const d = acc + (l * q) / n;
+          if (d < 28 || d > len - 22) continue;
+          if (ctx.roadIdx.clearance(a.x + ((b.x - a.x) * q) / n, a.z + ((b.z - a.z) * q) / n, 14) < 7) { ok = false; break; }
+        }
+        acc += l;
+      }
+      if (ok) { chosen = around; break; }
+    }
+    if (!chosen) { ctx.bump('castle.stub.loose'); continue; }
+    const full = [gateOut, ...chosen, ...pts];
+    ctx.setRoadPoints(r, fromStart ? full : full.slice().reverse());
   }
 }
 

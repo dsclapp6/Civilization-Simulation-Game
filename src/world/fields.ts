@@ -289,11 +289,17 @@ function convexish(poly: P2[]): boolean {
 function clearWoodland(s: LayoutCtx['s'], farms: Farm[], owner: Int16Array): void {
   const { forest, biome, land } = s;
   const clearing = new Float32Array(NN);
-  farms.forEach((f) => {
-    const i0 = Math.max(0, Math.floor((f.x - f.R) / CELL)), i1 = Math.min(N - 1, Math.floor((f.x + f.R) / CELL));
-    const j0 = Math.max(0, Math.floor((f.z - f.R) / CELL)), j1 = Math.min(N - 1, Math.floor((f.z + f.R) / CELL));
+  farms.forEach((f, fi) => {
+    // the edge of the clearing is lobed, not a circle: assarts followed the soil, streams and the lord's licence
+    const p1 = fi * 2.399 + 0.7, p2 = fi * 1.618 + 2.1, p3 = fi * 0.931 + 4.2;
+    const reach = f.R * 1.5;
+    const i0 = Math.max(0, Math.floor((f.x - reach) / CELL)), i1 = Math.min(N - 1, Math.floor((f.x + reach) / CELL));
+    const j0 = Math.max(0, Math.floor((f.z - reach) / CELL)), j1 = Math.min(N - 1, Math.floor((f.z + reach) / CELL));
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
-      const d = Math.hypot((i + 0.5) * CELL - f.x, (j + 0.5) * CELL - f.z) / f.R;
+      const dx = (i + 0.5) * CELL - f.x, dz = (j + 0.5) * CELL - f.z;
+      const a = Math.atan2(dz, dx);
+      const lobe = 1 + 0.22 * Math.sin(3 * a + p1) + 0.15 * Math.sin(5 * a + p2) + 0.09 * Math.sin(9 * a + p3);
+      const d = Math.hypot(dx, dz) / (f.R * lobe);
       const c = 1 - smoothstep(0.5, 0.95, d);
       const k = j * N + i;
       if (c > clearing[k]) clearing[k] = c;
