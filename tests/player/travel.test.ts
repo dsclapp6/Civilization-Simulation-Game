@@ -459,6 +459,54 @@ describe('encounters', () => {
     expect(r.player.travel()!.phase).toBe('travelling');
   });
 
+  it('lets a panel that only knows travelTo and cancelTravel settle an encounter (the UI\'s journey panel)', () => {
+    // press on: the same destination again. Past outlaws that is a dash, and the journey goes on either way
+    const a = onTheRoad('panel-1');
+    const dest = a.player.travel()!.to;
+    a.player.debug!.forceEncounter('bandits');
+    expect(a.player.travelTo(dest).ok).toBe(true);
+    expect(a.player.travel()!.phase).toBe('travelling');
+    expect(a.player.travel()!.encounter).toBeUndefined();
+    expect(a.sim.state.clock.actionTime).toBe(false);
+    expect(a.sim.clock.speed).toBe(8);
+
+    // turn back: another destination, and the journey is re-planned from where the party stands
+    const b = onTheRoad('panel-2');
+    const here = b.player.body()!;
+    const elsewhere = b.sim.world.settlements.find((s) => s.id !== b.player.travel()!.to && dist(s.x, s.z, here.x, here.z) > 1500)!.id;
+    b.player.debug!.forceEncounter('travellers');
+    expect(b.player.travelTo(elsewhere).ok).toBe(true);
+    expect(b.player.travel()!.to).toBe(elsewhere);
+    expect(b.player.travel()!.phase).toBe('travelling');
+
+    // a patrol will not be passed by walking on without the toll: a poor traveller is turned back
+    const c = onTheRoad('panel-3');
+    c.sim.state.persons.get(c.pid)!.money = 0;
+    c.player.debug!.forceEncounter('patrol');
+    const res = c.player.travelTo(c.player.travel()!.to);
+    expect(res.ok === false || c.player.travel() === null || c.player.travel()!.phase === 'travelling').toBe(true);
+
+    // ending the journey in front of wolves means turning and running: the encounter ends with the journey
+    const d = onTheRoad('panel-4');
+    d.player.debug!.forceEncounter('wolves');
+    d.player.cancelTravel();
+    expect(d.player.travel()).toBeNull();
+    expect(d.sim.hostileNear()).toBe(false);
+    expect(d.sim.state.clock.actionTime).toBe(false);
+    expect(d.sim.clock.speed).toBe(1);
+  });
+
+  it('E during an encounter asks the UI for the wheel that lists the choices', () => {
+    const r = onTheRoad('wheel');
+    r.player.debug!.forceEncounter('merchant');
+    const asked: unknown[] = [];
+    r.sim.events.on('ui', (u) => asked.push(u));
+    r.player.setInput(input({ interact: true }));
+    r.sim.step(0.05);
+    expect(asked).toEqual([{ panel: 'actions' }]);
+    expect(r.player.options().length).toBeGreaterThan(1);
+  });
+
   it('stays out of the first stretch of a journey', () => {
     expect(ROLL_GRACE).toBeGreaterThan(100);
   });

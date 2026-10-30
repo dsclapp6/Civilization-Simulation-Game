@@ -514,3 +514,30 @@ export function buildChoices(env: EncounterEnv, d: EncounterData): ChoiceDef[] {
       return [{ id: 'go', label: 'Move on', enabled: true, run: () => ok('You carry on.', true) }];
   }
 }
+
+// ---------------------------------------------------------------------------------------------
+// "Press on" and "get away" for panels that offer only those two (the UI's journey panel)
+// ---------------------------------------------------------------------------------------------
+
+function firstEnabled(choices: readonly ChoiceDef[], ids: readonly string[]): string | null {
+  for (const id of ids) if (choices.some((c) => c.id === id && c.enabled)) return id;
+  return null;
+}
+
+/** The choice that means "carry on towards the destination": run past outlaws and wolves, pay a patrol, nod to the harmless. */
+export function pressOnChoice(kind: EncounterKind, choices: readonly ChoiceDef[]): string | null {
+  switch (kind) {
+    case 'bandits': case 'wolves': return firstEnabled(choices, ['flee']);
+    case 'patrol': return firstEnabled(choices, ['pass', 'pay', 'parley']);
+    default: return firstEnabled(choices, ['go', 'pass']);
+  }
+}
+
+/** The choice that means "get away from here": outrun the hostile, turn back from a patrol, walk away from the harmless. */
+export function escapeChoice(kind: EncounterKind, choices: readonly ChoiceDef[]): string | null {
+  switch (kind) {
+    case 'bandits': case 'wolves': return firstEnabled(choices, ['flee']);
+    case 'patrol': return firstEnabled(choices, ['turn', 'pass']);
+    default: return firstEnabled(choices, ['go', 'pass']);
+  }
+}

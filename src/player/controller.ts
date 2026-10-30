@@ -21,8 +21,8 @@ import {
   DISMOUNT_SECONDS, MOUNT_SECONDS, createBody, placeBody, stepBody, type BodyEnv, type BodyState, type BodyTraits,
 } from './body';
 import {
-  buildChoices, encounterRate, makeEncounter, pickEncounterKind, sampleDanger, type ChoiceDef, type DangerSample, type EncounterData,
-  type EncounterEnv,
+  buildChoices, encounterRate, escapeChoice, makeEncounter, pickEncounterKind, pressOnChoice, sampleDanger, type ChoiceDef, type DangerSample,
+  type EncounterData, type EncounterEnv,
 } from './encounters';
 import { Interaction, SCAN_INTERVAL } from './interaction';
 import { footAnim, rideAnim, maxStamina, workEffort, turnToward } from './movement';
@@ -391,8 +391,17 @@ export class PlayerController implements PlayerApi {
   travelTo(settlement: number): Result {
     const p = this.person();
     if (this.dead || !p) return { ok: false, reason: 'You cannot travel now.' };
-    if (this.journey?.encounter) return { ok: false, reason: 'Settle things on the road first.' };
     if (this.avatar.lock) return { ok: false, reason: 'Wait a moment.' };
+    // an encounter is open: asking to go on (or elsewhere) settles it the way a traveller would — pressing on
+    // runs past the outlaws or pays the patrol, going elsewhere gets away from them
+    const open = this.journey?.encounter;
+    if (open && this.journey) {
+      const onwards = settlement === this.journey.state.to;
+      const choice = onwards ? pressOnChoice(open.kind, this.encounterChoicesCache) : escapeChoice(open.kind, this.encounterChoicesCache);
+      if (!choice) return { ok: false, reason: 'There is no getting past this by walking on.' };
+      this.resolveEncounter(choice, { say: true });
+      if (onwards) return this.journey ? { ok: true } : { ok: false, reason: 'The way is barred.' };
+    }
     const dest = this.world.settlements.find((s) => s.id === settlement);
     if (!dest) return { ok: false, reason: 'You do not know the way.' };
     // inside the settlement is "there": the map is for going somewhere
@@ -421,6 +430,12 @@ export class PlayerController implements PlayerApi {
     const j = this.journey;
     if (!j) return;
     if (j.state.phase === 'arrived') { this.journey = null; return; }
+    // stopping with hostile men or wolves in front of you means turning and running: it may cost you
+    const open = j.encounter;
+    if (open && open.hostile) {
+      const choice = escapeChoice(open.kind, this.encounterChoicesCache);
+      if (choice) { this.resolveEncounter(choice, { say: true, end: true }); return; }
+    }
     this.stopJourney('cancel');
   }
 
@@ -530,6 +545,9 @@ export class PlayerController implements PlayerApi {
     if (!pending && !talking) {
       if (eInteract) this.tapInteract();
       if (eMount) this.toggleMount();
+    } else if (pending && eInteract) {
+      // face the standoff: the wheel lists what can be done (tap or hold E)
+      this.sim.events.emit('ui', { panel: 'actions' });
     }
     active = this.sim.actions.active(this.personId);
     const working = active !== null && active.option.seconds > 0;
@@ -876,7 +894,6 @@ export class PlayerController implements PlayerApi {
     this.zone.resync();
     this.persistNow();
     sim.events.emit('travel', { phase: 'encounter', to: j.state.to, encounter: data.label });
-    sim.events.emit('notify', { kind: data.hostile ? 'danger' : 'info', text: data.label, person: p.id });
   }
 
   private encounterEnv(): EncounterEnv | null {
@@ -898,7 +915,12 @@ export class PlayerController implements PlayerApi {
     j.state.encounter = { kind: data.kind, label: data.label, hostile: data.hostile, text: data.text, choices };
   }
 
-  private resolveEncounter(choiceId: string): ActionOutcome {
+  /**
+   * Settles the open encounter with one of its choices. `say`: report the outcome to the HUD (choices run
+   * through the action registry are reported by the registry itself); `end`: the journey is over whatever
+   * the choice was (a hostile encounter walked away from).
+   */
+  private resolveEncounter(choiceId: string, opts: { say?: boolean; end?: boolean } = {}): ActionOutcome {
     const j = this.journey;
     const data = j?.encounter;
     if (!j || !data) return { ok: false, message: 'There is nothing to settle.' };
@@ -914,10 +936,14 @@ export class PlayerController implements PlayerApi {
     this.hostileEncounter = false;
     this.interaction.invalidate();
     this.sim.dispatch({ type: 'setActionTime', on: false });
-    if (out.end) this.stopJourney('cancel', true);
+    if (out.end || opts.end) this.stopJourney('cancel');
     else this.resumeJourney(j); // never leave the party standing in the road
     const { resume: _resume, end: _end, ...outcome } = out;
     void _resume; void _end;
+    if (opts.say) {
+      if (outcome.message) this.notify(outcome.ok ? 'info' : 'warn', outcome.message);
+      if (outcome.ui) this.sim.events.emit('ui', outcome.ui);
+    }
     return outcome;
   }
 
@@ -955,14 +981,13 @@ export class PlayerController implements PlayerApi {
     this.scanT = SCAN_INTERVAL;
     this.persistNow();
     this.sim.events.emit('travel', { phase: 'arrive', to: j.state.to });
-    this.sim.events.emit('notify', { kind: 'info', text: `You arrive at ${dest ? dest.name : 'your destination'}.`, person: this.personId });
   }
 
   private restoreSpeed(j: Journey): void {
     this.sim.dispatch({ type: 'setSpeed', speed: j.speedBefore });
   }
 
-  private stopJourney(phase: 'cancel', quiet = false): void {
+  private stopJourney(phase: 'cancel'): void {
     const j = this.journey;
     if (!j) return;
     this.restoreSpeed(j);
@@ -979,7 +1004,6 @@ export class PlayerController implements PlayerApi {
     this.scanT = SCAN_INTERVAL;
     this.persistNow();
     this.sim.events.emit('travel', { phase, to: j.state.to });
-    if (!quiet) this.notify('info', 'You halt your journey.');
   }
 
   private forceEncounter(kind: EncounterKind): void {
@@ -1007,7 +1031,7 @@ export class PlayerController implements PlayerApi {
   private onPlayerDied(e: SimEvents['playerDied']): void {
     if (e.person !== this.personId) return;
     this.sim.actions.cancel(this.personId, 'cancelled');
-    if (this.journey) this.stopJourney('cancel', true);
+    if (this.journey) this.stopJourney('cancel');
     this.markDead();
   }
 
@@ -1024,14 +1048,13 @@ export class PlayerController implements PlayerApi {
   private onPlayerSwitched(e: SimEvents['playerSwitched']): void {
     const oldX = this.draw.x, oldZ = this.draw.z;
     this.sim.actions.cancel(e.from, 'cancelled');
-    if (this.journey) this.stopJourney('cancel', true);
+    if (this.journey) this.stopJourney('cancel');
     const old = this.avatar;
     if (old.mounted && old.mounted.animal >= 0) this.zone.releaseAnimal?.(old.mounted.animal, old.x, old.z, old.yaw);
     this.zone.detachPlayer();
     this.attach(e.to, 'whereabouts');
     this.switchFx = { t: 0, fromX: oldX, fromZ: oldZ, toX: this.draw.x, toZ: this.draw.z };
-    this.notify('info', `You are now ${this.nameOf(e.to)}.`);
-  }
+      }
 
   private onGameOver(): void {
     this.dead = true;
