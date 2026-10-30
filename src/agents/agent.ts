@@ -120,6 +120,8 @@ export class Agent implements ZoneAgent {
 
   // ---- bookkeeping ----
   dead = false;
+  /** Summoned by the game (encounters, patrols): exempt from the zone cap and hysteresis until dismissed. */
+  summoned = false;
   spawnedAt = 0;
   distFocus = 0;
   gridIndex = -1;

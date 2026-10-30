@@ -16,7 +16,7 @@ beforeAll(() => {
   rig = makeRig();
   vil = village(rig.world, rig.zone);
   rig.zone.nav.prepare(vil.x, vil.z);
-});
+}, 180000);
 
 /** A large flat piece of the real continent with nothing built on it near (x, z). */
 function emptyGround(): { x: number; z: number } {

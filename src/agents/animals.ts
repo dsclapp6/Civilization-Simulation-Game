@@ -96,6 +96,7 @@ export class Animal implements ZoneAnimal {
   pack = -1;
   circle = 0;
   spec: Spec | null = null;
+  summoned = false;
 
   constructor(id: number, kind: AnimalKind, draw: AnimalDrawItem) {
     this.id = id; this.kind = kind; this.draw = draw; this.info = KINDS[kind];
@@ -153,9 +154,31 @@ export class AnimalSystem {
   }
 
   clear(): void {
+    const keep = this.items.filter((a) => a.summoned && !a.dead);
     this.items.length = 0;
     this.byId.clear();
+    for (const a of keep) { this.items.push(a); this.byId.set(a.id, a); }
     this.gatherT = -100;
+  }
+
+  private summonedCount = 0;
+  private nextSummonId = 20_000_000;
+
+  /** A temporary animal (a wolf of a pack met on the road, a stray): kept until dismissed, outside the cap and hysteresis. */
+  summon(kind: AnimalKind, x: number, zz: number, hostile: boolean): number {
+    const id = this.nextSummonId++;
+    const spec: Spec = {
+      id, kind, household: 0, owner: 0, settlement: -1, head: 0, shepherd: 0, homeX: x, homeZ: zz, yardR: 25,
+      grazeX: 0, grazeZ: 0, grazeR: 0, hasGraze: false, wild: true, hostile, pack: this.summonedCount++ >> 2,
+    };
+    const a = this.spawn(spec, x, zz, true);
+    if (a) a.summoned = true;
+    return id;
+  }
+
+  dismiss(id: number): void {
+    const a = this.byId.get(id);
+    if (a && a.summoned) a.dead = true;
   }
 
   resync(): void {
@@ -203,7 +226,7 @@ export class AnimalSystem {
       const a = items[i];
       if (a.dead) { this.byId.delete(a.id); continue; }
       const dxf = a.x - fx, dzf = a.z - fz;
-      if (dxf * dxf + dzf * dzf > LEAVE_RADIUS * LEAVE_RADIUS) { this.byId.delete(a.id); a.dead = true; continue; }
+      if (!a.summoned && dxf * dxf + dzf * dzf > LEAVE_RADIUS * LEAVE_RADIUS) { this.byId.delete(a.id); a.dead = true; continue; }
       this.update(a, dt, night);
       if (a.dead) { this.byId.delete(a.id); continue; }
       items[w++] = a;
@@ -228,7 +251,7 @@ export class AnimalSystem {
     a.timer -= dt;
     a.counter++;
 
-    if (a.wild && a.kind === 'wolf') this.wolf(a, dt);
+    if (a.hostile && (a.kind === 'wolf' || a.summoned)) this.wolf(a, dt);
     else {
       // people near? shy animals move off; others carry on
       if (a.counter % 3 === 0) this.threat(a);
@@ -467,8 +490,8 @@ export class AnimalSystem {
     found.sort((a, b) => a.d - b.d);
     let added = 0;
     for (const f of found) {
-      if (this.items.length >= MAX_ANIMALS) break;
-      this.spawn(f.s, f.x, f.z);
+      if (this.items.reduce((n, q) => n + (q.summoned ? 0 : 1), 0) >= MAX_ANIMALS) break;
+      this.spawn(f.s, f.x, f.z, false);
       if (!full && ++added >= 24) break;
     }
   }
@@ -491,10 +514,10 @@ export class AnimalSystem {
     found.push({ s: spec, d, x, z: zz });
   }
 
-  private spawn(spec: Spec, x: number, zz: number): void {
+  private spawn(spec: Spec, x: number, zz: number, exact: boolean): Animal | null {
     const z = this.zone;
     const out = this.tmp;
-    if (!z.nav.nearestWalkable(x, zz, 6, out)) return;
+    if (exact) { out.x = x; out.z = zz; } else if (!z.nav.nearestWalkable(x, zz, 6, out)) return null;
     const info = KINDS[spec.kind];
     const h = (k: number): number => hash01(spec.id, 40 + k);
     const season = toDate(z.now).season;
@@ -524,6 +547,7 @@ export class AnimalSystem {
     if (spec.kind === 'cat') a.st = hash01(spec.id, 78) < 0.6 ? A.Lie : A.Idle;
     this.items.push(a);
     this.byId.set(a.id, a);
+    return a;
   }
 
   // ---- household livestock ----

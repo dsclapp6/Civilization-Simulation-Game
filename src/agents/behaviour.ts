@@ -529,7 +529,13 @@ function hold(z: Zone, a: Agent, dt: number): void {
 
 function script(z: Zone, a: Agent, dt: number): void {
   const o = a.order;
-  if (!o) { setAnim(a, 'idle'); return; }
+  if (!o) {
+    setAnim(a, 'idle');
+    // unordered summoned people face the player
+    const p = z.player;
+    if (p && a.summoned) a.yaw = turnToward(a.yaw, yawTo(a.x, a.z, p.x, p.z), TURN_RATE * 0.5 * dt);
+    return;
+  }
   a.orderT += dt;
   switch (o.kind) {
     case 'goto':
@@ -565,7 +571,7 @@ function script(z: Zone, a: Agent, dt: number): void {
     case 'perform':
       setAnim(a, o.anim);
       if (o.mainHand) a.draw.mainHand = o.mainHand;
-      if (a.orderT >= o.seconds) { a.order = null; a.control = 'ai'; a.replanAt = 0; a.sig = 0; }
+      if (a.orderT >= o.seconds) endOrder(a);
       return;
     case 'flee': {
       const dx = a.x - o.from.x, dz = a.z - o.from.z;
@@ -575,11 +581,18 @@ function script(z: Zone, a: Agent, dt: number): void {
       a.x = z.mr.x; a.z = z.mr.z;
       a.yaw = turnToward(a.yaw, Math.atan2(dx, dz), TURN_RATE * dt);
       setAnim(a, 'run');
-      if (a.orderT > 7 || d > 60) { a.order = null; a.control = 'ai'; a.replanAt = 0; a.sig = 0; }
+      if (a.orderT > 7 || d > 60) endOrder(a);
       return;
     }
-    case 'resume': a.order = null; a.control = 'ai'; a.replanAt = 0; a.sig = 0; return;
+    case 'resume': endOrder(a); return;
   }
+}
+
+/** An order is over: back to the routine, except for summoned people, who stay put until dismissed. */
+export function endOrder(a: Agent): void {
+  a.order = null;
+  if (a.summoned) { a.st = St.Idle; return; }
+  a.control = 'ai'; a.replanAt = 0; a.sig = 0;
 }
 
 // ---------------------------------------------------------------------------------------------

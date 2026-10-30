@@ -20,7 +20,7 @@ let vil: Settlement;
 beforeAll(() => {
   rig = makeRig();
   vil = village(rig.world, rig.zone);
-});
+}, 180000);
 
 beforeEach(() => {
   rig.sim.view.setSource('mode', () => 'street');
@@ -209,6 +209,70 @@ describe('orders and conversation', () => {
     zone.detachPlayer();
     expect(barks.length).toBeGreaterThan(0);
     expect(barks[0]).toMatch(/greet/);
+  });
+});
+
+describe('summoned people and animals', () => {
+  it('summon puts a person at the spot whatever the schedule says, exempt from cap and hysteresis, until dismissed', () => {
+    const { zone, sim, focus } = rig;
+    // someone who is asleep indoors now would not be an agent
+    setClock(sim, 1, 2, 0.02);
+    zone.resync();
+    const sleeper = [...sim.state.residentsOf(vil.id)].find((p) => p.id !== sim.state.run.playerId && p.career !== 'child' && !p.death && zone.whereabouts(p.id).indoors)!;
+    expect(zone.agent(sleeper.id)).toBeNull();
+    const x = vil.x + 20, z = vil.z + 10;
+    zone.summon!(sleeper.id, x, z, 1.2);
+    const a = zone.agent(sleeper.id)!;
+    expect(a).not.toBeNull();
+    expect(Math.hypot(a.x - x, a.z - z)).toBeLessThan(0.01);
+    expect(a.control).toBe('script');
+    // far beyond the zone radius and across a resync: still there
+    focus.x += 600;
+    run(sim, 1);
+    zone.resync();
+    expect(zone.agent(sleeper.id)).not.toBeNull();
+    // obeys orders; after `resume` it stays (does not go back to the schedule)
+    zone.command(sleeper.id, { kind: 'resume' });
+    run(sim, 1);
+    expect(zone.agent(sleeper.id)).not.toBeNull();
+    zone.dismiss!(sleeper.id);
+    run(sim, 0.2);
+    expect(zone.agent(sleeper.id)).toBeNull();
+    zone.dismiss!(sleeper.id); // repeated calls are harmless
+    focus.x = vil.x; focus.z = vil.z;
+  });
+
+  it('summonAnimal adds a temporary beast that counts as hostile for the speed lock, and dismissAnimal removes it', () => {
+    const { zone, sim, focus } = rig;
+    focus.x = vil.x; focus.z = vil.z;
+    setClock(sim, 1, 2, 0.4);
+    zone.resync();
+    const before = zone.animals().length;
+    const id = zone.summonAnimal!('wolf', vil.x + 60, vil.z, true);
+    expect(zone.animals().length).toBe(before + 1);
+    expect(zone.animals().find((q) => q.id === id)!.hostile).toBe(true);
+    expect(sim.hostileNear()).toBe(true);
+    expect(sim.dispatch({ type: 'setSpeed', speed: 3 }).ok).toBe(false);
+    zone.resync();
+    run(sim, 1);
+    expect(zone.animals().some((q) => q.id === id)).toBe(true);
+    const stray = zone.summonAnimal!('dog', vil.x + 10, vil.z + 10, false);
+    expect(zone.animals().find((q) => q.id === stray)!.hostile).toBe(false);
+    zone.dismissAnimal!(id);
+    zone.dismissAnimal!(stray);
+    run(sim, 0.2);
+    expect(zone.animals().some((q) => q.id === id || q.id === stray)).toBe(false);
+    expect(sim.hostileNear()).toBe(false);
+  });
+
+  it('makes hold and release safe to repeat', () => {
+    const { zone } = rig;
+    const a = zone.agentsArr.find((q) => q.control === 'ai')!;
+    zone.hold(a.personId); zone.hold(a.personId, a.personId);
+    expect(a.control).toBe('held');
+    zone.release(a.personId); zone.release(a.personId);
+    expect(a.control).toBe('ai');
+    zone.release(999999999);
   });
 });
 

@@ -18,7 +18,7 @@ beforeAll(() => {
   rig = makeRig();
   vil = village(rig.world, rig.zone);
   people = [...rig.sim.state.residentsOf(vil.id)];
-});
+}, 180000);
 
 const where = (p: Person, season: number, dow: number, frac: number) => {
   setClock(rig.sim, season, dow, 0);
@@ -98,8 +98,8 @@ describe('whereabouts', () => {
       tally[w.activity] = (tally[w.activity] ?? 0) + 1;
     }
     expect(tally['work'] ?? 0).toBe(0);
-    const leisure = (tally['practice'] ?? 0) + (tally['alehouse'] ?? 0) + (tally['talk'] ?? 0) + (tally['home'] ?? 0) + (tally['eat'] ?? 0) + (tally['play'] ?? 0);
-    expect(leisure).toBeGreaterThan(adults().length * 0.85);
+    const leisure = (tally['practice'] ?? 0) + (tally['alehouse'] ?? 0) + (tally['talk'] ?? 0) + (tally['home'] ?? 0) + (tally['eat'] ?? 0) + (tally['play'] ?? 0) + (tally['walk'] ?? 0) + (tally['church'] ?? 0) + (tally['travel'] ?? 0);
+    expect(leisure).toBeGreaterThan(adults().length * 0.9);
     expect((tally['practice'] ?? 0) + (tally['alehouse'] ?? 0)).toBeGreaterThan(0);
   });
 

@@ -1,6 +1,7 @@
 // The detail zone: which people near the focus become agents (and when they fold back), the time
 // sliced scan that finds them, the per-step update, the interpolated view of their draw items, and
 // the ZoneApi the rest of the game talks to.
+import type { AnimalKind } from '../core/domain';
 import { clamp, hash01 } from '../core/math';
 import { SIM_DT } from '../core/time';
 import type { AnimalDrawItem, CharacterDrawItem, ViewMode } from '../core/view';
@@ -12,7 +13,7 @@ import { ageYears, type Person, type PersonId } from '../sim/state';
 import { kinshipLabel } from '../sim/api';
 import { AnimalSystem } from './animals';
 import { Agent, St } from './agent';
-import { replan, updateAgent } from './behaviour';
+import { endOrder, replan, updateAgent } from './behaviour';
 import { ADULT_RADIUS, CHILD_RADIUS, ENTER_RADIUS, LEAVE_RADIUS, NAV_BUILD_BUDGET_MS, PATH_BUDGET_MS, SPAWN_BUDGET_MS, WALK_SPEED } from './config';
 import { SpatialHash } from './hash';
 import { findInteractables } from './interact';
@@ -191,7 +192,7 @@ export class Zone {
       const dx = a.x - fx, dz = a.z - fz;
       a.distFocus = Math.sqrt(dx * dx + dz * dz);
       if (a.person.death) { a.dead = true; continue; }
-      if (a.distFocus > LEAVE_RADIUS && a.control === 'ai') { a.dead = true; continue; }
+      if (a.distFocus > LEAVE_RADIUS && !a.summoned) { a.dead = true; continue; }
       updateAgent(this, a, dt);
       if (!a.dead && a.counter % 90 === 7) this.refreshLook(a);
     }
@@ -202,6 +203,8 @@ export class Zone {
     this.scan(speedScale);
     this.stats.scanMs = performance.now() - tS;
     this.nav.queue.process(PATH_BUDGET_MS * speedScale);
+    // the array was compacted and may have grown: the animals look people up by slot
+    this.rebuildGrid();
     this.fauna.step(dt);
     this.recordStats(performance.now() - t0);
   }
@@ -307,7 +310,7 @@ export class Zone {
     const dx = x - this.focusX, dz = z - this.focusZ;
     const d = Math.sqrt(dx * dx + dz * dz);
     if (d > ENTER_RADIUS && !force) return false;
-    if (this.agentsArr.length >= MAX_AGENTS) {
+    if (this.agentsArr.reduce((n, q) => n + (q.summoned ? 0 : 1), 0) >= MAX_AGENTS) {
       // full: replace the farthest body when this one is clearly nearer
       let far: Agent | null = null, fd = 0;
       for (const a of this.agentsArr) if (!a.dead && a.control === 'ai' && a.distFocus > fd) { fd = a.distFocus; far = a; }
@@ -375,7 +378,7 @@ export class Zone {
     }
     found.sort((a, b) => a.d - b.d);
     const out = this.tmpP;
-    for (let i = 0; i < found.length && this.agentsArr.length < MAX_AGENTS; i++) {
+    for (let i = 0; i < found.length && this.agentsArr.reduce((n, q) => n + (q.summoned ? 0 : 1), 0) < MAX_AGENTS; i++) {
       const p = found[i].p;
       this.sched.intent(p, this.now, I);
       let x = I.x, z = I.z;
@@ -388,8 +391,11 @@ export class Zone {
   }
 
   clearAll(): void {
+    // summoned people and animals outlive resyncs: they belong to the game, not to the schedules
+    const keep = this.agentsArr.filter((a) => a.summoned && !a.dead);
     this.agentsArr.length = 0;
     this.byPerson.clear();
+    for (const a of keep) { this.agentsArr.push(a); this.byPerson.set(a.personId, a); }
     this.nav.queue.clear();
     this.doorNext.clear();
     this.fauna.clear();
@@ -541,11 +547,31 @@ export class Zone {
       if (Math.hypot(w.x - this.focusX, w.z - this.focusZ) > 500) return;
       a = this.add(p, w.x, w.z, Math.hypot(w.x - this.focusX, w.z - this.focusZ));
     }
-    if (order.kind === 'resume') { a.control = 'ai'; a.order = null; a.replanAt = 0; a.sig = 0; return; }
+    if (order.kind === 'resume') { endOrder(a); return; }
     a.control = 'script'; a.order = order; a.orderT = 0;
     a.st = St.Idle; a.pathN = a.pathI = 0; a.overlay = '';
     a.draw.carry = 'none';
   }
+
+  summon(person: PersonId, x: number, z: number, yaw = 0): void {
+    const p = this.state.persons.get(person);
+    if (!p || p.death || (this.player && this.player.person === person)) return;
+    let a = this.byPerson.get(person);
+    if (!a) a = this.add(p, x, z, Math.hypot(x - this.focusX, z - this.focusZ));
+    a.summoned = true; a.control = 'script'; a.order = null; a.orderT = 0;
+    a.x = x; a.z = z; a.y = this.nav.groundY(x, z); a.yaw = yaw;
+    a.st = St.Idle; a.pathN = a.pathI = 0; a.overlay = '';
+    this.nav.queue.cancel(person);
+  }
+
+  dismiss(person: PersonId): void {
+    const a = this.byPerson.get(person);
+    if (!a || !a.summoned) return;
+    a.summoned = false; a.dead = true;
+  }
+
+  summonAnimal(kind: AnimalKind, x: number, z: number, hostile: boolean): number { return this.fauna.summon(kind, x, z, hostile); }
+  dismissAnimal(id: number): void { this.fauna.dismiss(id); }
 
   say(person: PersonId, text: string, seconds = 3): void {
     const a = this.byPerson.get(person);
