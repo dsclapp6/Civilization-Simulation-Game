@@ -22,7 +22,7 @@ function courtChance(t: TopicCtx, base: number, opinionW: number, extra = 0): nu
     base, opinionW, chaW: 0.025, skillW: 0.004, rankUp: 0, rankDown: 0,
     other: { pious: -0.05, hot_tempered: -0.02, deceitful: 0.03, content: 0.02 },
     actor: { comely: 0.08, scarred: -0.04 },
-    extra: extra - 0.05 * dt - 0.01 * Math.max(0, Math.abs(gapOf(t) - 3) - 8),
+    extra: extra + core.courtship.compatibility(actor, other).score - 0.05 * dt - 0.01 * Math.max(0, Math.abs(gapOf(t) - 3) - 8),
   });
 }
 
@@ -133,6 +133,11 @@ function feelings(t: TopicCtx): TopicReply {
   const rec = core.courtship.record(actor.id, other.id);
   const p = rec ? rec.p : 0;
   t.npc.tags.add(`feel_${core.opinion.bucket(t.op)}`);
+  const taste = core.courtship.compatibility(actor, other);
+  if (taste.wants) {
+    t.npc.tags.add(`wants_${taste.wants}`);
+    t.npc.tags.add(taste.likes.includes(taste.wants) ? 'taste_met' : 'taste_unmet');
+  }
   t.npc.tags.add(p >= 0.9 ? 'p_high' : p >= 0.4 ? 'p_mid' : 'p_low');
   const block = rec ? core.courtship.outstanding(rec) : [];
   if (block.length > 0) {
@@ -140,7 +145,7 @@ function feelings(t: TopicCtx): TopicReply {
     t.npc.vars.who = names.join(' and ');
     t.npc.tags.add('needs_consent');
   }
-  return { lines: [...lines, ...npcSays(t, 'court.feelings.reply', 'friendly')] };
+  return { lines: [...lines, ...npcSays(t, 'court.feelings.reply', 'friendly'), ...(taste.wants ? npcSays(t, 'court.feelings.taste', 'friendly') : [])] };
 }
 
 function propose(t: TopicCtx): TopicReply {

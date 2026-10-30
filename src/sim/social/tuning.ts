@@ -50,9 +50,9 @@ export const COURT = {
   /** Youngest age at which a wedding (or the player's own proposal) is allowed. */
   marryAge: 16,
   /** Progress that may be gained by one person in one day. */
-  dailyCap: 0.28,
+  dailyCap: 0.22,
   /** Their opinion of you must reach this before the courtship can pass 0.6. */
-  loveFrom: 22,
+  loveFrom: 26,
   /** Days without contact before progress starts to fade, and how much per day. */
   coolAfterDays: 6,
   coolPerDay: 0.02,

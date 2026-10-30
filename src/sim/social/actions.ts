@@ -63,7 +63,7 @@ function listPerson(core: SocialCore, convs: Conversations, actorId: PersonId, t
   const refusal = convs.refusal(actor, other);
   out.push({
     ...base, id: 'social.talk', label: 'Talk', category: 'talk', enabled: refusal === null, reason: refusal ?? undefined,
-    seconds: 0, range: 4, priority: 60, preview: core.relations.describe(actor, other, false),
+    seconds: 0, range: 4, priority: 60, preview: core.relations.brief(actor, other),
   });
   if (other.death) return;
   const awake = core.isAwake(other);

@@ -123,6 +123,23 @@
         {"t": "My heart is yours, {first}, if you want it. I'm nearly sure.", "tone": "flirt", "if": {"tag": ["feel_devoted", "p_high"]}},
         {"t": "You know how I feel. I could not hide it if I tried.", "tone": "warm", "if": {"tag": "feel_devoted"}},
         {"t": "But there are others to be asked before we say more: {who} must agree.", "tone": "wary", "if": {"tag": "needs_consent"}}
+      ],
+      "taste": [
+        {"t": "I'll be plain with you, {first}: I mean to marry well. Show me you can rise.", "tone": "wary", "if": {"tag": ["wants_rank", "taste_unmet"]}},
+        {"t": "Your standing is what a sensible person hopes for. That counts with me.", "tone": "warm", "if": {"tag": ["wants_rank", "taste_met"]}},
+        {"t": "I could not wed one who neglects the Church. Be seen at Mass, {first}.", "tone": "wary", "if": {"tag": ["wants_piety", "taste_unmet"]}},
+        {"t": "I have seen you at your prayers, and I thought well of it.", "tone": "warm", "if": {"tag": ["wants_piety", "taste_met"]}},
+        {"t": "A person's word is all they have. I'd see yours kept.", "tone": "wary", "if": {"tag": ["wants_honour", "taste_unmet"]}},
+        {"t": "You keep your word. That is rarer than gold.", "tone": "warm", "if": {"tag": ["wants_honour", "taste_met"]}},
+        {"t": "I cannot abide a hard hand. Be gentle, and be giving.", "tone": "wary", "if": {"tag": ["wants_kindness", "taste_unmet"]}},
+        {"t": "You are kind to folk. I notice that, {first}; I notice it very much.", "tone": "warm", "if": {"tag": ["wants_kindness", "taste_met"]}},
+        {"t": "A purse that's empty makes a cold hearth, {first}.", "tone": "wary", "if": {"tag": ["wants_wealth", "taste_unmet"]}},
+        {"t": "You've means, and the sense not to boast of them. Good.", "tone": "warm", "if": {"tag": ["wants_wealth", "taste_met"]}},
+        {"t": "I'd want a spirit that is not afraid. Show me.", "tone": "wary", "if": {"tag": ["wants_valour", "taste_unmet"]}},
+        {"t": "They say you do not flinch. I like that.", "tone": "warm", "if": {"tag": ["wants_valour", "taste_met"]}},
+        {"t": "I'd talk with someone who thinks, {first}. Sharpen your wits.", "tone": "wary", "if": {"tag": ["wants_wit", "taste_unmet"]}},
+        {"t": "You have a quick mind. It makes our talk worth having.", "tone": "warm", "if": {"tag": ["wants_wit", "taste_met"]}},
+        {"t": "I fear a hard temper. Show me you can be gentle.", "tone": "wary", "if": {"tag": "wants_gentleness"}}
       ]
     },
     "propose": {

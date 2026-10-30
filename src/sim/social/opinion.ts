@@ -145,7 +145,8 @@ export class OpinionModel {
     if (stored !== undefined) of.opinions[aboutId] = round1(stored);
     core.state.touch(of);
     const player = core.playerId;
-    if (aboutId === player || ofId === player || Math.abs(d) >= 4) {
+    // what the player does to people, and any big change, is remembered; passing pleasantries are not
+    if (Math.abs(d) >= 2 && (aboutId === player || ofId === player || Math.abs(d) >= 4)) {
       core.store.addMemory({ o: ofId, a: aboutId, d: core.day, r: reason, v: d });
     }
     if (aboutId === player && Math.abs(d) >= 0.5) {

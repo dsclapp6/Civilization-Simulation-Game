@@ -176,6 +176,11 @@ export class Relations {
     return this.describe(v, o, named);
   }
 
+  /** A short phrase for the conversation header: "your father", "the reeve", "a stranger". */
+  brief(viewer: Person, other: Person): string {
+    return this.label(viewer, other, this.kinds(viewer, other), false);
+  }
+
   /** Who `other` is to `viewer` in a few words: "the reeve", "a neighbour", "Agnes, the alewife", "a stranger". */
   describe(v: Person, o: Person, named: boolean): string {
     const core = this.core;

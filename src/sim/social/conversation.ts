@@ -85,7 +85,7 @@ export class Conversations {
     const op = core.opinion.total(other, actor);
     const conv: Conversation = {
       id: this.nextId++, actor: actor.id, with: other.id, lines: [], options: [], opinion: op, opinionDelta: 0,
-      mood: moodOf(op), relation: core.relations.describe(actor, other, false), ended: false, page: 'root', pageLabel: '',
+      mood: moodOf(op), relation: core.relations.brief(actor, other), ended: false, page: 'root', pageLabel: '',
     };
     const s: Session = {
       conv, actor, other, startOpinion: op, page: 'root', used: new Map(), scratch: new Map(), turns: 0,
@@ -119,6 +119,7 @@ export class Conversations {
     s.conv.options = [];
     if (this.cur === s) { this.cur = null; this.last = s; }
     core.sim.dispatch({ type: 'setActionTime', on: false });
+    if (core.state.clock.actionTime) core.sim.clock.setActionTime(false); // e.g. the run just ended and commands are refused
     core.sim.events.emit('conversation', { phase: 'end', id: s.conv.id, actor: s.conv.actor, with: s.conv.with });
   }
 

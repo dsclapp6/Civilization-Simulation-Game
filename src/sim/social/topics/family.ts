@@ -1,6 +1,7 @@
 // "Family matters…": asking consent to a courtship (a parent's blessing, the lord's leave), being
 // sent to a master as an apprentice, discussing and arranging matches. Heads of households arrange
 // matches for their wards (child, sibling) with the other family's head — opinion, rank and dowry decide.
+import { kinshipLabel } from '../../api';
 import { CAREERS, type CareerId } from '../../careers';
 import { formatMoney } from '../../money';
 import { fullName, type Person, type PersonId } from '../../state';
@@ -80,6 +81,8 @@ function wardPairs(t: TopicCtx): Wards[] {
       if (a.ok) out.push({ ward: w, cand: c });
     }
   }
+  // the likeliest matches first
+  out.sort((x, y) => core.courtship.arrangeChance(actor, y.ward, y.cand).chance - core.courtship.arrangeChance(actor, x.ward, x.cand).chance);
   return out.slice(0, 3);
 }
 
@@ -102,6 +105,7 @@ export const familyGroup: TopicGroup = {
     const id = option.id;
     if (id.startsWith('family.consent.')) return consent(t, Number(id.slice('family.consent.'.length)));
     if (id.startsWith('family.apprentice.')) return apprentice(t, Number(id.slice('family.apprentice.'.length)));
+    if (id.startsWith('family.foster.')) return foster(t, Number(id.slice('family.foster.'.length)));
     if (id.startsWith('family.match.')) return matchForSelf(t, Number(id.slice('family.match.'.length)));
     if (id.startsWith('family.propose.')) {
       const [w, c] = id.slice('family.propose.'.length).split('.').map(Number);
@@ -150,6 +154,12 @@ function collect(t: TopicCtx, out: ReturnType<typeof mkOption>[]): void {
         enabled: afford && !unfree,
         reason: unfree ? 'A serf\'s child needs the lord\'s leave to leave the manor.' : afford ? undefined : `The household cannot spare ${formatMoney(premium)}.`,
       }));
+    }
+  }
+  // fostering, for the children of the gentry and above
+  if (age >= 7 && age < 17 && actor.rankTier >= 4 && isGuardianOf(other, actor, core) && !actor.spouse) {
+    for (const h of fosterHosts(t)) {
+      out.push(mkOption(`family.foster.${h.id}`, `Ask to be fostered in ${h.first}'s household`, 'family', { chance: fosterChance(t, h), priority: 68 }));
     }
   }
   // a match arranged by my parent or head
@@ -225,6 +235,54 @@ function apprentice(t: TopicCtx, masterId: PersonId): TopicReply {
   return { lines: [...lines, ...npcSays(t, 'family.apprentice.yes', 'warm')], opinion: 2, reason: 'apprenticed' };
 }
 
+// ---- fostering (gentry and nobility send their young to a kinsman's or a lord's household) ----
+
+function fosterHosts(t: TopicCtx): Person[] {
+  const { core, actor } = t;
+  const st = core.state;
+  const out: Array<{ p: Person; key: number }> = [];
+  for (const hh of st.householdList(actor.settlement)) {
+    if (hh.id === actor.household || (hh.kind !== 'family' && hh.kind !== 'lord') || hh.members.length >= 10) continue;
+    const head = core.living(hh.head);
+    if (!head || head.rankTier < Math.max(4, actor.rankTier) || head.estate === 'clergy') continue;
+    const kin = kinshipLabel(st, actor, head);
+    out.push({ p: head, key: (kin ? 50 : 0) + core.opinion.total(head, actor) - Math.abs(head.rankTier - actor.rankTier) * 4 });
+  }
+  out.sort((a, b) => b.key - a.key || a.p.id - b.p.id);
+  return out.slice(0, 2).map((x) => x.p);
+}
+
+function fosterChance(t: TopicCtx, host: Person): number {
+  const { core, actor, other } = t;
+  const parentOk = checkChance(core, actor, other, { base: 0.78, opinionW: 0.003, chaW: 0.005, skillW: 0.004 });
+  const kin = kinshipLabel(core.state, actor, host) !== '';
+  const hostOk = checkChance(core, actor, host, {
+    base: 0.45, opinionW: 0.004, chaW: 0.01, skillW: 0.004, rankUp: -0.02, rankDown: 0.02,
+    extra: (kin ? 0.25 : 0) + 0.01 * (actor.trained.cha + actor.trained.int - 20) / 2, other: { patient: 0.05, hot_tempered: -0.05 },
+  });
+  return Math.round(parentOk * hostOk * 100) / 100;
+}
+
+function foster(t: TopicCtx, hostId: PersonId): TopicReply {
+  const { core, actor } = t;
+  const st = core.state;
+  const host = core.living(hostId);
+  if (!host) return { lines: [] };
+  t.me.vars.third = host.first; t.npc.vars.third = host.first; t.npc.vars.thirdaddr = core.speech.address(t.other, host, true);
+  const lines = iSay(t, 'family.foster.ask');
+  if (!(core.rng().next() < fosterChance(t, host))) return { lines: [...lines, ...npcSays(t, 'family.foster.no', 'wary')], reason: 'asked' };
+  const hostHh = st.households.get(host.household);
+  if (!hostHh) return { lines };
+  st.leaveHousehold(actor);
+  st.joinHousehold(actor, hostHh);
+  if (actor.sex === 'm') { actor.career = core.age(actor) < 14 ? 'page' : 'squire'; actor.careerStage = core.age(actor) < 14 ? 0 : 1; }
+  st.touch(actor);
+  core.opinion.adjust(host.id, actor.id, 3, 'apprenticed');
+  core.notify(`You are fostered in the household of ${fullName(host)}.`, 'gain');
+  st.log(core.now, 'career', `${fullName(actor)} was fostered in the household of ${fullName(host)}.`, [actor.id, host.id]);
+  return { lines: [...lines, ...npcSays(t, 'family.foster.yes', 'warm')], opinion: 2, reason: 'apprenticed' };
+}
+
 function matchForSelf(t: TopicCtx, candId: PersonId): TopicReply {
   const { core, actor, other } = t;
   const cand = core.living(candId);
@@ -247,10 +305,8 @@ function proposeMatch(t: TopicCtx, wardId: PersonId, candId: PersonId): TopicRep
 }
 
 function matchReply(t: TopicCtx, lines: ReturnType<typeof iSay>, out: ArrangeOutcome, pool: string): TopicReply {
-  const { core } = t;
   if (out.ok) {
     if (out.code === 'betrothed') t.npc.tags.add('betrothed');
-    core.notify(out.code === 'wed' ? 'The match is made, and the wedding done.' : 'The match is made; they are promised.', 'social');
     return { lines: [...lines, ...npcSays(t, `${pool}.yes`, 'warm')], opinion: 3, reason: 'match' };
   }
   t.npc.vars.money = formatMoney(out.dowryExpected);

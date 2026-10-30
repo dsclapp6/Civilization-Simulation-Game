@@ -193,6 +193,24 @@
         {"t": "Nobody comes to mind just now, {first}.", "tone": "neutral"},
         {"t": "Let me ask around.", "tone": "neutral"}
       ]
+    },
+    "foster": {
+      "ask": [
+        {"t": "Might I be fostered in {third}'s household, {addr}? I'd learn a lord's ways."},
+        {"t": "Will you send me to {third}? I should like to be trained in a great house."},
+        {"t": "A place in {third}'s household would do me good, {addr}. Will you ask for me?"},
+        {"t": "I'm old enough to be bred up properly. {Third} keeps a fine house; let me go there."}
+      ],
+      "yes": [
+        {"t": "It is arranged. You will go to {third}'s household and learn what we cannot teach you.", "tone": "warm"},
+        {"t": "A good house, a good name. Go, and do us credit.", "tone": "warm"},
+        {"t": "{Third} has agreed. Mind your manners, mind your elders, and write home.", "tone": "friendly"}
+      ],
+      "no": [
+        {"t": "{Third} has no room. Not this year.", "tone": "sad"},
+        {"t": "I'd miss you too much, child. Not yet.", "tone": "sad"},
+        {"t": "The answer is no. We shall find another way.", "tone": "neutral"}
+      ]
     }
   }
 }

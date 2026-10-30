@@ -1,13 +1,13 @@
 // Shared helpers for the social tests: a running simulation with the social system installed, and
 // small builders for people with known kinship, rank and traits.
-import { vi } from 'vitest';
+import { expect, vi } from 'vitest';
 import { Rng } from '../../../src/core/rng';
 import type { Simulation } from '../../../src/sim/sim';
 import { installSocial, socialInternals } from '../../../src/sim/social';
 import type { SocialCore } from '../../../src/sim/social/core';
 import type { Conversation, DialogueOption, SocialApi } from '../../../src/sim/social/types';
 import { createPerson } from '../../../src/sim/people';
-import { ageYears, type Household, type House, type Person } from '../../../src/sim/state';
+import { ageYears, type GameState, type Household, type House, type Person } from '../../../src/sim/state';
 import { mkHouse, mkHousehold, mkPerson, makePlayer, type MkPerson } from '../builders';
 import { newSim, type TestSimOptions } from '../helpers';
 
@@ -86,3 +86,34 @@ export function lastNpcText(c: Conversation, npcId: number): string {
 }
 
 export type { Household, House };
+
+/** The live derived indexes must equal what rebuilding them from the entities gives. */
+export function indexSnapshot(st: GameState): string {
+  const res = [...st.residents.entries()].map(([s, l]) => [s, l.map((p) => p.id)] as const).filter(([, l]) => l.length > 0).sort((a, b) => a[0] - b[0]);
+  const hm = [...st.houseMembers.entries()].map(([h, s]) => [h, [...s].map((p) => p.id).sort((a, b) => a - b)] as const).filter(([, l]) => l.length > 0).sort((a, b) => a[0] - b[0]);
+  const ha = [...st.householdsAt.entries()].map(([s, set]) => [s, [...set].map((h) => h.id).sort((a, b) => a - b)] as const).filter(([, l]) => l.length > 0).sort((a, b) => a[0] - b[0]);
+  const bb = [...st.buildings.values()].map((b) => [b.id, b.household, b.occupied] as const);
+  return JSON.stringify({ res, hm, ha, bb, living: st.living });
+}
+
+export function expectConsistent(st: GameState): void {
+  const live = indexSnapshot(st);
+  // the spouse links and household memberships must agree too
+  for (const p of st.persons.values()) {
+    if (p.death) continue;
+    if (p.spouse) {
+      const sp = st.persons.get(p.spouse);
+      expect(sp && !sp.death && sp.spouse === p.id, `spouse link of ${p.first}`).toBe(true);
+    }
+    const hh = st.households.get(p.household);
+    expect(hh, `household of ${p.first}`).toBeDefined();
+    expect(hh!.members.includes(p.id), `${p.first} is listed in household ${p.household}`).toBe(true);
+    expect(hh!.settlement, `${p.first} lives where the household does`).toBe(p.settlement);
+  }
+  for (const hh of st.households.values()) {
+    for (const id of hh.members) expect(st.persons.get(id)?.household, `member ${id} of ${hh.id}`).toBe(hh.id);
+    if (hh.members.length > 0) expect(hh.members.includes(hh.head), `head of ${hh.id}`).toBe(true);
+  }
+  st.rebuildIndexes();
+  expect(indexSnapshot(st)).toBe(live);
+}

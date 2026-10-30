@@ -1,40 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { DAYS_PER_YEAR } from '../../../src/core/time';
 import type { SimEvents } from '../../../src/sim/events';
-import { ageYears, type GameState, type Person } from '../../../src/sim/state';
+import { ageYears, type Person } from '../../../src/sim/state';
 import { COURT } from '../../../src/sim/social/tuning';
-import { begin, forceRolls, makePlayer, mkHouse, mkHousehold, mkPerson, option, pick, rig, setClock, villager, type Rig } from './helpers';
-
-/** The live derived indexes must equal what rebuilding them from the entities gives. */
-export function indexSnapshot(st: GameState): string {
-  const res = [...st.residents.entries()].map(([s, l]) => [s, l.map((p) => p.id)] as const).filter(([, l]) => l.length > 0).sort((a, b) => a[0] - b[0]);
-  const hm = [...st.houseMembers.entries()].map(([h, s]) => [h, [...s].map((p) => p.id).sort((a, b) => a - b)] as const).filter(([, l]) => l.length > 0).sort((a, b) => a[0] - b[0]);
-  const ha = [...st.householdsAt.entries()].map(([s, set]) => [s, [...set].map((h) => h.id).sort((a, b) => a - b)] as const).filter(([, l]) => l.length > 0).sort((a, b) => a[0] - b[0]);
-  const bb = [...st.buildings.values()].map((b) => [b.id, b.household, b.occupied] as const);
-  return JSON.stringify({ res, hm, ha, bb, living: st.living });
-}
-
-export function expectConsistent(st: GameState): void {
-  const live = indexSnapshot(st);
-  // the spouse links and household memberships must agree too
-  for (const p of st.persons.values()) {
-    if (p.death) continue;
-    if (p.spouse) {
-      const sp = st.persons.get(p.spouse);
-      expect(sp && !sp.death && sp.spouse === p.id, `spouse link of ${p.first}`).toBe(true);
-    }
-    const hh = st.households.get(p.household);
-    expect(hh, `household of ${p.first}`).toBeDefined();
-    expect(hh!.members.includes(p.id), `${p.first} is listed in household ${p.household}`).toBe(true);
-    expect(hh!.settlement, `${p.first} lives where the household does`).toBe(p.settlement);
-  }
-  for (const hh of st.households.values()) {
-    for (const id of hh.members) expect(st.persons.get(id)?.household, `member ${id} of ${hh.id}`).toBe(hh.id);
-    if (hh.members.length > 0) expect(hh.members.includes(hh.head), `head of ${hh.id}`).toBe(true);
-  }
-  st.rebuildIndexes();
-  expect(indexSnapshot(st)).toBe(live);
-}
+import { begin, expectConsistent, forceRolls, makePlayer, mkHouse, mkHousehold, mkPerson, option, pick, rig, setClock, villager, type Rig } from './helpers';
 
 /** Makes a grown-up child of the player's parents the player (the rig's `player` follows). */
 function adultPlayer(r: Rig, sex: 'm' | 'f', age = 18, o: { tier?: Person['rankTier']; estate?: Person['estate'] } = {}): Person {

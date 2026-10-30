@@ -38,6 +38,22 @@ describe('starting and ending a conversation', () => {
     expect(events).toHaveLength(2);
   });
 
+  it('names the relationship on the header: kin, office, or stranger', () => {
+    const r = rig({ seed: 'conv-relation' });
+    const mother = r.sim.state.persons.get(r.player.mother)!;
+    const c1 = begin(r, mother);
+    expect(c1.relation).toBe('your mother');
+    const reeve = villager(r, { age: 45 });
+    reeve.offices.push({ office: 'reeve', place: reeve.settlement, since: 0 });
+    expect(begin(r, reeve).relation).toBe('the reeve');
+    const stranger = villager(r, { age: 30, settlement: r.sim.world.settlements.find((s) => s.id !== r.player.settlement && s.kind === 'village')!.id });
+    expect(begin(r, stranger).relation).toMatch(/^a stranger from /);
+    const friend = villager(r);
+    r.social.adjustOpinion(friend.id, r.player.id, 60, 'gift');
+    r.social.adjustOpinion(r.player.id, friend.id, 60, 'gift');
+    expect(begin(r, friend).relation).toBe('your friend');
+  });
+
   it('turns fast speeds down to 1× while talking and refuses to speed up', () => {
     const r = rig({ seed: 'conv-speed' });
     const npc = villager(r);

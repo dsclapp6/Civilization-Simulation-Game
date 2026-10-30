@@ -18,10 +18,20 @@ import type { SocialCore } from './core';
 import type { CourtRec } from './store';
 import { COURT } from './tuning';
 import type { Courtship, Result } from './types';
-import { clamp, round2 } from './util';
+import { clamp, round2, standingOf as standing } from './util';
 
 export interface Eligibility { ok: boolean; code?: string; reason?: string }
 export type ConsentRole = 'parent' | 'lord';
+
+/** What the one courted looks for in a suitor, by temperament; `score` shifts the odds of every gesture and of a proposal. */
+export interface Compat {
+  score: number;
+  /** What the suitor already has that the other prizes, and what they lack. */
+  likes: string[];
+  dislikes: string[];
+  /** The one thing the other values most, if any ("rank", "piety", "kindness", "honour", "wit", "wealth", "valour"). */
+  wants: string | null;
+}
 export interface ConsentNeed { who: PersonId; role: ConsentRole; /** The person under their care. */ ward: PersonId }
 
 export interface ArrangeOutcome {
@@ -72,6 +82,31 @@ export class CourtshipEngine {
     if (!base.ok) return base;
     if (this.core.age(a) < COURT.marryAge || this.core.age(b) < COURT.marryAge) return no('young', `Both must be ${COURT.marryAge} to wed.`);
     return { ok: true };
+  }
+
+  /** Tastes: an ambitious heart wants standing, a pious one piety, an honest one honour … */
+  compatibility(suitor: Person, other: Person): Compat {
+    const core = this.core;
+    const out: Compat = { score: 0, likes: [], dislikes: [], wants: null };
+    const has = (t: string): boolean => other.traits.includes(t as never);
+    const judge = (key: string, good: boolean, bad: boolean, plus: number, minus: number): void => {
+      if (!out.wants) out.wants = key;
+      if (good) { out.score += plus; out.likes.push(key); }
+      else if (bad) { out.score -= minus; out.dislikes.push(key); }
+    };
+    const r = suitor.rep;
+    const hh = core.state.households.get(suitor.household);
+    const means = suitor.money + (hh ? hh.purse / Math.max(1, hh.members.length) : 0);
+    if (has('ambitious')) judge('rank', standing(suitor) >= standing(other), standing(suitor) < standing(other) - 0.9, 0.08, 0.15);
+    if (has('pious')) judge('piety', r.piety >= 12, r.piety <= -8, 0.1, 0.1);
+    if (has('honest')) judge('honour', r.honour >= 10, r.honour <= -10, 0.08, 0.12);
+    if (has('content')) judge('kindness', r.generosity >= 10 && r.cruelty < 10, r.cruelty >= 15, 0.07, 0.1);
+    if (has('greedy')) judge('wealth', means >= 150, means < 20, 0.08, 0.08);
+    if (has('brave')) judge('valour', r.valour >= 10, r.valour <= -10, 0.08, 0.08);
+    if (has('deceitful')) judge('wit', suitor.trained.int >= 12, suitor.trained.int <= 7, 0.06, 0.06);
+    if (has('craven') || has('hot_tempered')) { if (r.cruelty >= 15) { out.score -= 0.1; out.dislikes.push('gentleness'); if (!out.wants) out.wants = 'gentleness'; } }
+    out.score = Math.max(-0.3, Math.min(0.3, out.score));
+    return out;
   }
 
   // ---- reading ----
@@ -210,7 +245,7 @@ export class CourtshipEngine {
     const rec = this.record(a.id, b.id);
     const dt = a.rankTier - b.rankTier; // > 0: b marries up
     const ambitious = b.traits.includes('ambitious');
-    const extra = (rec ? 0.15 * rec.p : 0) + (dt > 0 ? 0.05 * dt : 0.07 * dt) + (ambitious ? (dt > 0 ? 0.08 : dt < 0 ? -0.08 : 0) : 0) + (b.traits.includes('content') ? 0.03 : 0)
+    const extra = this.compatibility(a, b).score * 0.6 + (rec ? 0.15 * rec.p : 0) + (dt > 0 ? 0.05 * dt : 0.07 * dt) + (ambitious ? (dt > 0 ? 0.08 : dt < 0 ? -0.08 : 0) : 0) + (b.traits.includes('content') ? 0.03 : 0)
       + 0.01 * (a.trained.cha - 10);
     return round2(clamp(0.55 + extra + 0.006 * core.opinion.total(b, a), 0.05, 0.97));
   }
@@ -364,6 +399,7 @@ export class CourtshipEngine {
     const ready = this.canWed(ward, partner);
     if (ready.ok) {
       this.wed(ward, partner);
+      if (head.id === core.playerId || ward.id === core.playerId) core.notify(`${fullName(ward)} is wed to ${fullName(partner)}.`, 'social');
       return { ...c, ok: true, code: 'wed', reason: 'wed' };
     }
     const store = core.store;
