@@ -1068,6 +1068,15 @@ function lifeYearly(ctx: SimContext, info: YearInfo): void {
 
 }
 
+/** Dead nobles stay on record while a child or parent lives: inheritance by right of representation
+ *  needs them (a lord's dead eldest son still stands before his younger brothers). */
+function hasLivingNobleKin(state: GameState, p: Person): boolean {
+  if (p.estate !== 'noble') return false;
+  for (const id of p.children) { const c = state.persons.get(id); if (c && !c.death) return true; }
+  for (const id of [p.father, p.mother]) { if (!id) continue; const q = state.persons.get(id); if (q && !q.death) return true; }
+  return false;
+}
+
 /** Forgets people who died long ago, unless they belong to the player's kin web. Walks the
  *  graveyard from the oldest death, so the cost follows the number of recent deaths. */
 export function pruneDead(ctx: SimContext, now: number): number {
@@ -1088,7 +1097,7 @@ export function pruneDead(ctx: SimContext, now: number): number {
     if ((p.death as { day: number }).day >= cutoff) break;
     state.graveyardHead++;
     if (!state.persons.has(p.id)) continue;
-    if (keep.has(p.id) || p.flags.keep) { deferred.push(p); continue; }
+    if (keep.has(p.id) || p.flags.keep || hasLivingNobleKin(state, p)) { deferred.push(p); continue; }
     state.prunePerson(p);
     pruned++;
   }

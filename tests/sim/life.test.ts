@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { STAT_CAP, STATS } from '../../src/core/domain';
 import { DAYS_PER_YEAR } from '../../src/core/time';
 import { Rng } from '../../src/core/rng';
-import { marryPeople } from '../../src/sim/life';
+import { marryPeople, pruneDead } from '../../src/sim/life';
 import { createPerson, growthFraction, declineFactor, trainedFor, skillLevel, xpForLevel } from '../../src/sim/people';
 import { isCloseKin, familyOf, siblingsOf } from '../../src/sim/kin';
 import type { Simulation } from '../../src/sim/sim';
@@ -105,6 +105,22 @@ describe('inheritance (SPEC §15)', () => {
     // a child heir has a regent: his mother
     expect(f.titles[0].regent).toBe(widow.id);
     expect(grandson.rankTier).toBe(5);
+  });
+
+  it('remembers a dead noble eldest son while his own child lives, even after the dead are forgotten', () => {
+    const sim = newSim({ seed: 'inh2b' });
+    const f = makeLord(sim, { sons: [30, 22] });
+    const eldest = f.sons[0];
+    const st = sim.state;
+    const rng = new Rng('rep2');
+    const grandson = createPerson(st, rng, { culture: eldest.culture, sex: 'm', age: 4, day: sim.absDay, settlement: f.hh.settlement, household: f.hh, house: f.lord.house, career: 'child', tier: 5, estate: 'noble', father: eldest });
+    st.addChild(eldest, grandson.id);
+    killPerson(sim, eldest, 'accident', sim.absDay);
+    const pruned = pruneDead(sim, sim.absDay + DAYS_PER_YEAR * 10);
+    expect(pruned).toBeGreaterThanOrEqual(0);
+    expect(st.persons.has(eldest.id)).toBe(true); // kept: his son lives
+    killPerson(sim, f.lord, 'illness', sim.absDay + DAYS_PER_YEAR * 10);
+    expect(f.titles[0].holder).toBe(grandson.id);
   });
 
   it('divides lands between coheiresses when there are no sons; the principal title goes to the eldest', () => {
