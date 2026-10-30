@@ -29,6 +29,18 @@ export function villageStreets(ctx: LayoutCtx, id: number, maxLen = 250): Street
     const a = makeLane(ctx, { x: site.x, z: site.z }, dx, dz, 220, 'track', 40);
     const b = makeLane(ctx, { x: site.x, z: site.z }, -dx, -dz, 160, 'track', 40);
     streets = [a, b].filter((q): q is Street => !!q);
+    if (streets.length === 0) {
+      // cramped sites (a small island, a shore strip): shorter lanes in any direction
+      const base = Math.atan2(dz, dx);
+      for (const dAng of [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.4, -2.4, Math.PI]) {
+        for (const len of [140, 90, 60, 40]) {
+          const lane = makeLane(ctx, { x: site.x, z: site.z }, Math.cos(base + dAng), Math.sin(base + dAng), len, 'track', 16);
+          if (lane) { streets.push(lane); break; }
+        }
+        if (streets.length) break;
+      }
+      if (streets.length) ctx.bump('village.shortlane');
+    }
   } else if (streets.length === 1) {
     // dead end: continue the street through the centre a little way
     const p0 = streets[0].pts[0], p1 = streets[0].pts[Math.min(3, streets[0].pts.length - 1)];
@@ -82,7 +94,7 @@ export function placeChurch(ctx: LayoutCtx, id: number, streets: Street[], level
     const site = ctx.s.sites[id];
     search:
     for (const range of [2.4, 3.6, 6]) {
-      for (const r of [36, 50, 66, 84, 104, 128, 156]) {
+      for (const r of [16, 24, 34, 48, 64, 84, 104, 128, 156]) {
         for (let a = 0; a < 18; a++) {
           const ang = (a / 18) * Math.PI * 2 + id * 0.61;
           const x = site.x + Math.cos(ang) * r, z = site.z + Math.sin(ang) * r;
@@ -145,19 +157,46 @@ export function styleFor(culture: string): VillageStyle {
   return { longhouse: 0.1, hovel: 0.12 };
 }
 
+/** A street-less cluster (church, well, cottages in rings facing the middle) for sites too cramped for lanes. */
+function layoutCluster(ctx: LayoutCtx, id: number, nHomes: number, style: VillageStyle, churchLevel: number): void {
+  const site = ctx.s.sites[id];
+  const rng = ctx.rng;
+  if (!placeChurch(ctx, id, [], churchLevel)) ctx.bump('village.nochurch');
+  placeAround(ctx, id, 'well', site.x, site.z, [8, 11, 14, 18], 'well', 'centre');
+  let placed = 0;
+  for (let ring = 0; ring < 10 && placed < nHomes; ring++) {
+    const r = 16 + ring * 9;
+    const n = Math.max(5, Math.floor((2 * Math.PI * r) / 15));
+    const ph = rng.range(0, Math.PI * 2);
+    for (let k = 0; k < n && placed < nHomes; k++) {
+      const ang = ph + (k / n) * Math.PI * 2 + rng.range(-0.04, 0.04);
+      const x = site.x + Math.cos(ang) * r, z = site.z + Math.sin(ang) * r;
+      const roll = rng.next();
+      const kind: BuildingKind = roll < style.hovel ? 'hovel' : roll < style.hovel + style.longhouse ? 'longhouse' : 'cottage';
+      if (ctx.place(id, kind, x, z, yawOf(site.x - x, site.z - z) + rng.range(-0.15, 0.15), { role: kind === 'hovel' ? 'home_poor' : 'home', level: 1 })) placed++;
+    }
+  }
+  if (placed < nHomes) ctx.bump('village.fewhomes');
+}
+
 export function layoutVillage(ctx: LayoutCtx, id: number): void {
   const s = ctx.s;
   const site = s.sites[id], st = s.settlements[id];
   const rng = ctx.rng;
   const cx = site.x, cz = site.z;
   const streets = villageStreets(ctx, id);
-  if (streets.length === 0) { ctx.bump('village.nostreet'); return; }
-  // green at the heart of the village
-  ctx.reserve(circlePoly(cx, cz, 10, 10), id);
-
   const castleVillage = site.tags.includes('castle_village');
   const nHomes = Math.max(4, Math.min(34, Math.round(site.population / 4.6)));
   const style = styleFor(site.culture);
+  if (streets.length === 0) {
+    // no room for even a lane: a small cluster round the church, without streets
+    ctx.bump('village.nostreet');
+    layoutCluster(ctx, id, nHomes, style, 2);
+    st.radius = Math.max(40, Math.round(plotsRadius(ctx, id, cx, cz, 0.93)));
+    return;
+  }
+  // green at the heart of the village
+  ctx.reserve(circlePoly(cx, cz, 10, 10), id);
 
   // parish church
   const churchLevel = Math.min(3, 1 + (site.population > 70 ? 1 : 0) + (rng.chance(0.25) ? 1 : 0));
@@ -226,8 +265,13 @@ export function layoutHamlet(ctx: LayoutCtx, id: number): void {
   const site = s.sites[id], st = s.settlements[id];
   const rng = ctx.rng;
   const streets = villageStreets(ctx, id, 150);
-  if (!streets.length) return;
   const n = Math.max(3, Math.min(8, Math.round(site.population / 4.2)));
+  if (!streets.length) {
+    ctx.bump('hamlet.nostreet');
+    layoutCluster(ctx, id, n, styleFor(site.culture), 1);
+    st.radius = Math.max(30, Math.round(plotsRadius(ctx, id, site.x, site.z, 0.95)));
+    return;
+  }
   ctx.reserve(circlePoly(site.x, site.z, 6, 8), id);
   placeAround(ctx, id, 'well', site.x, site.z, [8, 11, 14], 'well', 'centre');
   fillFrontage(ctx, id, streets, {

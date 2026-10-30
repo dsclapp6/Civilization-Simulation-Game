@@ -326,8 +326,9 @@ export function layoutCastle(ctx: LayoutCtx, id: number): void {
   const rng = ctx.rng.fork('castle' + id);
   const wooden = !site.tags.includes('seat') ? rng.chance(0.65) : rng.chance(0.3);
   const scale = rng.range(0.9, 1.12);
-  const W = (wooden ? 66 : 84) * scale, D = (wooden ? 52 : 64) * scale;
-  const { specs, gate } = castleSpecs(wooden, W, D);
+  const W0 = (wooden ? 66 : 84) * scale, D0 = (wooden ? 52 : 64) * scale;
+  let W = W0, D = D0;
+  let gate = castleSpecs(wooden, W0, D0).gate;
   const streets = incidentStreets(ctx, id, 140, 0);
   // face the gate toward the approach road (or the parent village)
   let faceX = 0, faceZ = 1;
@@ -341,17 +342,27 @@ export function layoutCastle(ctx: LayoutCtx, id: number): void {
   let placed: Plot[] | null = null;
   let used = { cx: site.x, cz: site.z, base: base0 };
   ctx.ignoreRoads = new Set(s.roads.filter((r) => r.from === id || r.to === id).map((r) => r.id));
+  // the full plan first; on cramped or rough ground a smaller bailey with a wider search
+  const tiers = [
+    { k: 1, ranges: [4.5, 7.5, 11], offs: [0, 30, 60, 100] },
+    { k: 0.74, ranges: [8, 12, 18], offs: [0, 40, 80, 130, 190] },
+  ];
   outer:
-  for (const range of [4.5, 7.5, 11]) {
-    for (const off of [0, 30, 60, 100]) {
-      for (let a = 0; a < (off === 0 ? 1 : 8); a++) {
-        const ang = (a / 8) * Math.PI * 2 + id;
-        const cx = site.x + Math.cos(ang) * off, cz = site.z + Math.sin(ang) * off;
-        if (!sameKingdom(ctx, id, cx, cz)) continue;
-        for (const dbase of [0, 0.35, -0.35, 0.8, -0.8, Math.PI]) {
-          const base = normAngle(base0 + dbase);
-          placed = tryCompound(ctx, id, specs, cx, cz, base, { hw: W / 2 + 6, hd: D / 2 + 6 }, range);
-          if (placed) { used = { cx, cz, base }; break outer; }
+  for (let ti = 0; ti < tiers.length; ti++) {
+    const T = tiers[ti];
+    const tw = W0 * T.k, td = D0 * T.k;
+    const cs = castleSpecs(wooden, tw, td);
+    for (const range of T.ranges) {
+      for (const off of T.offs) {
+        for (let a = 0; a < (off === 0 ? 1 : 8); a++) {
+          const ang = (a / 8) * Math.PI * 2 + id;
+          const cx = site.x + Math.cos(ang) * off, cz = site.z + Math.sin(ang) * off;
+          if (!sameKingdom(ctx, id, cx, cz)) continue;
+          for (const dbase of [0, 0.35, -0.35, 0.8, -0.8, Math.PI]) {
+            const base = normAngle(base0 + dbase);
+            placed = tryCompound(ctx, id, cs.specs, cx, cz, base, { hw: tw / 2 + 6, hd: td / 2 + 6 }, range);
+            if (placed) { used = { cx, cz, base }; W = tw; D = td; gate = cs.gate; if (ti > 0) ctx.bump('castle.reduced'); break outer; }
+          }
         }
       }
     }
