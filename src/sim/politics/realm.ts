@@ -35,7 +35,7 @@ export class Realms {
     const before = co.members.length;
     for (const o of leaders.slice(1)) {
       if (co.members.includes(o) || c.isPlayerHouse(o)) continue;
-      if (c.stance(o, d) === 'alliance' || c.stance(o, d) === 'kin' || c.warsOf(o).some((w) => w.attackers.includes(d) || w.defenders.includes(d) && false)) continue;
+      if (c.stance(o, d) === 'alliance' || c.stance(o, d) === 'kin') continue;
       if (!this.touch(o, d) && this.wars.gap(o, d) > 12000) continue;
       const pw = c.personality(o);
       let p = 0.3 + pw.cautious * 0.35 + pw.ambitious * 0.25 - pw.honourable * 0.1 + c.tie(o, d).grievance / 250;

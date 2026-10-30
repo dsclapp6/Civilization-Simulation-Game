@@ -166,9 +166,10 @@ export class Wars {
     c.sim.events.emit('war', { phase: 'declared', war: war.id, attackers: attackers.slice(), defenders: defenders.slice() });
     const goalName = goal ? c.state.titles.get(goal)?.name : undefined;
     const text = this.declarationText(war, goalName);
-    const notable = attackers.some((h) => (c.primaryTitle(h)?.kind ?? 'manor') !== 'manor') || attackers.concat(defenders).some((h) => c.isPlayerHouse(h));
+    const mine = attackers.concat(defenders).some((h) => c.isPlayerHouse(h));
+    const notable = mine || (cause !== 'raid' && TITLE_RANK[c.primaryTitle(house)?.kind ?? 'manor'] >= 7);
     if (notable) c.log('war', text, [aHead?.id ?? 0, dHead?.id ?? 0].filter((x) => x > 0));
-    if (attackers.concat(defenders).some((h) => c.isPlayerHouse(h))) {
+    if (mine) {
       const mineAttacker = attackers.some((h) => c.isPlayerHouse(h));
       c.notify(mineAttacker ? `War: ${text}` : `${c.houseLabel(house)} declares war on you! ${goalName ? `They want ${goalName}.` : ''}`, 'danger');
     }
@@ -461,7 +462,6 @@ export class Wars {
     const rng = c.rng('raid');
     const sid = w.target;
     const raider = w.attackers[0];
-    if (sid <= 0 && sid !== 0) return;
     let stolen = 0;
     let burned = 0;
     const hhs = c.state.householdList(sid);
@@ -497,11 +497,21 @@ export class Wars {
     if (rhh) { rhh.purse += Math.round(stolen * 0.5); c.state.touchHousehold(rhh); }
     c.raiseUnrest(sid, 14);
     w.score = clamp(w.score + 12, -100, 100);
-    c.sim.events.emit('raid', { settlement: sid, raider, burned, stolen: Math.round(stolen), captives: 0 });
     const targetHouse = w.defenders[0];
+    // the lord's family who are at home may be taken and held for ransom (SPEC §13: about a year's income)
+    let captives = 0;
+    const family = c.state.residentsOf(sid).filter((p) => p.estate === 'noble' && p.house === targetHouse && p.id !== c.playerId && !p.flags.player && ageYears(p, c.day) >= 5);
+    if (family.length && rh && rng.chance(0.3)) {
+      const taken = family[Math.floor(rng.next() * family.length)];
+      const ransom = c.transferMoney(targetHouse, raider, Math.round(c.purseOf(targetHouse) * 0.12));
+      c.sim.events.emit('captured', { captive: taken.id, captor: rh.id, ransom });
+      if (c.isPlayerHouse(targetHouse) || c.isPlayerHouse(raider)) c.log('ransom', `${fullName(taken)} was carried off by raiders of ${c.houseLabel(raider)} and ransomed for ${ransom}d.`, [taken.id]);
+      captives = 1;
+    }
+    c.sim.events.emit('raid', { settlement: sid, raider, burned, stolen: Math.round(stolen), captives });
     if (c.isPlayerHouse(targetHouse)) c.notify(`Raiders from ${c.houseLabel(raider)} plunder ${c.placeName(sid)}!`, 'danger');
     c.addGrievance(targetHouse, raider, 10);
-    c.log('raid', `Raiders of ${c.houseLabel(raider)} plundered ${c.placeName(sid)}.`);
+    if (c.isPlayerHouse(raider) || c.isPlayerHouse(targetHouse)) c.log('raid', `Raiders of ${c.houseLabel(raider)} plundered ${c.placeName(sid)}.`);
   }
 
   // ---- peace ----
@@ -686,9 +696,10 @@ export class Wars {
     if (hist.length > 24) hist.splice(0, hist.length - 24);
     c.sim.events.emit('war', { phase: 'ended', war: w.id, attackers: w.attackers.slice(), defenders: w.defenders.slice(), winner });
     const text = this.endText(w, winner, applied);
-    const notable = w.attackers.concat(w.defenders).some((h) => c.isPlayerHouse(h)) || (c.primaryTitle(winLead) && TITLE_RANK[c.primaryTitle(winLead)!.kind] >= 6);
+    const mine = w.attackers.concat(w.defenders).some((h) => c.isPlayerHouse(h));
+    const notable = mine || (w.cause !== 'raid' && TITLE_RANK[c.primaryTitle(winLead)?.kind ?? 'manor'] >= 7);
     if (notable) c.log('war', text);
-    if (w.attackers.concat(w.defenders).some((h) => c.isPlayerHouse(h))) c.notify(text, winner === 'white_peace' ? 'info' : 'quest');
+    if (mine) c.notify(text, winner === 'white_peace' ? 'info' : 'quest');
     refreshScore(c);
     for (const fn of this.endListeners) fn(w);
     c.sim.requestSave('war ended');
