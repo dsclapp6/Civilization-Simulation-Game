@@ -220,16 +220,12 @@
       {"t": "You {memory}, {first}, and the whole street saw.", "tone": "angry", "if": {"trait": "hot_tempered"}}
     ],
     "favoured": [
-      "I've not forgotten how you {memory}, {first}. I'm grateful.",
-      "Remember when you {memory}? I do, and kindly.",
+      "I've not forgotten, {first}: you {memory}. I'm grateful.",
+      "I think of it often — how you {memory}.",
       "You {memory}, and that's not forgotten here.",
-      {"t": "I owe you thanks, {first} — you {memory}.", "if": {"trait": "honest"}},
+      {"t": "I owe you thanks, {first}. You {memory}.", "if": {"trait": "honest"}},
       "I think well of you, {first}, since you {memory}.",
-      "I'll not forget it, {first}: you {memory}.",
-      "You {memory}. It is good to see you.",
-      {"t": "Not everyone would have — you {memory}. Thank you.", "tone": "warm", "if": {"trait": "honest"}},
-      {"t": "My door is open to you, {first}, since you {memory}.", "tone": "warm", "if": {"op": ["warm", "devoted"]}},
-      "I was only just telling someone how you {memory}."
+      {"t": "A good turn is remembered, {first}. You {memory}.", "tone": "warm", "if": {"op": ["warm", "devoted"]}}
     ],
     "ambition": [
       "I'll tell you something, {first}: all I truly want is {ambition}.",

@@ -3,84 +3,845 @@
   "tables": {
     "address": {
       "default": {
-        "kin.father":        { "any": ["Father", "Father dear", "Father"], "anyn": ["Father"] },
-        "kin.mother":        { "any": ["Mother", "Mother dear", "Mother"], "anyn": ["Mother"] },
-        "kin.son":           { "any": ["son", "lad", "{first}", "my boy"], "anyn": ["{first}"] },
-        "kin.daughter":      { "any": ["daughter", "lass", "{first}", "my girl"], "anyn": ["{first}"] },
-        "kin.brother":       { "any": ["brother", "{first}"], "anyn": ["{first}"] },
-        "kin.sister":        { "any": ["sister", "{first}"], "anyn": ["{first}"] },
-        "kin.husband":       { "any": ["husband", "my love", "{first}"], "anyn": ["{first}"] },
-        "kin.wife":          { "any": ["wife", "my love", "sweeting", "{first}"], "anyn": ["{first}"] },
-        "kin.grandfather":   { "any": ["Grandfather", "Grandsire", "Grandfather"], "anyn": ["Grandfather"] },
-        "kin.grandmother":   { "any": ["Grandmother", "Gran", "Gammer"], "anyn": ["Grandmother"] },
-        "kin.grandson":      { "any": ["grandson", "{first}", "lad"], "anyn": ["{first}"] },
-        "kin.granddaughter": { "any": ["granddaughter", "{first}", "lass"], "anyn": ["{first}"] },
-        "kin.uncle":         { "any": ["Uncle", "Uncle {first}"], "anyn": ["Uncle {first}"] },
-        "kin.aunt":          { "any": ["Aunt", "Aunt {first}"], "anyn": ["Aunt {first}"] },
-        "kin.nephew":        { "any": ["nephew", "{first}"], "anyn": ["{first}"] },
-        "kin.niece":         { "any": ["niece", "{first}"], "anyn": ["{first}"] },
-        "kin.cousin":        { "any": ["cousin", "{first}"], "anyn": ["{first}"] },
-        "kin.in_law":        { "m": ["brother", "kinsman", "{first}"], "f": ["sister", "kinswoman", "{first}"], "anyn": ["{first}"] },
-
-        "cleric.priest":     { "any": ["Father", "good Father"], "anyn": ["Father {first}"] },
-        "cleric.monk":       { "m": ["Brother", "good brother"], "f": ["Sister"], "mn": ["Brother {first}"], "fn": ["Sister {first}"] },
-        "cleric.nun":        { "f": ["Sister", "good sister"], "m": ["Brother"], "fn": ["Sister {first}"], "mn": ["Brother {first}"] },
-        "cleric.prior":      { "m": ["Father Prior", "my lord prior"], "f": ["Mother Prioress", "my lady prioress"], "mn": ["Prior {first}"], "fn": ["Prioress {first}"] },
-        "cleric.abbot":      { "m": ["Father Abbot", "my lord abbot"], "f": ["Mother Abbess", "my lady abbess"], "mn": ["Abbot {first}"], "fn": ["Abbess {first}"] },
-        "cleric.bishop":     { "any": ["my lord bishop", "Your Grace"], "anyn": ["Bishop {first}"] },
-        "cleric.clerk":      { "m": ["master clerk", "clerk"], "f": ["mistress"], "mn": ["Master {byname}"], "fn": ["Mistress {byname}"] },
-
-        "up.royal":          { "m": ["Sire", "Your Grace", "my liege"], "f": ["Madam", "Your Grace", "my lady queen"], "mn": ["Sire"], "fn": ["Madam"] },
-        "up.magnate":        { "m": ["my lord", "Your Grace", "my lord earl"], "f": ["my lady", "Your Grace"], "mn": ["Lord {byname}"], "fn": ["Lady {byname}"] },
-        "up.baron":          { "m": ["my lord", "good my lord"], "f": ["my lady", "good my lady"], "mn": ["Lord {byname}"], "fn": ["Lady {byname}"] },
-        "up.knight":         { "m": ["my lord", "sir", "good sir"], "f": ["my lady", "good lady"], "mn": ["Sir {first}"], "fn": ["Lady {first}"] },
-        "up.gentry":         { "m": ["master", "good sir", "sir"], "f": ["mistress", "good lady", "madam"], "mn": ["Master {byname}"], "fn": ["Mistress {byname}"] },
-        "up.middling":       { "m": ["master", "goodman", "good sir"], "f": ["mistress", "goodwife", "good dame"], "mn": ["Master {byname}", "Goodman {byname}"], "fn": ["Mistress {byname}", "Goodwife {byname}"] },
-        "up.commoner":       { "m": ["goodman", "neighbour"], "f": ["goodwife", "neighbour", "mistress"], "mn": ["Goodman {first}"], "fn": ["Goodwife {first}"] },
-
-        "peer.low":          { "any": ["friend", "neighbour", "{first}"], "anyn": ["{first}"] },
-        "peer.mid":          { "m": ["master", "friend", "{first}"], "f": ["mistress", "friend", "{first}"], "mn": ["Master {byname}"], "fn": ["Mistress {byname}"] },
-        "peer.high":         { "m": ["sir", "my lord", "cousin"], "f": ["lady", "madam", "cousin"], "mn": ["Sir {first}"], "fn": ["Lady {first}"] },
-
-        "down.child":        { "m": ["lad", "boy", "child"], "f": ["lass", "girl", "child"], "anyn": ["{first}"] },
-        "down.youth":        { "m": ["lad", "boy", "youth"], "f": ["lass", "girl", "maid"], "anyn": ["{first}"] },
-        "down.adult":        { "m": ["fellow", "goodman", "man"], "f": ["goodwife", "woman", "mistress"], "anyn": ["{first}"] },
-        "down.elder":        { "m": ["gaffer", "old friend", "father"], "f": ["gammer", "good mother", "mother"], "mn": ["old {first}"], "fn": ["old {first}"] },
-        "down.cleric":       { "m": ["my son", "my child", "my friend"], "f": ["my daughter", "my child", "my friend"], "anyn": ["{first}"] },
-
-        "youth.up":          { "m": ["sir", "master", "goodman"], "f": ["mistress", "goodwife", "dame"], "mn": ["Master {byname}"], "fn": ["Mistress {byname}"] }
+        "kin.father": {
+          "any": [
+            "Father",
+            "Father dear",
+            "Father"
+          ],
+          "anyn": [
+            "Father"
+          ]
+        },
+        "kin.mother": {
+          "any": [
+            "Mother",
+            "Mother dear",
+            "Mother"
+          ],
+          "anyn": [
+            "Mother"
+          ]
+        },
+        "kin.son": {
+          "any": [
+            "son",
+            "lad",
+            "{first}",
+            "my boy"
+          ],
+          "anyn": [
+            "{first}"
+          ]
+        },
+        "kin.daughter": {
+          "any": [
+            "daughter",
+            "lass",
+            "{first}",
+            "my girl"
+          ],
+          "anyn": [
+            "{first}"
+          ]
+        },
+        "kin.brother": {
+          "any": [
+            "brother",
+            "{first}"
+          ],
+          "anyn": [
+            "{first}"
+          ]
+        },
+        "kin.sister": {
+          "any": [
+            "sister",
+            "{first}"
+          ],
+          "anyn": [
+            "{first}"
+          ]
+        },
+        "kin.husband": {
+          "any": [
+            "husband",
+            "my love",
+            "{first}"
+          ],
+          "anyn": [
+            "{first}"
+          ]
+        },
+        "kin.wife": {
+          "any": [
+            "wife",
+            "my love",
+            "sweeting",
+            "{first}"
+          ],
+          "anyn": [
+            "{first}"
+          ]
+        },
+        "kin.grandfather": {
+          "any": [
+            "Grandfather",
+            "Grandsire",
+            "Grandfather"
+          ],
+          "anyn": [
+            "Grandfather"
+          ]
+        },
+        "kin.grandmother": {
+          "any": [
+            "Grandmother",
+            "Gran",
+            "Gammer"
+          ],
+          "anyn": [
+            "Grandmother"
+          ]
+        },
+        "kin.grandson": {
+          "any": [
+            "grandson",
+            "{first}",
+            "lad"
+          ],
+          "anyn": [
+            "{first}"
+          ]
+        },
+        "kin.granddaughter": {
+          "any": [
+            "granddaughter",
+            "{first}",
+            "lass"
+          ],
+          "anyn": [
+            "{first}"
+          ]
+        },
+        "kin.uncle": {
+          "any": [
+            "Uncle",
+            "Uncle {first}"
+          ],
+          "anyn": [
+            "Uncle {first}"
+          ]
+        },
+        "kin.aunt": {
+          "any": [
+            "Aunt",
+            "Aunt {first}"
+          ],
+          "anyn": [
+            "Aunt {first}"
+          ]
+        },
+        "kin.nephew": {
+          "any": [
+            "nephew",
+            "{first}"
+          ],
+          "anyn": [
+            "{first}"
+          ]
+        },
+        "kin.niece": {
+          "any": [
+            "niece",
+            "{first}"
+          ],
+          "anyn": [
+            "{first}"
+          ]
+        },
+        "kin.cousin": {
+          "any": [
+            "cousin",
+            "{first}"
+          ],
+          "anyn": [
+            "{first}"
+          ]
+        },
+        "kin.in_law": {
+          "m": [
+            "brother",
+            "kinsman",
+            "{first}"
+          ],
+          "f": [
+            "sister",
+            "kinswoman",
+            "{first}"
+          ],
+          "anyn": [
+            "{first}"
+          ]
+        },
+        "cleric.priest": {
+          "any": [
+            "Father",
+            "good Father"
+          ],
+          "anyn": [
+            "Father {first}"
+          ]
+        },
+        "cleric.monk": {
+          "m": [
+            "Brother",
+            "good brother"
+          ],
+          "f": [
+            "Sister"
+          ],
+          "mn": [
+            "Brother {first}"
+          ],
+          "fn": [
+            "Sister {first}"
+          ]
+        },
+        "cleric.nun": {
+          "f": [
+            "Sister",
+            "good sister"
+          ],
+          "m": [
+            "Brother"
+          ],
+          "fn": [
+            "Sister {first}"
+          ],
+          "mn": [
+            "Brother {first}"
+          ]
+        },
+        "cleric.prior": {
+          "m": [
+            "Father Prior",
+            "my lord prior"
+          ],
+          "f": [
+            "Mother Prioress",
+            "my lady prioress"
+          ],
+          "mn": [
+            "Prior {first}"
+          ],
+          "fn": [
+            "Prioress {first}"
+          ]
+        },
+        "cleric.abbot": {
+          "m": [
+            "Father Abbot",
+            "my lord abbot"
+          ],
+          "f": [
+            "Mother Abbess",
+            "my lady abbess"
+          ],
+          "mn": [
+            "Abbot {first}"
+          ],
+          "fn": [
+            "Abbess {first}"
+          ]
+        },
+        "cleric.bishop": {
+          "any": [
+            "my lord bishop",
+            "Your Grace"
+          ],
+          "anyn": [
+            "Bishop {first}"
+          ]
+        },
+        "cleric.clerk": {
+          "m": [
+            "master clerk",
+            "clerk"
+          ],
+          "f": [
+            "mistress"
+          ],
+          "mn": [
+            "Master {byname}"
+          ],
+          "fn": [
+            "Mistress {byname}"
+          ]
+        },
+        "up.royal": {
+          "m": [
+            "Sire",
+            "Your Grace",
+            "my liege"
+          ],
+          "f": [
+            "Madam",
+            "Your Grace",
+            "my lady queen"
+          ],
+          "mn": [
+            "Sire"
+          ],
+          "fn": [
+            "Madam"
+          ]
+        },
+        "up.magnate": {
+          "m": [
+            "my lord",
+            "Your Grace",
+            "my lord earl"
+          ],
+          "f": [
+            "my lady",
+            "Your Grace"
+          ],
+          "mn": [
+            "Lord {byname}"
+          ],
+          "fn": [
+            "Lady {byname}"
+          ]
+        },
+        "up.baron": {
+          "m": [
+            "my lord",
+            "good my lord"
+          ],
+          "f": [
+            "my lady",
+            "good my lady"
+          ],
+          "mn": [
+            "Lord {byname}"
+          ],
+          "fn": [
+            "Lady {byname}"
+          ]
+        },
+        "up.knight": {
+          "m": [
+            "my lord",
+            "sir",
+            "good sir"
+          ],
+          "f": [
+            "my lady",
+            "good lady"
+          ],
+          "mn": [
+            "Sir {first}"
+          ],
+          "fn": [
+            "Lady {first}"
+          ]
+        },
+        "up.gentry": {
+          "m": [
+            "master",
+            "good sir",
+            "sir"
+          ],
+          "f": [
+            "mistress",
+            "good lady",
+            "madam"
+          ],
+          "mn": [
+            "Master {byname}"
+          ],
+          "fn": [
+            "Mistress {byname}"
+          ]
+        },
+        "up.middling": {
+          "m": [
+            "master",
+            "goodman",
+            "good sir"
+          ],
+          "f": [
+            "mistress",
+            "goodwife",
+            "good dame"
+          ],
+          "mn": [
+            "Master {byname}",
+            "Goodman {byname}"
+          ],
+          "fn": [
+            "Mistress {byname}",
+            "Goodwife {byname}"
+          ]
+        },
+        "up.commoner": {
+          "m": [
+            "goodman",
+            "neighbour"
+          ],
+          "f": [
+            "goodwife",
+            "neighbour",
+            "mistress"
+          ],
+          "mn": [
+            "Goodman {first}"
+          ],
+          "fn": [
+            "Goodwife {first}"
+          ]
+        },
+        "peer.low": {
+          "any": [
+            "friend",
+            "neighbour",
+            "{first}"
+          ],
+          "anyn": [
+            "{first}"
+          ]
+        },
+        "peer.mid": {
+          "m": [
+            "master",
+            "friend",
+            "{first}"
+          ],
+          "f": [
+            "mistress",
+            "friend",
+            "{first}"
+          ],
+          "mn": [
+            "Master {byname}"
+          ],
+          "fn": [
+            "Mistress {byname}"
+          ]
+        },
+        "peer.high": {
+          "m": [
+            "sir",
+            "my lord",
+            "cousin"
+          ],
+          "f": [
+            "lady",
+            "madam",
+            "cousin"
+          ],
+          "mn": [
+            "Sir {first}"
+          ],
+          "fn": [
+            "Lady {first}"
+          ]
+        },
+        "down.child": {
+          "m": [
+            "lad",
+            "boy",
+            "child"
+          ],
+          "f": [
+            "lass",
+            "girl",
+            "child"
+          ],
+          "anyn": [
+            "{first}"
+          ]
+        },
+        "down.youth": {
+          "m": [
+            "lad",
+            "boy",
+            "youth"
+          ],
+          "f": [
+            "lass",
+            "girl",
+            "maid"
+          ],
+          "anyn": [
+            "{first}"
+          ]
+        },
+        "down.adult": {
+          "m": [
+            "fellow",
+            "goodman",
+            "man"
+          ],
+          "f": [
+            "goodwife",
+            "woman",
+            "mistress"
+          ],
+          "anyn": [
+            "{first}"
+          ]
+        },
+        "down.elder": {
+          "m": [
+            "gaffer",
+            "old friend",
+            "father"
+          ],
+          "f": [
+            "gammer",
+            "good mother",
+            "mother"
+          ],
+          "mn": [
+            "old {first}"
+          ],
+          "fn": [
+            "old {first}"
+          ]
+        },
+        "down.cleric": {
+          "m": [
+            "my son",
+            "my child",
+            "my friend"
+          ],
+          "f": [
+            "my daughter",
+            "my child",
+            "my friend"
+          ],
+          "anyn": [
+            "{first}"
+          ]
+        },
+        "youth.up": {
+          "m": [
+            "sir",
+            "master",
+            "goodman"
+          ],
+          "f": [
+            "mistress",
+            "goodwife",
+            "dame"
+          ],
+          "mn": [
+            "Master {byname}"
+          ],
+          "fn": [
+            "Mistress {byname}"
+          ]
+        }
       },
       "franc": {
-        "kin.father":        { "any": ["Father", "Père", "Father dear"], "anyn": ["Father"] },
-        "kin.mother":        { "any": ["Mother", "Mère", "Mother dear"], "anyn": ["Mother"] },
-        "up.knight":         { "m": ["messire", "my lord", "sire"], "f": ["madame", "my lady", "ma dame"], "mn": ["Messire {first}"], "fn": ["Dame {first}"] },
-        "up.baron":          { "m": ["monseigneur", "my lord"], "f": ["madame", "my lady"], "mn": ["Seigneur {byname}"], "fn": ["Dame {byname}"] },
-        "up.gentry":         { "m": ["maître", "master", "good sir"], "f": ["dame", "mistress", "madame"], "mn": ["Maître {byname}"], "fn": ["Dame {byname}"] },
-        "peer.low":          { "any": ["friend", "neighbour", "{first}", "compère"], "anyn": ["{first}"] }
+        "kin.father": {
+          "any": [
+            "Father",
+            "Père",
+            "Father dear"
+          ],
+          "anyn": [
+            "Father"
+          ]
+        },
+        "kin.mother": {
+          "any": [
+            "Mother",
+            "Mère",
+            "Mother dear"
+          ],
+          "anyn": [
+            "Mother"
+          ]
+        },
+        "up.knight": {
+          "m": [
+            "messire",
+            "my lord",
+            "sire"
+          ],
+          "f": [
+            "madame",
+            "my lady",
+            "ma dame"
+          ],
+          "mn": [
+            "Messire {first}"
+          ],
+          "fn": [
+            "Dame {first}"
+          ]
+        },
+        "up.baron": {
+          "m": [
+            "monseigneur",
+            "my lord"
+          ],
+          "f": [
+            "madame",
+            "my lady"
+          ],
+          "mn": [
+            "Seigneur {byname}"
+          ],
+          "fn": [
+            "Dame {byname}"
+          ]
+        },
+        "up.gentry": {
+          "m": [
+            "maître",
+            "master",
+            "good sir"
+          ],
+          "f": [
+            "dame",
+            "mistress",
+            "madame"
+          ],
+          "mn": [
+            "Maître {byname}"
+          ],
+          "fn": [
+            "Dame {byname}"
+          ]
+        },
+        "peer.low": {
+          "any": [
+            "friend",
+            "neighbour",
+            "{first}",
+            "compère"
+          ],
+          "anyn": [
+            "{first}"
+          ]
+        }
       },
       "gael": {
-        "kin.father":        { "any": ["Father", "Athair", "Da"], "anyn": ["Father"] },
-        "up.knight":         { "m": ["my lord", "sir", "chief"], "f": ["my lady", "good lady"], "mn": ["Sir {first}"], "fn": ["Lady {first}"] },
-        "up.baron":          { "m": ["my chief", "my lord"], "f": ["my lady"], "mn": ["Lord {byname}"], "fn": ["Lady {byname}"] },
-        "peer.low":          { "any": ["friend", "a chara", "neighbour", "{first}"], "anyn": ["{first}"] }
+        "kin.father": {
+          "any": [
+            "Father",
+            "Athair",
+            "Da"
+          ],
+          "anyn": [
+            "Father"
+          ]
+        },
+        "up.knight": {
+          "m": [
+            "my lord",
+            "sir",
+            "chief"
+          ],
+          "f": [
+            "my lady",
+            "good lady"
+          ],
+          "mn": [
+            "Sir {first}"
+          ],
+          "fn": [
+            "Lady {first}"
+          ]
+        },
+        "up.baron": {
+          "m": [
+            "my chief",
+            "my lord"
+          ],
+          "f": [
+            "my lady"
+          ],
+          "mn": [
+            "Lord {byname}"
+          ],
+          "fn": [
+            "Lady {byname}"
+          ]
+        },
+        "peer.low": {
+          "any": [
+            "friend",
+            "a chara",
+            "neighbour",
+            "{first}"
+          ],
+          "anyn": [
+            "{first}"
+          ]
+        }
       },
       "cymric": {
-        "kin.father":        { "any": ["Tad", "Father"], "anyn": ["Tad"] },
-        "kin.mother":        { "any": ["Mam", "Mother"], "anyn": ["Mam"] },
-        "down.child":        { "m": ["lad", "bach", "boy"], "f": ["lass", "bach", "girl"], "anyn": ["{first} bach"] },
-        "peer.low":          { "any": ["friend", "cyfaill", "neighbour", "{first}"], "anyn": ["{first}"] }
+        "kin.father": {
+          "any": [
+            "Tad",
+            "Father"
+          ],
+          "anyn": [
+            "Tad"
+          ]
+        },
+        "kin.mother": {
+          "any": [
+            "Mam",
+            "Mother"
+          ],
+          "anyn": [
+            "Mam"
+          ]
+        },
+        "down.child": {
+          "m": [
+            "lad",
+            "bach",
+            "boy"
+          ],
+          "f": [
+            "lass",
+            "bach",
+            "girl"
+          ],
+          "anyn": [
+            "{first} bach"
+          ]
+        },
+        "peer.low": {
+          "any": [
+            "friend",
+            "cyfaill",
+            "neighbour",
+            "{first}"
+          ],
+          "anyn": [
+            "{first}"
+          ]
+        }
       },
       "norse": {
-        "up.magnate":        { "m": ["my lord", "my jarl", "Your Grace"], "f": ["my lady", "Your Grace"], "mn": ["Jarl {byname}"], "fn": ["Lady {byname}"] },
-        "up.baron":          { "m": ["my lord", "herra"], "f": ["my lady", "frú"], "mn": ["Lord {byname}"], "fn": ["Frú {byname}"] },
-        "peer.low":          { "any": ["friend", "neighbour", "{first}", "félagi"], "anyn": ["{first}"] }
+        "up.magnate": {
+          "m": [
+            "my lord",
+            "my jarl",
+            "Your Grace"
+          ],
+          "f": [
+            "my lady",
+            "Your Grace"
+          ],
+          "mn": [
+            "Jarl {byname}"
+          ],
+          "fn": [
+            "Lady {byname}"
+          ]
+        },
+        "up.baron": {
+          "m": [
+            "my lord",
+            "herra"
+          ],
+          "f": [
+            "my lady",
+            "frú"
+          ],
+          "mn": [
+            "Lord {byname}"
+          ],
+          "fn": [
+            "Frú {byname}"
+          ]
+        },
+        "peer.low": {
+          "any": [
+            "friend",
+            "neighbour",
+            "{first}",
+            "félagi"
+          ],
+          "anyn": [
+            "{first}"
+          ]
+        }
       },
       "teuton": {
-        "kin.father":        { "any": ["Father", "Vater"], "anyn": ["Father"] },
-        "kin.mother":        { "any": ["Mother", "Mutter"], "anyn": ["Mother"] },
-        "up.knight":         { "m": ["Herr", "my lord", "sir"], "f": ["Frau", "my lady"], "mn": ["Herr {first}"], "fn": ["Frau {first}"] },
-        "up.middling":       { "m": ["Meister", "master", "good sir"], "f": ["Frau", "mistress", "good dame"], "mn": ["Meister {byname}"], "fn": ["Frau {byname}"] },
-        "peer.low":          { "any": ["friend", "neighbour", "{first}", "Nachbar"], "anyn": ["{first}"] }
+        "kin.father": {
+          "any": [
+            "Father",
+            "Vater"
+          ],
+          "anyn": [
+            "Father"
+          ]
+        },
+        "kin.mother": {
+          "any": [
+            "Mother",
+            "Mutter"
+          ],
+          "anyn": [
+            "Mother"
+          ]
+        },
+        "up.knight": {
+          "m": [
+            "Herr",
+            "my lord",
+            "sir"
+          ],
+          "f": [
+            "Frau",
+            "my lady"
+          ],
+          "mn": [
+            "Herr {first}"
+          ],
+          "fn": [
+            "Frau {first}"
+          ]
+        },
+        "up.middling": {
+          "m": [
+            "Meister",
+            "master",
+            "good sir"
+          ],
+          "f": [
+            "Frau",
+            "mistress",
+            "good dame"
+          ],
+          "mn": [
+            "Meister {byname}"
+          ],
+          "fn": [
+            "Frau {byname}"
+          ]
+        },
+        "peer.low": {
+          "any": [
+            "friend",
+            "neighbour",
+            "{first}",
+            "Nachbar"
+          ],
+          "anyn": [
+            "{first}"
+          ]
+        }
       }
     },
     "ambition": {
@@ -97,38 +858,206 @@
       "avenge": "a wrong put right"
     },
     "reasons": {
-      "chat":            { "ui": "good company", "mem": "kept me good company", "good": true },
-      "flattery":        { "ui": "your kind words", "mem": "spoke kindly of me", "good": true },
-      "flattery_failed": { "ui": "your clumsy flattery", "mem": "tried to butter me up", "good": false },
-      "boast":           { "ui": "your tales", "mem": "told me of your deeds", "good": true },
-      "boast_failed":    { "ui": "your bragging", "mem": "bragged to my face", "good": false },
-      "insult":          { "ui": "the insult", "mem": "insulted me", "good": false },
-      "threat":          { "ui": "the threat", "mem": "threatened me", "good": false },
-      "threat_failed":   { "ui": "the threat", "mem": "threatened me and failed", "good": false },
-      "apology":         { "ui": "your apology", "mem": "begged my pardon", "good": true },
-      "apology_failed":  { "ui": "your poor apology", "mem": "made a poor apology", "good": false },
-      "asked":           { "ui": "the request", "mem": "pestered me", "good": false },
-      "loan":            { "ui": "the loan", "mem": "borrowed from me", "good": true },
-      "repaid":          { "ui": "repaying your debt", "mem": "paid what you owed", "good": true },
-      "overdue":         { "ui": "the unpaid debt", "mem": "left a debt unpaid", "good": false },
-      "meal":            { "ui": "the meal", "mem": "sat at my table", "good": true },
-      "vouched":         { "ui": "a good word for you", "mem": "were spoken well of to me", "good": true },
-      "lesson":          { "ui": "your diligence", "mem": "learnt your letters with me", "good": true },
-      "gift":            { "ui": "your gift", "mem": "gave me a gift", "good": true },
-      "courted":         { "ui": "your attentions", "mem": "courted me kindly", "good": true },
-      "rebuffed":        { "ui": "being turned down", "mem": "made advances I refused", "good": false },
-      "refused":         { "ui": "the refusal", "mem": "pressed a suit I refused", "good": false },
-      "wed":             { "ui": "the wedding", "mem": "wed me", "good": true },
-      "consent":         { "ui": "their blessing", "mem": "asked my blessing as you ought", "good": true },
-      "apprenticed":     { "ui": "taking you on", "mem": "came to me to learn", "good": true },
-      "match":           { "ui": "the match", "mem": "made a good match with my house", "good": true },
-      "wrestled":        { "ui": "the bout", "mem": "wrestled with me fairly", "good": true },
-      "played":          { "ui": "the game", "mem": "played with me", "good": true },
-      "greeted":         { "ui": "your greeting", "mem": "greeted me civilly", "good": true },
-      "mass":            { "ui": "your attendance", "mem": "knelt beside me at Mass", "good": true },
-      "confessed":       { "ui": "your confession", "mem": "made your confession to me", "good": true },
-      "missed_mass":     { "ui": "missing Mass", "mem": "stayed away from Mass", "good": false },
-      "misc":            { "ui": "your dealings", "mem": "dealt with me", "good": true }
+      "chat": {
+        "ui": "good company",
+        "mem": "kept me good company",
+        "good": true
+      },
+      "flattery": {
+        "ui": "your kind words",
+        "mem": "spoke kindly of me",
+        "good": true
+      },
+      "flattery_failed": {
+        "ui": "your clumsy flattery",
+        "mem": "tried to butter me up",
+        "good": false
+      },
+      "boast": {
+        "ui": "your tales",
+        "mem": "told me of your deeds",
+        "good": true
+      },
+      "boast_failed": {
+        "ui": "your bragging",
+        "mem": "bragged to my face",
+        "good": false
+      },
+      "insult": {
+        "ui": "the insult",
+        "mem": "insulted me",
+        "good": false
+      },
+      "threat": {
+        "ui": "the threat",
+        "mem": "threatened me",
+        "good": false
+      },
+      "threat_failed": {
+        "ui": "the threat",
+        "mem": "threatened me and failed",
+        "good": false
+      },
+      "apology": {
+        "ui": "your apology",
+        "mem": "begged my pardon",
+        "good": true
+      },
+      "apology_failed": {
+        "ui": "your poor apology",
+        "mem": "made a poor apology",
+        "good": false
+      },
+      "asked": {
+        "ui": "the request",
+        "mem": "pestered me",
+        "good": false
+      },
+      "loan": {
+        "ui": "the loan",
+        "mem": "borrowed from me",
+        "good": true
+      },
+      "repaid": {
+        "ui": "repaying your debt",
+        "mem": "paid what you owed",
+        "good": true
+      },
+      "overdue": {
+        "ui": "the unpaid debt",
+        "mem": "left a debt unpaid",
+        "good": false
+      },
+      "meal": {
+        "ui": "the meal",
+        "mem": "sat at my table",
+        "good": true
+      },
+      "vouched": {
+        "ui": "a good word for you",
+        "mem": "were spoken well of to me",
+        "good": true
+      },
+      "lesson": {
+        "ui": "your diligence",
+        "mem": "learnt your letters with me",
+        "good": true
+      },
+      "gift": {
+        "ui": "your gift",
+        "mem": "gave me a gift",
+        "good": true
+      },
+      "courted": {
+        "ui": "your attentions",
+        "mem": "courted me kindly",
+        "good": true
+      },
+      "rebuffed": {
+        "ui": "being turned down",
+        "mem": "made advances I refused",
+        "good": false
+      },
+      "refused": {
+        "ui": "the refusal",
+        "mem": "pressed a suit I refused",
+        "good": false
+      },
+      "wed": {
+        "ui": "the wedding",
+        "mem": "wed me",
+        "good": true
+      },
+      "consent": {
+        "ui": "their blessing",
+        "mem": "asked my blessing as you ought",
+        "good": true
+      },
+      "apprenticed": {
+        "ui": "taking you on",
+        "mem": "came to me to learn",
+        "good": true
+      },
+      "match": {
+        "ui": "the match",
+        "mem": "made a good match with my house",
+        "good": true
+      },
+      "wrestled": {
+        "ui": "the bout",
+        "mem": "wrestled with me fairly",
+        "good": true
+      },
+      "played": {
+        "ui": "the game",
+        "mem": "played with me",
+        "good": true
+      },
+      "greeted": {
+        "ui": "your greeting",
+        "mem": "greeted me civilly",
+        "good": true
+      },
+      "mass": {
+        "ui": "your attendance",
+        "mem": "knelt beside me at Mass",
+        "good": true
+      },
+      "confessed": {
+        "ui": "your confession",
+        "mem": "made your confession to me",
+        "good": true
+      },
+      "missed_mass": {
+        "ui": "missing Mass",
+        "mem": "stayed away from Mass",
+        "good": false
+      },
+      "misc": {
+        "ui": "your dealings",
+        "mem": "dealt with me",
+        "good": true
+      },
+      "took the post": {
+        "ui": "taking the post",
+        "mem": "took the post I offered",
+        "good": true
+      },
+      "left before the term": {
+        "ui": "leaving early",
+        "mem": "left my service before your term was done",
+        "good": false
+      },
+      "hired": {
+        "ui": "being hired",
+        "mem": "hired me",
+        "good": true
+      },
+      "worked the lord's land": {
+        "ui": "your labour on the lord's land",
+        "mem": "worked the lord's land",
+        "good": true
+      },
+      "bought freedom": {
+        "ui": "buying your freedom",
+        "mem": "bought your freedom of me",
+        "good": true
+      },
+      "ran away": {
+        "ui": "running away",
+        "mem": "ran away from your duties",
+        "good": false
+      },
+      "a gift": {
+        "ui": "your gift",
+        "mem": "gave me a gift",
+        "good": true
+      },
+      "ran an errand": {
+        "ui": "your errand",
+        "mem": "ran an errand for me",
+        "good": true
+      }
     },
     "traitWords": {
       "quick_learner": "quick to learn",

@@ -10,6 +10,12 @@ import type { Session } from './topics/kit';
 import { OPINION } from './tuning';
 import type { Conversation, DialogueLine, DialogueOption, Result, TopicProvider, TopicReply } from './types';
 
+/** Deeds too slight or too constant to bring up when meeting again. */
+const PLEASANTRIES: ReadonlySet<string> = new Set(['chat', 'courted', 'rebuffed', 'greeted', 'played', 'wrestled', 'wed', 'asked', 'meal', 'mass', 'confessed', 'lesson', 'consent']);
+
+/** Lines kept in an open conversation. */
+const MAX_LINES = 200;
+
 export function moodOf(op: number): Conversation['mood'] {
   return op >= OPINION.moodFriendlyFrom ? 'friendly' : op >= OPINION.moodWaryBelow ? 'neutral' : op >= OPINION.moodHostileBelow ? 'wary' : 'hostile';
 }
@@ -146,6 +152,7 @@ export class Conversations {
     }
     s.turns++;
     if (reply.lines.length > 0) conv.lines.push(...reply.lines);
+    if (conv.lines.length > MAX_LINES) conv.lines.splice(0, conv.lines.length - MAX_LINES + 40); // a very long talk keeps its recent lines
     const reason = reply.reason ?? option.label;
     if (reply.opinion) core.opinion.adjust(s.other.id, s.actor.id, reply.opinion, reason);
     if (reply.mood) {
@@ -220,19 +227,17 @@ export class Conversations {
     const npc = core.speech.ctx(s.other, s.actor);
     const hello = core.speech.line('greet.start', npc);
     if (hello) out.push(hello);
-    const mem = core.store.memoriesOf(s.other.id, s.actor.id);
-    const last = mem.length > 0 ? mem[mem.length - 1] : null;
+    // they recall a real deed (not pleasantries, not today's), and not at every meeting
+    const mem = core.store.memoriesOf(s.other.id, s.actor.id).filter((m) => !PLEASANTRIES.has(m.r) && Math.abs(m.v) >= 3 && core.day - m.d >= 1 && core.day - m.d <= 40);
+    const last = mem.length > 0 && core.speech.hash01(s.other.id, `remark${core.day}`) < 0.55 ? mem[mem.length - 1] : null;
     if (last) npc.vars.memory = core.speech.reasonMem(last.r);
     if (npc.tags.has('debtor')) {
       const owed = core.store.debtsOwedBy(s.actor.id).filter((d) => d.from === s.other.id).reduce((n, d) => n + d.v, 0);
       npc.vars.money = formatMoney(owed);
       const l = core.speech.line('greet.debt', npc);
       if (l) out.push(l);
-    } else if (npc.tags.has('grudge') && last && npc.vars.memory) {
-      const l = core.speech.line('greet.grudge', npc);
-      if (l) out.push(l);
-    } else if (npc.tags.has('favoured') && last && npc.vars.memory) {
-      const l = core.speech.line('greet.favoured', npc);
+    } else if (last && npc.vars.memory) {
+      const l = core.speech.line(last.v < 0 ? 'greet.grudge' : 'greet.favoured', npc);
       if (l) out.push(l);
     } else if (s.other.ambition !== 'content' && core.speech.hash01(s.other.id, `amb${core.day}`) < 0.3 && core.age(s.other) >= 12) {
       const l = core.speech.line('greet.ambition', npc);

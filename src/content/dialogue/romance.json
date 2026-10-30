@@ -72,13 +72,12 @@
     },
     "token": {
       "ask": [
-        "I bought you this at the fair: a ribbon for your hair. It cost {money}.",
-        "A trifle, {first} — a small brooch. It cost {money}, and it's yours.",
-        "I thought of you when I saw this. {Money}, but it's yours to keep.",
-        "Take it, {first}, as a token of my regard.",
-        {"t": "A comb of horn, {first}. I carved the edge myself. Well — I tried.", "if": {"role": ["craft", "land"]}},
-        "A little ribbon, {first} — blue, to match your eyes. {Money}.",
-        "I made this for you. It cost me {money} for the cord alone."
+        "A ribbon for your hair, {first} — blue, to match your eyes. It cost me {money}, and was worth it.",
+        "I bought you this at the fair, {first}: a little brooch. {Money}, but it's yours.",
+        "I thought of you when I saw this. It was {money}; take it, {first}.",
+        "Take it, {first}, as a token of my regard. {Money} well spent.",
+        {"t": "A comb of horn, {first}. I carved the edge myself — well, I tried. Worth {money} to me.", "if": {"role": ["craft", "land"]}},
+        {"t": "A trinket, {addr}. It cost {money}. Don't tell my mother.", "if": {"age": ["youth", "adult"]}}
       ],
       "yes": [
         {"t": "Oh, {first}. It's beautiful. I shall wear it to Mass.", "tone": "flirt"},
@@ -169,9 +168,9 @@
         {"t": "I like you, but I can't.", "tone": "sad"}
       ],
       "consent": [
-        {"t": "I want it, {first}, but I cannot say yes until {who} agrees. Ask them first.", "tone": "wary"},
+        {"t": "I want it, {first}, but I cannot say yes until {who} agrees. Go and ask for it.", "tone": "wary"},
         {"t": "My heart says yes. But it isn't mine alone to give: {who} must consent.", "tone": "wary"},
-        {"t": "Speak to {who}, {first}. Without their blessing I can't.", "tone": "wary"}
+        {"t": "Speak to {who}, {first}. I can't say yes without that blessing.", "tone": "wary"}
       ],
       "young": [
         {"t": "We are both too young yet, {first}. Wait until we're grown.", "tone": "wary"},

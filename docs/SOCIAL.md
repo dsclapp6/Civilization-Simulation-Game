@@ -13,7 +13,7 @@ choices `sim.rng('social.wedding')`; wording uses hashes, see *Determinism*).
 | UI (dialogue panel) | `start / choose / end / current`, `Conversation.{lines, options, opinion, opinionDelta, mood, relation, page, pageLabel}`, `relations`, `relationLabel`, `courtship`; events `conversation`, `opinion`, `notify` |
 | Player controller | the `social` ActionProvider (Talk, Greet, Wrestle, Play, Pray, Hear Mass, Confess) via `sim.actions`; holds/releases the NPC agent on `conversation` events |
 | Agents | `bark(speaker, situation, listener?)` for speech bubbles; `setHooks({ awakeHook })` |
-| Economy | `registerTopic` ("Ask for work", "Trade…"), `adjustOpinion`, `setHooks({ giveHook, itemInfoHook, priceTipsHook, dressTierHook })`; listens to `marriage` (merchet) |
+| Economy | `registerTopic` ("Ask for work", "Trade…"), `adjustOpinion`, `setHooks({ giveHook, itemInfoHook, priceTipsHook, dressTierHook, apprenticeHook })`; listens to `marriage` (merchet) |
 | Politics (later) | `registerTopic`, `arrangeMatch`, `matchCandidates`, `adjustOpinion`, `propose` |
 
 ```ts
@@ -29,6 +29,7 @@ social.setHooks({
   priceTipsHook: (settlement) => [{ good: 'wheat', trend: 0.4 }],                // market gossip
   awakeHook: (person) => zone.agent(person) !== null,                            // agents know who is up
   dressTierHook: (person) => 3,                                                  // what clothes suggest to strangers
+  apprenticeHook: (youth, master, dryRun) => ({ ok: true, premium: 240 }),       // economy: quote (dryRun) or enter the indenture
 });
 ```
 
@@ -75,6 +76,14 @@ talk short (`cutoff` line, conversation ends). `Conversation.opinion` is *their*
 
 Options are sorted enabled first, then by `priority` (higher first), `leave` last. Disabled options keep a
 `reason`. Options that are checks carry `chance` — **exactly the probability rolled**.
+
+*Priority scale.* The root entries sit on the 0–10 scale the economy's topics use (theirs run 2–9), so a trade or
+a job offer interleaves with them rather than always leading or trailing: propose 10 · repay 9.8 · chat 8.8 ·
+news 7.8 · ask 6.5 · court 6.3 · family 5.5 · say 5 · favour 4.5 · gift 3.5 · farewell −100. Entries inside a page
+use 10–80 among themselves.
+
+*Long talks.* A conversation keeps its latest 200 lines (the oldest 40 beyond that are dropped at once, so the
+panel redraws rarely).
 
 **Chances.** Every check is `base + 0.004·their opinion of you + 0.02·(Charisma − 10) + 0.012·Persuasion level
 + rank term + trait terms + extras`, clamped to 3 %…97 % (`chance.ts`). The rank term costs `0.04` per tier when
@@ -130,7 +139,11 @@ Base, in points (`opinion.ts`, `tuning.ts`), clamped to −45…65:
 (rounded to 0.1). Deeds of ≥ 2 points by or towards the player are written to `state.ext['social'].mem`
 (who, whom, day, reason code, delta — at most 5 per pair, 140 in all) so people can say "I've not forgotten how
 you insulted me"; changes towards the player of ≥ 0.5 emit an `opinion` event with a readable reason
-("your gift"). Memory fades ×0.944 every four days (half-life three game years), each settlement on its own hour
+("your gift"). `reason` is a short code or free text: the tables in `dialogue.json` (`tables.reasons`) say how it reads in
+the pop-up (`ui`), how an NPC words the memory (`mem`: "…you took the post I offered") and whether it was a good deed; a
+reason with no entry is shown as given in the pop-up and never brought up by the NPC, so other modules may pass their own
+words (the economy's free-text reasons "hired", "took the post", "left before the term", "worked the lord's land",
+"bought freedom", "ran away", "a gift" and "ran an errand" already have entries). Memory fades ×0.944 every four days (half-life three game years), each settlement on its own hour
 of its own day (`social.hourly`), and entries about the forgotten dead are dropped.
 
 **Thresholds:** devoted ≥ 40 · warm ≥ 14 · neutral ≥ −8 · cold · hostile < −30; friends ≥ 28 (both ways);
@@ -295,8 +308,10 @@ memory / decay, relations and labels, topics (gifts, loans, favours, speaking yo
 → consent → proposal → wedding with consistent indexes (`state.rebuildIndexes()` equals the live ones), arranged
 matches and betrothals, fostering and apprenticeship, fertility of a married player, barks and rate limits, news
 travel, actions, persistence, and the content itself.
-Tools (not run by vitest): `tests/sim/social/demo.ts` (read real conversations), `audit.ts` (content), `perf.ts`,
-`courtship-odds.ts`.
+Tools (not run by vitest; run with `npx tsx`): `tests/sim/social/demo.ts` (read real conversations),
+`demo-wedding.ts [seed]` (a whole courtship told in lines — compliments, tokens, the father's blessing, the proposal,
+the household afterwards; dice loaded in the suitor's favour), `audit.ts` (content), `perf.ts`, `courtship-odds.ts`
+(how likely a courtship is to succeed with honest dice).
 
 ## 13. Known gaps
 

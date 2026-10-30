@@ -96,6 +96,7 @@ type Gesture = 'compliment' | 'walk' | 'token';
 
 function gesture(t: TopicCtx, kind: Gesture): TopicReply {
   const { core, actor, other } = t;
+  if (kind === 'token') { t.me.vars.money = formatMoney(tokenCost(actor)); t.npc.vars.money = t.me.vars.money; }
   const lines = iSay(t, `court.${kind}.ask`);
   const el = core.courtship.canCourt(actor, other);
   if (!el.ok) return { lines: [...lines, ...npcSays(t, 'court.refuse', 'cold')] };
@@ -116,11 +117,9 @@ function gesture(t: TopicCtx, kind: Gesture): TopicReply {
     const cost = tokenCost(actor);
     const r = transferMoney(core, actor, other, cost);
     if (!r.ok) return { lines: [{ speaker: actor.id, text: r.reason ?? 'You cannot afford it.' }] };
-    t.npc.vars.money = formatMoney(cost);
     progress = 0.1; gain = 3.5;
   }
   const now = core.courtship.advance(actor, other, progress * fresh);
-  if (kind === 'token') t.me.vars.money = t.npc.vars.money;
   const tone = now >= 0.8 ? 'flirt' : 'friendly';
   const out: TopicReply = { lines: [...lines, ...npcSays(t, `court.${kind}.yes`, tone)], opinion: Math.round(gain * fresh * 10) / 10, reason: 'courted', mood: 0.03 };
   if (now >= 1) core.notify(`${other.first} has given you their heart.`, 'social');
