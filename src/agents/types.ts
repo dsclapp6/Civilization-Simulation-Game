@@ -124,6 +124,15 @@ export interface ZoneApi {
   release(person: PersonId): void;
   /** Give an NPC an order (quests, followers, scripted scenes). */
   command(person: PersonId, order: AgentOrder): void;
+  /**
+   * Make a person an agent at (x, z) regardless of their schedule (encounters, bandits, a patrol,
+   * a messenger), kept until `dismiss`. They follow `command` orders; unordered they idle/face the player.
+   */
+  summon?(person: PersonId, x: number, z: number, yaw?: number): void;
+  dismiss?(person: PersonId): void;
+  /** Spawn a temporary animal (wolf pack, stray beast) at (x, z); returns its id. */
+  summonAnimal?(kind: AnimalKind, x: number, z: number, hostile: boolean): number;
+  dismissAnimal?(id: number): void;
   /** Speech bubble over a person for `seconds`. */
   say(person: PersonId, text: string, seconds?: number): void;
   /** The player's body: position is read every step, draw item is included in the view. */
