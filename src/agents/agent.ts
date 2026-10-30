@@ -82,6 +82,9 @@ export class Agent implements ZoneAgent {
   pathN = 0;
   pathI = 0;
   pathAsked = 0;
+  /** The route of the last errand/patrol leg A→B, reused (reversed) for the way back. */
+  readonly route = new Float32Array(MAX_WAYPOINTS * 2);
+  routeN = 0;
   pathFails = 0;
   stuck = 0;
   progX = 0; progZ = 0; progT = 0;

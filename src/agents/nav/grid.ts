@@ -28,6 +28,8 @@ export class NavGrid {
   readonly terrain = new Uint8Array(NAV_N * NAV_N);
   readonly solid = new Uint8Array(NAV_N * NAV_N);
   private readonly tag = new Int32Array(TILES_PER_SIDE * TILES_PER_SIDE).fill(-1);
+  /** Per tile: 1 when some cell of it is impassable terrain (water, cliff), so exact edge tests are needed. */
+  private readonly mixed = new Uint8Array(TILES_PER_SIDE * TILES_PER_SIDE);
   /** Cell range currently inside the window (inclusive). */
   minI = 0; maxI = NAV_N - 1; minJ = 0; maxJ = NAV_N - 1;
   private centreI = 0;
@@ -86,6 +88,15 @@ export class NavGrid {
     return this.terrain[((j & NAV_MASK) << 8) | (i & NAV_MASK)];
   }
 
+  /** Does the tile holding (i, j) contain impassable terrain? (builds the tile on demand) */
+  tileMixed(i: number, j: number): boolean {
+    if (i < this.minI || i > this.maxI || j < this.minJ || j > this.maxJ) return true;
+    const ti = i >> 4, tj = j >> 4;
+    const slot = ((tj & 15) << 4) | (ti & 15);
+    if (this.tag[slot] !== ti * 65536 + tj) this.buildTile(ti, tj);
+    return this.mixed[slot] !== 0;
+  }
+
   solidAt(i: number, j: number): number {
     if (i < this.minI || i > this.maxI || j < this.minJ || j > this.maxJ) return 0;
     const ti = i >> 4, tj = j >> 4;
@@ -136,6 +147,7 @@ export class NavGrid {
     const ci0 = ti * TILE_CELLS, cj0 = tj * TILE_CELLS;
     const x0 = ci0 * CELL, z0 = cj0 * CELL;
     const terrain = this.terrain, solid = this.solid;
+    let blockedCells = 0;
     for (let j = 0; j < TILE_CELLS; j++) {
       const idxRow = (((cj0 + j) & NAV_MASK) << 8);
       const z = z0 + (j + 0.5) * CELL;
@@ -146,8 +158,10 @@ export class NavGrid {
         if (x < 0 || z < 0 || x >= WORLD_SIZE || z >= WORLD_SIZE) { terrain[idx] = 0; continue; }
         const c = world.walkCostAt(x, z);
         terrain[idx] = c === Infinity || c !== c ? 0 : Math.max(1, Math.min(255, Math.round(c * 16)));
+        if (terrain[idx] === 0) blockedCells++;
       }
     }
+    this.mixed[((tj & 15) << 4) | (ti & 15)] = blockedCells > 0 ? 1 : 0;
     const ob = this.obstacles;
     const pad = PLAN_MARGIN + 2.2;
     const near = { x: 0, z: 0 };

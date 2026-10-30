@@ -165,6 +165,7 @@ export function goTo(z: Zone, a: Agent, tx: number, tz: number, pace: number): v
       if (a.dead || a.st !== St.Wait) return;
       if (ok && buf.n > 0) {
         a.setPath(buf.x, buf.z, buf.n); a.st = St.Walk; a.pathFails = 0;
+        if (a.leg === 1 && (a.mode === Mode.Errand || a.mode === Mode.Patrol)) { a.route.set(a.path.subarray(0, a.pathN * 2)); a.routeN = a.pathN; }
         if (a.control === 'ai' && a.distFocus > SEEN_RADIUS) enterSeen(z, a);
         return;
       }
@@ -256,7 +257,7 @@ function walk(z: Zone, a: Agent, dt: number): void {
   a.counter++;
   v *= a.tf;
   // step away from others (ranks, the player) while keeping the way
-  z.separation(a);
+  if (a.distFocus > SEEN_RADIUS + 20) { z.sepX = 0; z.sepZ = 0; } else z.separation(a);
   let vx = (dx / dist) * v + z.sepX, vz = (dz / dist) * v + z.sepZ;
   const sp = Math.sqrt(vx * vx + vz * vz);
   const cap = v * 1.35 + 0.2;
@@ -398,8 +399,17 @@ function errand(z: Zone, a: Agent, dt: number, patrol: boolean): void {
     setAnim(a, patrol ? 'idle' : (a.leg === 2 ? 'work_lift' : (WORK_ANIMS.has(a.anim) ? a.anim : 'idle')));
     d.carry = a.leg === 2 && !patrol ? a.carry : 'none';
     if (a.timer > 0) return;
-    if (a.leg === 0) { a.leg = 1; goTo(z, a, a.bx, a.bz, patrol ? 0.8 : 0.95); }
-    else { a.leg = 3; goTo(z, a, a.tx, a.tz, patrol ? 0.8 : 0.95); }
+    if (a.leg === 0) { a.leg = 1; a.routeN = 0; goTo(z, a, a.bx, a.bz, patrol ? 0.8 : 0.95); }
+    else {
+      a.leg = 3;
+      if (a.routeN > 1 && Math.hypot(a.x - a.bx, a.z - a.bz) < 3) {
+        // the way back is the way there, reversed (the last waypoint of the way there is where we stand)
+        const n = a.routeN - 1;
+        for (let k = 0; k < n; k++) { a.path[k * 2] = a.route[(n - 1 - k) * 2]; a.path[k * 2 + 1] = a.route[(n - 1 - k) * 2 + 1]; }
+        a.path[n * 2] = a.tx; a.path[n * 2 + 1] = a.tz;
+        a.pathN = n + 1; a.pathI = 0; a.st = St.Walk; a.paceScale = patrol ? 0.8 : 0.95;
+      } else goTo(z, a, a.tx, a.tz, patrol ? 0.8 : 0.95);
+    }
     d.carry = a.mode === Mode.Errand ? a.carry : 'none';
   }
 }

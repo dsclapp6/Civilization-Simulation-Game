@@ -144,6 +144,7 @@ export class Nav implements NavApi {
     const g = this.grid;
     const i = Math.floor(x / CELL), j = Math.floor(z / CELL);
     if (!g.inWindow(i, j)) return Number.isFinite(this.world.walkCostAt(x, z));
+    if (!g.tileMixed(i, j)) return true;
     const c = g.terrainCost(i, j);
     const blocked = c === 0;
     if ((g.terrainCost(i + 1, j) === 0) !== blocked || (g.terrainCost(i - 1, j) === 0) !== blocked
