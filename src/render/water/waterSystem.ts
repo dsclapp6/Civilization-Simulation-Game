@@ -5,7 +5,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { clamp, pointInPolygon } from '../../core/math';
 import type { WorldModel } from '../../world/types';
 import type { Palette } from '../../assets/types';
-import type { AtmosphereState } from '../sky/atmosphere';
+import { HEMI_DAY, type AtmosphereState } from '../sky/atmosphere';
 import { buildRiverRibbons, ribbonGeometry } from './rivers';
 import { buildBridgesGeometry } from './bridges';
 import { createWaterMaterial, createWaterShared, type WaterShared } from './waterMaterial';
@@ -161,7 +161,7 @@ export class WaterSystem {
     s.uFoam.value.setHex(p.foam);
     s.uSunDir.value.copy(atmo.lightDir);
     s.uSunColor.value.copy(atmo.lightColor).multiplyScalar(atmo.lightIntensity / 3.0);
-    s.uAmbient.value.copy(atmo.hemiSky).multiplyScalar(atmo.hemiIntensity * 0.65);
+    s.uAmbient.value.copy(atmo.hemiSky).multiplyScalar(atmo.hemiIntensity * 0.65 * (1 - (1 - 0.9 / HEMI_DAY) * atmo.day));
     s.uSkyTop.value.copy(atmo.skyTop).multiplyScalar(0.58);
     s.uSkyHorizon.value.copy(atmo.skyHorizon).multiplyScalar(0.62).lerp(this.tmpC.copy(atmo.sunHalo), 0.25 * atmo.dusk);
     s.uRain.value = rain;

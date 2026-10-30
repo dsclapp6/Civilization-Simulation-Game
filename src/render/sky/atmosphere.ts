@@ -62,6 +62,10 @@ export interface AtmosphereState {
   hemiSky: THREE.Color;
   hemiGround: THREE.Color;
   hemiIntensity: number;
+  /** Shadowless sky fill from the side of the sky opposite the sun (gives shaded walls their form). */
+  fillDir: THREE.Vector3;
+  fillColor: THREE.Color;
+  fillIntensity: number;
   exposure: number;
   cloudCover: number;
   cloudLit: THREE.Color;
@@ -75,6 +79,12 @@ export interface AtmosphereState {
   gradeTint: THREE.Color;
 }
 
+/** Noon sun, daytime hemisphere fill, sky fill (shadowless, from the side away from the sun) and ground bounce colour. */
+export const SUN_NOON = 2.9;
+export const HEMI_DAY = 1.6;
+export const FILL_DAY = 0.7;
+export const HEMI_GROUND = 0x8f7b58;
+
 /** Half the daylight length (day fraction) and max sun elevation (radians) per season. */
 const MAX_ELEV = [0.84, 1.08, 0.70, 0.42];
 
@@ -87,6 +97,7 @@ export function createAtmosphereState(): AtmosphereState {
     sunDisc: new THREE.Color(), sunHalo: new THREE.Color(), moonColor: new THREE.Color(), moonPhase: 0.5, moonAlpha: 0,
     starAlpha: 0, lightDir: new THREE.Vector3(0, 1, 0), lightColor: new THREE.Color(), lightIntensity: 3,
     lightIsMoon: false, shadowStrength: 1, hemiSky: new THREE.Color(), hemiGround: new THREE.Color(), hemiIntensity: 0.9,
+    fillDir: new THREE.Vector3(0, 1, 0), fillColor: new THREE.Color(), fillIntensity: 0,
     exposure: 1, cloudCover: 0.2, cloudLit: new THREE.Color(), cloudShade: new THREE.Color(), cloudShadow: 0, nightLight: 0,
     gradeDesat: 0, gradeTint: new THREE.Color(0, 0, 0),
   };
@@ -213,12 +224,18 @@ export function computeAtmosphere(input: AtmosphereInput, palette: Palette, out:
   out.sunHalo.copy(sunCol).multiplyScalar((0.35 + dusk * 0.9) * sunVis);
 
   // ---- direct light and sky fill (docs/ART.md §6; gallery computeLighting is the reference) ----
+  // Under three's physically based lights a Lambert surface reflects albedo * E / PI, so the
+  // nominal hemisphere 0.9 left everything out of the sun (street walls, the shaded side of every
+  // house) at a tenth of the sunlit brightness: towns looked grey and dim at noon. The fill is
+  // therefore stronger (HEMI_DAY), the ground bounce warmer and lighter, and a shadowless sky
+  // fill from the side away from the sun gives shaded walls their form.
   const dayAmt = smoothstep(-0.04, 0.22, sh);
   const golden = 1 - smoothstep(0.05, 0.42, sh);
   const artNight = 1 - smoothstep(-0.1, 0.1, sh);
   // one DirectionalLight serves sun and moon: the sun fades out just below the horizon, then the
   // moon fades in ("moonlit blue": moon 0.9, phase only trims it slightly)
-  const sunI = 3.0 * dayAmt * (0.75 + 0.25 * (1 - golden)) * (1 - overcast * 0.72);
+  // golden hour keeps a strong, warm key so sunlit walls and fields glow instead of going dull
+  const sunI = SUN_NOON * dayAmt * (0.92 + 0.08 * (1 - golden)) * (1 - overcast * 0.72);
   if (sh > -0.02) {
     out.lightDir.copy(out.sunDir);
     if (out.lightDir.y < 0.02) out.lightDir.y = 0.02;
@@ -238,10 +255,20 @@ export function computeAtmosphere(input: AtmosphereInput, palette: Palette, out:
   }
 
   // ---- hemisphere: cool sky fill, warmed at golden hour, deep blue at night ----
-  out.hemiSky.setHex(0xbfd9ef).lerp(_a.setHex(0xe8b896), golden * dayAmt * 0.45).lerp(_b.setHex(palette.ambient.night), artNight);
-  out.hemiGround.setHex(0x6b5a3a).lerp(_a.setHex(0x1e2433), artNight);
-  out.hemiIntensity = (0.9 * (0.3 + 0.7 * dayAmt) + 0.75 * artNight) * (1 + overcast * 0.2);
-  out.exposure = 1.0 + overcast * 0.06;
+  out.hemiSky.setHex(0xbfd9ef).lerp(_a.setHex(0xe8b896), golden * dayAmt * 0.6).lerp(_b.setHex(palette.ambient.night), artNight);
+  out.hemiGround.setHex(HEMI_GROUND).lerp(_c.setHex(0xa8764a), golden * dayAmt * 0.45).lerp(_a.setHex(0x1e2433), artNight);
+  // overcast skies are one big soft light: the fill rises as the sun goes
+  out.hemiIntensity = (HEMI_DAY * (0.3 + 0.7 * dayAmt) * (1 + overcast * 0.3)) * (1 - artNight) + 1.02 * artNight;
+
+  // ---- sky fill: the bright sky opposite the sun (bluer at golden hour), none at night ----
+  {
+    const sd = out.sunDir;
+    const hz = Math.hypot(sd.x, sd.z) || 1;
+    out.fillDir.set(-sd.x / hz, 0, -sd.z / hz).multiplyScalar(0.8).setY(0.6).normalize();
+    out.fillColor.setHex(0xc9dcf0).lerp(_a.setHex(0x9fb2dc), golden * 0.7);
+    out.fillIntensity = FILL_DAY * dayAmt * (1 - overcast * 0.6);
+  }
+  out.exposure = 1.0 + overcast * 0.06 + golden * dayAmt * 0.12 * (1 - overcast);
 
   // ---- clouds ----
   out.cloudCover = clamp(0.34 + input.cloud * 0.6 + input.rain * 0.3 + input.snow * 0.2, 0, 1);

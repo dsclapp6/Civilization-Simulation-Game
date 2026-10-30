@@ -98,6 +98,12 @@ ${far ? `if (texture2D(uMask, vTWorld.xz / uWorldSize).r > 0.5) discard;` : ''}`
   float camD = distance(vTWorld, cameraPosition);
   float canopy = forestW * smoothstep(uCanopyDist * 0.3, uCanopyDist * 0.95, camD);
   base = mix(base, uCanopy * (0.9 + 0.2 * tNoise(vTWorld.xz * 0.02)), canopy * 0.7);
+  // close to the camera: soft mottling (tufts, trodden patches) so the smooth near ground is not plastic
+  float nearG = 1.0 - smoothstep(25.0, 90.0, camD);
+  if (nearG > 0.0) {
+    float mott = (tNoise(vTWorld.xz * 1.15) - 0.5) * 0.12 + (tNoise(vTWorld.xz * 0.27 + 7.3) - 0.5) * 0.14;
+    base *= 1.0 + mott * nearG * (0.45 + 0.55 * grassW);
+  }
   // snow: settles on flat, exposed ground first; patchy while thin; always on high peaks
   float flatness = smoothstep(0.55, 0.88, vTUp);
   float n = tNoise(vTWorld.xz * 0.045) * 0.55 + tNoise(vTWorld.xz * 0.19) * 0.3 + tNoise(vTWorld.xz * 0.9) * 0.15;
@@ -106,7 +112,7 @@ ${far ? `if (texture2D(uMask, vTWorld.xz / uWorldSize).r > 0.5) discard;` : ''}`
   float alt = smoothstep(uSnowLine - 160.0, uSnowLine + 120.0, vTWorld.y + (n - 0.5) * 160.0);
   float snow = max(seasonal, alt * smoothstep(0.3, 0.62, vTUp));
   snow *= smoothstep(-0.3, 0.4, vTWorld.y);
-  base = mix(base, vec3(0.86, 0.9, 0.95) + n * 0.06, clamp(snow, 0.0, 1.0));
+  base = mix(base, vec3(0.78, 0.82, 0.88) + n * 0.07, clamp(snow, 0.0, 1.0));
   // rain: darker, slightly more saturated ground
   float wet = uWetness * vTMat.z * (1.0 - snow);
   base = mix(base, base * base * 1.6, wet * 0.35);

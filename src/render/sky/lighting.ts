@@ -8,6 +8,8 @@ const ORIGIN = new THREE.Vector3();
 export class Lighting {
   readonly sun: THREE.DirectionalLight;
   readonly hemi: THREE.HemisphereLight;
+  /** Shadowless sky fill opposite the sun (never casts: costs one light term per fragment). */
+  readonly fill: THREE.DirectionalLight;
   private readonly lightView = new THREE.Matrix4();
   private readonly lightViewInv = new THREE.Matrix4();
   private readonly centre = new THREE.Vector3();
@@ -26,7 +28,10 @@ export class Lighting {
     this.sun.shadow.mapSize.set(2048, 2048);
     this.hemi = new THREE.HemisphereLight(0xbfd9ef, 0x6b5a3a, 0.9);
     this.hemi.name = 'hemisphere';
-    scene.add(this.sun, this.sun.target, this.hemi);
+    this.fill = new THREE.DirectionalLight(0xc9dcf0, 0);
+    this.fill.name = 'sky-fill';
+    this.fill.castShadow = false;
+    scene.add(this.sun, this.sun.target, this.hemi, this.fill, this.fill.target);
   }
 
   configure(shadows: boolean, mapSize: number, radius: number): void {
@@ -48,6 +53,13 @@ export class Lighting {
     this.hemi.color.copy(atmo.hemiSky);
     this.hemi.groundColor.copy(atmo.hemiGround);
     this.hemi.intensity = atmo.hemiIntensity;
+    this.fill.color.copy(atmo.fillColor);
+    this.fill.intensity = atmo.fillIntensity;
+    // directional lights shine from position towards target: keep the pair at the origin offset
+    this.fill.position.copy(atmo.fillDir);
+    this.fill.target.position.set(0, 0, 0);
+    this.fill.updateMatrixWorld();
+    this.fill.target.updateMatrixWorld();
     if (!this.sun.castShadow) return;
     this.sun.shadow.intensity = shadowsActive ? atmo.shadowStrength : 0;
     // keep the map alive: always render it at least once, then only while shadows matter
@@ -97,5 +109,6 @@ export class Lighting {
     this.sun.shadow.map?.dispose();
     this.sun.dispose();
     this.hemi.dispose();
+    this.fill.dispose();
   }
 }

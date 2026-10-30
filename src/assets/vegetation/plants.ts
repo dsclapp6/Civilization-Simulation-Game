@@ -14,7 +14,7 @@ export interface PlantSpec {
   build(b: MeshBuilder, lod: 0 | 1 | 2): void;
 }
 
-const BARK = 0x5b4632, BARK_OAK = 0x544232, BARK_GREY = 0x8a8a80, BIRCH = 0xe8e4d8, BIRCH_MARK = 0x3a3632;
+const BARK = 0x5b4632, BARK_OAK = 0x544232, BARK_GREY = 0x8a8a80, BIRCH = 0xe8e4d8, BIRCH_MARK = 0x6e6860;
 const PINE_UP = 0xa0603c, PINE_LO = 0x5e4636, DEAD = 0x8f877c;
 
 /** Grey shade multipliers for foliage faces: lighter on top, darker beneath. */
@@ -124,7 +124,8 @@ export const PLANTS: Record<ScatterKind, PlantSpec> = {
       setSway(b, H, 0.45, 1.3);
       const lean = 0.5;
       if (lod === 2) { spike(b, 9, 0.22, BIRCH); octa(b, [lean * 0.7, 9.0, 0], [2.1, 3.6, 2.1], true, 0); return; }
-      const segs: [V3, V3, number][] = [[[0, -0.3, 0], [lean * 0.25, 3, 0], BIRCH], [[lean * 0.25, 3, 0], [lean * 0.5, 3.6, 0], BIRCH_MARK], [[lean * 0.5, 3.6, 0], [lean * 0.75, 7.5, 0], BIRCH], [[lean * 0.75, 7.5, 0], [lean * 0.85, 8.0, 0], BIRCH_MARK], [[lean * 0.85, 8.0, 0], [lean, 11.5, 0], BIRCH]];
+      // white bark with two narrow grey-black lenticel bands (wide near-black rings read as a stripe)
+      const segs: [V3, V3, number][] = [[[0, -0.3, 0], [lean * 0.27, 3.2, 0], BIRCH], [[lean * 0.27, 3.2, 0], [lean * 0.3, 3.46, 0], BIRCH_MARK], [[lean * 0.3, 3.46, 0], [lean * 0.75, 7.5, 0], BIRCH], [[lean * 0.75, 7.5, 0], [lean * 0.78, 7.72, 0], BIRCH_MARK], [[lean * 0.78, 7.72, 0], [lean, 11.5, 0], BIRCH]];
       if (lod === 1) bark(b, [0, -0.3, 0], [lean, 10, 0], 0.22, 0.1, 4, BIRCH);
       else {
         segs.forEach(([a, c, col], i) => bark(b, a, c, 0.24 - i * 0.03, 0.21 - i * 0.03, 6, col));

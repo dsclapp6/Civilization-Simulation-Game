@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { PALETTE } from '../../src/assets/palette';
 import { daylight, type Season } from '../../src/core/time';
-import { computeAtmosphere, createAtmosphereState, sunDirection, type AtmosphereInput } from '../../src/render/sky/atmosphere';
+import { computeAtmosphere, createAtmosphereState, FILL_DAY, HEMI_DAY, HEMI_GROUND, SUN_NOON, sunDirection, type AtmosphereInput } from '../../src/render/sky/atmosphere';
 
 const base = (dayFraction: number, season: Season = 1): AtmosphereInput => ({
   dayFraction, season, seasonProgress: 0.2, absDay: 20, cloud: 0, rain: 0, snow: 0, fog: 0,
@@ -31,13 +31,17 @@ describe('atmosphere', () => {
     expect(sunDirection(0.5, 1, 0.2, v)).toBeGreaterThan(sunDirection(0.5, 3, 0.2, v) + 0.2);
   });
 
-  it('matches the nominal lighting at clear noon (ARCHITECTURE §5)', () => {
+  it('matches the nominal lighting at clear noon (docs/ART.md section 6)', () => {
     const a = computeAtmosphere(base(0.5), PALETTE, createAtmosphereState());
     expect(a.lightIsMoon).toBe(false);
-    expect(a.lightIntensity).toBeCloseTo(3.0, 1);
-    expect(a.hemiIntensity).toBeCloseTo(0.9, 1);
+    expect(a.lightIntensity).toBeCloseTo(SUN_NOON, 1);
+    expect(a.hemiIntensity).toBeCloseTo(HEMI_DAY, 1);
     expect(a.hemiSky.getHex()).toBe(0xbfd9ef);
-    expect(a.hemiGround.getHex()).toBe(0x6b5a3a);
+    expect(a.hemiGround.getHex()).toBe(HEMI_GROUND);
+    // the sky fill comes from the side away from the sun, from above
+    expect(a.fillIntensity).toBeCloseTo(FILL_DAY, 1);
+    expect(a.fillDir.y).toBeGreaterThan(0.3);
+    expect(a.fillDir.x * a.sunDir.x + a.fillDir.z * a.sunDir.z).toBeLessThan(0);
     expect(a.exposure).toBeCloseTo(1.0, 2);
     expect(a.day).toBe(1);
     expect(a.night).toBe(0);
@@ -51,6 +55,7 @@ describe('atmosphere', () => {
     expect(a.lightColor.b).toBeGreaterThan(a.lightColor.r);
     expect(a.hemiIntensity).toBeCloseTo(0.27 + 0.75, 1);
     expect(a.hemiSky.getHex()).toBe(PALETTE.ambient.night);
+    expect(a.fillIntensity).toBe(0);
     expect(a.exposure).toBeCloseTo(1.0, 2);
     expect(a.starAlpha).toBeGreaterThan(0.5);
     expect(a.nightLight).toBeGreaterThan(0.9);
@@ -61,6 +66,15 @@ describe('atmosphere', () => {
     const a = computeAtmosphere(base(d.sunset - 0.01), PALETTE, createAtmosphereState());
     expect(a.dusk).toBeGreaterThan(0.5);
     expect(a.lightColor.r).toBeGreaterThan(a.lightColor.b * 1.5);
+  });
+
+  it('lights shaded walls well at noon: sky fill reaches a third of the sun', () => {
+    const a = computeAtmosphere(base(0.5), PALETTE, createAtmosphereState());
+    // irradiance on a wall facing away from the sun vs. flat ground in the sun (rough check)
+    const wallShade = a.hemiIntensity * 0.5 + a.fillIntensity * Math.hypot(a.fillDir.x, a.fillDir.z);
+    const groundSun = a.lightIntensity * a.lightDir.y + a.hemiIntensity;
+    expect(wallShade / groundSun).toBeGreaterThan(0.25);
+    expect(wallShade / groundSun).toBeLessThan(0.5);
   });
 
   it('thickens fog and dims the sun in bad weather', () => {

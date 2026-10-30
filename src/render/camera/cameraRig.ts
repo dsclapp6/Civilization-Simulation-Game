@@ -18,6 +18,11 @@ interface Pose { pos: THREE.Vector3; quat: THREE.Quaternion; fov: number }
 const FOLLOW_MIN = 2.2;
 const FOLLOW_MAX = 140;
 const MAP_MIN = 450;
+/** Aiming: shoulder offset to the right (m) and boom length. */
+const AIM_SHOULDER = 0.62;
+const AIM_DISTANCE = 3.2;
+/** Extra boom pitches tried, in order, when the way back is blocked. */
+const PITCH_LIFTS = [0, 0.12, 0.24, 0.36];
 const MAP_MAX = 30000;
 
 export class CameraRig {
@@ -53,6 +58,13 @@ export class CameraRig {
   private readonly m = new THREE.Matrix4();
   private readonly up = new THREE.Vector3(0, 1, 0);
   private readonly focusTmp = new THREE.Vector3();
+  private readonly probe = new THREE.Vector3();
+  private readonly side = new THREE.Vector3();
+  /** Extra pitch (smoothed) that lifts the boom over a roof or wall behind the character. */
+  private pitchLift = 0;
+  /** Over-the-shoulder aim blend (0 normal follow … 1 aiming a bow or crossbow) and its target. */
+  private aimK = 0;
+  private aimWant = false;
 
   constructor(aspect: number, private readonly env: CameraEnv) {
     this.camera = new THREE.PerspectiveCamera(55, aspect, 0.2, 60000);
@@ -158,6 +170,13 @@ export class CameraRig {
     this.freePitch = Math.atan2(dy, Math.hypot(dx, dz));
   }
 
+  /**
+   * Aiming a bow or crossbow: the follow camera eases in over the right shoulder, so the
+   * character stands left of the screen centre (the reticle) and the target is in clear view.
+   */
+  setAim(on: boolean, heldSeconds = 0): void { this.aimWant = on; this.aimHeld = on ? heldSeconds : 0; }
+  private aimHeld = 0;
+
   /** Jump to the end of any running mode transition. */
   skipTransition(): void { this.transFrom = null; }
 
@@ -191,24 +210,21 @@ export class CameraRig {
     out.fov = fov;
   }
 
-  private computeFollow(out: Pose, focus: THREE.Vector3, dt: number): void {
-    if (!this.targetValid) { this.target.copy(focus); this.targetValid = true; }
-    const k = 1 - Math.exp(-dt * 14);
-    this.target.lerp(focus, k);
-    if (this.target.distanceTo(focus) > 40) this.target.copy(focus);
-    const head = this.tmp2.copy(this.target);
-    head.y += 1.55;
-    const cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
-    const dir = this.tmp.set(-Math.sin(this.yaw) * cp, sp, -Math.cos(this.yaw) * cp);
-    // collision: terrain along the boom (bisected to the first obstruction) and buildings
-    let allowed = this.distance;
+  /**
+   * How far the boom can reach from `head` along `dir` before terrain or a building gets in the
+   * way (terrain bisected along the boom; buildings probed with a small bundle of parallel rays
+   * so the near plane does not slice into a wall the centre ray just misses).
+   */
+  private boomReach(head: THREE.Vector3, dir: THREE.Vector3, want: number): number {
+    const ws = this.env.worldSize;
+    let allowed = want;
     const blocked = (d: number) => {
       const x = head.x + dir.x * d, y = head.y + dir.y * d, z = head.z + dir.z * d;
-      return y < this.env.heightAt(clamp(x, 0, this.env.worldSize), clamp(z, 0, this.env.worldSize)) + 0.45;
+      return y < this.env.heightAt(clamp(x, 0, ws), clamp(z, 0, ws)) + 0.45;
     };
     let prev = 0;
     for (let i = 1; i <= 12; i++) {
-      const d = (i / 12) * this.distance;
+      const d = (i / 12) * want;
       if (blocked(d)) {
         let a = prev, b = d;
         for (let k = 0; k < 6; k++) { const m = (a + b) / 2; if (blocked(m)) b = m; else a = m; }
@@ -217,18 +233,82 @@ export class CameraRig {
       }
       prev = d;
     }
-    if (this.env.raycastBuildings && this.distance > 1.5) {
-      this.ray.origin.copy(head);
-      this.ray.direction.copy(dir);
-      const hit = this.env.raycastBuildings(this.ray, this.distance);
-      if (hit !== null) allowed = Math.min(allowed, Math.max(1.2, hit - 0.4));
+    if (this.env.raycastBuildings && want > 1.5) {
+      // centre, left, right and above: the camera's near plane is ~0.3 m wide at its distance
+      const side = this.side.set(-dir.z, 0, dir.x);
+      if (side.lengthSq() < 1e-6) side.set(1, 0, 0); else side.normalize();
+      for (let k = 0; k < 4; k++) {
+        const o = this.probe.copy(head);
+        if (k === 1) o.addScaledVector(side, 0.35);
+        else if (k === 2) o.addScaledVector(side, -0.35);
+        else if (k === 3) o.y += 0.3;
+        this.ray.origin.copy(o);
+        this.ray.direction.copy(dir);
+        const hit = this.env.raycastBuildings(this.ray, want);
+        if (hit !== null) allowed = Math.min(allowed, Math.max(1.2, hit - 0.45));
+      }
     }
+    return allowed;
+  }
+
+  private boomDir(pitch: number, out: THREE.Vector3): THREE.Vector3 {
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    return out.set(-Math.sin(this.yaw) * cp, sp, -Math.cos(this.yaw) * cp);
+  }
+
+  private computeFollow(out: Pose, focus: THREE.Vector3, dt: number): void {
+    if (!this.targetValid) { this.target.copy(focus); this.targetValid = true; }
+    const k = 1 - Math.exp(-dt * 14);
+    this.target.lerp(focus, k);
+    if (this.target.distanceTo(focus) > 40) this.target.copy(focus);
+    const head = this.tmp2.copy(this.target);
+    head.y += 1.55;
+    // over-the-shoulder aim: shift the boom origin (and the look point with it) to the right
+    const aimT = this.aimWant ? 1 : 0;
+    this.aimK += (aimT - this.aimK) * (dt > 0 ? 1 - Math.exp(-dt * 7) : 1);
+    // keyed to how long the aim has been held (simulation time), so it is in place even when
+    // frames are few (screenshots, slow machines)
+    if (this.aimWant) this.aimK = Math.max(this.aimK, Math.min(1, this.aimHeld * 3.5));
+    if (this.aimK > 1e-3) {
+      head.x += -Math.cos(this.yaw) * AIM_SHOULDER * this.aimK;
+      head.z += Math.sin(this.yaw) * AIM_SHOULDER * this.aimK;
+      head.y += 0.1 * this.aimK;
+    }
+    // In tight spots (a cottage right behind the character, a narrow lane) a camera that only
+    // pulls in ends up in the character's hair. Prefer to crane up over the obstacle: find the
+    // smallest extra pitch that keeps most of the wanted distance, and ease towards it.
+    const want = this.distance + (Math.min(this.distance, AIM_DISTANCE) - this.distance) * this.aimK;
+    let lift = 0;
+    if (dt > 0 || this.pitchLift === 0) {
+      let best = -1, bestLift = 0;
+      for (const l of PITCH_LIFTS) {
+        const p = this.pitch + l;
+        if (l > 0 && p > 1.3) break;
+        const reach = this.boomReach(head, this.boomDir(p, this.tmp), want);
+        if (reach > best + 0.6 + l * 4) { best = reach; bestLift = l; }
+        if (reach >= Math.min(want - 0.3, Math.max(want * 0.8, 3.5))) { bestLift = l; break; }
+      }
+      lift = bestLift;
+      // rise quickly, settle back slowly
+      const rate = lift > this.pitchLift ? 5 : 1.4;
+      this.pitchLift += (lift - this.pitchLift) * (dt > 0 ? 1 - Math.exp(-dt * rate) : 1);
+    }
+    const dir = this.boomDir(this.pitch + this.pitchLift, this.tmp);
+    const allowed = this.boomReach(head, dir, want);
+    // forward on the ground (dir is reused for the position below)
+    const fl = Math.hypot(dir.x, dir.z) || 1;
+    const fwdX = -dir.x / fl, fwdZ = -dir.z / fl;
     if (allowed < this.curDistance) this.curDistance = allowed;
     else this.curDistance += (allowed - this.curDistance) * (1 - Math.exp(-dt * 3));
     const pos = this.tmp.set(head.x + dir.x * this.curDistance, head.y + dir.y * this.curDistance, head.z + dir.z * this.curDistance);
     const ground = this.env.heightAt(clamp(pos.x, 0, this.env.worldSize), clamp(pos.z, 0, this.env.worldSize));
     if (pos.y < ground + 0.45) pos.y = ground + 0.45;
-    const look = this.tmp2.set(head.x, head.y + Math.max(0, (0.2 - this.pitch)) * 0.8, head.z);
+    const pitch = this.pitch + this.pitchLift;
+    // pulled in close by a wall: look over the character's head down the way ahead instead of
+    // filling the screen with the back of it
+    const close = want > 4 ? smoothstep(4.5, 1.6, this.curDistance) : 0;
+    pos.y += close * 0.15;
+    const look = this.tmp2.set(head.x + fwdX * close * 1.1, head.y + Math.max(0, (0.2 - pitch)) * 0.8, head.z + fwdZ * close * 1.1);
     this.lookPose(out, pos, look, 55);
   }
 

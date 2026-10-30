@@ -49,8 +49,15 @@ float mlSnowMask(vec3 nView, vec3 wpos, float snow, float hold) {
 }
 `;
 
+/**
+ * LOD cross-fade of building meshes (x = progress 0..1, y = 0 off, 1 incoming, 2 outgoing). One
+ * shared value: the renderer sets it per draw (Mesh.onBeforeRender) and clears it afterwards.
+ */
+export const BUILDING_FADE = { value: new THREE.Vector2(0, 0) };
+
 function patchBuildingShader(shader: THREE.WebGLProgramParametersWithUniforms, u: SharedUniforms): void {
   shader.uniforms.uSnow = u.uSnow;
+  shader.uniforms.uBFade = BUILDING_FADE;
   shader.uniforms.uGrassTint = u.uGrassTint;
   shader.uniforms.uSnowColor = u.uSnowColor;
   shader.vertexShader = shader.vertexShader
@@ -72,10 +79,19 @@ vSurf = aSurf;
 uniform float uSnow;
 uniform vec3 uGrassTint;
 uniform vec3 uSnowColor;
+uniform vec2 uBFade;
 varying vec2 vSurf;
 varying vec3 vWPos;
 ${GLSL_NOISE}
 ${GLSL_SNOW}`)
+    .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+if (uBFade.y > 0.5) {
+  // screen-door LOD cross-fade: the incoming model takes the pattern cells below the progress,
+  // the outgoing one keeps the rest, so the pair always covers the building exactly once
+  vec2 bfc = mod(floor(gl_FragCoord.xy), 4.0);
+  float bth = mod(bfc.x * 4.0 + bfc.y * 7.0, 16.0) / 16.0 + 1.0 / 32.0;
+  if (uBFade.y < 1.5 ? bth > uBFade.x : bth <= uBFade.x) discard;
+}`)
     .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
 diffuseColor.rgb *= mix(vec3(1.0), uGrassTint, vSurf.y);
 diffuseColor.rgb = mix(diffuseColor.rgb, uSnowColor, mlSnowMask(normal, vWPos, uSnow, vSurf.x));`);
@@ -109,9 +125,19 @@ export function createWindowMaterial(u: SharedUniforms, glow: { value: number })
   m.onBeforeCompile = (s) => {
     s.uniforms.uGlow = glow;
     s.uniforms.uSnow = u.uSnow;
+    s.uniforms.uBFade = BUILDING_FADE;
     s.fragmentShader = s.fragmentShader
       .replace('#include <common>', `#include <common>
-uniform float uGlow;`)
+uniform float uGlow;
+uniform vec2 uBFade;`)
+      .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+if (uBFade.y > 0.5) {
+  // screen-door LOD cross-fade: the incoming model takes the pattern cells below the progress,
+  // the outgoing one keeps the rest, so the pair always covers the building exactly once
+  vec2 bfc = mod(floor(gl_FragCoord.xy), 4.0);
+  float bth = mod(bfc.x * 4.0 + bfc.y * 7.0, 16.0) / 16.0 + 1.0 / 32.0;
+  if (uBFade.y < 1.5 ? bth > uBFade.x : bth <= uBFade.x) discard;
+}`)
       .replace('#include <color_fragment>', '')
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
 totalEmissiveRadiance += vColor.rgb * uGlow;`);
@@ -288,6 +314,7 @@ attribute vec3 aCenter;
 varying float vLeaf;
 varying float vInst;
 varying vec3 vWPos;
+varying float vLodDist;
 `;
 
 const GLSL_VEG_VERTEX = /* glsl */ `
@@ -300,6 +327,7 @@ const GLSL_VEG_VERTEX = /* glsl */ `
   #endif
   vec3 wO = (modelMatrix * vec4(instO, 1.0)).xyz;
   vInst = fract(sin(dot(wO.xz, vec2(12.9898, 78.233))) * 43758.5453);
+  vLodDist = distance(wO.xz, cameraPosition.xz);
   vLeaf = aLeaf;
   if (aLeaf >= 2.0) {
     // Petals (wildflowers): open with the blossom season.
@@ -332,6 +360,7 @@ const GLSL_VEG_VERTEX = /* glsl */ `
 
 function bindVegUniforms(s: THREE.WebGLProgramParametersWithUniforms, u: SharedUniforms, f: FoliageUniforms): void {
   s.uniforms.uTime = u.uTime;
+  s.uniforms.uNight = u.uNight;
   s.uniforms.uWindDir = u.uWindDir;
   s.uniforms.uWindAmp = u.uWindAmp;
   s.uniforms.uSnow = u.uSnow;
@@ -354,11 +383,19 @@ function bindVegUniforms(s: THREE.WebGLProgramParametersWithUniforms, u: SharedU
 export function createVegetationMaterial(u: SharedUniforms, f: FoliageUniforms, doubleSided = false, soft = false): THREE.MeshLambertMaterial {
   const m = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: !soft, side: doubleSided ? THREE.DoubleSide : THREE.FrontSide });
   m.name = soft ? 'ml-vegetation-soft' : 'ml-vegetation';
+  // Distance cross-fade window (x..y fades in, z..w fades out, metres from the camera, per
+  // instance) for LOD bands: the renderer sets it per draw (onBeforeRender) and resets it after.
+  const lodFade = { value: new THREE.Vector4(...LOD_FADE_NONE) };
+  m.userData.lodFade = lodFade;
   m.onBeforeCompile = (s) => {
     bindVegUniforms(s, u, f);
+    s.uniforms.uLodFade = lodFade;
     if (soft) {
       // Thin plants keep their up-bent normals on both sides so they light like the ground.
       s.fragmentShader = s.fragmentShader.replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin.replace('normal *= faceDirection;', ''));
+      // ...but their pale blades caught the moon and sky fill and glowed over the dark ground at
+      // night: dim them with the night level
+      s.fragmentShader = s.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ndiffuseColor.rgb *= 1.0 - uNight * 0.45;');
     }
     s.vertexShader = s.vertexShader
       .replace('#include <common>', `#include <common>
@@ -379,8 +416,23 @@ uniform float uSnowHold;
 varying float vLeaf;
 varying float vInst;
 varying vec3 vWPos;
+uniform vec4 uLodFade;
+uniform float uNight;
+varying float vLodDist;
 ${GLSL_NOISE}
 ${GLSL_SNOW}`)
+      .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+{
+  // dithered LOD cross-fade: a 4x4 ordered pattern; the fading-out band keeps the cells below
+  // its weight and the fading-in band the complementary cells, so a tree is never see-through
+  float lfIn = smoothstep(uLodFade.x, uLodFade.y, vLodDist);
+  float lfOut = 1.0 - smoothstep(uLodFade.z, uLodFade.w, vLodDist);
+  if (lfIn * lfOut < 0.999) {
+    vec2 fc = mod(floor(gl_FragCoord.xy), 4.0);
+    float bayer = mod(fc.x * 4.0 + fc.y * 7.0, 16.0) / 16.0 + 1.0 / 32.0;
+    if (bayer >= lfOut || bayer < 1.0 - lfIn) discard;
+  }
+}`)
       .replace('#include <color_fragment>', `
 {
   vec3 base = vColor.rgb;
@@ -389,7 +441,8 @@ ${GLSL_SNOW}`)
     // Wildflower petals: poppy, cornflower, ox-eye daisy, buttercup, campion by instance.
     float k = fract(vInst * 3.31 + floor(vLeaf * 3.0) * 0.37);
     vec3 pc = k < 0.22 ? vec3(0.78, 0.06, 0.04) : k < 0.42 ? vec3(0.16, 0.26, 0.85) : k < 0.66 ? vec3(0.92, 0.9, 0.84) : k < 0.86 ? vec3(0.95, 0.72, 0.05) : vec3(0.75, 0.22, 0.45);
-    diffuseColor.rgb *= pc * base;
+    // flowers lose their colour in the dark instead of glowing in the grass
+    diffuseColor.rgb *= mix(pc * base, vec3(dot(pc * base, vec3(0.3, 0.55, 0.15))), uNight * 0.7) * (1.0 - uNight * 0.45);
   } else if (vLeaf >= 0.0) {
     vec3 tint = mix(uTintA, uTintB, smoothstep(0.15, 0.85, vInst));
     vec3 c = tint * base * iv;
@@ -408,6 +461,9 @@ diffuseColor.rgb = mix(diffuseColor.rgb, uSnowColor, mlSnowMask(normal, vWPos, u
   m.customProgramCacheKey = () => (soft ? 'ml-vegetation-soft' : 'ml-vegetation');
   return m;
 }
+
+/** uLodFade value meaning "always drawn". */
+export const LOD_FADE_NONE: [number, number, number, number] = [-2, -1, 1e9, 2e9];
 
 /** Depth material for vegetation shadows that follows sway and leaf fall. */
 export function createVegetationDepthMaterial(u: SharedUniforms, f: FoliageUniforms, doubleSided = false): THREE.MeshDepthMaterial {

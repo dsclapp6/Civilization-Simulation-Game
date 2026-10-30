@@ -3,6 +3,9 @@
 // and aggregated into one InstancedMesh per (LOD band, kind) from the chunks currently in that
 // band and in view. Felled scatter ids (view.felled()) are skipped; chunks containing changed ids
 // are rebuilt. Shadows use the kit's depth material so they follow sway and leaf fall.
+// Band edges do not pop: chunks straddling the near/mid edge feed both meshes and each instance
+// cross-fades (dithered, by its own distance) over FADE metres; grass and small plants fade out
+// at their radius instead of vanishing chunk by chunk.
 import * as THREE from 'three';
 import { hash01, hash3 } from '../../core/math';
 import { CHUNK_SIZE, CHUNKS_PER_SIDE, type ScatterItem, type ScatterKind, type WorldModel } from '../../world/types';
@@ -37,6 +40,8 @@ interface VegChunk {
   /** chunkIndex values found in item ids (for mapping felled ids back to chunks). */
   idChunk: number;
   band: number;
+  /** Near-band chunk reaching past the near/mid fade start: also feeds the mid band. */
+  edge: boolean;
   visible: boolean;
   lastUsed: number;
   /** Distance from the camera at the last evaluation (m). */
@@ -48,6 +53,8 @@ interface BandMesh {
   capacity: number;
   dirty: boolean;
   count: number;
+  /** Per-instance distance fade window of this band (see createVegetationMaterial). */
+  fade: THREE.Vector4;
 }
 
 export interface VegetationSettings {
@@ -71,6 +78,11 @@ const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
 const _y = new THREE.Vector3(0, 1, 0);
 const _box = new THREE.Box3();
+/** Width of the dithered cross-fade at the grass / near / mid band edges (m). */
+const FADE = 18;
+/** Farthest instance in a chunk from its nearest point (chunk diagonal). */
+const CHUNK_REACH = CHUNK_SIZE * Math.SQRT2;
+const NO_FADE = new THREE.Vector4(-2, -1, 1e9, 2e9);
 const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 
@@ -117,7 +129,7 @@ export class VegetationSystem {
       }
     }
     for (let b = 0; b < 4; b++) {
-      this.meshes.push(KINDS.map(() => ({ mesh: null, capacity: 0, dirty: false, count: 0 })));
+      this.meshes.push(KINDS.map(() => ({ mesh: null, capacity: 0, dirty: false, count: 0, fade: NO_FADE.clone() })));
     }
   }
 
@@ -227,13 +239,18 @@ export class VegetationSystem {
         c.lastUsed = this.frame;
         if (Math.abs(c.dist - d) > 40) this.markBandDirty(c);
         c.dist = d;
-        const band = d < s.grass ? 0 : d < s.near ? 1 : d < s.mid ? 2 : 3;
+        // bands by horizontal distance, the same measure the shader fades by (instance distances
+        // in a chunk are never below the chunk's), so the near/mid hand-over has no gaps
+        const dh = Math.sqrt(dx * dx + dz * dz);
+        const band = dh < s.grass ? 0 : dh < s.near ? 1 : dh < s.mid ? 2 : 3;
+        const edge = band <= 1 && dh + CHUNK_REACH > s.near - FADE;
         _box.set(_v1.set(x0, c.minY - 2, z0), _v2.set(x0 + CHUNK_SIZE, c.maxY + 30, z0 + CHUNK_SIZE));
         const vis = d < 40 || this.wideFrustum.intersectsBox(_box);
-        if (band !== c.band || vis !== c.visible) {
+        if (band !== c.band || vis !== c.visible || edge !== c.edge) {
           this.markBandDirty(c);
           c.band = band;
           c.visible = vis;
+          c.edge = edge;
           this.markBandDirty(c);
         }
       }
@@ -264,6 +281,7 @@ export class VegetationSystem {
       if (!c.kinds[k]) continue;
       const b = this.bandFor(KINDS[k], c.band);
       if (b >= 0) this.meshes[b][k].dirty = true;
+      if (c.edge && this.bandFor(KINDS[k], 2) === 2) this.meshes[2][k].dirty = true;
     }
   }
 
@@ -336,7 +354,7 @@ export class VegetationSystem {
       if (inWood[idx]) arr.farCount++;
     }
     if (minY === Infinity) { minY = this.world.heightAt(cx * CHUNK_SIZE + 32, cz * CHUNK_SIZE + 32); maxY = minY; }
-    const chunk: VegChunk = { key, cx, cz, minY, maxY, kinds, idChunk, band: -1, visible: false, lastUsed: this.frame, dist: Infinity };
+    const chunk: VegChunk = { key, cx, cz, minY, maxY, kinds, idChunk, band: -1, edge: false, visible: false, lastUsed: this.frame, dist: Infinity };
     this.chunks.set(key, chunk);
   }
 
@@ -361,13 +379,22 @@ export class VegetationSystem {
           if (!c.visible || c.band < 0) continue;
           const arr = c.kinds[k];
           if (!arr || !arr.count) continue;
-          if (this.bandFor(KINDS[k], c.band) !== b) continue;
+          const own = this.bandFor(KINDS[k], c.band) === b;
+          // near chunks straddling the near/mid edge also feed the mid band (cross-fade)
+          if (!own && !(b === 2 && c.edge && this.bandFor(KINDS[k], 2) === 2)) continue;
           if (b === 3 && !arr.farCount) continue;
           list.push(arr);
           // coarser terrain LODs sag below hilltops; sink distant plants so they never float
           sinks.push(Math.min(4, Math.max(0, (c.dist - 140) * 0.0035)));
           need += b === 3 ? arr.farCount : arr.count;
         }
+        // per-instance fade windows: grass fades out at its radius, the near band hands over to
+        // the mid band over FADE metres, kinds that stop at the near band fade out there
+        const reach = REACH[KINDS[k]];
+        if (b === 0) bm.fade.set(-2, -1, s.grass - FADE * 0.7, s.grass);
+        else if (b === 1) bm.fade.set(-2, -1, s.near - FADE, s.near);
+        else if (b === 2) bm.fade.set(s.near - FADE, s.near, reach === 2 ? s.mid - FADE : 1e9, reach === 2 ? s.mid : 2e9);
+        else bm.fade.copy(NO_FADE);
         const lodK = (b <= 1 ? 0 : b === 2 ? 1 : 2) as 0 | 1 | 2;
         const cap = Math.min(s.maxPerKind, Math.floor(s.kindTris / kitTriangles(this.kit(KINDS[k], lodK))));
         const ratio = need > cap ? cap / need : 1;
@@ -391,6 +418,7 @@ export class VegetationSystem {
           if (kit.depthMaterial) mesh.customDepthMaterial = kit.depthMaterial;
           mesh.receiveShadow = true;
           mesh.name = `veg:${KINDS[k]}:${b}`;
+
           mesh.matrixAutoUpdate = false;
           this.root.add(mesh);
           bm.mesh = mesh;
@@ -407,6 +435,9 @@ export class VegetationSystem {
           if (sink > 0) for (let q = 0; q < n; q++) mats[(o + q) * 16 + 13] -= sink;
           o += n;
         }
+        // the kit's material is per (kind, lod), and each band uses its own lod: set its fade window
+        const fadeU = (bm.mesh.material as THREE.Material).userData?.lodFade as { value: THREE.Vector4 } | undefined;
+        fadeU?.value.copy(bm.fade);
         bm.mesh.count = o;
         bm.mesh.instanceMatrix.clearUpdateRanges();
         bm.mesh.instanceMatrix.addUpdateRange(0, o * 16);

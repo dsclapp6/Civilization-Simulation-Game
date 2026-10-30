@@ -311,9 +311,10 @@ export function createFxLayer(u: SharedUniforms, envRef: () => AssetEnvironment)
         break;
       case 'hearth_smoke':
         for (let i = 0; i < N(1); i++) {
-          at(e, 0.15); sp.vx = (rnd() - 0.5) * 0.1; sp.vy = 0.55 + rnd() * 0.25; sp.vz = (rnd() - 0.5) * 0.1;
-          col(rnd() < 0.5 ? 0xa4a8ae : 0x8f949a); sp.a = 0.32;
-          sp.life = 6 + rnd() * 3; sp.s0 = 0.35; sp.s1 = 2.4; sp.grav = -0.04; sp.drag = 0.25; sp.wind = 0.9; sp.shape = SHAPE.soft;
+          // wood smoke: a dense blue-grey plume that thins as it spreads (alpha falls with growth)
+          at(e, 0.15); sp.vx = (rnd() - 0.5) * 0.1; sp.vy = 0.6 + rnd() * 0.25; sp.vz = (rnd() - 0.5) * 0.1;
+          col(rnd() < 0.5 ? 0x9a9fa8 : 0x858a93); sp.a = 0.62;
+          sp.life = 7 + rnd() * 3; sp.s0 = 0.5; sp.s1 = 3.6; sp.grav = -0.09; sp.drag = 0.25; sp.wind = 0.75; sp.shape = SHAPE.soft;
           write(alpha, sp);
         }
         break;
@@ -328,7 +329,8 @@ export function createFxLayer(u: SharedUniforms, envRef: () => AssetEnvironment)
     update(dt: number, camera: THREE.Camera): void {
       void dt; void camera;
       const night = envRef().nightLight;
-      light.value = 1 - night * 0.72;
+      // moonlit smoke stays a pale ghost against the night sky instead of vanishing
+      light.value = 1 - night * 0.55;
       flush(alpha);
       flush(add);
     },

@@ -1,6 +1,9 @@
 // Builds one terrain quadtree node: a flat-shaded, per-triangle coloured grid with skirts, plus
 // the coastal sea surface for the same area (depth per vertex for tint and shoreline foam).
-// The job is resumable so generation can be time-sliced across frames.
+// Fine tiles near the camera (quads <= SMOOTH_STEP m) are shaded per vertex instead: colours and
+// ground weights sampled at the grid points (dirt and grass meet in a soft edge instead of a
+// sawtooth) and normals mostly smoothed (a hint of facet is kept), so the ground at the player's
+// feet is not a field of big flat facets. The job is resumable so generation can be time-sliced.
 import { hash3, smoothstep } from '../../core/math';
 import type { Simplex2 } from '../../core/noise';
 import { Ground, type WorldModel } from '../../world/types';
@@ -38,6 +41,13 @@ export interface TerrainNodeData {
   heights: Float32Array;
 }
 
+/** Quads at most this size (m) are shaded per vertex (the near rings around the camera). */
+export const SMOOTH_STEP = 2.5;
+/** How much of the smooth vertex normal replaces the facet normal on smooth tiles. */
+const SMOOTH_NORMAL = 0.82;
+/** Bare rock on slopes is judged over this baseline (m), so road banks and bumps stay grassy. */
+const ROCK_BASELINE = 4;
+
 /** Grounds that are usually thin lines (lanes, river beds): undersampled on coarse tiles. */
 const LINEAR = new Uint8Array(32);
 LINEAR[Ground.Road] = 1; LINEAR[Ground.Path] = 1; LINEAR[Ground.Shingle] = 1; LINEAR[Ground.Mud] = 1;
@@ -65,6 +75,12 @@ export class TerrainNodeJob {
   /** Total build time accumulated across slices (ms). */
   elapsed = 0;
   private readonly samples = new Int32Array(4);
+  /** Smooth tiles: per grid point colour (0..255 floats), ground weights and normal. */
+  private readonly smooth: boolean;
+  private vCol: Float32Array | null = null;
+  private vMat: Uint8Array | null = null;
+  private vNor: Float32Array | null = null;
+  private readonly shadeOut = new Float32Array(8);
 
   constructor(p: TerrainBuildParams) {
     this.p = p;
@@ -79,6 +95,13 @@ export class TerrainNodeJob {
     this.mat = new Uint8Array(verts * 4);
     this.quadTri = new Int32Array(n * n);
     this.seaCell = p.world.macro.water;
+    this.smooth = this.step_ <= SMOOTH_STEP;
+    if (this.smooth) {
+      const W = (n + 1) * (n + 1);
+      this.vCol = new Float32Array(W * 3);
+      this.vMat = new Uint8Array(W * 4);
+      this.vNor = new Float32Array(W * 3);
+    }
   }
 
   /** Advance until finished or the deadline (performance.now() ms) passes. Returns true when done. */
@@ -91,26 +114,29 @@ export class TerrainNodeJob {
     const t0 = performance.now();
     const n = this.n;
     this.progressed = false;
-    while (this.phase < 3) {
-      const est = this.phase === 0 ? this.heightRowMs : this.phase === 1 ? this.quadRowMs : this.quadRowMs * 2;
+    while (this.phase < 4) {
+      const est = this.phase === 0 ? this.heightRowMs : this.phase === 1 ? this.heightRowMs * 3 : this.phase === 2 ? this.quadRowMs : this.quadRowMs * 2;
       const now = performance.now();
       if (now + est > deadline && !(mustProgress && !this.progressed)) break;
       if (this.phase === 0) {
         this.sampleHeightRow(this.row);
-        if (++this.row > n) { this.phase = 1; this.row = 0; }
+        if (++this.row > n) { this.phase = this.smooth ? 1 : 2; this.row = 0; }
         this.heightRowMs = this.heightRowMs * 0.8 + (performance.now() - now) * 0.2;
       } else if (this.phase === 1) {
+        this.shadeVertexRow(this.row);
+        if (++this.row > n) { this.phase = 2; this.row = 0; }
+      } else if (this.phase === 2) {
         this.buildQuadRow(this.row);
-        if (++this.row >= n) { this.phase = 2; this.row = 0; }
+        if (++this.row >= n) { this.phase = 3; this.row = 0; }
         this.quadRowMs = this.quadRowMs * 0.8 + (performance.now() - now) * 0.2;
       } else {
         this.buildSkirts();
-        this.phase = 3;
+        this.phase = 4;
       }
       this.progressed = true;
     }
     this.elapsed += performance.now() - t0;
-    return this.phase === 3;
+    return this.phase === 4;
   }
 
   /** Whether the last step() did any work. */
@@ -119,7 +145,7 @@ export class TerrainNodeJob {
   heightRowMs = 0.04;
   quadRowMs = 0.12;
 
-  get done(): boolean { return this.phase === 3; }
+  get done(): boolean { return this.phase === 4; }
 
   result(): TerrainNodeData {
     const wc = this.waterVerts;
@@ -162,16 +188,100 @@ export class TerrainNodeJob {
     return false;
   }
 
+  /**
+   * Colour and shading weights of one ground sample (shared by the per-triangle and per-vertex
+   * paths). Writes r, g, b (0..255, unclamped) and the four aMat weights (0..255) to `o`.
+   */
+  private shade(g: number, r: number, gg: number, b: number, forest: number, slope: number, ty: number, n0: number, n1: number, n2: number, jitter: number, o: Float32Array): void {
+    const style = this.p.style;
+    const rgb = style.rgb;
+    if (g === Ground.Heath || g === Ground.Moor) {
+      // heather and moorland are patchy, mixed with grass
+      const t = 0.2 + 0.35 * (0.5 + 0.5 * n1);
+      r += (rgb[Ground.Grass * 3] - r) * t; gg += (rgb[Ground.Grass * 3 + 1] - gg) * t; b += (rgb[Ground.Grass * 3 + 2] - b) * t;
+    }
+    // woodland darkening
+    const fw = FOREST_WEIGHT[g];
+    if (fw > 0 && forest > 0.2) {
+      const f = smoothstep(0.2, 0.9, forest) * fw * 0.75;
+      r += (style.forest[0] - r) * f; gg += (style.forest[1] - gg) * f; b += (style.forest[2] - b) * f;
+    }
+    // slope → bare rock
+    const rw = ROCK_WEIGHT[g] * smoothstep(0.17, 0.34, slope);
+    if (rw > 0) {
+      const rv = 0.94 + 0.12 * n2;
+      r += (style.rock[0] * rv - r) * rw; gg += (style.rock[1] * rv - gg) * rw; b += (style.rock[2] * rv - b) * rw;
+    }
+    // under the sea: darker, wetter sand
+    if (ty < -0.2) {
+      const u = smoothstep(-0.2, -6, ty) * 0.5;
+      r += (style.sandWet[0] - r) * u; gg += (style.sandWet[1] - gg) * u; b += (style.sandWet[2] - b) * u;
+    }
+    // natural variation: broad patches + fine per-facet jitter
+    const grassW = GRASS_WEIGHT[g] * (1 - rw);
+    const bright = 1 + n0 * 0.06 + n1 * 0.07 + n2 * 0.03 + jitter;
+    // meadows drift between lush blue-green and dry yellow-green over a few hundred metres
+    const dry = (n0 * 0.7 + n1 * 0.3) * grassW;
+    o[0] = (r + dry * 16) * bright;
+    o[1] = (gg + dry * 3) * bright;
+    o[2] = (b - dry * 10) * bright;
+    const snowW = SNOW_WEIGHT[g] * (1 - smoothstep(0.22, 0.45, slope)) * (1 - smoothstep(0.55, 1, forest) * 0.3);
+    // 4th channel: woodland cover (distant forests are tinted towards canopy colour)
+    o[3] = grassW * 255; o[4] = snowW * 255; o[5] = WET_WEIGHT[g] * 255; o[6] = forest * FOREST_WEIGHT[g] * 255;
+  }
+
+  /** Height on the grid, or from the world just outside it (smooth normals match across tiles). */
+  private hAt(i: number, j: number): number {
+    const n = this.n;
+    if (i >= 0 && j >= 0 && i <= n && j <= n) return this.heights[j * (n + 1) + i];
+    const { world, x0, z0 } = this.p;
+    const s = this.step_;
+    return world.heightAt(Math.min(world.size, Math.max(0, x0 + i * s)), Math.min(world.size, Math.max(0, z0 + j * s)));
+  }
+
+  /** Smooth tiles: ground, colour, weights and normal at each grid point of row j. */
+  private shadeVertexRow(j: number): void {
+    const { world, noise, x0, z0 } = this.p;
+    const n = this.n, s = this.step_, W = n + 1;
+    const vCol = this.vCol!, vMat = this.vMat!, vNor = this.vNor!, o = this.shadeOut, rgb = this.p.style.rgb;
+    const k = Math.max(1, Math.round(ROCK_BASELINE / (2 * s)));
+    for (let i = 0; i <= n; i++) {
+      const x = Math.min(x0 + i * s, world.size), z = Math.min(z0 + j * s, world.size);
+      const h = this.heights[j * W + i];
+      // normal from central differences over one cell
+      const dx = (this.hAt(i + 1, j) - this.hAt(i - 1, j)) / (2 * s);
+      const dz = (this.hAt(i, j + 1) - this.hAt(i, j - 1)) / (2 * s);
+      const inv = 1 / Math.sqrt(dx * dx + 1 + dz * dz);
+      const vi = j * W + i;
+      vNor[vi * 3] = -dx * inv; vNor[vi * 3 + 1] = inv; vNor[vi * 3 + 2] = -dz * inv;
+      // rock: slope over a wider baseline
+      const rdx = (this.hAt(i + k, j) - this.hAt(i - k, j)) / (2 * k * s);
+      const rdz = (this.hAt(i, j + k) - this.hAt(i, j - k)) / (2 * k * s);
+      const slope = 1 - 1 / Math.sqrt(rdx * rdx + 1 + rdz * rdz);
+      let g: number = world.groundAt(x, z);
+      if (this.p.skipRoads && (g === Ground.Road || g === Ground.Path || g === Ground.Cobbles)) g = Ground.Grass;
+      const forest = world.forestAt(x, z);
+      const n0 = noise.noise(x / 420 - 31.7, z / 420 + 8.3);
+      const n1 = noise.noise(x / 85, z / 85);
+      const n2 = noise.noise(x / 23 + 17.3, z / 23 - 4.1);
+      this.shade(g, rgb[g * 3], rgb[g * 3 + 1], rgb[g * 3 + 2], forest, slope, h, n0, n1, n2, 0, o);
+      vCol[vi * 3] = o[0]; vCol[vi * 3 + 1] = o[1]; vCol[vi * 3 + 2] = o[2];
+      for (let c = 0; c < 4; c++) vMat[vi * 4 + c] = Math.round(o[3 + c]);
+    }
+  }
+
   private buildQuadRow(j: number): void {
     const { world, style, noise, x0, z0, seed } = this.p;
     const n = this.n, s = this.step_, H = this.heights, W = n + 1;
     const pos = this.position, nor = this.normal, col = this.color, mat = this.mat;
     const fineGround = s <= 4.5;
+    const smooth = this.smooth;
+    const vCol = this.vCol, vMat = this.vMat, vNor = this.vNor, o = this.shadeOut;
     for (let i = 0; i < n; i++) {
       const h00 = H[j * W + i], h10 = H[j * W + i + 1], h01 = H[(j + 1) * W + i], h11 = H[(j + 1) * W + i + 1];
       const lx = i * s, lz = j * s;
       const qcx = x0 + lx + s * 0.5, qcz = z0 + lz + s * 0.5;
-      const forest = world.forestAt(qcx, qcz);
+      const forest = smooth ? 0 : world.forestAt(qcx, qcz);
       // coarse tiles: one representative ground (for shading weights) plus a 2x2 supersampled
       // colour. Thin linear grounds (roads, paths, river beds) count half and lend the other half
       // to the tile's dominant ground, so undersampled lanes and streams do not alias into dashes.
@@ -195,70 +305,64 @@ export class TerrainNodeJob {
         }
         avgR *= 0.25; avgG *= 0.25; avgB *= 0.25;
       }
-      const n0 = noise.noise(qcx / 420 - 31.7, qcz / 420 + 8.3);
-      const n1 = noise.noise(qcx / 85, qcz / 85);
-      const n2 = noise.noise(qcx / 23 + 17.3, qcz / 23 - 4.1);
+      const n0 = smooth ? 0 : noise.noise(qcx / 420 - 31.7, qcz / 420 + 8.3);
+      const n1 = smooth ? 0 : noise.noise(qcx / 85, qcz / 85);
+      const n2 = smooth ? 0 : noise.noise(qcx / 23 + 17.3, qcz / 23 - 4.1);
       const split = Math.abs(h00 - h11) <= Math.abs(h10 - h01);
       this.quadTri[j * n + i] = this.vert;
+      const g00 = j * W + i, g10 = g00 + 1, g01 = g00 + W, g11 = g01 + 1;
       for (let t = 0; t < 2; t++) {
-        // triangle corners (local x, y, z)
+        // triangle corners (local x, y, z) and their grid points (for per-vertex shading)
         let ax: number, ay: number, az: number, bx: number, by: number, bz: number, cx: number, cy: number, cz: number;
+        let ga: number, gb: number, gc: number;
         if (split) {
-          if (t === 0) { ax = lx; ay = h00; az = lz; bx = lx; by = h01; bz = lz + s; cx = lx + s; cy = h11; cz = lz + s; }
-          else { ax = lx; ay = h00; az = lz; bx = lx + s; by = h11; bz = lz + s; cx = lx + s; cy = h10; cz = lz; }
+          if (t === 0) { ax = lx; ay = h00; az = lz; bx = lx; by = h01; bz = lz + s; cx = lx + s; cy = h11; cz = lz + s; ga = g00; gb = g01; gc = g11; }
+          else { ax = lx; ay = h00; az = lz; bx = lx + s; by = h11; bz = lz + s; cx = lx + s; cy = h10; cz = lz; ga = g00; gb = g11; gc = g10; }
         } else {
-          if (t === 0) { ax = lx; ay = h00; az = lz; bx = lx; by = h01; bz = lz + s; cx = lx + s; cy = h10; cz = lz; }
-          else { ax = lx + s; ay = h10; az = lz; bx = lx; by = h01; bz = lz + s; cx = lx + s; cy = h11; cz = lz + s; }
+          if (t === 0) { ax = lx; ay = h00; az = lz; bx = lx; by = h01; bz = lz + s; cx = lx + s; cy = h10; cz = lz; ga = g00; gb = g01; gc = g10; }
+          else { ax = lx + s; ay = h10; az = lz; bx = lx; by = h01; bz = lz + s; cx = lx + s; cy = h11; cz = lz + s; ga = g10; gb = g01; gc = g11; }
         }
         // face normal = (b - a) x (c - a)
         const ux = bx - ax, uy = by - ay, uz = bz - az, vx = cx - ax, vy = cy - ay, vz = cz - az;
         let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
         const nl = Math.hypot(nx, ny, nz) || 1;
         nx /= nl; ny /= nl; nz /= nl;
-        const tx = x0 + (ax + bx + cx) / 3, tz = z0 + (az + bz + cz) / 3, ty = (ay + by + cy) / 3;
-        let g = fineGround ? world.groundAt(tx, tz) : quadGround;
-        // the finest tiles (near the camera) leave roads to the smooth ribbons in render/roads.ts
-        if (s <= 2.5 && this.p.skipRoads && (g === Ground.Road || g === Ground.Path)) g = Ground.Grass;
-        const rgb = style.rgb;
-        let r = fineGround ? rgb[g * 3] : avgR, gg = fineGround ? rgb[g * 3 + 1] : avgG, b = fineGround ? rgb[g * 3 + 2] : avgB;
-        if (g === Ground.Heath || g === Ground.Moor) {
-          // heather and moorland are patchy, mixed with grass
-          const t = 0.2 + 0.35 * (0.5 + 0.5 * n1);
-          r += (rgb[Ground.Grass * 3] - r) * t; gg += (rgb[Ground.Grass * 3 + 1] - gg) * t; b += (rgb[Ground.Grass * 3 + 2] - b) * t;
-        }
-        // woodland darkening
-        const fw = FOREST_WEIGHT[g];
-        if (fw > 0 && forest > 0.2) {
-          const f = smoothstep(0.2, 0.9, forest) * fw * 0.75;
-          r += (style.forest[0] - r) * f; gg += (style.forest[1] - gg) * f; b += (style.forest[2] - b) * f;
-        }
-        // slope → bare rock
-        const slope = 1 - ny;
-        const rw = ROCK_WEIGHT[g] * smoothstep(0.17, 0.34, slope);
-        if (rw > 0) {
-          const rv = 0.94 + 0.12 * n2;
-          r += (style.rock[0] * rv - r) * rw; gg += (style.rock[1] * rv - gg) * rw; b += (style.rock[2] * rv - b) * rw;
-        }
-        // under the sea: darker, wetter sand
-        if (ty < -0.2) {
-          const u = smoothstep(-0.2, -6, ty) * 0.5;
-          r += (style.sandWet[0] - r) * u; gg += (style.sandWet[1] - gg) * u; b += (style.sandWet[2] - b) * u;
-        }
-        // natural variation: broad patches + fine per-facet jitter
-        const grassW = GRASS_WEIGHT[g] * (1 - rw);
         const jitter = (hash3(seed + i, j * 2 + t, 7) / 4294967296 - 0.5) * 0.05;
-        const bright = 1 + n0 * 0.06 + n1 * 0.07 + n2 * 0.03 + jitter;
-        // meadows drift between lush blue-green and dry yellow-green over a few hundred metres
-        const dry = (n0 * 0.7 + n1 * 0.3) * grassW;
-        r = (r + dry * 16) * bright;
-        gg = (gg + dry * 3) * bright;
-        b = (b - dry * 10) * bright;
-        const snowW = SNOW_WEIGHT[g] * (1 - smoothstep(0.22, 0.45, slope)) * (1 - smoothstep(0.55, 1, forest) * 0.3);
         const v = this.vert;
-        const R = r < 0 ? 0 : r > 255 ? 255 : r, G = gg < 0 ? 0 : gg > 255 ? 255 : gg, B = b < 0 ? 0 : b > 255 ? 255 : b;
+        if (smooth) {
+          // per-vertex colour, weights and a mostly smooth normal; a little facet jitter stays per triangle
+          const fade = 1 + jitter * 0.6;
+          for (let k = 0; k < 3; k++) {
+            const gi = k === 0 ? ga : k === 1 ? gb : gc;
+            const vi = v + k;
+            pos[vi * 3] = k === 0 ? ax : k === 1 ? bx : cx;
+            pos[vi * 3 + 1] = k === 0 ? ay : k === 1 ? by : cy;
+            pos[vi * 3 + 2] = k === 0 ? az : k === 1 ? bz : cz;
+            let mx = nx * (1 - SMOOTH_NORMAL) + vNor![gi * 3] * SMOOTH_NORMAL;
+            let my = ny * (1 - SMOOTH_NORMAL) + vNor![gi * 3 + 1] * SMOOTH_NORMAL;
+            let mz = nz * (1 - SMOOTH_NORMAL) + vNor![gi * 3 + 2] * SMOOTH_NORMAL;
+            const ml = 127 / (Math.hypot(mx, my, mz) || 1);
+            mx *= ml; my *= ml; mz *= ml;
+            nor[vi * 3] = Math.round(mx); nor[vi * 3 + 1] = Math.round(my); nor[vi * 3 + 2] = Math.round(mz);
+            for (let c = 0; c < 3; c++) {
+              const val = vCol![gi * 3 + c] * fade;
+              col[vi * 3 + c] = val < 0 ? 0 : val > 255 ? 255 : val;
+            }
+            for (let c = 0; c < 4; c++) mat[vi * 4 + c] = vMat![gi * 4 + c];
+          }
+          this.vert += 3;
+          continue;
+        }
+        const ty = (ay + by + cy) / 3;
+        let g = fineGround ? world.groundAt(x0 + (ax + bx + cx) / 3, z0 + (az + bz + cz) / 3) : quadGround;
+        // the finest tiles (near the camera) leave roads to the smooth ribbons in render/roads.ts
+        if (s <= 2.5 && this.p.skipRoads && (g === Ground.Road || g === Ground.Path || g === Ground.Cobbles)) g = Ground.Grass;
+        const rgb = style.rgb;
+        this.shade(g, fineGround ? rgb[g * 3] : avgR, fineGround ? rgb[g * 3 + 1] : avgG, fineGround ? rgb[g * 3 + 2] : avgB,
+          forest, 1 - ny, ty, n0, n1, n2, jitter, o);
+        const R = o[0] < 0 ? 0 : o[0] > 255 ? 255 : o[0], G = o[1] < 0 ? 0 : o[1] > 255 ? 255 : o[1], B = o[2] < 0 ? 0 : o[2] > 255 ? 255 : o[2];
         const NX = Math.round(nx * 127), NY = Math.round(ny * 127), NZ = Math.round(nz * 127);
-        // 4th channel: woodland cover (distant forests are tinted towards canopy colour)
-        const MG = Math.round(grassW * 255), MS = Math.round(snowW * 255), MW = Math.round(WET_WEIGHT[g] * 255), MR = Math.round(forest * FOREST_WEIGHT[g] * 255);
+        const MG = Math.round(o[3]), MS = Math.round(o[4]), MW = Math.round(o[5]), MR = Math.round(o[6]);
         for (let k = 0; k < 3; k++) {
           const vi = v + k;
           pos[vi * 3] = k === 0 ? ax : k === 1 ? bx : cx;
