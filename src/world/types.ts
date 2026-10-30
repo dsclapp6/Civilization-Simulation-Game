@@ -142,7 +142,13 @@ export interface Plot {
   settlement: number;
   culture: CultureId;
   seed: number;
-  /** Optional role tag, e.g. 'lord_seat', 'parish', 'mill', 'home', 'market'. */
+  /**
+   * Optional role tag, e.g. 'lord_seat', 'parish', 'mill', 'home', 'market'. Roles written by the generator:
+   * home, home_poor, lord_seat (manor house, great hall), lord_farm (manor barn/stable/dovecote/granary), keep, garrison,
+   * parish (church, cathedral, abbey church), chapel, monastic (cloister), infirmary, school, guesthouse, inn, smithy,
+   * workshop, mill, market (cross, stalls, hall), guild, civic (stocks, gallows), well, storage (barns, granaries,
+   * tithe barn), warehouse, dock, gate (gatehouses), defence (walls, palisades, towers).
+   */
   role?: string;
 }
 
@@ -208,6 +214,13 @@ export interface WorldModel {
   readonly plots: readonly Plot[];
   readonly strips: readonly Strip[];
   readonly parcels: readonly LandParcel[];
+  /** Additive (optional) members, filled by `generateWorld`: */
+  /** Per-phase generation timings in ms ("phase.terrain", ..., "phase.total", plus finer "t.*", "h.*" laps). */
+  readonly timings?: Readonly<Record<string, number>>;
+  /** Id of the central, default home realm (an 'anglo' kingdom). */
+  readonly homeKingdom?: number;
+  /** Hedgerow segments (x0, z0, x1, z1 flattened) around open-field furlongs; parcel edges are hedged too. */
+  readonly hedges?: readonly number[];
 
   /** Detailed terrain height (m) including detail noise, river beds, and flattening for roads/plots/fields. Fast: called per terrain vertex. */
   heightAt(x: number, z: number): number;
