@@ -142,19 +142,30 @@ export const ICON_NAMES = Object.keys(ICONS) as IconName[];
 
 const SVG_ATTRS = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"';
 
-/** An inline SVG icon sized in px (the stylesheet may override with the `.mu-ico` class). */
-export function icon(name: IconName, size = 18, cls = ''): SVGElement {
-  const holder = staticSvg(ICONS[name]);
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  for (const part of SVG_ATTRS.match(/[\w-]+="[^"]*"/g) ?? []) {
-    const eq = part.indexOf('=');
-    svg.setAttribute(part.slice(0, eq), part.slice(eq + 2, -1));
+const templates = new Map<IconName, SVGElement>();
+
+function template(name: IconName): SVGElement {
+  let t = templates.get(name);
+  if (!t) {
+    const holder = staticSvg(ICONS[name]);
+    t = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    for (const part of SVG_ATTRS.match(/[\w-]+="[^"]*"/g) ?? []) {
+      const eq = part.indexOf('=');
+      t.setAttribute(part.slice(0, eq), part.slice(eq + 2, -1));
+    }
+    t.setAttribute('aria-hidden', 'true');
+    while (holder.firstChild) t.appendChild(holder.firstChild);
+    templates.set(name, t);
   }
+  return t;
+}
+
+/** An inline SVG icon sized in px (the stylesheet may override with the `.mu-ico` class). Parsed once, then cloned. */
+export function icon(name: IconName, size = 18, cls = ''): SVGElement {
+  const svg = template(name).cloneNode(true) as SVGElement;
   svg.setAttribute('width', String(size));
   svg.setAttribute('height', String(size));
   svg.setAttribute('class', `mu-ico${cls ? ` ${cls}` : ''}`);
-  svg.setAttribute('aria-hidden', 'true');
-  while (holder.firstChild) svg.appendChild(holder.firstChild);
   return svg;
 }
 

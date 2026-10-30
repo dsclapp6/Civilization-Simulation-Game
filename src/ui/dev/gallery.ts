@@ -12,6 +12,7 @@ import { createUI } from '../index';
 import type { PanelRequest } from '../core/requests';
 import type { GameUIExt } from '../types';
 import { GALLERY_SEED, MockHost, galleryWorld, type MockGame } from './mockHost';
+import { MockPlayer } from './mockPlayer';
 import { ICON_NAMES, icon } from '../core/icons';
 
 type Bg = 'village' | 'night' | 'dusk' | 'winter' | 'forest' | 'map' | 'dawn' | 'rain';
@@ -83,15 +84,17 @@ export async function start(root: AppRoot): Promise<void> {
       const season = o.season ?? Number(q.get('season') ?? 0);
       setClock(mock.sim, time, season, o.day ?? 2);
       const p = mock.player;
-      p.hpFraction = 0.82; p.staminaFraction = 0.68; p.danger = false;
-      p.needs = { hunger: 0.62, rest: 0.78, warmth: 0.9, mood: 0.7 };
-      p.targetKind = o.target ?? 'strip';
       p.cancelAction();
-      p.clearJourney();
-      p.encounterAt = 0;
-      p.prompt = p.targetKind === 'person' ? { label: 'Talk', targetLabel: 'Hugh Hayward', enabled: true }
-        : p.targetKind === 'building' ? { label: 'Go in', targetLabel: 'Parish church', enabled: true }
-          : { label: 'Reap', targetLabel: 'strip of barley', enabled: true };
+      if (p instanceof MockPlayer) { // not with ?services=repo, which brings the repo's own player
+        p.hpFraction = 0.82; p.staminaFraction = 0.68; p.danger = false;
+        p.needs = { hunger: 0.62, rest: 0.78, warmth: 0.9, mood: 0.7 };
+        p.targetKind = o.target ?? 'strip';
+        p.clearJourney();
+        p.encounterAt = 0;
+        p.prompt = p.targetKind === 'person' ? { label: 'Talk', targetLabel: 'Hugh Hayward', enabled: true }
+          : p.targetKind === 'building' ? { label: 'Go in', targetLabel: 'Parish church', enabled: true }
+            : { label: 'Reap', targetLabel: 'strip of barley', enabled: true };
+      }
       const night = time < 0.22 || time > 0.78;
       const bg = (q.get('bg') as Bg | null) ?? o.bg ?? (night ? 'night' : 'village');
       currentBg = bg === 'map' ? 'village' : bg;
@@ -212,7 +215,7 @@ export async function start(root: AppRoot): Promise<void> {
       id: 'hud-travel', label: 'HUD (travelling)', group: 'Game', run: async (c) => {
         const mock = await c.enter({ bg: 'map', target: 'none' });
         c.host.renderer()?.setCameraMode('map');
-        mock.player.startJourney(4, 0.42);
+        mock.player.startJourney?.(4, 0.42);
         mock.sim.events.emit('travel', { phase: 'start', to: 4 });
         await c.frames(3);
       },
@@ -324,7 +327,7 @@ export async function start(root: AppRoot): Promise<void> {
     {
       id: 'encounter', label: 'Encounter', group: 'Panels', run: async (c) => {
         const mock = await c.enter({ bg: 'forest', target: 'none' });
-        mock.player.startJourney(4, 0.5, 'encounter', { kind: 'bandits', label: 'A band of outlaws blocks the road', hostile: true });
+        mock.player.startJourney?.(4, 0.5, 'encounter', { kind: 'bandits', label: 'A band of outlaws blocks the road', hostile: true });
         await c.frames(4);
       },
     },
@@ -377,7 +380,38 @@ export async function start(root: AppRoot): Promise<void> {
   };
 
   const gallery = window as unknown as { __ui: unknown };
-  gallery.__ui = { entries: entries.map((e) => e.id), run, ui, host, ctx, ready: true };
+  /** Timing of the UI's own JavaScript: the HUD per frame, and what opening each panel costs. */
+  const bench = async (): Promise<unknown> => {
+    await run('hud');
+    const stat = (xs: number[]): { mean: number; p95: number; max: number } => {
+      const s = [...xs].sort((a, b) => a - b);
+      return { mean: xs.reduce((n, x) => n + x, 0) / xs.length, p95: s[Math.floor(s.length * 0.95)], max: s[s.length - 1] };
+    };
+    const frame: number[] = [];
+    for (let i = 0; i < 600; i++) { const t0 = performance.now(); ui.update(1 / 60); frame.push(performance.now() - t0); }
+    const mock = host.mock()!;
+    const pid = mock.sim.state.run.playerId;
+    const settlement = mock.sim.state.persons.get(pid)?.settlement ?? 0;
+    const panels: Record<string, { open: number; update: number }> = {};
+    const reqs: Array<[string, PanelRequest]> = [
+      ['character', { panel: 'character' }], ['inventory', { panel: 'inventory' }], ['family', { panel: 'family', tab: 'tree' }],
+      ['ledger', { panel: 'ledger', tab: 'holdings' }], ['chronicle', { panel: 'chronicle' }], ['career', { panel: 'career', person: pid }],
+      ['trade', { panel: 'trade', partner: { kind: 'market', settlement } }], ['map', { panel: 'map' }], ['rest', { panel: 'rest' }],
+      ['actions', { panel: 'actions' }], ['birth', { panel: 'birth' }],
+    ];
+    for (const [name, req] of reqs) {
+      const t0 = performance.now();
+      ui.openPanel(req);
+      const t1 = performance.now();
+      ui.update(0.6);
+      const t2 = performance.now();
+      panels[name] = { open: Math.round((t1 - t0) * 100) / 100, update: Math.round((t2 - t1) * 100) / 100 };
+      closeAll();
+    }
+    return { frameMs: stat(frame), panels };
+  };
+
+  gallery.__ui = { entries: entries.map((e) => e.id), run, ui, host, ctx, bench, ready: true };
 
   if (q.get('chrome') !== '0') buildSidebar(entries, run);
 
@@ -388,7 +422,7 @@ export async function start(root: AppRoot): Promise<void> {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     const mock = host.mock();
-    if (mock && !STILL) { mock.sim.step(dt); mock.player.update(dt); }
+    if (mock && !STILL) { mock.sim.step(dt); mock.player.update?.(dt); }
     ui.update(dt);
     requestAnimationFrame(loop);
   };

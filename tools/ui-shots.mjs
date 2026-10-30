@@ -6,9 +6,11 @@
 //   node tools/ui-shots.mjs --list                # the entry names
 //   node tools/ui-shots.mjs --check               # exit 1 on page errors or layout overflow
 //   node tools/ui-shots.mjs --scale=1.25 --out=/tmp/ui   # other UI scale / output folder
-import { spawn } from 'node:child_process';
+//   node tools/ui-shots.mjs --format=png          # lossless (default: full-chroma JPEG via ImageMagick, 6x smaller)
+//   node tools/ui-shots.mjs --bench               # JS timing of the HUD and of opening each panel
+import { execFileSync, spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { mkdirSync, statSync } from 'node:fs';
+import { mkdirSync, statSync, unlinkSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -26,6 +28,8 @@ const OUT = resolve(ROOT, opt('out', 'docs/ui'));
 const sizes = opt('size', '1280x720,1920x1080').split(',').map((s) => s.split('x').map(Number));
 const scale = opt('scale', '');
 const check = args.includes('--check');
+const format = opt('format', 'jpg');
+const extraQuery = opt('query', '');
 const wanted = args.filter((a) => !a.startsWith('--'));
 
 async function serverUp() {
@@ -98,11 +102,20 @@ try {
     page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') { const t = `[${W}x${H} ${m.type()}] ${m.text()}`; if (m.type() === 'error') errors.push(t); console.log(t); } });
     page.on('pageerror', (e) => { errors.push(`[${W}x${H} pageerror] ${e.message}`); console.log(`[pageerror] ${e.message}`); });
     const t0 = Date.now();
-    await page.goto(`http://localhost:${PORT}/?mode=ui&still=1&chrome=0${scale ? `&scale=${scale}` : ''}`, { timeout: 120000 });
+    await page.goto(`http://localhost:${PORT}/?mode=ui&still=1&chrome=0${scale ? `&scale=${scale}` : ''}${extraQuery ? `&${extraQuery}` : ''}`, { timeout: 120000 });
     await page.waitForFunction(() => window.__ui && window.__ui.ready, null, { timeout: 300000, polling: 300 });
     console.log(`gallery ready at ${W}x${H} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
     const all = await page.evaluate(() => window.__ui.entries);
     if (args.includes('--list')) { console.log(all.join('\n')); break; }
+    if (args.includes('--bench')) {
+      // JS cost of the UI itself (HUD per frame, opening each panel); layout and paint are the browser's
+      const r = await page.evaluate(() => window.__ui.bench());
+      const f = r.frameMs;
+      console.log(`HUD update at ${W}x${H}: mean ${f.mean.toFixed(3)} ms, p95 ${f.p95.toFixed(3)} ms, max ${f.max.toFixed(3)} ms`);
+      for (const [name, v] of Object.entries(r.panels)) console.log(`  ${name.padEnd(10)} open ${v.open.toFixed(2)} ms   first update ${v.update.toFixed(2)} ms`);
+      await page.close();
+      continue;
+    }
     const names = wanted.length ? wanted : all.filter((n) => n !== 'icons');
     for (const name of names) {
       if (!all.includes(name)) { console.log(`unknown entry ${name}`); continue; }
@@ -115,8 +128,17 @@ try {
         continue;
       }
       await page.waitForTimeout(120);
-      const file = resolve(OUT, `${name}-${W}x${H}.png`);
+      let file = resolve(OUT, `${name}-${W}x${H}.png`);
       await page.screenshot({ path: file });
+      if (format === 'jpg') {
+        // the 3D backdrops make PNGs huge; full-chroma JPEG keeps text crisp at a sixth of the size
+        const jpg = file.replace(/\.png$/, '.jpg');
+        try {
+          execFileSync('convert', [file, '-sampling-factor', '4:4:4', '-quality', '86', jpg]);
+          unlinkSync(file);
+          file = jpg;
+        } catch { /* ImageMagick missing: keep the PNG */ }
+      }
       const problems = await page.evaluate(audit);
       for (const p of problems) warnings.push(`[${W}x${H} ${name}] ${p}`);
       console.log(`${name}: ${((Date.now() - t1) / 1000).toFixed(1)} s, ${Math.round(statSync(file).size / 1024)} KB${problems.length ? `  (${problems.length} layout warnings)` : ''}`);

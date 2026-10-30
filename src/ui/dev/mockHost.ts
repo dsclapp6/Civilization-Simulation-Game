@@ -8,6 +8,10 @@ import { levelProfile, newProfile, type Profile, type StatUpgrades } from '../..
 import { Simulation } from '../../sim/sim';
 import type { WorldModel } from '../../world/types';
 import { DEFAULT_SETTINGS, type GameServices, type GameUIExt, type Settings, type UiHost, type UiRendererControls } from '../types';
+import { installAgents } from '../../agents';
+import { installEconomy } from '../../sim/economy';
+import { installSocial } from '../../sim/social';
+import { installPlayer } from '../../player';
 import { MockEconomy } from './mockEconomy';
 import { MockPlayer } from './mockPlayer';
 import { MockSocial } from './mockSocial';
@@ -44,7 +48,17 @@ function makeZone(sim: Simulation): ZoneApi {
   };
 }
 
+/** `?services=repo`: the repo's own wave 2 modules instead of the fakes (today the placeholders: no goods, no HUD data) — the UI must cope with empty. */
+export const USE_PLACEHOLDERS = typeof location !== 'undefined' && ['repo', 'placeholder'].includes(new URLSearchParams(location.search).get('services') ?? '');
+
 export function makeGame(sim: Simulation): MockGame {
+  if (USE_PLACEHOLDERS) {
+    const social = installSocial(sim);
+    const economy = installEconomy(sim, { social });
+    const zone = installAgents(sim, { economy, social });
+    const player = installPlayer(sim, { zone, economy, social });
+    return { sim, economy, social, zone, player } as unknown as MockGame;
+  }
   const social = new MockSocial(sim);
   const economy = new MockEconomy(sim);
   const zone = makeZone(sim);
