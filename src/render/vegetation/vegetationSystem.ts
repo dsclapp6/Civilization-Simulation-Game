@@ -239,8 +239,11 @@ export class VegetationSystem {
         c.lastUsed = this.frame;
         if (Math.abs(c.dist - d) > 40) this.markBandDirty(c);
         c.dist = d;
-        const band = d < s.grass ? 0 : d < s.near ? 1 : d < s.mid ? 2 : 3;
-        const edge = band <= 1 && d + CHUNK_REACH > s.near - FADE;
+        // bands by horizontal distance, the same measure the shader fades by (instance distances
+        // in a chunk are never below the chunk's), so the near/mid hand-over has no gaps
+        const dh = Math.sqrt(dx * dx + dz * dz);
+        const band = dh < s.grass ? 0 : dh < s.near ? 1 : dh < s.mid ? 2 : 3;
+        const edge = band <= 1 && dh + CHUNK_REACH > s.near - FADE;
         _box.set(_v1.set(x0, c.minY - 2, z0), _v2.set(x0 + CHUNK_SIZE, c.maxY + 30, z0 + CHUNK_SIZE));
         const vis = d < 40 || this.wideFrustum.intersectsBox(_box);
         if (band !== c.band || vis !== c.visible || edge !== c.edge) {
@@ -415,12 +418,7 @@ export class VegetationSystem {
           if (kit.depthMaterial) mesh.customDepthMaterial = kit.depthMaterial;
           mesh.receiveShadow = true;
           mesh.name = `veg:${KINDS[k]}:${b}`;
-          const fadeU = (kit.material as THREE.Material).userData?.lodFade as { value: THREE.Vector4 } | undefined;
-          if (fadeU) {
-            const fade = bm.fade;
-            mesh.onBeforeRender = () => { fadeU.value.copy(fade); };
-            mesh.onAfterRender = () => { fadeU.value.copy(NO_FADE); };
-          }
+
           mesh.matrixAutoUpdate = false;
           this.root.add(mesh);
           bm.mesh = mesh;
@@ -437,6 +435,9 @@ export class VegetationSystem {
           if (sink > 0) for (let q = 0; q < n; q++) mats[(o + q) * 16 + 13] -= sink;
           o += n;
         }
+        // the kit's material is per (kind, lod), and each band uses its own lod: set its fade window
+        const fadeU = (bm.mesh.material as THREE.Material).userData?.lodFade as { value: THREE.Vector4 } | undefined;
+        fadeU?.value.copy(bm.fade);
         bm.mesh.count = o;
         bm.mesh.instanceMatrix.clearUpdateRanges();
         bm.mesh.instanceMatrix.addUpdateRange(0, o * 16);

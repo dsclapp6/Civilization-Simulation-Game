@@ -50,7 +50,7 @@ export function bendNormalsUp(g: THREE.BufferGeometry, keep: number): void {
 export function createVegetationKits(u: SharedUniforms): VegetationKits {
   const foliage = new Map<ScatterKind, FoliageUniforms>();
   const kits = new Map<string, VegetationKit>();
-  const mats = new Map<ScatterKind, { m: THREE.Material; d: THREE.Material }>();
+  const mats = new Map<string, { m: THREE.Material; d: THREE.Material }>();
   let last: AssetEnvironment | null = null;
 
   const fol = (kind: ScatterKind): FoliageUniforms => {
@@ -62,14 +62,17 @@ export function createVegetationKits(u: SharedUniforms): VegetationKits {
     }
     return f;
   };
-  const matsFor = (kind: ScatterKind) => {
-    let m = mats.get(kind);
+  // one material per (kind, lod): same shader program, but each lod carries its own distance
+  // cross-fade window (material.userData.lodFade), so neighbouring bands can fade into each other
+  const matsFor = (kind: ScatterKind, lod: number) => {
+    const mk = `${kind}|${lod}`;
+    let m = mats.get(mk);
     if (!m) {
       const f = fol(kind);
       const ds = PLANTS[kind].doubleSided;
       m = { m: createVegetationMaterial(u, f, ds, !!PLANTS[kind].soft), d: createVegetationDepthMaterial(u, f, ds) };
       m.m.name = `veg:${kind}`;
-      mats.set(kind, m);
+      mats.set(mk, m);
     }
     return m;
   };
@@ -80,7 +83,7 @@ export function createVegetationKits(u: SharedUniforms): VegetationKits {
       let k = kits.get(key);
       if (!k) {
         const geometry = buildPlantGeometry(kind, lod);
-        const { m, d } = matsFor(kind);
+        const { m, d } = matsFor(kind, lod);
         const bb = geometry.boundingBox!;
         k = {
           geometry, material: m, depthMaterial: d,
