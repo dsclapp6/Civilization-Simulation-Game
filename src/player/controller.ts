@@ -113,6 +113,8 @@ export class PlayerController implements PlayerApi {
   private readonly danger: DangerSample = { forest: 0, wild: false, border: false, nearSettlement: false, night: false, winter: false, holyDay: false, leg: 'road' };
   private switchFx: { t: number; fromX: number; fromZ: number; toX: number; toZ: number } | null = null;
   private pendingAltitude: number | null = null;
+  /** The view must read 'street' until the renderer's camera has left the map (see viewMode). */
+  private streetPending = false;
 
   // ---- derived, refreshed at intervals ----
   private readonly traits: BodyTraits = { agility: 10, endurance: 10, age: 12, ridingLevel: 0, weight: 0, capacity: 30, hunger: 1, rest: 1 };
@@ -886,6 +888,7 @@ export class PlayerController implements PlayerApi {
     const data = makeEncounter(kind, { ctx: sim, person: p, rng }, b.x, b.z);
     j.encounter = data;
     j.state.phase = 'encounter';
+    this.streetPending = true;
     this.hostileEncounter = data.hostile;
     // a standoff runs in action time (the world slows to a crawl, speed drops to 1×)
     sim.dispatch({ type: 'setActionTime', on: true });
@@ -971,6 +974,7 @@ export class PlayerController implements PlayerApi {
       placeBody(b, x, z, yawTo(x, z, dest.x, dest.z), this.zone.nav);
     }
     j.state.phase = 'arrived';
+    this.streetPending = true;
     j.state.progress = 1;
     j.state.daysLeft = 0;
     j.arrivedFor = 0;
@@ -993,6 +997,7 @@ export class PlayerController implements PlayerApi {
     this.restoreSpeed(j);
     if (j.encounter) this.sim.dispatch({ type: 'setActionTime', on: false });
     this.journey = null;
+    this.streetPending = true;
     this.encounterChoicesCache = [];
     this.hostileEncounter = false;
     const b = this.avatar;
@@ -1087,7 +1092,9 @@ export class PlayerController implements PlayerApi {
 
     if (this.dead) this.deadFor += dt;
     if (this.switchFx) {
+      const before = this.switchFx.t;
       this.switchFx.t += dt;
+      if (before < SWITCH_MAP && this.switchFx.t >= SWITCH_MAP) this.streetPending = true; // the camera comes down now
       if (this.switchFx.t > SWITCH_TOTAL) this.switchFx = null;
     }
     this.lookT += dt;
@@ -1215,6 +1222,13 @@ export class PlayerController implements PlayerApi {
     if (this.switchFx && this.switchFx.t < SWITCH_MAP) return 'map';
     const j = this.journey;
     if (j && j.state.phase === 'travelling') return 'travel';
+    // After a journey stops (an encounter, arrival, cancel) or a character switch the camera is still on the
+    // map. Reading that back as "the map is open" would keep it there, so say 'street' until the renderer has
+    // actually come down.
+    if (this.streetPending) {
+      if (this.cameraModeFn() !== 'map') this.streetPending = false;
+      return 'street';
+    }
     return this.cameraModeFn() === 'map' ? 'map' : 'street';
   }
 

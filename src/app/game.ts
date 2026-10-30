@@ -37,6 +37,8 @@ export interface GameHooks {
   draw(): void;
   /** Lets the renderer finish streaming and camera transitions for the current view (call before `draw` after moving far). */
   settle(): void;
+  /** Runs the whole frame (real held keys, UI, simulation) for `seconds` at 30 frames per second without drawing. */
+  tick(seconds: number): void;
   /** Stops (true) or resumes the real-time loop's stepping and drawing, so `advance` and `draw` are the only things that move the world. */
   freeze(on: boolean): void;
   /** Kills the current character (death screen, succession). */
@@ -108,39 +110,47 @@ export async function start(root: AppRoot): Promise<void> {
     const dt = last === 0 ? 1 / 60 : Math.min(0.1, Math.max(0, (ts - last) / 1000));
     last = ts;
     try {
-      frame(dt, ts);
+      frame(dt, ts, !flags.frozen, !flags.frozen);
     } catch (err) {
       console.error('frame failed', err);
     }
   };
 
-  const frame = (dt: number, ts: number): void => {
+  /**
+   * One frame. `step`: advance the simulation (input → player → sim.step → player.frame); `render`: draw it.
+   * The keys are read either way, so the app-level intents (speed, pause, the action wheel) work while a
+   * screenshot tool holds the world still.
+   */
+  const frame = (dt: number, ts: number, step: boolean, render: boolean): void => {
     const s = host.session;
     const t0 = performance.now();
-    if (s && flags.frozen) {
-      ui.update(dt);
-    } else if (s && host.screen !== 'loading') {
+    if (s && host.screen !== 'loading') {
       const g = s.services;
       // the journey is shown on the map: zooming into the street camera mid-journey is not allowed
-      if (g.player.travel()?.phase === 'travelling' && s.renderer.getCameraMode() !== 'map') s.renderer.setCameraMode('map');
+      if (step && g.player.travel()?.phase === 'travelling' && s.renderer.getCameraMode() !== 'map') s.renderer.setCameraMode('map');
       const intent = input.read(dt);
       const t1 = performance.now();
-      g.player.setInput(host.screen === 'game' ? intent : EMPTY_INPUT);
-      s.sim.step(dt);
-      const t2 = performance.now();
-      g.player.frame?.(dt);
-      const focus = g.player.mapFocus?.();
-      if (focus) s.renderer.focusMap(focus.x, focus.z, focus.altitude);
-      const t3 = performance.now();
-      s.renderer.render(s.sim.view, dt);
+      let t2 = t1, t3 = t1;
+      if (step) {
+        g.player.setInput(host.screen === 'game' ? intent : EMPTY_INPUT);
+        s.sim.step(dt);
+        t2 = performance.now();
+        g.player.frame?.(dt);
+        const focus = g.player.mapFocus?.();
+        if (focus) s.renderer.focusMap(focus.x, focus.z, focus.altitude);
+        t3 = performance.now();
+      }
+      if (render) s.renderer.render(s.sim.view, dt);
       const t4 = performance.now();
       ui.update(dt);
       const t5 = performance.now();
-      timings.input += (t1 - t0 - timings.input) * 0.1;
-      timings.sim += (t2 - t1 - timings.sim) * 0.1;
-      timings.player += (t3 - t2 - timings.player) * 0.1;
-      timings.render += (t4 - t3 - timings.render) * 0.1;
-      timings.ui += (t5 - t4 - timings.ui) * 0.1;
+      if (step && render) {
+        timings.input += (t1 - t0 - timings.input) * 0.1;
+        timings.sim += (t2 - t1 - timings.sim) * 0.1;
+        timings.player += (t3 - t2 - timings.player) * 0.1;
+        timings.render += (t4 - t3 - timings.render) * 0.1;
+        timings.ui += (t5 - t4 - timings.ui) * 0.1;
+      }
     } else {
       input.read(dt);
       ui.update(dt);
@@ -160,7 +170,7 @@ export async function start(root: AppRoot): Promise<void> {
   document.addEventListener('visibilitychange', () => { if (document.hidden) void host.flush(); });
   window.addEventListener('pagehide', () => { void host.flush(); });
 
-  if (params.has('debug') || params.has('autostart') || params.has('shots') || params.has('hud')) installHooks(host, ui, flags);
+  if (params.has('debug') || params.has('autostart') || params.has('shots') || params.has('hud')) installHooks(host, ui, flags, (dt) => frame(dt, performance.now(), true, false));
   requestAnimationFrame(loop);
 
   // ---- developer shortcut past the menus ----
@@ -174,7 +184,7 @@ export async function start(root: AppRoot): Promise<void> {
   }
 }
 
-function installHooks(host: AppHost, ui: GameUI, flags: { frozen: boolean }): void {
+function installHooks(host: AppHost, ui: GameUI, flags: { frozen: boolean }, headlessFrame: (dt: number) => void): void {
   const hooks: GameHooks = {
     host,
     get session() { return host.session; },
@@ -221,6 +231,10 @@ function installHooks(host: AppHost, ui: GameUI, flags: { frozen: boolean }): vo
       if (s) s.renderer.render(s.sim.view, 1 / 60);
     },
     freeze(on) { flags.frozen = on; },
+    tick(seconds) {
+      const n = Math.max(1, Math.round(seconds * 30));
+      for (let i = 0; i < n; i++) headlessFrame(1 / 30);
+    },
     async killPlayer() {
       const s = host.session;
       if (!s) return;

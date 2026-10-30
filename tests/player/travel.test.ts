@@ -6,6 +6,7 @@ import { encounterRate, encounterWeights, fleeChance, parleyChance, type DangerS
 import type { EncounterKind } from '../../src/player/types';
 import { generateWorld } from '../../src/world/generate';
 import type { WorldModel } from '../../src/world/types';
+import { killPerson } from '../../src/sim/succession';
 import { FakeZone, input, rig, type Rig } from './fakes';
 
 describe('route planning on the real road network', () => {
@@ -518,3 +519,66 @@ describe('encounters', () => {
     void FakeZone;
   });
 });
+
+describe('the view mode and the renderer\'s camera', () => {
+  /** A stand-in for the renderer: it follows `view.mode()` only when that changes, like the real one. */
+  function withCamera() {
+    let cam = 'follow';
+    let last: string | null = null;
+    const r = rig({ preset: 'small', seed: 'cam', cameraMode: () => cam });
+    const map: Record<string, string> = { street: 'follow', map: 'map', travel: 'map', cinematic: 'cinematic' };
+    const render = (): string => {
+      const vm = r.sim.view.mode();
+      if (vm !== last) { if (last !== null) cam = map[vm]; last = vm; }
+      return vm;
+    };
+    return { r, render, setCam: (c: string) => { cam = c; }, cam: () => cam };
+  }
+
+  function destination(r: Rig): number { return farthestFrom(r, 2500, 9000); }
+
+  it('comes down to street level when an encounter starts, when the journey is cancelled and on arrival', () => {
+    const c = withCamera();
+    c.render();
+    expect(c.r.player.travelTo(destination(c.r)).ok).toBe(true);
+    expect(c.render()).toBe('travel');
+    expect(c.cam()).toBe('map');
+    c.r.player.debug!.forceEncounter('travellers');
+    expect(c.render()).toBe('street');
+    expect(c.cam()).toBe('follow');
+    expect(c.render()).toBe('street'); // and it stays down
+    c.r.player.perform(c.r.player.options().find((o) => o.enabled)!);
+    expect(c.render()).toBe('travel');
+    expect(c.cam()).toBe('map');
+    c.r.player.cancelTravel();
+    expect(c.render()).toBe('street');
+    expect(c.cam()).toBe('follow');
+    expect(c.render()).toBe('street');
+  });
+
+  it('comes down after a character switch (the camera rises to the map and descends onto the new body)', () => {
+    const c = withCamera();
+    c.render();
+    killPersonNow(c.r);
+    const heir = c.r.sim.state.run.pendingSuccession!.eligible[0];
+    c.r.sim.dispatch({ type: 'switchCharacter', personId: heir });
+    expect(c.render()).toBe('map');
+    expect(c.cam()).toBe('map');
+    for (let i = 0; i < 30; i++) { c.r.player.frame!(0.1); c.render(); }
+    expect(c.r.sim.view.mode()).toBe('street');
+    expect(c.cam()).toBe('follow');
+  });
+
+  it('still reports the map when the UI opens it, and street when the UI closes it', () => {
+    const c = withCamera();
+    c.render();
+    c.setCam('map'); // the map panel
+    expect(c.r.sim.view.mode()).toBe('map');
+    c.setCam('follow');
+    expect(c.r.sim.view.mode()).toBe('street');
+  });
+});
+
+function killPersonNow(r: Rig): void {
+  killPerson(r.sim, r.sim.state.persons.get(r.pid)!, 'accident', r.sim.absDay);
+}

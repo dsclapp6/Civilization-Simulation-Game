@@ -72,8 +72,11 @@ on the spot, slows time, and asks you to choose:
 | Travellers, pilgrims, a messenger | share news · walk with them / give alms · move on |
 | Wolves | drive them off with fire (needs a torch, candle or firewood) · run · stand your ground |
 
-After a choice the journey resumes at 8× (or ends if you turned back). **Cancel** on the HUD stops where
-you are.
+After a choice the journey resumes at 8× (or ends if you turned back). The journey panel the UI opens for an
+encounter offers *Face them* (street level: tap or hold **E** and the wheel lists the choices above),
+*Press on* (the same as running past the outlaws, paying the patrol or nodding to the harmless),
+*Turn back* (get away, then head for where you started) and *End the journey here* (in front of
+outlaws or wolves that means turning and running). **Cancel journey** on the HUD stops where you are.
 
 ### Death and succession
 
@@ -92,12 +95,15 @@ All optional, on the URL of the game page:
 | `seed=abc` `difficulty=squire\|knight\|lord\|king` | the continent and difficulty of an autostarted run |
 | `quality=low\|medium\|high` | override the saved quality setting |
 | `time=0..1` `day=0..3` `season=0..3` | start at this time of day / day of the season / season |
-| `debug=1` | overlay with frame timings, renderer and simulation statistics, and a plain-text HUD (prompt, action, journey, encounter choices, successor buttons) for use without the real UI |
+| `debug=1` | overlay with frame timings, renderer and simulation statistics (and, with `profile=1`, the cost of the busiest systems) |
+| `hud=1` | a plain-text stand-in for the HUD (prompt, action, journey, encounter choices, successor buttons) for builds without the real UI |
 | `devzone=1` | stand-in villagers and a horse around your home, buildings that block you (for builds without the real agents module) |
-| `shots=1` | keep the drawing buffer and expose `window.__game` (`session`, `advance(seconds, input)`, `draw()`, `freeze(on)`, `frames(n)`, `killPlayer()`, `ready()`) for screenshot tools |
+| `shots=1` | keep the drawing buffer and expose `window.__game` / `window.__ui` for tools: `session`, `ready()`, `advance(seconds, input)` (the world moves by simulated seconds with the given input), `tick(seconds)` (whole frames with the real held keys, no drawing), `draw()`, `settle()`, `freeze(on)`, `frames(n)`, `killPlayer()` |
 
-`node tools/game-shots.mjs` starts Vite, plays through the situations above in headless Chromium and
-writes `docs/game/*.png`.
+Tools (headless Chromium, software GL, so they are slow): `node tools/game-shots.mjs` plays through the
+situations above and writes `docs/game/*.png`; `node tools/game-flow.mjs` clicks and types through the run
+start, hotkeys, pause, the action wheel, the map, a journey with encounters, death and succession and
+*Save and quit* / *Continue*, and checks what the game and the UI report at every step.
 
 ## For other modules
 

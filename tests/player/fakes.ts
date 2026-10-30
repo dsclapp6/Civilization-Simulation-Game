@@ -160,13 +160,13 @@ export interface Rig {
 }
 
 /** A simulation (mock world) with the placeholder economy/social, a fake zone and the player installed. */
-export function rig(opts: TestSimOptions & { zone?: (z: FakeZone) => void } = {}): Rig {
+export function rig(opts: TestSimOptions & { zone?: (z: FakeZone) => void; cameraMode?: () => string } = {}): Rig {
   const sim = newSim(opts);
   const zone = new FakeZone();
   opts.zone?.(zone);
   const social = installSocial(sim);
   const economy = installEconomy(sim, { social });
-  const player = installPlayer(sim, { zone, economy, social });
+  const player = installPlayer(sim, { zone, economy, social, cameraMode: opts.cameraMode });
   return { sim, zone, player, economy, social, pid: sim.state.run.playerId };
 }
 
