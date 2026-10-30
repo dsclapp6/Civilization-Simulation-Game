@@ -52,7 +52,8 @@ describe('collision', () => {
     const { sim, zone } = rig;
     const blds = (sim.state.buildingsAt.get(vil.id) ?? []).filter((b) => BUILDINGS[b.kind].blocks);
     expect(blds.length).toBeGreaterThan(8);
-    let moves = 0, blocked = 0;
+    let moves = 0, blocked = 0, closest = Infinity;
+    const near = { x: 0, z: 0 };
     for (let i = 0; i < 4000; i++) {
       const b = blds[i % blds.length];
       const def = BUILDINGS[b.kind];
@@ -67,11 +68,13 @@ describe('collision', () => {
         moves++;
         if (mr.blocked) blocked++;
         for (const o of blds) {
-          const d = obbNearest(x, z, o.x, o.z, Math.cos(o.rot), Math.sin(o.rot), BUILDINGS[o.kind].w / 2, BUILDINGS[o.kind].d / 2, { x: 0, z: 0 });
-          expect(d).toBeGreaterThan(0.2);
+          const d = obbNearest(x, z, o.x, o.z, Math.cos(o.rot), Math.sin(o.rot), BUILDINGS[o.kind].w / 2, BUILDINGS[o.kind].d / 2, near);
+          if (d < closest) closest = d;
         }
       }
     }
+    // checked once at the end: an expect per probe made this test slow enough to time out under load
+    expect(closest).toBeGreaterThan(0.2);
     expect(moves).toBeGreaterThan(20000);
     expect(blocked).toBeGreaterThan(100);
   });

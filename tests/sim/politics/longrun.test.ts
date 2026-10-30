@@ -39,7 +39,7 @@ function invariants(r: Rig): string[] {
 }
 
 describe('fifty years of politics', () => {
-  it('stays sane: real changes of power, no continent-wide collapse, a sound feudal tree', () => {
+  it.runIf(process.env.SIM_LONG)('stays sane: real changes of power, no continent-wide collapse, a sound feudal tree (long: npm run test:long)', () => {
     const r = rig({ preset: 'large', seed: 'fifty' });
     const startKingdoms = r.sim.world.kingdoms.length;
     const moved: number[] = [];
