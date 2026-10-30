@@ -35,8 +35,8 @@ export const LIFE = {
   /** Dead people are forgotten after this many game years unless they are in the player's kin web. */
   pruneAfterYears: 2,
   /** Chance per 4-day round that an unmarried woman looks for a husband, by age band. */
-  seekYoung: 0.05,
-  seekMid: 0.03,
+  seekYoung: 0.03,
+  seekMid: 0.02,
   seekOld: 0.01,
   seekWidow: 0.02,
 };
@@ -238,7 +238,7 @@ function tryConceive(ctx: SimContext, rng: Rng, ss: SettlementState, p: Person, 
   const dens = Math.max(0.25, Math.min(1.8, 1 + LIFE.densityK * (1 - rho)));
   const nutrition = Math.max(0.5, Math.min(1.2, ss.prosperity));
   const wealth = p.estate === 'noble' ? 0.92 : p.rankTier >= 3 ? 1.05 : p.rankTier === 1 ? 0.96 : 1;
-  if (rng.next() >= base * FERTILITY_SCALE * dens * nutrition * wealth) return;
+  if (rng.next() >= base * FERTILITY_SCALE * ctx.state.fertilityTrim * dens * nutrition * wealth) return;
   const husband = ctx.state.persons.get(p.spouse);
   if (!husband || husband.death) return;
   p.pregnancy = { due: now + GESTATION_DAYS + rng.int(-1, 1), father: husband.id, conceived: now };
@@ -1042,6 +1042,16 @@ const FAMINE_CHANCE = { squire: 0.01, knight: 0.03, lord: 0.05, king: 0.09 } as 
 function lifeYearly(ctx: SimContext, info: YearInfo): void {
   const { state, world } = ctx;
   const rng = ctx.rng('harvest');
+  // Malthusian balance: births follow the room there is. A slow integral controller keeps the whole
+  // population at the settlements' combined carrying capacity (births rise after a plague, fall when crowded).
+  let capacity = 0;
+  for (const ss of state.settlements.values()) capacity += ss.target;
+  if (capacity > 0) {
+    const rho = state.living / capacity;
+    state.fertilityTrim = Math.max(0.5, Math.min(2, state.fertilityTrim * (1 + 0.3 * (1 - rho))));
+    state.dirty.meta = true;
+  }
+
   // close the statistics year
   const st = state.stats;
   st.current.population = state.living;

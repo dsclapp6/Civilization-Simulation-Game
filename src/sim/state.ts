@@ -428,6 +428,9 @@ export class GameState {
   nextBuildingId = 0;
   readonly strips = new Map<number, StripState>();
   weather: WeatherState = { snowCover: 0 };
+  /** Slowly adjusted multiplier on fertility so the whole population settles at the settlements'
+   *  carrying capacity (a Malthusian balance: more births after a plague, fewer when crowded). */
+  fertilityTrim = 1;
   run: RunState = emptyRun();
   score: ScoreState = emptyScore();
   stats: DemographyState = { current: emptyYearStats(1), history: [] };

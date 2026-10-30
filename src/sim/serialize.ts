@@ -61,6 +61,8 @@ interface MetaRec {
   run: RunState;
   score: ScoreState;
   weather: WeatherState;
+  /** Fertility trim (see GameState.fertilityTrim). */
+  ft?: number;
   stats: DemographyState;
   chronicle: ChronicleEntry[];
   next: { person: number; household: number; house: number; title: number; building: number };
@@ -247,6 +249,7 @@ export function serializeMeta(state: GameState): string {
     run: state.run,
     score: state.score,
     weather: state.weather,
+    ft: state.fertilityTrim,
     stats: state.stats,
     chronicle: state.chronicle,
     next: {
@@ -374,6 +377,7 @@ export function rawToState(raw: RawSave, world: WorldModel): GameState {
   state.run = meta.run;
   state.score = meta.score;
   state.weather = meta.weather;
+  state.fertilityTrim = meta.ft ?? 1;
   state.stats = meta.stats;
   state.chronicle = meta.chronicle;
   for (const [name, st] of Object.entries(meta.rngs)) state.rng(name).setState(st);

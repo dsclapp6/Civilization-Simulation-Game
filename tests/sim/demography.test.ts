@@ -4,6 +4,7 @@ import {
   BASE_Q, CONCEPTION_PER_DAY, SURVIVAL, dailyHazard, lifeExpectancyAtBirth, sampleStationaryAge, survivalTo,
 } from '../../src/sim/demography';
 import { Rng } from '../../src/core/rng';
+import { killPerson } from '../../src/sim/succession';
 import { newSim, noPlayer } from './helpers';
 import { ageYears, type Person } from '../../src/sim/state';
 import type { Simulation } from '../../src/sim/sim';
@@ -114,6 +115,23 @@ describe('100 years of macro life', () => {
       expect(startPop + b - d + a).toBe(sim.state.living);
     }, 120_000);
   }
+
+  it('recovers from a catastrophe: after a plague kills a quarter of the people, births rise and the population returns to its carrying capacity', () => {
+    const sim = newSim({ seed: 'plague', preset: 'small' });
+    noPlayer(sim);
+    const start = sim.state.living;
+    sim.advanceDays(DAYS_PER_YEAR * 3);
+    const victims = [...sim.state.persons.values()].filter((p) => !p.death && p.id % 4 === 1 && p.estate !== 'clergy' && p.rankTier < 5);
+    for (const v of victims) killPerson(sim, v, 'plague', sim.absDay);
+    const low = sim.state.living;
+    expect(low).toBeLessThan(start * 0.85);
+    sim.advanceDays(DAYS_PER_YEAR * 6);
+    expect(sim.state.fertilityTrim).toBeGreaterThan(1.1); // the land has room: more births
+    sim.advanceDays(DAYS_PER_YEAR * 70);
+    expect(sim.state.living).toBeGreaterThan(start * 0.88);
+    expect(sim.state.living).toBeLessThan(start * 1.12);
+    expect(sim.state.fertilityTrim).toBeLessThan(1.5);
+  }, 120_000);
 
   it('leaves a consistent world after a century: titles held by the living, no empty households, rank order', () => {
     const sim = newSim({ seed: 'gamma', preset: 'small' });

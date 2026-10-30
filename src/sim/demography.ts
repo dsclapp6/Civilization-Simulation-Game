@@ -160,13 +160,14 @@ export function maternalDeathChance(age: number, parity: number): number {
 /** Share of each age band that is currently married (generation of adult households). */
 export function marriedShare(age: number, sex: Sex): number {
   if (sex === 'm') {
-    if (age < 20) return 0.04;
-    if (age < 25) return 0.28;
-    if (age < 30) return 0.62;
-    if (age < 40) return 0.86;
-    if (age < 55) return 0.88;
-    if (age < 65) return 0.78;
-    return 0.62;
+    // close to what the marriage market settles at in the running sim
+    if (age < 20) return 0.05;
+    if (age < 25) return 0.42;
+    if (age < 30) return 0.72;
+    if (age < 40) return 0.85;
+    if (age < 55) return 0.82;
+    if (age < 65) return 0.7;
+    return 0.5;
   }
   if (age < 16) return 0;
   if (age < 20) return 0.28;
