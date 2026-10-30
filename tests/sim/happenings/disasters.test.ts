@@ -22,8 +22,8 @@ function hub(a: ReturnType<typeof advSim>): number {
 
 describe('plague', () => {
   it('spreads along the roads, sets the epidemic and kills more people than usual', () => {
-    const plague = advSim({ seed: 'plague', preset: 'small' });
-    const calm = advSim({ seed: 'plague', preset: 'small' });
+    const plague = advSim({ seed: 'plague-wave', preset: 'small' });
+    const calm = advSim({ seed: 'plague-wave', preset: 'small' });
     const origin = hub(plague);
     const deaths = (a: ReturnType<typeof advSim>): number => {
       const st = a.sim.state.stats;

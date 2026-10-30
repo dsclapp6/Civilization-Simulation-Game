@@ -1,7 +1,7 @@
 // Shared runtime of the happenings module: the persisted section (`state.ext.happenings`) and the small
 // helpers every part uses (difficulty scaling, "does this concern the player", starting and ending
 // events, messages). Randomness comes from the named stream 'happenings'.
-import { dist2 } from '../../core/math';
+import { dist, dist2 } from '../../core/math';
 import type { Rng } from '../../core/rng';
 import { DAYS_PER_YEAR, toDate } from '../../core/time';
 import type { Settlement, WorldModel } from '../../world/types';
@@ -146,7 +146,7 @@ export class Hap {
 
   distance(a: number, b: number): number {
     const sa = this.settlementById.get(a), sb = this.settlementById.get(b);
-    return sa && sb ? dist2(sa.x, sa.z, sb.x, sb.z) : Infinity;
+    return sa && sb ? dist(sa.x, sa.z, sb.x, sb.z) : Infinity;
   }
 
   playerSettlement(): number {

@@ -128,7 +128,7 @@ const BUILD: Record<RequestType, Builder> = {
     // the recipient lives in a neighbouring place
     const rng = H.rng();
     const near = H.world.settlements
-      .filter((s) => s.id !== me.settlement && H.distance(me.settlement, s.id) <= 4500 && H.state.residentsOf(s.id).length > 5)
+      .filter((s) => s.id !== me.settlement && H.distance(me.settlement, s.id) <= DATA.requests.message.radius && H.state.residentsOf(s.id).length > 5)
       .sort((a, b) => H.distance(me.settlement, a.id) - H.distance(me.settlement, b.id) || a.id - b.id).slice(0, 5);
     if (near.length === 0) return null;
     const place = rng.pick(near);
@@ -147,9 +147,10 @@ const BUILD: Record<RequestType, Builder> = {
     const rng = H.rng();
     let x = 0, z = 0, ok = false;
     for (let i = 0; i < 8 && !ok; i++) {
-      const a = rng.range(0, Math.PI * 2), r = rng.range(cfg.radius[0], cfg.radius[1]);
+      // out beyond the houses and fields, in the pasture and the wood
+      const a = rng.range(0, Math.PI * 2), r = s.radius + rng.range(cfg.radius[0], cfg.radius[1]);
       x = s.x + Math.cos(a) * r; z = s.z + Math.sin(a) * r;
-      ok = H.world.waterSurfaceAt(x, z) === null && Number.isFinite(H.world.walkCostAt(x, z)) && !H.world.settlementAt(x, z);
+      ok = H.world.waterSurfaceAt(x, z) === null && Number.isFinite(H.world.walkCostAt(x, z));
     }
     if (!ok) return null;
     const animal = from.career === 'shepherd' ? 'sheep' : rng.pick(['sheep', 'pig', 'goat', 'cow']);

@@ -19,7 +19,7 @@ export interface HappeningData {
     fetch: { goods: FetchGood[]; famineGoods: FetchGood[]; premium: number; days: number; ask: string[]; thanks: string[] };
     loan: { amounts: number[]; interest: number; days: number; offerDays: number; ask: string[]; thanks: string[] };
     work: { count: [number, number]; wage: number; days: number; ask: string[]; thanks: string[] };
-    message: { days: number; pay: number; ask: string[]; thanks: string[]; delivered: string[] };
+    message: { days: number; pay: number; radius: number; ask: string[]; thanks: string[]; delivered: string[] };
     lost_animal: { radius: [number, number]; found: number; days: number; pay: number; ask: string[]; thanks: string[] };
     watch: { hours: number; days: number; pay: number; ask: string[]; thanks: string[] };
     godparent: { days: number; gift: number; ask: string[]; thanks: string[] };

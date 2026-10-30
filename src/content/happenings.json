@@ -118,7 +118,7 @@
       "thanks": ["Well done, {name}. Here is your wage."]
     },
     "message": {
-      "days": 8, "pay": 24,
+      "days": 8, "pay": 24, "radius": 7500,
       "ask": [
         "Would you carry a message to {who} at {place}? It is nothing secret, only family business, and I will make it worth the walk.",
         "{name}, I must get word to {who} in {place}, and I have no one to send. Will you go?"
