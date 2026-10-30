@@ -393,6 +393,9 @@ export function createVegetationMaterial(u: SharedUniforms, f: FoliageUniforms, 
     if (soft) {
       // Thin plants keep their up-bent normals on both sides so they light like the ground.
       s.fragmentShader = s.fragmentShader.replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin.replace('normal *= faceDirection;', ''));
+      // ...but their pale blades caught the moon and sky fill and glowed over the dark ground at
+      // night: dim them with the night level
+      s.fragmentShader = s.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ndiffuseColor.rgb *= 1.0 - uNight * 0.45;');
     }
     s.vertexShader = s.vertexShader
       .replace('#include <common>', `#include <common>
