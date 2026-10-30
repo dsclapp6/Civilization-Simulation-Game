@@ -62,6 +62,8 @@ export interface CombatApi {
   // ---- additive (combat module); optional so other modules' fakes need not implement them ----
   /** The fight a person is in (0 = none). */
   fightOf?(person: PersonId): number;
+  /** Breaks a fight off (everyone goes back to their lives, no winner). */
+  disperse?(fight: number): void;
   /** Is any fight going on in the detail zone? */
   anyFight?(): boolean;
   /** Blood left (1 = whole); 1 for the unhurt. */

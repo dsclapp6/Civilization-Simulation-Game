@@ -65,7 +65,7 @@ export class InputMapper {
   private readonly tap = { tap: false, openWheel: false, held: 0 };
   private readonly intent: FrameIntent = { input: { ...EMPTY_INPUT }, openWheel: false, speed: null, togglePause: false };
 
-  map(raw: RawKeys, ctx: { cameraYaw: number; attack: boolean; block: boolean }, dt: number): FrameIntent {
+  map(raw: RawKeys, ctx: { cameraYaw: number; attack: boolean; block: boolean; aim?: InputState['aim'] }, dt: number): FrameIntent {
     const { down, pressed, released } = raw;
     const i = this.intent.input;
     i.forward = (any(down, MOVE_FORWARD) ? 1 : 0) - (any(down, MOVE_BACK) ? 1 : 0);
@@ -82,6 +82,7 @@ export class InputMapper {
     i.cancel = pressed.has(KEYMAP.input.cancel);
     i.attack = ctx.attack;
     i.block = ctx.block;
+    i.aim = ctx.aim ?? null;
     this.intent.openWheel = this.tap.openWheel;
     this.intent.speed = pressed.has(KEYMAP.input.speed1) ? 1 : pressed.has(KEYMAP.input.speed2) ? 3 : pressed.has(KEYMAP.input.speed3) ? 8 : null;
     this.intent.togglePause = pressed.has(KEYMAP.input.pause);
@@ -93,6 +94,7 @@ export class InputMapper {
     this.tracker.reset();
     const i = this.intent.input;
     Object.assign(i, EMPTY_INPUT);
+    i.aim = null;
     i.walk = this.walkToggle;
     this.intent.openWheel = false;
     this.intent.speed = null;

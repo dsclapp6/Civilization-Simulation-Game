@@ -205,6 +205,7 @@ export function installCombat(sim: Simulation, deps: Wave3Deps): CombatModule {
       return () => { const i = listeners.indexOf(fn); if (i >= 0) listeners.splice(i, 1); };
     },
     fightOf: (person) => arena.fighterOf(person)?.fight ?? 0,
+    disperse: (id) => { const f = arena.fights.get(id); if (f) arena.endFight(f, 'dispersed'); },
     anyFight: () => arena.anyFight(),
     blood: (person) => book.rec(person)?.blood ?? 1,
     tend: (healer, patient) => {

@@ -224,6 +224,8 @@ export class Arena {
         const p = env.ctx.state.persons.get(pid);
         if (!p || p.death) continue;
         let f = this.byKey.get(pid);
+        // the player's body is the controller's: the port's fighter is the one that fights
+        if (!f && pid === env.ctx.state.run.playerId && env.playerBody()) f = this.ensurePlayer(pid) ?? undefined;
         if (f && f.fight !== 0 && !f.gone) continue; // already fighting somewhere else
         if (!f) {
           f = this.makePerson(p);
@@ -919,7 +921,7 @@ export class Arena {
     // everyone goes back to their lives
     for (const side of fight.sides) for (const f of side.members) {
       f.fight = 0;
-      if (f.isPlayer) { f.st = f.st === S.Dead ? S.Dead : S.Idle; f.target = null; continue; }
+      if (f.isPlayer) { f.target = null; if (f.st !== S.Dead && f.st !== S.Down) this.toIdle(f); continue; }
       this.free(f);
       if (!f.isAnimal || f.st === S.Dead) { /* keep the fighter record until swept */ }
       f.gone = true;

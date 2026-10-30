@@ -133,7 +133,7 @@ export function applyBlow(a: Arena, att: Fighter | null, v: Fighter, b: Blow): B
     const off = Math.abs(angleDiff(v.yaw, bearing));
     if (off <= arc) {
       const base = side ? v.gear.shield!.block : v.gear.weapon.guard;
-      const skill = 0.62 + 0.38 * Math.min(1, v.melee / 12);
+      const skill = 0.74 + 0.26 * Math.min(1, v.melee / 12);
       const strength = clamp(base * skill, 0, 0.93) * (b.how === 'overhead' ? 0.82 : 1);
       if (v.guardT < 0.24 && b.melee) {
         // met at the moment of the blow: turned aside

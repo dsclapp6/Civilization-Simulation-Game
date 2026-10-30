@@ -81,7 +81,7 @@ export class InputLayer {
     const mapView = mode === 'map' || this.host.travelling();
     const intent = this.mapper.map(
       { down: this.down, pressed: this.pressed, released: this.released },
-      { cameraYaw: r ? r.getCameraYaw() : 0, attack: this.attack, block: this.block },
+      { cameraYaw: r ? r.getCameraYaw() : 0, attack: this.attack, block: this.block, aim: r && mode === 'follow' ? this.cameraRay(r) : null },
       dt,
     );
     if (intent.speed !== null) this.host.setSpeed(intent.speed);
@@ -100,6 +100,18 @@ export class InputLayer {
     this.released.clear();
     return intent.input;
   }
+
+  /** The camera's ray from its world matrix (position = column 3, forward = −column 2): what a bow is aimed along. */
+  private cameraRay(r: GameRenderer): NonNullable<InputState['aim']> {
+    const e = r.getCamera().matrixWorld.elements;
+    const a = this.aimRay;
+    a.x = e[12]; a.y = e[13]; a.z = e[14];
+    const dx = -e[8], dy = -e[9], dz = -e[10];
+    const l = Math.hypot(dx, dy, dz) || 1;
+    a.dx = dx / l; a.dy = dy / l; a.dz = dz / l;
+    return a;
+  }
+  private readonly aimRay = { x: 0, y: 0, z: 0, dx: 0, dy: 0, dz: 1 };
 
   private clearHeld(): void {
     this.down.clear(); this.pressed.clear(); this.released.clear();

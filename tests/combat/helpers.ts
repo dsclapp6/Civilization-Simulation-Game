@@ -23,9 +23,25 @@ export interface CombatRig {
   player?: PlayerApi;
 }
 
+/** The fake zone, with summoned beasts standing in the zone's animal list so a fight can find them. */
+class CombatZone extends FakeZone {
+  override enableSummons(): void {
+    super.enableSummons();
+    const make = this.summonAnimal!;
+    this.summonAnimal = (kind, x, z, hostile) => {
+      const id = make(kind, x, z, hostile);
+      const an = this.addAnimal(id, kind, x, z, 0);
+      an.hostile = hostile;
+      return id;
+    };
+    const drop = this.dismissAnimal!;
+    this.dismissAnimal = (id) => { drop(id); this.animalList = this.animalList.filter((a) => a.id !== id); };
+  }
+}
+
 export function combatRig(opts: TestSimOptions & { player?: boolean } = {}): CombatRig {
   const sim = newSim(opts);
-  const zone = new FakeZone();
+  const zone = new CombatZone();
   zone.enableSummons();
   const social = installSocial(sim);
   const economy = installEconomy(sim, { social });

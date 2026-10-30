@@ -78,7 +78,11 @@ export class PlayerPort implements PlayerCombatPort {
     out.armour = null; out.helmet = null;
     const p = a.env.ctx.state.persons.get(fr.person);
     if (!p || p.death) return;
-    if (this.personId !== fr.person) { this.personId = fr.person; a.dropPlayer(); this.gearT = 99; }
+    if (this.personId !== fr.person) {
+      if (this.personId !== 0) a.dropPlayer();
+      this.personId = fr.person;
+      this.gearT = 99;
+    }
     const pf = a.ensurePlayer(fr.person);
     if (!pf) return;
 

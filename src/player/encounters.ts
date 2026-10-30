@@ -1,7 +1,7 @@
 // Road encounters of map travel (SPEC §2, §19): how likely they are per kilometre (forest, heath, borders,
 // night, winter wolves, difficulty), which kind turns up, and the choices each one offers. Everything is
-// deterministic given the `travel` RNG stream. Combat arrives in wave 3, so a fight is never on offer:
-// bandits are paid, outrun or talked round; wolves are scared off with fire or outrun.
+// deterministic given the `travel` RNG stream. Bandits are paid, outrun, talked round or fought (wave 3
+// combat, when the module is installed); wolves are scared off with fire, outrun, stood against or fought.
 import type { Difficulty } from '../core/domain';
 import { clamp } from '../core/math';
 import type { Rng } from '../core/rng';
@@ -126,7 +126,7 @@ export interface ChoiceDef {
   enabled: boolean;
   reason?: string;
   /** Resolves the encounter. `resume` = the journey carries on; `end` = the journey is over (turned back). */
-  run(): ActionOutcome & { resume: boolean; end?: boolean };
+  run(): ActionOutcome & { resume: boolean; end?: boolean; fight?: boolean };
 }
 
 export interface EncounterEnv {
@@ -138,6 +138,10 @@ export interface EncounterEnv {
   /** Stamina 0..1. */
   stamina: number;
   rng: Rng;
+  /** The combat module is installed and the zone can show the fight: a Fight choice is offered. */
+  canFight?: boolean;
+  /** What is in the main hand, for the Fight choice's wording. */
+  weaponName?: string;
 }
 
 const LIGHT_SOURCES = ['torch', 'candle', 'candles', 'tallow', 'firewood', 'charcoal'];
@@ -285,6 +289,19 @@ function use(env: Pick<EncounterEnv, 'ctx' | 'person'>, key: string, qty = 1): v
 
 const ok = (message: string, resume = true, extra: Partial<ActionOutcome> = {}): ActionOutcome & { resume: boolean } => ({ ok: true, message, resume, ...extra });
 
+/** Standing and fighting it out (src/combat): the party stays, the road waits, and the fight decides. */
+function fightChoice(env: EncounterEnv, d: EncounterData): ChoiceDef {
+  const arms = env.weaponName ? `with your ${env.weaponName}` : 'bare-handed';
+  return {
+    id: 'fight',
+    label: d.kind === 'wolves' ? `Stand and fight ${arms}` : `Draw and fight ${arms}`,
+    preview: d.kind === 'wolves' ? 'Wolves bite hard and run when hurt' : 'They are armed too. A wound or a death is on the cards',
+    enabled: env.canFight === true,
+    reason: env.canFight ? undefined : 'Nothing comes of fighting here',
+    run: () => ({ ok: true, message: 'You set your feet and draw.', resume: false, fight: true }),
+  };
+}
+
 // ---------------------------------------------------------------------------------------------
 // Choices
 // ---------------------------------------------------------------------------------------------
@@ -342,6 +359,7 @@ export function buildChoices(env: EncounterEnv, d: EncounterData): ChoiceDef[] {
             return ok(`Your words only anger them. It costs you ${formatMoney(paid)} to be rid of them.`, true, { ok: false });
           },
         },
+        fightChoice(env, d),
       ];
     }
     case 'patrol': {
@@ -494,6 +512,7 @@ export function buildChoices(env: EncounterEnv, d: EncounterData): ChoiceDef[] {
             return ok('The wolves rush you. By the time they lose interest you are badly mauled.', true, { ok: false });
           },
         },
+        fightChoice(env, d),
       ];
     }
     case 'messenger': {

@@ -86,10 +86,10 @@ const KIND_BLEED: Record<WoundKind, number> = { cut: 1, pierce: 0.65, arrow: 0.7
 const KIND_INFECT: Record<WoundKind, number> = { cut: 1, pierce: 1.25, arrow: 1.25, bite: 1.5, blunt: 0.1, burn: 1 };
 /** Chance a blow of this kind to the part is a mortal one (lung, heart, brain, great vessel), per unit severity. */
 const MORTAL: Record<WoundKind, Record<HitLocation, number>> = {
-  pierce: { head: 0.55, torso: 0.34, arm_l: 0, arm_r: 0, leg_l: 0.03, leg_r: 0.03 },
-  arrow: { head: 0.55, torso: 0.34, arm_l: 0, arm_r: 0, leg_l: 0.03, leg_r: 0.03 },
-  cut: { head: 0.4, torso: 0.2, arm_l: 0, arm_r: 0, leg_l: 0.02, leg_r: 0.02 },
-  blunt: { head: 0.3, torso: 0.08, arm_l: 0, arm_r: 0, leg_l: 0, leg_r: 0 },
+  pierce: { head: 0.45, torso: 0.28, arm_l: 0, arm_r: 0, leg_l: 0.03, leg_r: 0.03 },
+  arrow: { head: 0.45, torso: 0.28, arm_l: 0, arm_r: 0, leg_l: 0.03, leg_r: 0.03 },
+  cut: { head: 0.32, torso: 0.16, arm_l: 0, arm_r: 0, leg_l: 0.02, leg_r: 0.02 },
+  blunt: { head: 0.25, torso: 0.07, arm_l: 0, arm_r: 0, leg_l: 0, leg_r: 0 },
   bite: { head: 0.3, torso: 0.15, arm_l: 0, arm_r: 0, leg_l: 0.02, leg_r: 0.02 },
   burn: { head: 0.1, torso: 0.1, arm_l: 0, arm_r: 0, leg_l: 0, leg_r: 0 },
 };
