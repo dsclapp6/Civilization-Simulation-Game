@@ -1,8 +1,8 @@
 {
-  "name": "ascent",
+  "name": "millennia",
   "private": true,
   "version": "0.2.0",
-  "description": "Ascent — a long-form simulation of human history, from a band of foragers to the stars. Browser MVP: Stage 1 (Band) and Stage 2 (Tribe).",
+  "description": "Millennia \u2014 live one life at a time inside a fully simulated medieval world. Browser build (TypeScript + Three.js).",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,8 +10,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "sim": "tsx tools/headless.ts",
-    "smoke": "node tools/smoke.mjs"
+    "sim": "tsx tools/headless.ts"
   },
   "dependencies": {
     "three": "0.186.1"
