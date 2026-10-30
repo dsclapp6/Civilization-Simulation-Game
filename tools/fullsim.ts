@@ -1,7 +1,7 @@
 // Headless run of the whole simulation with every gameplay module installed (no zone/player):
 // population, food, conflict and happenings per year, plus per-system cost. From 20 years on it also prints a summary
 // per decade (population min/max, prosperity, famine, revolts, wars, battles, sieges, raids) and the drift per year.
-//   npx tsx tools/fullsim.ts --years 10 [--seed millennia] [--difficulty knight] [--preset tiny|small|large] [--quiet]
+//   npx tsx tools/fullsim.ts --years 10 [--seed millennia] [--difficulty knight] [--preset tiny|small|large] [--quiet] [--keep-player] [--wall] [--sections]
 import { performance } from 'node:perf_hooks';
 import type { Difficulty } from '../src/core/domain';
 import { installCombat } from '../src/combat';
@@ -52,6 +52,12 @@ sim.events.on('request', () => bump('request'));
 sim.events.on('tech', () => bump('tech'));
 sim.events.on('office', (e) => { if (e.gained) bump('office'); });
 
+// no player: a long study must not stop when the random character dies (`--keep-player` plays on through successors instead)
+if (!process.argv.includes('--keep-player')) {
+  const pl = sim.state.persons.get(sim.state.run.playerId);
+  if (pl) { delete pl.flags.player; sim.state.touch(pl); }
+  sim.state.run.playerId = 0;
+}
 sim.scheduler.profiling = true;
 const sections = process.argv.includes('--sections');
 if (sections) militaryContext(sim).timings = {};
