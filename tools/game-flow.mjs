@@ -143,7 +143,8 @@ try {
   await page.keyboard.press('Tab');
   await tick(0.2);
   check('Tab closes it again', (await ui()).panels.length === 0);
-  await page.keyboard.press('Escape');
+  await page.waitForTimeout(120); // the UI debounces Esc (one press can arrive by two routes)
+    await page.keyboard.press('Escape');
   await tick(0.2);
   s = await ui();
   check('Esc with nothing open shows the pause menu', s.panels.join() === 'pause', JSON.stringify(s));
@@ -162,6 +163,7 @@ try {
       await tick(0.1);
       check(`${id}: the arrow keys switch tabs`, (await page.locator('.mu-tab.active').allTextContents()).join().length > 0 && (await page.locator('.mu-tab.active').first().textContent()) !== (id === 'politics' ? 'Standing' : 'Controls'), await page.locator('.mu-tab.active').first().textContent());
     }
+    await page.waitForTimeout(120); // the UI debounces Esc (one press can arrive by two routes)
     await page.keyboard.press('Escape');
     await tick(0.2);
     check(`Esc closes ${id}`, (await ui()).panels.length === 0, JSON.stringify(await ui()));
@@ -171,7 +173,8 @@ try {
   await page.locator('.mu-dock .mu-dockbtn[aria-label="Realm and politics"]').click();
   await tick(0.2);
   check('the dock button opens the politics page', (await ui()).panels.join() === 'politics', JSON.stringify(await ui()));
-  await page.keyboard.press('Escape');
+  await page.waitForTimeout(120); // the UI debounces Esc (one press can arrive by two routes)
+    await page.keyboard.press('Escape');
   await tick(0.2);
   await sim(() => { window.__game.session.sim.services.happenings.offerRequest('fetch'); window.__game.tick(0.3); });
   await tick(0.3);
@@ -180,7 +183,8 @@ try {
   await page.keyboard.press('Enter');
   await tick(0.2);
   check('Enter takes the notice to the requests journal', (await ui()).panels.join() === 'requests', JSON.stringify(await ui()));
-  await page.keyboard.press('Escape');
+  await page.waitForTimeout(120); // the UI debounces Esc (one press can arrive by two routes)
+    await page.keyboard.press('Escape');
   await tick(0.2);
   await sim(() => window.__ui.showHint('interact'));
   await tick(0.2);
@@ -197,7 +201,8 @@ try {
   s = await ui();
   check('holding E opens the action wheel', s.panels.includes('actions'), JSON.stringify(s));
   check('the wheel lists the options on the target', (await page.locator('.mu-wheel-opt').count()) >= 2, String(await page.locator('.mu-wheel-opt').count()));
-  await page.keyboard.press('Escape');
+  await page.waitForTimeout(120); // the UI debounces Esc (one press can arrive by two routes)
+    await page.keyboard.press('Escape');
   await tick(0.2);
   check('Esc closes the wheel', (await ui()).panels.length === 0);
 
@@ -275,7 +280,8 @@ try {
   // ---- leave to the menu and continue where the run was left
   await tick(1.5);
   const spot = await sim(() => ({ ...window.__game.session.services.player.body() }));
-  await page.keyboard.press('Escape');
+  await page.waitForTimeout(120); // the UI debounces Esc (one press can arrive by two routes)
+    await page.keyboard.press('Escape');
   await tick(0.2);
   await page.getByRole('button', { name: 'Save and quit to menu' }).click();
   await page.waitForFunction(() => window.__game.session === null && window.__game.host.screen === 'menu', null, { timeout: 60000 });
