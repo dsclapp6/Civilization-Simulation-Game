@@ -124,7 +124,15 @@ export function politicsPanel(ctx: PanelCtx, startTab: Tab | undefined): UiPanel
     const mine = myHouse();
     const isActor = !!api.houseView(mine)?.titles.length;
     if (!isActor) return scroll(lock('Only a House that holds land treats with other Houses. Win a manor and the doors of the great will open.'));
-    const near = api.neighbours(mine).slice(0, 12);
+    const leaders = api.actors().filter((a) => api.realmLeader(a) === a && a !== mine);
+    const seen = new Set<HouseId>();
+    const near = [...api.neighbours(mine), ...leaders].filter((o) => {
+      const st = api.stance(mine, o);
+      if (seen.has(o) || st === 'vassal' || st === 'liege') return false;
+      seen.add(o);
+      return true;
+    }).slice(0, 14);
+    const mineVassals = api.vassalsOf(mine).length;
     const rows = near.map((o) => {
       const v = api.houseView(o, mine);
       if (!v) return h('span');
@@ -143,7 +151,8 @@ export function politicsPanel(ctx: PanelCtx, startTab: Tab | undefined): UiPanel
         h('div.mu-grow', null, h('b', null, `House ${v.name}`), h('div.mu-small.mu-dim', null, `${v.headName} · ${v.titles[0]?.name ?? ''} · strength ${v.strength}${v.pacts.length ? ` · ${v.pacts.join(', ')}` : ''}`)),
         chip(STANCE_WORD[v.stance], STANCE_TONE[v.stance]), ...actions);
     });
-    return scroll(heading('Neighbours and kin', 'shield'), rows.length ? h('div.mu-list', null, rows) : empty('No other House lies within reach.'),
+    return scroll(heading('Neighbours, kin and rival realms', 'shield'), rows.length ? h('div.mu-list', null, rows) : empty('No other House lies within reach.'),
+      mineVassals ? h('p.mu-small.mu-dim', { style: { marginTop: '8px' } }, `${plural(mineVassals, 'vassal House')} swear to you; they follow you to war and bring their levies.`) : null,
       h('p.mu-tiny.mu-dim', { style: { marginTop: '8px' } }, 'The ladder: contact, truce, trade, marriage ties, alliance — then union by inheritance, or conquest and vassalage.'));
   };
 

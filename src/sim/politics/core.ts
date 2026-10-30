@@ -113,7 +113,11 @@ export class PoliticsCore {
 
   get day(): number { return this.sim.absDay; }
   get playerId(): PersonId { return this.state.run.playerId; }
-  get playerHouse(): HouseId { return this.state.run.houseId; }
+  /** The House the player acts for: that of the character he plays (the run's own House when nobody is). */
+  get playerHouse(): HouseId {
+    const p = this.state.persons.get(this.state.run.playerId);
+    return p && !p.death ? p.house : this.state.run.houseId;
+  }
   rng(name: string): Rng { return this.sim.rng(`politics.${name}`); }
   touch(): void { this.state.touchExt(EXT_KEY); }
   person(id: PersonId): Person | undefined { return this.state.persons.get(id); }
@@ -529,6 +533,15 @@ export class PoliticsCore {
       this.touch();
     }
     return m;
+  }
+
+  /** Did House `h` lose a title now held by House `o` (and still press its claim)? */
+  hasDeposed(o: HouseId, h: HouseId): boolean {
+    for (const t of this.titlesOfHouse(o)) {
+      const d = this.save.deposed[String(t.id)];
+      if (d && d[0] === h && d[1] > this.day) return true;
+    }
+    return false;
   }
 
   /** Is a coalition (forming or at war) aimed at this House or its realm leader? */

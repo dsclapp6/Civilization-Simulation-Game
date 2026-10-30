@@ -27,7 +27,7 @@ const SEATS: Partial<Record<OfficeId, number>> = { alderman: 2 };
 
 interface Seat { office: OfficeId; place: number }
 
-const MAX_ELECTORS = 24;
+const MAX_ELECTORS = 16;
 const hash = (n: number): number => (Math.imul(n ^ 0x9e3779b1, 2654435761) >>> 0);
 
 export class Offices {
@@ -304,7 +304,7 @@ export class Offices {
 
   private tally(office: OfficeId, place: number, rolled: boolean): { tally: Array<{ person: PersonId; votes: number }>; candidates: Person[] } {
     const c = this.core;
-    const candidates = this.pool(office, place, 4);
+    const candidates = this.pool(office, place, 3);
     const electors = this.electors(office, place);
     const incumbent = this.holders(office, place)[0] ?? 0;
     const rng = c.rng('election');
@@ -427,10 +427,11 @@ export class Offices {
   /** Hourly: the posts whose review falls today are voted on or filled — a few each hour, spread over the year. */
   hourly(hour: number): void {
     const c = this.core;
+    if (hour % 2 === 0) return; // odd hours only: the Houses think on the even ones
     const slot = Math.floor(c.day) % YEAR;
     const list = this.bySlot.get(slot);
     // appointments the player left unchosen are made for him
-    if (hour === 6) {
+    if (hour === 7) {
       for (const k of Object.keys(c.save.pending).sort()) {
         if (c.save.pending[k] <= c.day) {
           const [office, place] = k.split(':');
@@ -439,7 +440,7 @@ export class Offices {
       }
     }
     if (!list) return;
-    for (let i = 0; i < list.length; i++) if (i % 24 === hour) this.review(list[i]);
+    for (let i = 0; i < list.length; i++) if (i % 12 === (hour - 1) / 2) this.review(list[i]);
   }
 
   private review(seat: Seat): void {

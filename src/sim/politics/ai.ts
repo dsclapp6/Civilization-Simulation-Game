@@ -22,11 +22,17 @@ export class Ai {
   /** Hourly slice: each House thinks once every THINK_PERIOD days, at its own hour (about one House per hour). */
   hourly(hourIndex: number): void {
     const c = this.core;
-    const cycle = THINK_PERIOD * 24;
-    for (const h of c.actors()) {
-      if (h % cycle !== hourIndex % cycle) continue;
-      this.think(h);
+    if (hourIndex % 2 !== 0) return; // Houses think on even hours, posts are reviewed on odd ones: no frame carries both
+    const cycle = THINK_PERIOD * 12;
+    const slot = (hourIndex / 2) % cycle;
+    // who is due this hour is found without touching the snapshot (most hours nobody is, or one House)
+    const due: HouseId[] = [];
+    for (let id = slot; id < c.state.houses.nextId; id += cycle) {
+      if (id > 0 && !c.isPlayerHouse(id) && c.holdsLand(id)) due.push(id);
     }
+    if (due.length === 0) return;
+    c.invalidate(); // decisions are taken on the state of this very hour, live or loaded
+    for (const h of due) if (c.isActor(h)) this.think(h);
   }
 
   think(h: HouseId): void {
@@ -95,16 +101,14 @@ export class Ai {
       return s !== 'war' && s !== 'hostile';
     });
     let tried = 0;
-    for (const o of targets) {
-      if (tried >= 2) break;
-      const opts = this.diplo.matchOptions(h, o, only);
-      if (opts.length === 0) continue;
-      const pick = opts[0];
-      const last = mind.matched[String(pick.ward)] ?? -999;
-      if (c.day - last < YEAR / 2) continue;
+    for (const o of targets.slice(0, 6)) {
+      if (tried >= 1) break;
       const theirs = c.strengthOf(o);
       const want = (theirs >= mine * 0.6 ? 0.5 : 0.2) + (c.stance(h, o) === 'kin' ? -0.2 : 0.1) + (mind.goal === 'marry_up' || mind.goal === 'secure_heir' ? 0.25 : 0);
       if (!rng.chance(clamp(want, 0.05, 0.85))) continue;
+      const opts = this.diplo.matchOptions(h, o, only);
+      if (opts.length === 0) continue;
+      const pick = opts[0];
       mind.matched[String(pick.ward)] = c.day;
       tried++;
       const r = this.diplo.propose(h, o, 'marriage', { a: pick.ward, b: pick.partner });
@@ -288,6 +292,8 @@ export class Ai {
   /** Strength (0..3) of the best claim of House h on any title of o. */
   private bestClaim(h: HouseId, o: HouseId): number {
     const c = this.core;
+    // claims come with marriages (kin ties) or with titles lost: nothing to compute for strangers
+    if (c.tie(h, o).kin === 0 && !c.hasDeposed(o, h)) return 0;
     let best = 0;
     for (const t of c.titlesOfHouse(o)) {
       if (t.kind === 'abbey' || t.kind === 'see') continue;

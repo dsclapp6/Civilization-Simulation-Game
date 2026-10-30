@@ -64,7 +64,6 @@ export function installPolitics(sim: Simulation, deps: Pick<Wave3Deps, 'economy'
   offs.push(sim.registerSystem({
     name: 'politics.hourly', phase: 'hourly', order: 70,
     run: (_ctx, info) => {
-      core.invalidate(); // decisions are taken on the state of this very hour, live or loaded
       ai.hourly(info.hourIndex);
       offices.hourly(info.hour);
     },
@@ -92,7 +91,13 @@ export function installPolitics(sim: Simulation, deps: Pick<Wave3Deps, 'economy'
   offs.push(sim.events.on('marriage', (e) => diplo.onMarriage(e)));
   offs.push(sim.events.on('inheritance', (e) => realms.onInheritance(e)));
   offs.push(sim.events.on('siege', (e) => wars.onSiege(e)));
-  offs.push(sim.events.on('playerSwitched', () => core.invalidate()));
+  offs.push(sim.events.on('playerSwitched', (e) => {
+    core.invalidate();
+    // letters and petitions follow the House and the lordship to the new character
+    core.save.inbox = core.save.inbox.filter((p) => p.to === core.playerHouse);
+    for (const pt of core.save.petitions) pt.to = e.to;
+    core.touch();
+  }));
 
   // the monks vote for their abbot and prior
   setSuccessionHooks(core.state, {
@@ -186,10 +191,10 @@ export function installPolitics(sim: Simulation, deps: Pick<Wave3Deps, 'economy'
   offs.push(sim.actions.register(politicsActions(core)));
   offs.push(deps.social.registerTopic(politicsTopics(core, runtime, offices)));
 
+  runtime.dispose = () => { for (const off of offs.splice(0)) off(); setSuccessionHooks(core.state, null); delete sim.services.politics; installed.delete(sim); internals.delete(sim); };
   sim.services.politics = runtime;
   installed.set(sim, runtime);
   internals.set(sim, { core, wars, diplo, realms, offices, unrest, manage, ai });
-  void offs;
   return runtime;
 }
 

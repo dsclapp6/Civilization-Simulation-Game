@@ -292,6 +292,8 @@ export interface PoliticsRuntime extends PoliticsApi {
   realmShare(house: HouseId): number;
   /** Cheap counts for the debug tool. */
   stats(): PoliticsStats;
+  /** Removes the systems, listeners, topics and actions this module installed (tests, tools). */
+  dispose?(): void;
 
   // ---- claims ----
   claimsOn(title: TitleId): readonly Claim[];

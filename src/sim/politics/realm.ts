@@ -133,6 +133,20 @@ export class Realms {
       this.feelings(v, l);
     }
     this.unions();
+    this.housekeeping();
+  }
+
+  /** Yearly tidy-up: lapsed claims, dead office holders, oaths of titles that no longer exist. */
+  private housekeeping(): void {
+    const c = this.core;
+    for (const k of Object.keys(c.save.deposed)) if (c.save.deposed[k][1] <= c.day || !c.state.titles.get(Number(k))) delete c.save.deposed[k];
+    for (const k of Object.keys(c.save.oaths)) if (k[0] !== 'u' && !c.state.titles.get(Number(k))) delete c.save.oaths[k];
+    for (const k of Object.keys(c.save.offices)) {
+      if (k === '__init') continue;
+      const live = c.save.offices[k].filter((id) => !!c.living(id));
+      if (live.length) c.save.offices[k] = live; else delete c.save.offices[k];
+    }
+    c.touch();
   }
 
   /** Opinion of a liege moves with his protection, his strength and his taxes. */
