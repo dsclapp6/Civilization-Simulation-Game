@@ -24,7 +24,7 @@ import { addStock, marketBuy } from './market';
 
 export const TITHE = 0.1;
 /** Work units (bouts at speed 1) each strip task takes for a player; see work.ts. */
-export const TASK_BOUTS = { plough: 6, harrow: 3, sow: 3, weed: 4, reap: 6, bind: 4, carry: 3, thresh: 5, winnow: 3 } as const;
+export const TASK_BOUTS = { plough: 4, harrow: 2, sow: 2, weed: 3, reap: 4, bind: 3, carry: 2, thresh: 3, winnow: 2 } as const;
 export type StripTask = 'plough' | 'harrow' | 'sow' | 'weed' | 'reap' | 'bind' | 'carry';
 
 // ---------------------------------------------------------------------------------------------

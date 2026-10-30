@@ -12,6 +12,7 @@ import { shiftFamilyRank } from '../succession';
 import { ageYears, type Household, type Person } from '../state';
 import type { Econ } from './core';
 import { CAREER_ECON, GOODS, GOOD_LIST, careerEcon, keyOf } from './data';
+import { RATION } from './diet';
 import { bagAdd, bagEntries, bagGet, bagTake, countGood } from './items';
 import { employmentOf } from './jobs';
 import { buyFreedom, fleeToTown, manumissionPrice } from './obligations';
@@ -349,7 +350,7 @@ function listBuilding(E: Econ, p: Person, id: number, out: ActionOption[]): void
   if (hh && hh.home === id) {
     out.push(option({ id: 'manage.household', label: 'Household affairs', seconds: 0, category: 'manage', priority: 7, ...base, data: { act: 'open', ui: { panel: 'household', id: hh.id } } as WorkData }));
     // eat at the household table
-    const hasFood = Object.keys(hh.stores).some((k) => GOODS[parseItemKey(k).good]?.food && hh.stores[k] > 0.2 && !k.startsWith('~'));
+    const hasFood = Object.keys(hh.stores).some((k) => !k.startsWith('~') && ((GOODS[parseItemKey(k).good]?.food && GOODS[parseItemKey(k).good].category !== 'livestock' && hh.stores[k] > 0.2) || (POTTAGE.includes(parseItemKey(k).good) && hh.stores[k] > 0.1)));
     const o = option({
       id: 'eat.home', label: 'Eat at the household table', seconds: 5, anim: 'eat', mainHand: 'none', category: 'use', priority: p.needs.hunger < 0.5 ? 70 : 8, ...base,
       preview: 'A meal from the family stores', data: { act: 'eat_home' } as WorkData,
@@ -425,6 +426,9 @@ function practise(E: Econ, p: Person, buildingId: number): ActionOutcome {
 }
 
 
+/** Grain, pulses and flour make a pottage when the larder holds nothing prepared. */
+const POTTAGE = ['flour', 'rye', 'barley', 'oats', 'wheat', 'peas', 'beans'];
+
 function eatItem(E: Econ, p: Person, key: ItemKey, qty: number): ActionOutcome {
   const r = consume(E, p, key, qty);
   return { ok: r.ok, message: r.ok ? `You ${GOODS[parseItemKey(key).good]?.category === 'drink' ? 'drink' : 'eat'} and feel better.` : r.reason };
@@ -451,13 +455,15 @@ function eatAtHome(E: Econ, p: Person): ActionOutcome {
   }
   // flour and grain make pottage if there is nothing else
   if (ate === 0) {
-    for (const g of ['flour', 'rye', 'barley', 'oats', 'wheat', 'peas', 'beans']) {
-      const per = g === 'flour' ? 0.06 : 0.5;
+    for (const g of POTTAGE) {
+      // a gallon of grain is 3 to 4 days of rations (diet.ts); a ration is about 0.55 of the hunger bar
+      const per = g === 'flour' ? 0.06 : (RATION[g] ?? 3) * 0.55;
       const have = bagGet(hh.stores, g);
       if (have <= 0.1) continue;
-      const qty = Math.min(have, g === 'flour' ? 5 : 0.5);
+      const want = Math.max(0, 0.92 - p.needs.hunger) / per;
+      const qty = Math.min(have, Math.max(0.05, Math.ceil(want * 20) / 20), g === 'flour' ? 12 : 0.6);
       bagTake(hh.stores, g, qty);
-      p.needs.hunger = Math.min(1, p.needs.hunger + per * qty);
+      p.needs.hunger = Math.round(Math.min(1, p.needs.hunger + per * qty) * 1000) / 1000;
       ate++;
       break;
     }

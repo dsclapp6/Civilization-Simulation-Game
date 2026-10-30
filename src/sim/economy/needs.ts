@@ -95,9 +95,11 @@ export function playerHour(E: Econ, _info: HourInfo): void {
   const part = dayPart(E.day);
   const night = part === 'night';
 
-  n.hunger = r2(clamp01(n.hunger - (sleeping ? 0.015 : 0.038)));
+  n.hunger = r2(clamp01(n.hunger - (sleeping ? 0.01 : 0.026)));
   if (!sleeping) n.rest = r2(clamp01(n.rest - 0.036 - (night ? 0.01 : 0)));
   else n.rest = r2(clamp01(n.rest + 0.12));
+
+  autoEat(E, p);
 
   // warmth: weather against clothes, shelter and fire
   const w = E.sim.view.weather();
@@ -140,6 +142,27 @@ export function playerHour(E: Econ, _info: HourInfo): void {
     const cause = n.hunger <= 0.03 ? 'famine' : 'exposure';
     killPerson(E.sim, p, cause, E.day);
   }
+}
+
+/** A hungry character with food in the pack eats without being told (the HUD still shows what is eaten): nobody should have to click a loaf twice a day. */
+function autoEat(E: Econ, p: Person): void {
+  if (p.needs.hunger >= 0.3) return;
+  const foods = Object.keys(p.inventory).filter((k) => k.charCodeAt(0) !== 126 && GOODS[parseItemKey(k).good]?.food && GOODS[parseItemKey(k).good].category !== 'livestock');
+  if (foods.length === 0) return;
+  // bread and cheese before ale and vegetables
+  const order = ['bread', 'cheese', 'meat', 'fish', 'eggs', 'vegetables', 'honey', 'ale'];
+  foods.sort((a, b) => order.indexOf(parseItemKey(a).good) - order.indexOf(parseItemKey(b).good));
+  let ate = 0;
+  for (const k of foods) {
+    if (p.needs.hunger >= 0.7) break;
+    const g = GOODS[parseItemKey(k).good];
+    const have = bagGet(p.inventory, k);
+    const unit = g.category === 'drink' ? 0.25 : 1;
+    const qty = Math.min(have, Math.max(unit, Math.ceil(((0.8 - p.needs.hunger) / (g.food ?? 0.2)) / unit) * unit));
+    if (consume(E, p, k, qty).ok) ate++;
+    if (ate >= 3) break;
+  }
+  if (ate > 0) E.notify('You eat from your pack.', 'info', p.id);
 }
 
 /** Every season the training bonus of the player fades a little unless exercised (sim/skills.ts asks for a call). */

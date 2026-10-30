@@ -517,46 +517,48 @@ function stockFor(E: Econ, head: Person, hh: Household, u: () => number): Record
   return out;
 }
 
+/** Stocks one household for the days to the next harvest (grain by diet, ale, fuel, and for farmers seed corn, cheese and animals). */
+export function stockHousehold(E: Econ, hh: Household, farmerHint?: boolean): void {
+  const state = E.state;
+  const toHarvest = daysToHarvest(E.dayOfYear);
+  const head = state.persons.get(hh.head) ?? hh.members.map((id) => state.persons.get(id)).find((p) => !!p && !p.death);
+  if (!head) return;
+  let units = 0;
+  for (const id of hh.members) {
+    const p = state.persons.get(id);
+    if (!p || p.death) continue;
+    const age = E.age(p);
+    units += age >= 14 ? 1 : age >= 8 ? 0.7 : age >= 3 ? 0.5 : 0.25;
+  }
+  const uOf = (): number => hash01(hh.id, ++E.initSeq, 61);
+  delete hh.stores.grain;
+  const diet = dietOf(head.rankTier);
+  const farmer = farmerHint ?? (['farmer', 'yeoman', 'cottar', 'labourer', 'shepherd', 'swineherd', 'woodward'].includes(head.career) || hh.kind === 'lord' || hh.kind === 'monastic');
+  const cover = farmer ? toHarvest + 1.5 + 2 * uOf() : 2 + 3 * uOf();
+  const grain = units * GRAIN_PER_UNIT_DAY * cover;
+  for (const [g, w] of diet.staple) {
+    const q = Math.round(grain * w * 100) / 100;
+    if (q > 0.05) bagAdd(hh.stores, g, q);
+  }
+  bagAdd(hh.stores, 'ale', Math.round(units * diet.ale * (1 + 2 * uOf()) * 10) / 10);
+  bagAdd(hh.stores, 'firewood', Math.round(units * diet.fuel * (3 + 6 * uOf()) * 10) / 10);
+  if (farmer) {
+    bagAdd(hh.stores, 'barley', Math.round(units * 0.3 * 10) / 10);
+    bagAdd(hh.stores, 'cheese', Math.round(units * 0.6 * 10) / 10);
+    // seed corn for the sowings of the strips they hold
+    const sset = E.settlementById.get(hh.settlement);
+    const seed = sset ? seedWanted(E, sset, hh.id) : 0;
+    if (seed > 0) bagAdd(hh.stores, 'seed_corn', Math.round(seed * 100) / 100);
+  }
+  for (const [k, v] of Object.entries(stockFor(E, head, hh, uOf))) bagAdd(hh.stores, k, v);
+  bagAdd(hh.stores, 'hay', 0);
+  state.touchHousehold(hh);
+}
+
 /** Sets up every household: stores for the days to the first harvest, animals, an economic footing. */
 export function initHouseholds(E: Econ): void {
-  const state = E.state;
-  const d = E.dayOfYear;
-  const toHarvest = daysToHarvest(d);
-  const hhs = [...state.households.values()].sort((a, b) => a.id - b.id);
-  for (const hh of hhs) {
-    const head = state.persons.get(hh.head) ?? hh.members.map((id) => state.persons.get(id)).find((p) => !!p && !p.death);
-    if (!head) continue;
-    let units = 0;
-    for (const id of hh.members) {
-      const p = state.persons.get(id);
-      if (!p || p.death) continue;
-      const age = E.age(p);
-      units += age >= 14 ? 1 : age >= 8 ? 0.7 : age >= 3 ? 0.5 : 0.25;
-    }
-    const uOf = (): number => hash01(hh.id, ++E.initSeq, 61);
-    delete hh.stores.grain;
-    const diet = dietOf(head.rankTier);
-    const farmer = ['farmer', 'yeoman', 'cottar', 'labourer', 'shepherd', 'swineherd', 'woodward'].includes(head.career) || hh.kind === 'lord' || hh.kind === 'monastic';
-    const cover = farmer ? toHarvest + 1.5 + 2 * uOf() : 2 + 3 * uOf();
-    const grain = units * GRAIN_PER_UNIT_DAY * cover;
-    for (const [g, w] of diet.staple) {
-      const q = Math.round(grain * w * 100) / 100;
-      if (q > 0.05) bagAdd(hh.stores, g, q);
-    }
-    bagAdd(hh.stores, 'ale', Math.round(units * diet.ale * (1 + 2 * uOf()) * 10) / 10);
-    bagAdd(hh.stores, 'firewood', Math.round(units * diet.fuel * (3 + 6 * uOf()) * 10) / 10);
-    if (farmer) {
-      bagAdd(hh.stores, 'barley', Math.round(units * 0.3 * 10) / 10);
-      bagAdd(hh.stores, 'cheese', Math.round(units * 0.6 * 10) / 10);
-      // seed corn for the sowings of the strips they hold
-      const sset = E.settlementById.get(hh.settlement);
-      const seed = sset ? seedWanted(E, sset, hh.id) : 0;
-      if (seed > 0) bagAdd(hh.stores, 'seed_corn', Math.round(seed * 100) / 100);
-    }
-    for (const [k, v] of Object.entries(stockFor(E, head, hh, uOf))) bagAdd(hh.stores, k, v);
-    bagAdd(hh.stores, 'hay', 0);
-    state.touchHousehold(hh);
-  }
+  const hhs = [...E.state.households.values()].sort((a, b) => a.id - b.id);
+  for (const hh of hhs) stockHousehold(E, hh);
   void GRAIN_STAPLE_ORDER; void NONE; void keyOf;
 }
 

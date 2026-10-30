@@ -441,7 +441,7 @@ function stripBout(E: Econ, p: Person, d: StripData, f: number): ActionOutcome {
   const skill = 'farming' as const;
   const toolQ = tool ? tool.quality : null;
   // progress
-  ex.p = round2((ex.p ?? 0) + f / d.bouts);
+  ex.p = Math.round(((ex.p ?? 0) + f / d.bouts) * 1000) / 1000;
   const care = careOf(p, skill, toolQ);
   const w = 0.2 * f;
   ex.c = Math.max(0.3, Math.min(1, round2((ex.c ?? 0.5) * (1 - w) + care * w)));
@@ -453,7 +453,7 @@ function stripBout(E: Econ, p: Person, d: StripData, f: number): ActionOutcome {
   if (pay > 0) gains.push({ label: 'Wages', amount: round2(pay), ref: 'money' });
   if (d.access === 'week') gains.push({ label: "Week-work for the lord", amount: round2(BOUT_DAYS * f), ref: 'days' });
   let message = `${taskLabel(d.task, st)}: ${Math.min(100, Math.round(ex.p * 100))}%.`;
-  if (ex.p >= 0.999) {
+  if (ex.p >= 0.985) {
     ex.p = 0;
     const done = finishTask(E, p, st, ex, d);
     message = done.message;
@@ -577,7 +577,7 @@ function listBuilding(E: Econ, p: Person, id: number, out: ActionOption[]): void
         const speed = speedOf(E, p, 'farming', 'str', flail.quality);
         push(option({
           id: 'farm.thresh', label: `Thresh ${SHEAF_CROP[best.good]} (${Math.round(best.qty)} sheaves)`, seconds: secondsFor(1, speed), anim: 'work_hammer', mainHand: 'flail', priority: 65,
-          preview: 'Each bout beats out about six sheaves into chaffy grain and straw · Farming', ...base, data: { act: 'thresh', good: best.good, building: id, tool: flail.key } as FarmData,
+          preview: 'Each bout beats out about eight sheaves into chaffy grain and straw · Farming', ...base, data: { act: 'thresh', good: best.good, building: id, tool: flail.key } as FarmData,
         }));
       }
     }
@@ -703,7 +703,7 @@ function toStores(E: Econ, p: Person, good: string, qty: number): void {
 
 function threshBout(E: Econ, p: Person, d: BarnData, f: number): ActionOutcome {
   const good = d.good as string;
-  const got = takeFrom(E, p, good, 6 * f);
+  const got = takeFrom(E, p, good, 8 * f);
   if (got < 0.1) return { ok: false, message: 'No sheaves left.' };
   const crop = SHEAF_CROP[good];
   const grain = round2(got * 0.95 * (1 + perkSum(p, 'farming', 'yield') * 0.5));
@@ -718,7 +718,7 @@ function threshBout(E: Econ, p: Person, d: BarnData, f: number): ActionOutcome {
 
 function winnowBout(E: Econ, p: Person, d: BarnData, f: number): ActionOutcome {
   const g = d.good as string;
-  const got = takeFrom(E, p, `${g}#0`, 10 * f);
+  const got = takeFrom(E, p, `${g}#0`, 12 * f);
   if (got < 0.1) return { ok: false, message: 'Nothing left to winnow.' };
   const clean = round2(got * 0.96);
   toStores(E, p, g, clean);
@@ -729,7 +729,7 @@ function winnowBout(E: Econ, p: Person, d: BarnData, f: number): ActionOutcome {
 function millBout(E: Econ, p: Person, d: BarnData, f: number): ActionOutcome {
   const g = d.good as string;
   const quern = d.act === 'quern';
-  const got = takeFrom(E, p, g, 6 * f);
+  const got = takeFrom(E, p, g, 8 * f);
   if (got < 0.1) return { ok: false, message: 'No grain left to grind.' };
   const multure = quern ? 0 : round2(got / 16);
   const flour = round2((got - multure) * FLOUR_PER_GALLON[g] * (1 + perkSum(p, 'brewing', 'yield') * 0));
@@ -818,13 +818,13 @@ function gardenBout(E: Econ, p: Person, d: GardenData, f: number): ActionOutcome
   const bed = beds[d.bed] ?? (d.step === 'dig' ? beds[beds.push({ c: '', s: 0 }) - 1] : undefined);
   if (!bed) return { ok: false, message: 'There is no such bed.' };
   const need = d.step === 'dig' ? 2 : d.step === 'harvest' ? 2 : 1;
-  bed.p = round2((bed.p ?? 0) + f / need);
+  bed.p = Math.round(((bed.p ?? 0) + f / need) * 1000) / 1000;
   boutDone(E, p, { skill: 'farming', xp: 6, heavy: d.step === 'dig' ? 0.6 : 0.2, bouts: f });
   const tool = d.step === 'dig' ? toolFor(E, p, 'spade') : d.step === 'weed' ? toolFor(E, p, 'hoe') : null;
   wearOut(E, p, tool, 0.01 * f, 'farming');
   let message = 'You work the bed.';
   const gains: NonNullable<ActionOutcome['gains']> = [{ label: 'Farming', ref: 'farming' }];
-  if ((bed.p ?? 0) >= 0.999) {
+  if ((bed.p ?? 0) >= 0.985) {
     bed.p = 0;
     switch (d.step) {
       case 'dig': bed.d = 1; message = 'The bed is dug and ready for sowing.'; break;

@@ -16,7 +16,7 @@ import { perkSum, perkTotal } from './perks';
 import { parseItemKey, type ItemKey, type Quality } from './types';
 
 /** Seconds a bout takes at speed 1. */
-export const BOUT = 13;
+export const BOUT = 12;
 /** Fraction of a working day one bout stands for (a day's work is a little over three bouts). */
 export const BOUT_DAYS = 0.3;
 
