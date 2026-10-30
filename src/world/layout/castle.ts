@@ -188,6 +188,9 @@ function routeCandidates(ctx: LayoutCtx, a: P2, b: P2, cx: number, cz: number, c
       len += dist(prev.x, prev.z, p.x, p.z);
       prev = p;
     }
+    // no doubling back at the waypoints
+    const chain = [a, ...path, b];
+    for (let i = 1; i + 1 < chain.length; i++) if (turnDeg(chain[i - 1], chain[i], chain[i + 1]) > 100) return;
     found.push({ path, len });
   };
   for (let i = 0; i < ws.length; i++) consider([ws[i]]);
@@ -228,6 +231,17 @@ export function cutRoadsAtCompound(ctx: LayoutCtx, id: number, cx: number, cz: n
       // reconnect to the first point of the old road that is visible from the gate spur
       let idx = 0;
       while (idx < keep.length - 1 && !clearLine(ctx, gateOut, keep[idx], 3.4)) idx++;
+      // ... but join where the old road carries on without doubling back (no spike at the join)
+      if (keep.length > 1) {
+        let bestJ = idx, bestTurn = Infinity;
+        for (let j = idx; j < Math.min(keep.length - 1, idx + 12); j++) {
+          const way = routeAround(ctx, gateOut, keep[j], cx, cz, corners);
+          const t = turnDeg(way.length ? way[way.length - 1] : gateOut, keep[j], keep[j + 1]);
+          if (t < bestTurn) { bestTurn = t; bestJ = j; }
+          if (t <= 75) break;
+        }
+        idx = bestJ;
+      }
       let target: P2;
       let rest: P2[] = [];
       if (keep.length) { target = keep[idx]; rest = keep.slice(idx + 1); }
@@ -244,8 +258,14 @@ export function cutRoadsAtCompound(ctx: LayoutCtx, id: number, cx: number, cz: n
       // further approaches join the main approach road where it passes close by (a junction, never an overlap);
       // otherwise they end in a stub outside the ring
       const excl = new Set(roads.filter((q) => q.id !== firstId).map((q) => q.id));
-      const np = firstId >= 0 ? ctx.roadIdx.nearest(keep[0].x, keep[0].z, 120, excl) : null;
-      if (np && dist(np.x, np.z, keep[0].x, keep[0].z) > 6 && clearLine(ctx, keep[0], { x: np.x, z: np.z }, 3.4)) outward = [{ x: np.x, z: np.z }, ...keep];
+      let joined: P2[] | null = null;
+      for (let j = 0; j < Math.min(keep.length - 1, 10) && firstId >= 0 && !joined; j++) {
+        const np = ctx.roadIdx.nearest(keep[j].x, keep[j].z, 120, excl);
+        if (!np || dist(np.x, np.z, keep[j].x, keep[j].z) <= 6 || !clearLine(ctx, keep[j], { x: np.x, z: np.z }, 3.4)) continue;
+        if (turnDeg(np, keep[j], keep[j + 1]) > 75) continue; // no spike: the road must carry on away from the junction
+        joined = [{ x: np.x, z: np.z }, ...keep.slice(j)];
+      }
+      if (joined) outward = joined;
       else { outward = keep; stubs.push(r); }
     } else {
       const dx = far.x - cx, dz = far.z - cz, l = Math.hypot(dx, dz) || 1;
@@ -257,31 +277,40 @@ export function cutRoadsAtCompound(ctx: LayoutCtx, id: number, cx: number, cz: n
   for (const r of stubs) {
     const fromStart = r.from === id;
     const pts = fromStart ? r.points.slice() : r.points.slice().reverse();
-    const end = pts[0];
-    const options = routeCandidates(ctx, gateOut, end, cx, cz, corners, true);
-    if (!options.length) { ctx.bump('castle.stub.noroute'); continue; }
-    let chosen: P2[] | null = null;
-    for (const around of options) {
-      const path = [gateOut, ...around, end];
-      let len = 0;
-      for (let i = 0; i + 1 < path.length; i++) len += dist(path[i].x, path[i].z, path[i + 1].x, path[i + 1].z);
-      if (len > 560) continue;
-      let ok = true, acc = 0;
-      for (let i = 0; i + 1 < path.length && ok; i++) {
-        const a = path[i], b = path[i + 1], l = dist(a.x, a.z, b.x, b.z), n = Math.max(1, Math.ceil(l / 4));
-        for (let q = 0; q <= n; q++) {
-          const d = acc + (l * q) / n;
-          if (d < 28 || d > len - 22) continue;
-          if (ctx.roadIdx.clearance(a.x + ((b.x - a.x) * q) / n, a.z + ((b.z - a.z) * q) / n, 14) < 7) { ok = false; break; }
+    let full: P2[] | null = null;
+    for (let j = 0; j < Math.min(pts.length - 1, 8) && !full; j++) {
+      const end = pts[j];
+      for (const around of routeCandidates(ctx, gateOut, end, cx, cz, corners, true)) {
+        const path = [gateOut, ...around, end];
+        // no spike where the new way meets the old road
+        if (turnDeg(path[path.length - 2], end, pts[j + 1]) > 75) continue;
+        let len = 0;
+        for (let i = 0; i + 1 < path.length; i++) len += dist(path[i].x, path[i].z, path[i + 1].x, path[i + 1].z);
+        if (len > 560) continue;
+        let ok = true, acc = 0;
+        for (let i = 0; i + 1 < path.length && ok; i++) {
+          const a = path[i], b = path[i + 1], l = dist(a.x, a.z, b.x, b.z), n = Math.max(1, Math.ceil(l / 4));
+          for (let q = 0; q <= n; q++) {
+            const d = acc + (l * q) / n;
+            if (d < 28 || d > len - 22) continue;
+            if (ctx.roadIdx.clearance(a.x + ((b.x - a.x) * q) / n, a.z + ((b.z - a.z) * q) / n, 14) < 7) { ok = false; break; }
+          }
+          acc += l;
         }
-        acc += l;
+        if (ok) { full = [gateOut, ...around, ...pts.slice(j)]; break; }
       }
-      if (ok) { chosen = around; break; }
     }
-    if (!chosen) { ctx.bump('castle.stub.loose'); continue; }
-    const full = [gateOut, ...chosen, ...pts];
+    if (!full) { ctx.bump('castle.stub.loose'); continue; }
     ctx.setRoadPoints(r, fromStart ? full : full.slice().reverse());
   }
+}
+
+/** Deviation (degrees) from straight ahead at b on the way a -> b -> c. */
+function turnDeg(a: P2, b: P2, c: P2): number {
+  const ux = b.x - a.x, uz = b.z - a.z, vx = c.x - b.x, vz = c.z - b.z;
+  const lu = Math.hypot(ux, uz), lv = Math.hypot(vx, vz);
+  if (lu < 1e-6 || lv < 1e-6) return 0;
+  return (Math.acos(Math.max(-1, Math.min(1, (ux * vx + uz * vz) / (lu * lv)))) * 180) / Math.PI;
 }
 
 /** A compound may be shifted a little, but never across its kingdom or county border. */

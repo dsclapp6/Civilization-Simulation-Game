@@ -227,22 +227,59 @@ export class World implements WorldModel {
     let h = tm.baseHeight(x, z);
     if (x < 0 || z < 0 || x >= WORLD_SIZE || z >= WORLD_SIZE) return h;
     const b = ((z * INV_B) | 0) * BCOLS + ((x * INV_B) | 0);
-    // roads
-    const rc = this.roadCsr;
-    const re = rc.start[b + 1];
-    if (rc.start[b] < re) {
-      const hit = tm.hit;
-      const inChannel = hit.d <= hit.hw + 1.5;
-      if (!inChannel) {
-        let bestD = ROAD_BLEND, bi = -1, bt = 0;
+    const hit = tm.hit;
+    const dBank = hit.d - hit.hw;
+    // building platforms first (they never reshape a river channel): inside a footprint (plus a hair) the nearest
+    // platform decides exactly; beyond it neighbouring platforms blend into the ground
+    if (dBank > 0.8) {
+      const pc = this.platCsr;
+      const pe = pc.start[b + 1];
+      if (pc.start[b] < pe) {
+        let bestSd = 1e9, bestI = -1;
+        for (let p = pc.start[b]; p < pe; p++) {
+          const i = pc.items[p];
+          if (this.pBlend[i] <= 0) continue;
+          const dx = x - this.pX[i], dz = z - this.pZ[i];
+          const lx = Math.abs(dx * this.pCos[i] - dz * this.pSin[i]) - this.pHw[i];
+          const lz = Math.abs(dx * this.pSin[i] + dz * this.pCos[i]) - this.pHd[i];
+          const ox = lx > 0 ? lx : 0, oz = lz > 0 ? lz : 0;
+          const sd = Math.sqrt(ox * ox + oz * oz) + (lx > lz ? (lx < 0 ? lx : 0) : (lz < 0 ? lz : 0));
+          if (sd < bestSd) { bestSd = sd; bestI = i; }
+        }
+        if (bestI >= 0 && bestSd <= 0.3) return this.pTarget[bestI];
+        for (let p = pc.start[b]; p < pe; p++) {
+          const i = pc.items[p];
+          const blend = this.pBlend[i];
+          if (blend <= 0) continue;
+          const dx = x - this.pX[i], dz = z - this.pZ[i];
+          const lx = Math.abs(dx * this.pCos[i] - dz * this.pSin[i]) - this.pHw[i];
+          const lz = Math.abs(dx * this.pSin[i] + dz * this.pCos[i]) - this.pHd[i];
+          const ox = lx > 0 ? lx : 0, oz = lz > 0 ? lz : 0;
+          const sd = Math.sqrt(ox * ox + oz * oz) + (lx > lz ? (lx < 0 ? lx : 0) : (lz < 0 ? lz : 0));
+          if (sd >= blend) continue;
+          const w = 1 - smoothstep(0.3, blend, sd);
+          h += (this.pTarget[i] - h) * w;
+        }
+      }
+    }
+    // roads last: they own the ground under and beside them, so a street between houses stays level across its width
+    if (dBank > 1.5) {
+      const rc = this.roadCsr;
+      const re = rc.start[b + 1];
+      if (rc.start[b] < re) {
+        // nearest road body wins; where bodies overlap (a lane ending on a highway) the widest road owns the ground
+        let bestD = ROAD_BLEND, bi = -1, bt = 0, bestHw = 0;
         for (let p = rc.start[b]; p < re; p++) {
           const i = rc.items[p];
           const dx = x - this.rdX0[i], dz = z - this.rdZ0[i];
           let t = (dx * this.rdDx[i] + dz * this.rdDz[i]) * this.rdInv[i];
           t = t < 0 ? 0 : t > 1 ? 1 : t;
           const ex = dx - this.rdDx[i] * t, ez = dz - this.rdDz[i] * t;
-          const d = Math.sqrt(ex * ex + ez * ez) - this.rdHw[i];
-          if (d < bestD) { bestD = d; bi = i; bt = t; }
+          const hw = this.rdHw[i];
+          const d = Math.sqrt(ex * ex + ez * ez) - hw;
+          if (d <= 0) {
+            if (bestD > 0 || hw > bestHw + 0.01 || (hw >= bestHw - 0.01 && d < bestD)) { bestD = d; bi = i; bt = t; bestHw = hw; }
+          } else if (bestD > 0 && d < bestD) { bestD = d; bi = i; bt = t; bestHw = hw; }
         }
         if (bi >= 0) {
           const target = this.rdH0[bi] + (this.rdH1[bi] - this.rdH0[bi]) * bt;
@@ -250,37 +287,6 @@ export class World implements WorldModel {
           h += (target - h) * w;
         }
       }
-    }
-    // building platforms (never reshape a river channel)
-    const pc = this.platCsr;
-    const pe = pc.start[b + 1];
-    const hitNow = tm.hit;
-    if (hitNow.d <= hitNow.hw + 0.8) return h;
-    // inside a footprint (plus a hair) the nearest platform decides exactly; beyond it neighbours blend
-    let bestSd = 1e9, bestI = -1;
-    for (let p = pc.start[b]; p < pe; p++) {
-      const i = pc.items[p];
-      if (this.pBlend[i] <= 0) continue;
-      const dx = x - this.pX[i], dz = z - this.pZ[i];
-      const lx = Math.abs(dx * this.pCos[i] - dz * this.pSin[i]) - this.pHw[i];
-      const lz = Math.abs(dx * this.pSin[i] + dz * this.pCos[i]) - this.pHd[i];
-      const ox = lx > 0 ? lx : 0, oz = lz > 0 ? lz : 0;
-      const sd = Math.sqrt(ox * ox + oz * oz) + (lx > lz ? (lx < 0 ? lx : 0) : (lz < 0 ? lz : 0));
-      if (sd < bestSd) { bestSd = sd; bestI = i; }
-    }
-    if (bestI >= 0 && bestSd <= 0.3) return this.pTarget[bestI];
-    for (let p = pc.start[b]; p < pe; p++) {
-      const i = pc.items[p];
-      const blend = this.pBlend[i];
-      if (blend <= 0) continue;
-      const dx = x - this.pX[i], dz = z - this.pZ[i];
-      const lx = Math.abs(dx * this.pCos[i] - dz * this.pSin[i]) - this.pHw[i];
-      const lz = Math.abs(dx * this.pSin[i] + dz * this.pCos[i]) - this.pHd[i];
-      const ox = lx > 0 ? lx : 0, oz = lz > 0 ? lz : 0;
-      const sd = Math.sqrt(ox * ox + oz * oz) + (lx > lz ? (lx < 0 ? lx : 0) : (lz < 0 ? lz : 0));
-      if (sd >= blend) continue;
-      const w = 1 - smoothstep(0.3, blend, sd);
-      h += (this.pTarget[i] - h) * w;
     }
     return h;
   }

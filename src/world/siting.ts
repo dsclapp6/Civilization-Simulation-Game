@@ -158,6 +158,13 @@ export function generateSites(s: GenState): void {
     kingdoms.push({ id: i, name: kingdomName(culture, nameRng, usedNames), culture, capital: i, color, counties: [] });
     nCounties.push(rng.weighted([3, 4, 5, 6], [0.42, 0.35, 0.18, 0.05]));
   }
+  // each county seat but the capital is a castle: cap the total so that castles stay a modest share of ~135 settlements
+  for (let guard = 0; guard < 40 && nCounties.reduce((a, b) => a + b, 0) > Math.round(K * 4.7); guard++) {
+    let bi = 0;
+    for (let i = 1; i < K; i++) if (nCounties[i] > nCounties[bi]) bi = i;
+    if (nCounties[bi] <= 3) break;
+    nCounties[bi]--;
+  }
   // ensure distinct colours for kingdoms: replace duplicates
   {
     const seen = new Set<number>();
@@ -275,7 +282,7 @@ export function generateSites(s: GenState): void {
       if (prom[k] > 12) st.tags.push('hill');
     }
   }
-  const extraForts = sparse ? 0 : Math.round(K * 0.4);
+  const extraForts = sparse ? 0 : Math.round(K * 0.3);
   for (let q = 0; q < extraForts; q++) {
     const kd = rng.int(0, K - 1);
     const k = pickBest(cellsByKingdom[kd], (kk) => castleScore(kk) + 0.6 * (1 - smoothstep(300, 1200, borderDist[kk])), (x, z) => spacingOk(x, z, (o) => o.kind === 'castle' ? 2000 : 900), 0.1);
@@ -304,7 +311,11 @@ export function generateSites(s: GenState): void {
   // ---------- villages ----------
   const villageScore = (k: number): number => fert(k) + 0.35 * wNear(k) + 0.25 * smoothstep(100, 400, coast[k]) * (1 - smoothstep(500, 900, coast[k]))
     - 3.2 * smoothstep(0.03, 0.11, slope[k]) - 0.55 * forestOf(k) - 0.55 * smoothstep(140, 320, height[k]) - 0.9 * s.floodplain[k] * (1 - smoothstep(60, 120, s.waterDist[k])) + 0.1 * hash01(k, 3, 3);
-  const villageTarget = sparse ? 16 : 78;
+  // fewer hamlets when many castles already fill the non-village share
+  const hamletTarget = sparse ? 3 : Math.max(4, Math.min(8, 54 - (sites.length + 1)));
+  // villages are 60-65 % of all settlements (the total stays near 135 unless many castles push the minimum share up)
+  const nonVillageExpected = sites.length + hamletTarget + 1;
+  const villageTarget = sparse ? 16 : Math.max(Math.round(1.5 * nonVillageExpected), Math.min(Math.round(1.8 * nonVillageExpected), 138 - nonVillageExpected));
   const nonVillageCount = (): number => sites.length;
   void nonVillageCount;
   // castle villages first
@@ -351,7 +362,6 @@ export function generateSites(s: GenState): void {
   lap(s, 's.villages');
 
   // ---------- hamlets ----------
-  const hamletTarget = sparse ? 3 : 12;
   const hamletCells: number[] = [];
   for (let k = 0; k < NN; k++) {
     if ((k & 1) !== 0 || ((k / N) & 1) !== 0 || !land[k] || water[k] !== 0 || slope[k] > 0.14 || s.waterDist[k] < 45) continue;
