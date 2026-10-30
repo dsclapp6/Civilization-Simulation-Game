@@ -54,6 +54,7 @@ docs/          SPEC, ARCHITECTURE, ART, screenshots
   - `core` → nothing. `content` → core. `world` → core, content.
   - `sim` (incl. `sim/economy`, `sim/social`) → core, content, world (types + generator), `assets/palette.ts` (data only).
   - `agents` → the same + sim. `player` → the same + sim + `agents` (types / ZoneApi).
+    `combat` (wave 3) → like `player`, and may also use `player/types`.
   - None of `sim`, `agents`, `player` may use **three or the DOM** (except `sim/save-idb.ts`, IndexedDB).
   - `assets` → three, core, content, world/types.
   - `render` → three, core, content, world/types, assets (types + library).

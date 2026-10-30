@@ -13,6 +13,10 @@ import type { UiRequest } from '../sim/actions';
 import { installEconomy } from '../sim/economy';
 import type { Simulation } from '../sim/sim';
 import { installSocial } from '../sim/social';
+import { installCombat } from '../combat';
+import { installPolitics } from '../sim/politics';
+import { installMilitary } from '../sim/military';
+import { installAdvancement } from '../sim/advancement';
 import type { GameServices, QualitySetting, UiRendererControls } from '../ui/types';
 import { wrapWithDevZone } from './devZone';
 
@@ -59,6 +63,12 @@ export async function buildSession(sim: Simulation, o: SessionOptions): Promise<
   let zone: ZoneApi = installAgents(sim, { economy, social });
   if (o.devZone) zone = wrapWithDevZone(sim, zone);
   const player = installPlayer(sim, { zone, economy, social, cameraMode: () => renderer.getCameraMode() });
+  // wave 3: they find each other through sim.services (sim/wave3.ts)
+  const w3 = { economy, social, zone, player };
+  installPolitics(sim, w3);
+  installMilitary(sim, w3);
+  installCombat(sim, w3);
+  installAdvancement(sim, w3);
   // the camera looks where the character faces: at the start, and after taking over someone else
   const alignCamera = (): void => {
     const b = player.body();

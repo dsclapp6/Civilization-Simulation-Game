@@ -1,0 +1,5 @@
+// Placeholder (wave 3 builder replaces this file): registers nothing on sim.services.
+import type { Simulation } from '../sim';
+import type { Wave3Deps } from '../wave3deps';
+
+export function installMilitary(_sim: Simulation, _deps: Wave3Deps): void {}
