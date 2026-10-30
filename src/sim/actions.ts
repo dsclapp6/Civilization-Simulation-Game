@@ -77,6 +77,10 @@ export type UiRequest =
   | { panel: 'household'; id: number }
   | { panel: 'perk'; person: PersonId; skill: string }
   | { panel: 'map' }
+  /** The action wheel: every option on the player's current target (hold the interact key). */
+  | { panel: 'actions' }
+  /** Sleep / wait-until menu. */
+  | { panel: 'rest' }
   | { panel: 'message'; title: string; text: string };
 
 export type TradePartnerRef =

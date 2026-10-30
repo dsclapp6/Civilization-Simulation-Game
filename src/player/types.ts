@@ -6,6 +6,26 @@ import type { InteractCandidate } from '../agents/types';
 import type { ActionOption, ActionOutcome } from '../sim/actions';
 import type { PersonId } from '../sim/state';
 
+/**
+ * Who handles which key (SPEC §22). `input` keys are read by the input layer (src/app/input.ts,
+ * owned with the player controller) and ignored while `ui.capturesInput()`; `ui` keys are handled
+ * by the UI's own listener. Mouse: move = orbit camera (pointer lock), wheel = zoom (far out = map),
+ * LMB attack/use, RMB block/aim (combat arrives in wave 3).
+ */
+export const KEYMAP = {
+  input: {
+    forward: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD', sprint: 'ShiftLeft', walk: 'KeyX',
+    interact: 'KeyE', mount: 'KeyF', dodge: 'Space', speed1: 'Digit1', speed2: 'Digit2', speed3: 'Digit3', pause: 'KeyP',
+  },
+  ui: {
+    menu: 'Escape', character: 'Tab', inventory: 'KeyI', ledger: 'KeyJ', map: 'KeyM', command: 'KeyC',
+    family: 'KeyH', chronicle: 'KeyL', rest: 'KeyZ',
+  },
+} as const;
+
+/** Holding the interact key this long opens the action wheel (UiRequest { panel: 'actions' }). */
+export const INTERACT_HOLD_SECONDS = 0.35;
+
 /** One frame of player intent, already mapped from keys/mouse/gamepad by the input layer. */
 export interface InputState {
   /** Movement intent relative to the camera: +forward / +right, each −1..1. */
