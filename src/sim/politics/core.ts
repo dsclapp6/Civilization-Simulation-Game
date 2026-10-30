@@ -133,6 +133,16 @@ export class PoliticsCore {
   notify(text: string, kind: 'info' | 'gain' | 'loss' | 'warn' | 'danger' | 'quest' | 'social' = 'info', person?: PersonId): void {
     this.sim.events.emit('notify', person === undefined ? { kind, text } : { kind, text, person });
   }
+  /** Does the House hold a secular title right now? (A scan of the titles: cheap, and independent of the snapshot.) */
+  holdsLand(h: HouseId): boolean {
+    for (const t of this.state.titles.values()) {
+      if (t.kind === 'abbey' || t.kind === 'see' || !t.holder) continue;
+      const p = this.state.persons.get(t.holder);
+      if (p && !p.death && p.house === h) return true;
+    }
+    return false;
+  }
+
   /** Is this House the player's (or does the person belong to it)? */
   isPlayerHouse(h: HouseId): boolean { return h !== 0 && h === this.playerHouse && this.state.run.phase !== 'over'; }
   houseName(h: HouseId): string { return this.state.houses.get(h)?.name ?? 'an unknown House'; }
@@ -153,13 +163,13 @@ export class PoliticsCore {
 
   snapshot(): Snapshot {
     const s = this.snap;
-    if (s && s.day === Math.floor(this.day) && s.rev === this.rev) return s;
+    if (s && s.day === Math.floor(this.day * 24) && s.rev === this.rev) return s;
     return (this.snap = this.buildSnapshot());
   }
 
   private buildSnapshot(): Snapshot {
     const state = this.state;
-    const day = Math.floor(this.day);
+    const day = Math.floor(this.day * 24); // snapshots live for an hour
     const titlesOf = new Map<HouseId, Title[]>();
     for (const t of state.titles.values()) {
       if (!t.holder) continue;

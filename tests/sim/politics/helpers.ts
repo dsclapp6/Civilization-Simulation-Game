@@ -28,6 +28,8 @@ export function rig(opts: TestSimOptions & { keepPlayer?: boolean } = {}): Rig {
   return { sim, pol, x, social, core: socialInternals(sim) as SocialCore };
 }
 
+export type Ctx = Pick<Rig, 'sim' | 'x'>;
+
 /** Houses holding a title of the given kind, in title-id order. */
 export function housesHolding(sim: Simulation, kind: Title['kind']): HouseId[] {
   const out: HouseId[] = [];
@@ -48,7 +50,7 @@ export function holderOf(sim: Simulation, t: Title): Person {
 }
 
 /** Moves the demesnes of House `b` next to those of House `a` (so they count as neighbours). */
-export function bringNear(r: Rig, a: HouseId, b: HouseId): void {
+export function bringNear(r: Ctx, a: HouseId, b: HouseId): void {
   const pa = r.x.core.demesnes(a)[0], pb = r.x.core.demesnes(b)[0];
   const sa = r.sim.world.settlements.find((s) => s.id === pa);
   const sb = r.sim.world.settlements.find((s) => s.id === pb);
@@ -59,7 +61,7 @@ export function bringNear(r: Rig, a: HouseId, b: HouseId): void {
 }
 
 /** A grown noble of a House, married or not, in the household of its head. */
-export function noble(r: Rig, house: HouseId, sex: 'm' | 'f', age: number, opts: { father?: Person; mother?: Person; tier?: Person['rankTier']; traits?: Person['traits'] } = {}): Person {
+export function noble(r: Ctx, house: HouseId, sex: 'm' | 'f', age: number, opts: { father?: Person; mother?: Person; tier?: Person['rankTier']; traits?: Person['traits'] } = {}): Person {
   const st = r.sim.state;
   const h = st.houses.get(house)!;
   const head = st.persons.get(h.head)!;
@@ -82,7 +84,7 @@ export function wed(r: Rig, a: Person, b: Person): void {
 }
 
 /** Sets a head's traits (and so the House's temperament) for a scenario. */
-export function setTraits(r: Rig, house: HouseId, traits: Person['traits']): Person {
+export function setTraits(r: Ctx, house: HouseId, traits: Person['traits']): Person {
   const head = r.x.core.headOf(house) as Person;
   head.traits = [...traits];
   head.rep = { honour: 0, generosity: 0, piety: 0, cruelty: 0, valour: 0 };
@@ -91,7 +93,7 @@ export function setTraits(r: Rig, house: HouseId, traits: Person['traits']): Per
   return head;
 }
 
-export function ageHead(r: Rig, house: HouseId, years: number): Person {
+export function ageHead(r: Ctx, house: HouseId, years: number): Person {
   const head = r.x.core.headOf(house) as Person;
   head.birthDay = r.sim.absDay - years * 16;
   r.sim.state.touch(head);

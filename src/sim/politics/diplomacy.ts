@@ -305,8 +305,8 @@ export class Diplomacy {
     const home = pa.house; // the bride has taken her husband's House
     const other = home === ha ? hb : ha;
     if (!home || !other || home === other) return;
-    if (!c.isActor(home) && !c.isPlayerHouse(home)) return;
-    if (!c.isActor(other) && !c.isPlayerHouse(other)) return;
+    if (!c.isPlayerHouse(home) && !c.holdsLand(home)) return;
+    if (!c.isPlayerHouse(other) && !c.holdsLand(other)) return;
     const wasKin = c.tie(home, other).kin > 0;
     const n = Math.max(1, this.linksOf(home).get(other) ?? 1);
     c.changeTie(home, other, (t: Tie) => { t.kin = n; t.grievance = Math.max(0, t.grievance - 20); t.truce = Math.max(t.truce, Math.floor(c.day) + TRUCE_PACT); });

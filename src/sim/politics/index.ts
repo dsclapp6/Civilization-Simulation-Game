@@ -64,6 +64,7 @@ export function installPolitics(sim: Simulation, deps: Pick<Wave3Deps, 'economy'
   offs.push(sim.registerSystem({
     name: 'politics.hourly', phase: 'hourly', order: 70,
     run: (_ctx, info) => {
+      core.invalidate(); // decisions are taken on the state of this very hour, live or loaded
       ai.hourly(info.hourIndex);
       offices.hourly(info.hour);
     },
@@ -71,6 +72,7 @@ export function installPolitics(sim: Simulation, deps: Pick<Wave3Deps, 'economy'
   offs.push(sim.registerSystem({
     name: 'politics.seasonal', phase: 'seasonal', order: 70,
     run: () => {
+      core.invalidate();
       unrest.seasonal();
       realms.coalitionsSeasonal();
       manage.seasonal();
@@ -83,7 +85,6 @@ export function installPolitics(sim: Simulation, deps: Pick<Wave3Deps, 'economy'
       core.invalidate();
       diplo.refreshKin();
       realms.yearly();
-      core.state.score.continentPct = core.state.score.continentPct; // the score keeper refreshes it in its own yearly pass
     },
   }));
 

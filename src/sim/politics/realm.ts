@@ -36,7 +36,7 @@ export class Realms {
     for (const o of leaders.slice(1)) {
       if (co.members.includes(o) || c.isPlayerHouse(o)) continue;
       if (c.stance(o, d) === 'alliance' || c.stance(o, d) === 'kin' || c.warsOf(o).some((w) => w.attackers.includes(d) || w.defenders.includes(d) && false)) continue;
-      if (this.wars.gap(o, d) > 9500) continue;
+      if (!this.touch(o, d) && this.wars.gap(o, d) > 12000) continue;
       const pw = c.personality(o);
       let p = 0.3 + pw.cautious * 0.35 + pw.ambitious * 0.25 - pw.honourable * 0.1 + c.tie(o, d).grievance / 250;
       p *= c.coordination;
@@ -52,6 +52,14 @@ export class Realms {
     c.touch();
   }
 
+  /** Do the realms of two leaders share a border (any of their Houses are neighbours)? */
+  private touch(o: HouseId, d: HouseId): boolean {
+    const c = this.core;
+    const theirs = new Set<HouseId>([d, ...c.allVassals(d, 80)]);
+    for (const h of [o, ...c.allVassals(o, 80)]) for (const n of c.neighbours(h)) if (theirs.has(n)) return true;
+    return false;
+  }
+
   /** Members of a coalition make common cause: they ally one another unless they hate each other. */
   private bind(co: Coalition): void {
     const c = this.core;
@@ -59,7 +67,7 @@ export class Realms {
       for (let j = i + 1; j < co.members.length; j++) {
         const a = co.members[i], b = co.members[j];
         if (c.warBetween(a, b) || c.tie(a, b).grievance >= 45 || c.tie(a, b).alliance) continue;
-        c.changeTie(a, b, (t) => { t.alliance = Math.floor(c.day); t.truce = Math.max(t.truce, Math.floor(c.day) + 3 * YEAR); });
+        c.changeTie(a, b, (t) => { t.alliance = Math.floor(c.day) + 1; t.truce = Math.max(t.truce, Math.floor(c.day) + 3 * YEAR); });
       }
     }
     for (const m of co.members) c.addGrievance(m, co.target, 15);

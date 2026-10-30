@@ -143,13 +143,13 @@ export class Unrest {
         rv.outcome = 'lord_fell';
         killPerson(c.sim, lord, 'violence', c.day);
       }
-      this.raise(sid, -35);
+      this.settle(sid, 15);
       c.log('revolt', `The villagers of ${name} rose against ${fullName(lord)} and forced a charter of easier terms.`, [lord.id]);
       if (mineLord) c.notify(`The villagers of ${name} have risen and forced you to ease their dues!`, 'danger');
     } else {
       rv.outcome = 'crushed';
       this.punish(sid, men, rebels, rng.next());
-      this.raise(sid, -30);
+      this.settle(sid, 35); // fear, not contentment
       const st = c.state.settlements.get(sid);
       if (st) { st.prosperity = Math.max(0.4, st.prosperity - 0.05); c.state.touchSettlement(st); }
       c.log('revolt', `${fullName(lord)} crushed the revolt at ${name}; the ringleaders were hanged or fled to the woods.`, [lord.id]);
@@ -163,7 +163,11 @@ export class Unrest {
     return { ok: true };
   }
 
-  private raise(sid: number, d: number): void { this.core.raiseUnrest(sid, d); }
+  /** After a revolt the village's unrest falls to `level` at most (concessions calm it, hangings frighten it). */
+  private settle(sid: number, level: number): void {
+    const c = this.core;
+    if ((c.save.unrest[String(sid)] ?? 0) > level) { c.save.unrest[String(sid)] = level; c.touch(); }
+  }
 
   /** Casualties and punishment of a failed revolt. */
   private punish(sid: number, men: Person[], rebels: number, roll: number): void {
