@@ -140,7 +140,7 @@ export class Mil {
     const cur = this.data.feuds.find((f) => (f.a === a && f.b === b) || (f.a === b && f.b === a));
     if (cur) cur.until = Math.max(cur.until, until);
     else this.data.feuds.push({ a, b, until, cause });
-    this.realm.invalidate();
+    this.realm.invalidateEnmity();
     this.touch();
   }
 

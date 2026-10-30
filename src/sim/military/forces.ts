@@ -234,7 +234,19 @@ export class ForceCache {
   private readonly cache = new Map<HouseId, CacheEntry>();
   constructor(private readonly M: Mil) {}
 
-  clear(): void { this.cache.clear(); }
+  clear(): void { this.cache.clear(); this.standingCache.clear(); }
+
+  private readonly standingCache = new Map<HouseId, number>();
+  /** Weight of the retinue, the garrison households and the hired companies (no scan of the levy pool). */
+  standing(house: HouseId): number {
+    const hit = this.standingCache.get(house);
+    if (hit !== undefined) return hit;
+    let mercs = 0;
+    for (const rec of Object.values(this.M.data.hired)) if (rec.h === house) mercs++;
+    const v = Math.round((retinueOf(this.M, house).length * 2.6 + garrisonOf(this.M, house).length * 2.2 + mercs * 2) * 10) / 10;
+    this.standingCache.set(house, v);
+    return v;
+  }
 
   summary(house: HouseId): ForceSummary {
     const now = this.M.day;

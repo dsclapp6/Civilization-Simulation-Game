@@ -338,9 +338,9 @@ function fieldFighters(M: Mil, rec: BattleRec, a: Army, d: Army, exclude?: Reado
 
 /** Whole battle by the macro model (no player in the line, or no combat module to run the detail). */
 function finishMacro(M: Mil, rec: BattleRec, a: Army, d: Army): void {
-  const [fa, fd] = fieldFighters(M, rec, a, d);
-  const res = resolve(M, fa, fd, { x: rec.x, z: rec.z });
-  conclude(M, rec, a, d, fa, fd, res, undefined);
+  const [fa, fd] = M.time('battle.fighters', () => fieldFighters(M, rec, a, d));
+  const res = M.time('battle.resolve', () => resolve(M, fa, fd, { x: rec.x, z: rec.z }));
+  M.time('battle.conclude', () => conclude(M, rec, a, d, fa, fd, res, undefined));
 }
 
 /** Applies a resolution: casualties, captives, morale, retreats, spoils, politics, events, player's deeds. */
@@ -349,8 +349,8 @@ function conclude(
 ): void {
   const excluded = detail?.excluded;
   const winner = res.attWon ? fa : fd;
-  const attCas = applyCasualties(M, fa, res.attLoss, fd, !res.attWon, rec.settlement, excluded);
-  const defCas = applyCasualties(M, fd, res.defLoss, fa, res.attWon, rec.settlement, excluded);
+  const attCas = M.time('battle.casualtiesA', () => applyCasualties(M, fa, res.attLoss, fd, !res.attWon, rec.settlement, excluded));
+  const defCas = M.time('battle.casualtiesD', () => applyCasualties(M, fd, res.defLoss, fa, res.attWon, rec.settlement, excluded));
   void winner;
   res.attCasualties = attCas; res.defCasualties = defCas;
 

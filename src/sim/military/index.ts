@@ -12,7 +12,7 @@ import {
   armiesOf, detailOf, disband, giveOrder, nearestSettlementId, raise, removeMen, settlementPoint, upkeepDay, viewOf,
 } from './armies';
 import { battleInfo, checkContacts, onFightEnded, stepBattles } from './battle';
-import { dailyCampaign, hourlyArmies } from './campaign';
+import { dailyCampaign, hourlyArmies, thinkHour } from './campaign';
 import { CareerSystem } from './career';
 import { CFG } from './config';
 import { ForceCache, armsQuality, levySizeFor, recruitTests } from './forces';
@@ -26,6 +26,8 @@ import { MusterView } from './musterview';
 import { UNIT_CHAR, CHAR_UNIT, type MilitaryRuntime } from './types';
 
 const contexts = new WeakMap<Simulation, Mil>();
+/** Offices that come with a title (politics `officeFor`): the others change nothing about who rules what. */
+const TITLE_OFFICES: ReadonlySet<string> = new Set(['lord', 'baron', 'earl', 'king', 'abbot', 'bishop']);
 /** The module's internal context (tests, tools and the dev pages). */
 export function militaryContext(sim: Simulation): Mil {
   const m = contexts.get(sim);
@@ -59,10 +61,11 @@ export function installMilitary(sim: Simulation, deps: Wave3Deps): MilitaryRunti
   // ---- systems ----
   offs.push(sim.registerSystem({
     name: 'military.hour', phase: 'hourly', order: 60,
-    run: () => {
+    run: (_ctx, info) => {
       ensureHooks();
       if (M.data.armies.length === 0 && M.data.battles.length === 0) return;
       M.time('hour.armies', () => hourlyArmies(M));
+      thinkHour(M, info.hour);
       M.time('hour.contacts', () => checkContacts(M));
       M.touch();
     },
@@ -100,7 +103,11 @@ export function installMilitary(sim: Simulation, deps: Wave3Deps): MilitaryRunti
   // ---- the player's world ----
   offs.push(sim.events.on('playerSwitched', () => M.career.reset()));
   // who rules what changes with deaths and oaths
-  for (const ev of ['death', 'inheritance', 'stance', 'war', 'office'] as const) offs.push(sim.events.on(ev, () => M.realm.invalidate()));
+  // only what moves a lordship or a House's head changes the realm (most deaths and offices do not)
+  offs.push(sim.events.on('inheritance', () => M.realm.invalidate()));
+  offs.push(sim.events.on('death', (e) => { if (e.wasHead || M.state.titlesHeldBy(e.person).size > 0) M.realm.invalidate(); }));
+  offs.push(sim.events.on('office', (e) => { if (TITLE_OFFICES.has(e.office)) M.realm.invalidate(); }));
+  for (const ev of ['stance', 'war'] as const) offs.push(sim.events.on(ev, () => M.realm.invalidateEnmity()));
   offs.push(sim.events.on('captured', (e) => adoptCaptive(M, e.captive, e.captor, e.ransom)));
   const prevHostile = sim.hostileNear;
   sim.hostileNear = () => M.data.battles.some((b) => b.fight !== 0 && b.result === '') || prevHostile();
@@ -146,6 +153,7 @@ export function installMilitary(sim: Simulation, deps: Wave3Deps): MilitaryRunti
     // ---- forces ----
     forces: (house) => M.forces.summary(house),
     strength: (house) => M.forces.summary(house).strength,
+    standing: (house) => M.forces.standing(house),
     levyPool: (house) => M.forces.summary(house).levyPool,
     levySize: (house, reason) => levySizeFor(M, house, reason),
     lordHouse: (settlement) => M.realm.lordHouse(settlement),

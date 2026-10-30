@@ -8,8 +8,9 @@ import { installCombat } from '../src/combat';
 import { installAdvancement } from '../src/sim/advancement';
 import { installEconomy } from '../src/sim/economy';
 import { newProfile } from '../src/sim/legacy';
-import { installMilitary } from '../src/sim/military';
+import { installMilitary, militaryContext } from '../src/sim/military';
 import { installPolitics } from '../src/sim/politics';
+import { SLOW_MS } from '../src/sim/scheduler';
 import { Simulation } from '../src/sim/sim';
 import { installSocial } from '../src/sim/social';
 import { createMockWorld } from '../src/sim/testing/mockWorld';
@@ -52,6 +53,10 @@ sim.events.on('tech', () => bump('tech'));
 sim.events.on('office', (e) => { if (e.gained) bump('office'); });
 
 sim.scheduler.profiling = true;
+const sections = process.argv.includes('--sections');
+if (sections) militaryContext(sim).timings = {};
+// CPU time of this process, not wall time: the machine is shared and the wall clock counts the others' work too
+if (!process.argv.includes('--wall')) sim.scheduler.clock = () => { const u = process.cpuUsage(); return (u.user + u.system) / 1000; };
 const living = (): number => { let n = 0; for (const p of sim.state.persons.values()) if (!p.death) n++; return n; };
 const prosperity = (): number => {
   let s = 0, n = 0;
@@ -84,9 +89,14 @@ for (let y = 1; y <= years; y++) {
   if (sim.state.run.phase === 'over') { console.log('run over: no heir left'); break; }
 }
 console.log('\ntotals:', Object.entries(tally).sort().map(([k, v]) => `${k}=${v}`).join('  '));
-const prof = [...sim.scheduler.profile.entries()].sort((a, b) => b[1].maxMs - a[1].maxMs).slice(0, 12);
-console.log('\nslowest systems (max ms per call / avg ms):');
-for (const [name, p] of prof) console.log(`  ${name.padEnd(28)} max ${p.maxMs.toFixed(1).padStart(6)}  avg ${(p.totalMs / Math.max(1, p.calls)).toFixed(3)}  calls ${p.calls}`);
+const prof = [...sim.scheduler.profile.entries()].sort((a, b) => b[1].maxMs - a[1].maxMs).slice(0, 14);
+console.log(`\nslowest systems (CPU ms per call; "slow" = calls over ${SLOW_MS} ms):`);
+for (const [name, p] of prof) console.log(`  ${name.padEnd(28)} max ${p.maxMs.toFixed(1).padStart(6)}  avg ${(p.totalMs / Math.max(1, p.calls)).toFixed(3)}  slow ${String(p.slow).padStart(4)}  calls ${p.calls}`);
+let totalMs = 0;
+for (const p of sim.scheduler.profile.values()) totalMs += p.totalMs;
+const perHour = totalMs / (years * 16 * 24);
+// at 8x a game hour lasts 0.3125 s = 18.75 frames of 60 Hz; the headless run has no agents, zone or player systems
+console.log(`all systems: ${perHour.toFixed(3)} ms per game hour = ${(perHour / 18.75).toFixed(3)} ms per frame at 8x (averaged over the hour)`);
 
 if (rows.length >= 20) {
   console.log('\nper decade (counts are events in the decade; pop/prosperity are the min..max of the yearly values):');
@@ -106,4 +116,11 @@ if (rows.length >= 20) {
   const mx = xs.reduce((a, b) => a + b, 0) / n, my = ys.reduce((a, b) => a + b, 0) / n;
   const slope = xs.reduce((a, x, i) => a + (x - mx) * (ys[i] - my), 0) / xs.reduce((a, x) => a + (x - mx) ** 2, 0);
   console.log(`population drift ${(slope * 100).toFixed(2)} %/yr (fit over ${n} years: ${rows[0].pop} -> ${rows[n - 1].pop}); famine starts ${rows.reduce((a, r) => a + r.famine, 0)} in ${n} years`);
+}
+
+if (sections) {
+  console.log('\nmilitary sections (ms; wall clock):');
+  for (const [k, v] of Object.entries(militaryContext(sim).timings ?? {}).sort((a, b) => b[1].ms - a[1].ms).slice(0, 12)) {
+    console.log(`  ${k.padEnd(18)} total ${v.ms.toFixed(0).padStart(6)}  avg ${(v.ms / v.calls).toFixed(3)}  max ${v.max.toFixed(1).padStart(6)}  calls ${v.calls}`);
+  }
 }

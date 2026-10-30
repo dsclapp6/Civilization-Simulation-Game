@@ -73,14 +73,14 @@ export function dailyCampaign(M: Mil): void {
       if (data.wars[w.id] === undefined) {
         data.wars[w.id] = dayNo;
         M.touch();
-        M.realm.invalidate();
+        M.realm.invalidateEnmity();
         warBegins(M, w.id, w.attackers, w.defenders);
       } else if ((dayNo - data.wars[w.id]) % 6 === 0) {
         // keep up the effort: a side with no army in the field raises one again
         for (const h of [...w.attackers, ...w.defenders]) reinforce(M, h, w.id);
       }
     }
-    for (const k of Object.keys(data.wars)) if (!live.has(Number(k))) { delete data.wars[k]; M.realm.invalidate(); }
+    for (const k of Object.keys(data.wars)) if (!live.has(Number(k))) { delete data.wars[k]; M.realm.invalidateEnmity(); }
   }
   // armies of a war that has ended go home
   for (const a of M.allArmies().slice()) {
@@ -91,17 +91,23 @@ export function dailyCampaign(M: Mil): void {
       else M.notify('The war is over. Your army may go home.', 'info');
     }
   }
-  for (const a of M.allArmies().slice()) {
-    if (!M.armyById.has(a.id) || a.task === 'muster' || a.engaged) continue;
-    if (playerCommanded(M, a)) continue;
-    M.time('think', () => think(M, a));
-  }
+  // each army thinks once a day, in the hour of its own number (see `thinkHour`)
   M.time('defend', () => defend(M, dayNo));
   M.time('queue', () => runQueue(M));
   // expire feuds and lapsed occupations
   for (const k of Object.keys(data.occupied)) if (data.occupied[k].until <= now) { delete data.occupied[k]; M.touch(); }
   const feuds = data.feuds.filter((f) => f.until >= now);
   if (feuds.length !== data.feuds.length) { data.feuds = feuds; M.touch(); }
+}
+
+/** The armies whose hour it is decide what to do next: one slice of the day's thinking, so no frame pays for every army at once. */
+export function thinkHour(M: Mil, hour: number): void {
+  for (const a of M.allArmies().slice()) {
+    if (a.id % 24 !== hour) continue;
+    if (!M.armyById.has(a.id) || a.task === 'muster' || a.engaged) continue;
+    if (playerCommanded(M, a)) continue;
+    M.time('think', () => think(M, a));
+  }
 }
 
 function warBegins(M: Mil, war: number, attackers: readonly number[], defenders: readonly number[]): void {

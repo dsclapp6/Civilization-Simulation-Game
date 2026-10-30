@@ -17,18 +17,24 @@ export class Realm {
   private readonly liegeOfHouse = new Map<HouseId, HouseId>();
   /** Noble and royal Houses (the only ones that hold men and titles of consequence). */
   private nobles: HouseId[] = [];
+  /** Memos of the day, dropped with every rebuild (a title, an oath, a war or a feud moving invalidates the realm). */
+  private readonly chains = new Map<HouseId, HouseId[]>();
+  private readonly enemies = new Map<HouseId, Set<HouseId>>();
+  private readonly hostiles = new Map<number, boolean>();
 
   constructor(private readonly M: Mil) {}
 
   /** Drops the cache (a title moved, a war began). */
   invalidate(): void { this.day = -99; }
+  /** Only who is at war with whom changed (a war, a stance, a feud): the lords and domains stand, the enmity memos go. */
+  invalidateEnmity(): void { this.chains.clear(); this.enemies.clear(); this.hostiles.clear(); }
 
   private fresh(): void {
     const now = this.M.sim.absDay;
     if (this.day > -90 && now - this.day < 1 && this.stamp === this.M.state.titles.size) return;
     this.day = now;
     this.stamp = this.M.state.titles.size;
-    this.rebuild();
+    this.M.time('realm.rebuild', () => this.rebuild());
   }
 
   private holderHouse(t: Title | undefined): HouseId {
@@ -42,6 +48,7 @@ export class Realm {
     const M = this.M;
     const st = M.state;
     this.lord.clear(); this.domain.clear(); this.liegeOfHouse.clear();
+    this.chains.clear(); this.enemies.clear(); this.hostiles.clear();
     this.nobles = [];
 
     // the House that sits at each castle / capital
@@ -127,6 +134,15 @@ export class Realm {
 
   /** The House and its lieges up to the realm's head. */
   chain(house: HouseId): HouseId[] {
+    this.fresh();
+    const hit = this.chains.get(house);
+    if (hit) return hit;
+    const out = this.chainOf(house);
+    this.chains.set(house, out);
+    return out;
+  }
+
+  private chainOf(house: HouseId): HouseId[] {
     const out = [house];
     let cur = house;
     for (let i = 0; i < 4; i++) {
@@ -177,6 +193,15 @@ export class Realm {
 
   /** Houses at war with `house` directly (politics wars) or in a feud. */
   directEnemies(house: HouseId): Set<HouseId> {
+    this.fresh();
+    const hit = this.enemies.get(house);
+    if (hit) return hit;
+    const s = this.enemiesOf(house);
+    this.enemies.set(house, s);
+    return s;
+  }
+
+  private enemiesOf(house: HouseId): Set<HouseId> {
     const s = new Set<HouseId>();
     for (const { war, side } of this.warsOf(house)) for (const e of side === 'attacker' ? war.defenders : war.attackers) s.add(e);
     const now = this.M.sim.absDay;
@@ -191,6 +216,16 @@ export class Realm {
   /** Two Houses (or their lieges) are at war or in a feud. */
   hostile(a: HouseId, b: HouseId): boolean {
     if (!a || !b || a === b) return false;
+    this.fresh();
+    const key = a * 1048576 + b;
+    const hit = this.hostiles.get(key);
+    if (hit !== undefined) return hit;
+    const v = this.hostileNow(a, b);
+    this.hostiles.set(key, v);
+    return v;
+  }
+
+  private hostileNow(a: HouseId, b: HouseId): boolean {
     const ca = this.chain(a), cb = this.chain(b);
     if (ca.some((x) => cb.includes(x))) return false;
     for (const x of ca) {
