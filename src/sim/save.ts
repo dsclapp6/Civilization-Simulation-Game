@@ -148,7 +148,11 @@ export class RunSaver {
       if (!this.urgent && t - this.lastStart < this.intervalMs) return;
       this.beginCycle(t);
     }
-    if (this.phase === 'serializing') this.slice(this.budgetMs);
+    if (this.phase === 'serializing') {
+      // a big cycle (a whole new run) is spread thinner: it only delays the cycle, never a frame
+      const big = this.queue.length - this.qi > 150;
+      this.slice(big ? Math.min(this.budgetMs, 1) : this.budgetMs);
+    }
   }
 
   /** Finishes everything pending, ignoring the time budget, and waits for the store. */

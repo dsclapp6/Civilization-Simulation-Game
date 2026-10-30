@@ -3,7 +3,7 @@
 // ("of <settlement>") and noble house names. Lists are real medieval-style names; no randomness
 // beyond the Rng passed in.
 import type { CultureId, Sex } from '../core/domain';
-import type { Rng } from '../core/rng';
+import { hashString, type Rng } from '../core/rng';
 import type { CareerId } from './careers';
 
 interface CultureNames {
@@ -210,9 +210,16 @@ function vowelStart(s: string): boolean { return /^[AEIOUaeiou]/.test(s); }
 export function patronymic(culture: CultureId, sex: Sex, fatherFirst: string): string {
   switch (NAMES[culture].patronymic) {
     case 'son': return `${fatherFirst}son`;
-    case 'sson': return `${fatherFirst}${sex === 'm' ? 'sson' : 'sdottir'}`;
+    case 'sson': {
+      // Danish/Norwegian -sen/-datter for some families, Swedish/Icelandic -sson/-sdottir for others (stable per name)
+      const sen = hashString(fatherFirst)[0] % 3 === 0;
+      return sen ? `${fatherFirst}${sex === 'm' ? 'sen' : 'datter'}` : `${fatherFirst}${sex === 'm' ? 'sson' : 'sdottir'}`;
+    }
     case 'ap': return `${sex === 'm' ? (vowelStart(fatherFirst) ? 'ab' : 'ap') : 'ferch'} ${fatherFirst}`;
-    case 'mac': return `${sex === 'm' ? 'Mac' : 'Nic'}${fatherFirst}`;
+    case 'mac': {
+      const mc = hashString(fatherFirst)[1] % 3 === 0; // Mc- for some, Mac- for others
+      return `${sex === 'm' ? (mc ? 'Mc' : 'Mac') : 'Nic'}${fatherFirst}`;
+    }
     default: return '';
   }
 }

@@ -17,7 +17,7 @@ import { levelProfile, newProfile, type Profile, type StatUpgrades } from './leg
 import { registerLifeSystems } from './life';
 import { abandonRun, attachRunHandlers, eligibleSwitchTargets, newRun, switchTo } from './run';
 import { RunSaver, loadProfile, loadRun, saveProfile, type SaveStore, type SaverOptions } from './save';
-import { hashState } from './serialize';
+import { hashState, warmUpSerializer } from './serialize';
 import { Scheduler, type System } from './scheduler';
 import { ScoreKeeper } from './score';
 import type { GameState, PersonId } from './state';
@@ -28,6 +28,8 @@ import type { Difficulty } from '../core/domain';
 /** Longest real-time step the sim will take in one call (a backgrounded tab must not skip years). */
 export const MAX_FRAME_DT = 0.25;
 const MAX_SUBSTEPS = 48;
+/** Calendar hours fired per catch-up call; normal frames cross well under one hour. */
+const MAX_HOURS_PER_CALL = 6;
 
 export type WaitUntil =
   | TimeOfDay
@@ -123,6 +125,7 @@ export class Simulation implements SimContext {
         onSaved: (info) => { opts.autosave?.onSaved?.(info); this.events.emit('saved', info); },
       }, opts.fresh === true);
       if (opts.knownKeys) this.saver.markKnown(opts.knownKeys);
+      warmUpSerializer(this.state);
     } else {
       this.saver = null;
     }
@@ -204,7 +207,8 @@ export class Simulation implements SimContext {
 
   private fireHooks(): void {
     if (this.saver?.holdingHooks) return;
-    this.clock.fireDue(this.hooks);
+    // after a save cycle has held the hooks back, catch up over a few frames instead of in one burst
+    this.clock.fireDue(this.hooks, MAX_HOURS_PER_CALL);
   }
 
   private stepNormal(dt: number): void {

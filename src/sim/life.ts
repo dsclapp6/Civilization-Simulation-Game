@@ -64,6 +64,11 @@ function lifeHourly(ctx: SimContext, info: HourInfo): void {
   if (hour === 12) {
     for (const k of world.kingdoms) if ((day + k.id) % 4 === 0) nobleMatchmaking(ctx, k.id, now);
   }
+  // yearly bookkeeping that walks the whole state runs on a quiet day of its own, not at New Year
+  if (hour === 3 && day % AGE === 9) {
+    pruneDead(ctx, now);
+    ctx.score.yearly(world);
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1037,8 +1042,6 @@ const FAMINE_CHANCE = { squire: 0.01, knight: 0.03, lord: 0.05, king: 0.09 } as 
 function lifeYearly(ctx: SimContext, info: YearInfo): void {
   const { state, world } = ctx;
   const rng = ctx.rng('harvest');
-  const now = info.day;
-
   // close the statistics year
   const st = state.stats;
   st.current.population = state.living;
@@ -1063,26 +1066,37 @@ function lifeYearly(ctx: SimContext, info: YearInfo): void {
     }
   }
 
-  pruneDead(ctx, now);
-  ctx.score.yearly(world);
 }
 
-/** Forgets people who died long ago, unless they belong to the player's kin web. */
+/** Forgets people who died long ago, unless they belong to the player's kin web. Walks the
+ *  graveyard from the oldest death, so the cost follows the number of recent deaths. */
 export function pruneDead(ctx: SimContext, now: number): number {
   const state = ctx.state;
+  const cutoff = now - LIFE.pruneAfterYears * AGE;
+  const g = state.graveyard;
+  if (state.graveyardHead >= g.length || (g[state.graveyardHead].death as { day: number }).day >= cutoff) return 0;
   const keep = new Set<number>();
   const roots: Person[] = [];
   const player = state.persons.get(state.run.playerId);
   if (player) roots.push(player);
-  const members = state.houseMembers.get(state.run.houseId);
-  if (members) for (const m of members) roots.push(m);
+  for (const m of state.houseMemberList(state.run.houseId)) roots.push(m);
   for (const r of roots) for (const id of familyOf(state, r, 4).keys()) keep.add(id);
-  const cutoff = now - LIFE.pruneAfterYears * AGE;
-  const doomed: Person[] = [];
-  for (const p of state.persons.values()) {
-    if (p.death && p.death.day < cutoff && !keep.has(p.id) && !p.flags.keep) doomed.push(p);
+  let pruned = 0;
+  const deferred: Person[] = [];
+  while (state.graveyardHead < g.length) {
+    const p = g[state.graveyardHead];
+    if ((p.death as { day: number }).day >= cutoff) break;
+    state.graveyardHead++;
+    if (!state.persons.has(p.id)) continue;
+    if (keep.has(p.id) || p.flags.keep) { deferred.push(p); continue; }
+    state.prunePerson(p);
+    pruned++;
   }
-  for (const p of doomed) state.prunePerson(p);
+  // the protected stay in the queue (at the front, so they are looked at again next year)
+  if (deferred.length) {
+    g.splice(state.graveyardHead, 0, ...deferred);
+  }
+  if (state.graveyardHead > 2048) { g.splice(0, state.graveyardHead); state.graveyardHead = 0; }
   // Houses with nobody left
   const emptyHouses: number[] = [];
   for (const h of state.houses.values()) {
@@ -1095,8 +1109,8 @@ export function pruneDead(ctx: SimContext, now: number): number {
     if (h) { state.houses.delete(id); state.touchHouse(h); }
   }
   for (const hh of Array.from(state.households.values())) {
-    if (hh.members.length === 0) state.removeHousehold(hh);
+    if (hh.members.length === 0 && hh.target === undefined) state.removeHousehold(hh);
   }
-  return doomed.length;
+  return pruned;
 }
 

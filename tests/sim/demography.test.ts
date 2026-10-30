@@ -127,6 +127,7 @@ describe('100 years of macro life', () => {
       expect((h as Person).rankTier, t.name).toBeGreaterThanOrEqual(min);
     }
     for (const hh of st.households.values()) {
+      if (hh.target !== undefined && hh.members.length === 0) continue; // an institution waiting for recruits
       expect(hh.members.length).toBeGreaterThan(0);
       const head = st.persons.get(hh.head);
       expect(head && !head.death && head.household === hh.id).toBeTruthy();

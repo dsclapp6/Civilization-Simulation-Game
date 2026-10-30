@@ -45,11 +45,15 @@ describe('names', () => {
 
   it('builds patronymics per culture: -son, -sson/-sdottir, ap/ab, Mac/Nic', () => {
     expect(patronymic('anglo', 'm', 'William')).toBe('Williamson');
-    expect(patronymic('norse', 'm', 'Erik')).toBe('Eriksson');
-    expect(patronymic('norse', 'f', 'Erik')).toBe('Eriksdottir');
+    expect(patronymic('norse', 'm', 'Erik')).toMatch(/^Eriks(son|en)$/);
+    expect(patronymic('norse', 'f', 'Erik')).toMatch(/^Erik(sdottir|datter)$/);
     expect(patronymic('cymric', 'm', 'Rhys')).toBe('ap Rhys');
     expect(patronymic('cymric', 'm', 'Owain')).toBe('ab Owain');
-    expect(patronymic('gael', 'm', 'Donal')).toBe('MacDonal');
+    expect(patronymic('gael', 'm', 'Donal')).toMatch(/^Ma?cDonal$/);
+    expect(patronymic('gael', 'f', 'Donal')).toBe('NicDonal');
+    const sens = new Set(['Anders', 'Bjorn', 'Knut', 'Olaf', 'Sven', 'Tore', 'Ulf', 'Arne'].map((n) => patronymic('norse', 'm', n).endsWith('sen')));
+    expect(sens.size).toBe(2); // both -sen and -sson occur
+    expect(patronymic('norse', 'm', 'Olaf')).toBe(patronymic('norse', 'm', 'Olaf')); // stable per name
     expect(patronymic('franc', 'm', 'Jean')).toBe('');
     expect(patronymic('teuton', 'm', 'Hans')).toBe('');
   });
@@ -72,9 +76,9 @@ describe('names', () => {
     const rng = new Rng('child');
     expect(childByname(rng, 'anglo', 'm', { first: 'John', byname: 'Smith' }, null)).toBe('Smith');
     expect(childByname(rng, 'franc', 'f', { first: 'Jean', byname: 'Lefevre' }, { first: 'Anne', byname: 'Boulanger' })).toBe('Lefevre');
-    expect(childByname(rng, 'norse', 'm', { first: 'Olaf', byname: 'Eriksson' }, null)).toBe('Olafsson');
+    expect(childByname(rng, 'norse', 'm', { first: 'Olaf', byname: 'Eriksson' }, null)).toMatch(/^Olafs(son|en)$/);
     expect(childByname(rng, 'norse', 'm', { first: 'Olaf', byname: 'Haraldsson' }, null, true)).toBe('Haraldsson');
-    expect(childByname(rng, 'norse', 'f', { first: 'Olaf', byname: 'Eriksson' }, null)).toBe('Olafsdottir');
+    expect(childByname(rng, 'norse', 'f', { first: 'Olaf', byname: 'Eriksson' }, null)).toMatch(/^Olaf(sdottir|datter)$/);
     expect(childByname(rng, 'cymric', 'm', { first: 'Hywel', byname: 'ap Rhys' }, null)).toBe('ap Hywel');
     expect(childByname(rng, 'anglo', 'f', null, { first: 'Alice', byname: 'Baker' })).toBe('Baker');
   });

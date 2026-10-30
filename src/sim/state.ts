@@ -450,6 +450,9 @@ export class GameState {
   /** Buildings by settlement, in plot order. */
   readonly buildingsAt = new Map<number, BuildingState[]>();
   living = 0;
+  /** Dead people still in the registry, oldest death first (so pruning is O(deaths), not O(population)). */
+  readonly graveyard: Person[] = [];
+  graveyardHead = 0;
   /** Bumped whenever a building / strip changes, so views know when to refresh (not saved). */
   buildingRevision = 0;
   stripRevision = 0;
@@ -593,6 +596,7 @@ export class GameState {
     if (p.death) return;
     p.death = { day, cause };
     this.unindexPerson(p);
+    this.graveyard.push(p);
     this.touch(p);
   }
 
@@ -780,7 +784,13 @@ export class GameState {
       this.householdsAt.set(id, new Set());
       this.buildingsAt.set(id, []);
     }
-    for (const p of this.persons.values()) if (!p.death) this.indexPerson(p);
+    this.graveyard.length = 0;
+    this.graveyardHead = 0;
+    for (const p of this.persons.values()) {
+      if (!p.death) this.indexPerson(p);
+      else this.graveyard.push(p);
+    }
+    this.graveyard.sort((a, b) => (a.death as { day: number }).day - (b.death as { day: number }).day || a.id - b.id);
     for (const list of this.residents.values()) list.sort(byId);
     for (const h of this.households.values()) {
       let set = this.householdsAt.get(h.settlement);

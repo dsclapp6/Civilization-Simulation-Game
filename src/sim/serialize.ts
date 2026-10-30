@@ -262,6 +262,19 @@ export function serializeExt(state: GameState, name: string): string | null {
   return name in state.ext ? JSON.stringify(state.ext[name]) : null;
 }
 
+/** Serialises a few records and throws them away, so the first real save does not run cold code
+ *  (JIT warm-up) on a frame that also has to render. */
+export function warmUpSerializer(state: GameState): void {
+  let n = 0;
+  for (const { kind, chunk } of allChunkKeys(state)) {
+    if (kind === 'persons' || kind === 'households' || kind === 'buildings') {
+      serializeChunk(state, kind, chunk);
+      if (++n >= 6) break;
+    }
+  }
+  serializeMeta(state);
+}
+
 /** All chunk keys of every kind that currently has entities. */
 export function allChunkKeys(state: GameState): Array<{ kind: DirtyKind; chunk: number }> {
   const out: Array<{ kind: DirtyKind; chunk: number }> = [];
