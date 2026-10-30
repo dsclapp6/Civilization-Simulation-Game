@@ -42,6 +42,8 @@ export interface UiRendererControls {
   focusMap(x: number, z: number, altitude?: number): void;
   /** Screen position of a world point (for markers), or null when behind the camera. */
   project(x: number, y: number, z: number): { x: number; y: number } | null;
+  /** World point under a screen position (map clicks), or null. */
+  screenToGround(x: number, y: number): { x: number; z: number } | null;
 }
 
 /** The app side of the UI: lifecycle and meta state. */

@@ -21,6 +21,8 @@ binding brief for every contributor and subagent.
 | `world` | `src/render/worldViewer.ts` | fly over a generated continent (renderer dev) |
 | `gallery` | `src/gallery/main.ts` | browse buildings, vegetation, crops, props, fx |
 | `chars` | `src/gallery/characters-main.ts` | characters, horses, animals, animations |
+| `village` | `src/agents/dev/villageViewer.ts` | a settlement living its day: agents, routines, animals (wave 2 dev) |
+| `ui` | `src/ui/dev/gallery.ts` | every UI screen and panel with mock data (wave 2 dev) |
 
 Common params: `seed`, `quality=low|medium|high`, `time` (0..1 day fraction), `season` (0..3).
 

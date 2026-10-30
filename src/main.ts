@@ -1,4 +1,4 @@
-// Entry point: picks a mode from the URL (?mode=game|world|gallery|chars).
+// Entry point: picks a mode from the URL (?mode=game|world|gallery|chars|village|ui).
 export interface AppRoot {
   viewport: HTMLElement;
   ui: HTMLElement;
@@ -20,6 +20,8 @@ const boot =
   mode === 'gallery' ? import('./gallery/main') :
   mode === 'chars' ? import('./gallery/characters-main') :
   mode === 'world' ? import('./render/worldViewer') :
+  mode === 'village' ? import('./agents/dev/villageViewer') :
+  mode === 'ui' ? import('./ui/dev/gallery') :
   import('./app/game');
 
 boot.then((m) => m.start(root)).catch((err) => {
