@@ -17,8 +17,9 @@ export function think(a: Arena, f: Fighter, dt: number): void {
   if (!fight) return;
   f.think -= dt;
   switch (f.st) {
-    case S.Dead: case S.Gone: case S.Down: case S.Hit: case S.Stagger: case S.Yield:
+    case S.Dead: case S.Gone: case S.Down: case S.Hit: case S.Stagger: case S.Yield: case S.Shoot:
       f.wantSpeed = 0;
+      if (f.st === S.Shoot && f.target) f.wantYaw = yawTo(f.x, f.z, f.target.x, f.target.z);
       return;
     case S.Windup: case S.Recover: {
       f.wantSpeed = 0;
@@ -65,7 +66,7 @@ export function think(a: Arena, f: Fighter, dt: number): void {
 
 function moraleBreaks(a: Arena, f: Fighter, fight: Fight): boolean {
   if (f.st === S.Flee) return false;
-  const limit = f.isAnimal ? 24 : 20;
+  const limit = f.isAnimal ? 22 : 16;
   if (f.morale > limit) return false;
   const p = f.person;
   // nobles and wounded men of rank yield rather than run, when yielding is allowed and the foe is a man
@@ -206,7 +207,7 @@ function answer(a: Arena, f: Fighter, t: Fighter, g: number): boolean {
   f.answered = t; f.answeredSerial = t.serial;
   const rng = a.rng;
   const skill = f.melee;
-  const react = clamp(0.28 + 0.035 * skill + 0.022 * (f.agi - 10) + (f.gear.shield ? 0.12 : 0) + (f.person?.traits.includes('brave') ? 0.04 : 0) - (1 - f.breath) * 0.2, 0.1, 0.9);
+  const react = clamp(0.42 + 0.035 * skill + 0.022 * (f.agi - 10) + (f.gear.shield ? 0.12 : 0) + (f.person?.traits.includes('brave') ? 0.04 : 0) - (1 - f.breath) * 0.2, 0.1, 0.9);
   if (rng.next() > react) return false;
   const canGuard = f.stamina > 8 && (f.gear.weapon.guard > 0.15 || f.gear.shield !== null) && !f.isAnimal;
   const dodgeP = f.isAnimal ? 0.55 : clamp(0.18 + 0.03 * (f.agi - 10) + (f.gear.worn > 8 ? -0.12 : 0), 0.05, 0.55);

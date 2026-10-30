@@ -94,6 +94,7 @@ export class Arena {
   readonly endListeners: Array<(r: FightResult) => void> = [];
   nextFight = 1;
   time = 0;
+  private stepNo = 0;
   player: Fighter | null = null;
   lastResult: FightResult | null = null;
   private readonly mr: MoveResult = { x: 0, z: 0, blocked: false, wading: false };
@@ -399,8 +400,11 @@ export class Arena {
     if (this.fighters.length === 0 && env.proj.count === 0 && this.corpses.length === 0 && env.proj.landed.length === 0) return;
     this.time += dt;
     const list = this.fighters;
-    for (let i = 0; i < list.length; i++) {
-      const f = list[i];
+    // who acts first rotates every step, so neither side gets the first blow of every exchange
+    const n = list.length;
+    const start = n > 0 ? this.stepNo++ % n : 0;
+    for (let k = 0; k < n; k++) {
+      const f = list[(start + k) % n];
       if (f.gone) continue;
       if (f.external) {
         this.followPlayerBody(f);
@@ -548,10 +552,12 @@ export class Arena {
         if (!f.impacted && f.t >= f.dur) {
           f.impacted = true;
           impact(this, f);
-        }
-        if (f.st === S.Windup) {
-          const a = f.attack;
-          if (a) this.toRecover(f, a.recover);
+          // the blow may have been parried or the fighter struck: only a swing still under way recovers
+          if (f.st === S.Windup) {
+            const a = f.attack;
+            if (a) this.toRecover(f, a.recover);
+            else this.toIdle(f);
+          }
         }
         break;
       case S.Recover:
@@ -866,7 +872,7 @@ export class Arena {
         if (!f.active) continue;
         const hp = f.person ? f.person.health.hp : f.beastMax > 0 ? f.beastHp / f.beastMax : 1;
         const odds = mine - theirs;
-        const target = f.moraleBase - 60 * Math.pow(1 - clamp(hp, 0, 1), 1.4) - (odds < 0 ? 5 * -odds : -1.5 * odds)
+        const target = f.moraleBase - 48 * Math.pow(1 - clamp(hp, 0, 1), 1.4) - (odds < 0 ? 5 * -odds : -1.5 * odds)
           - (f.person ? 14 * this.env.book.limbPenalty(f.personId, 'legs') : 0);
         // morale drifts to the level the situation deserves; blows and deaths push it down at once (see strike/markDead)
         f.morale += clamp(target - f.morale, -1.5, 1.2);

@@ -199,7 +199,7 @@ export function applyBlow(a: Arena, att: Fighter | null, v: Fighter, b: Blow): B
   if (damage >= 1) fx.add(b.kind === 'blunt' ? 'impact' : 'blood', hx, y, hz, clamp(damage / 14, 0.4, 2.4));
   if (deflected) fx.add('sparks', hx, y, hz, 0.6);
   v.hitsTaken++;
-  v.morale -= 3 + 80 * hpLost;
+  v.morale -= 2 + 62 * hpLost;
   if (att) att.morale += 2;
   if (killed) {
     a.markDead(v, att);
