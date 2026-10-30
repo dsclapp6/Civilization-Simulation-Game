@@ -193,6 +193,7 @@ export class PlayerController implements PlayerApi {
       // loaded in the middle of a succession: the dead character's body lies where it fell
       this.attach(run.pendingSuccession.person, 'load', ext);
       this.markDead();
+      this.deadFor = DEAD_FALL_SECONDS + 1; // already on the ground
     } else if (run.phase === 'alive') {
       this.attach(run.playerId, ext && ext.person === run.playerId ? 'load' : 'home', ext);
     }
