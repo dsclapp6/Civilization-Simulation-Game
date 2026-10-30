@@ -69,6 +69,16 @@ export function restPanel(ctx: PanelCtx): UiPanel {
         h('div', null, h('div.mu-rest-time', null, clockText(d.dayFraction)), h('div.mu-dim', null, `${dayPartLabel(dayPart(now))} · ${dateText(now)}`)),
         h('div.mu-rest-need', null, h('div.mu-small.mu-dim', null, `Rest ${pct(rest)}`), b.el)),
     );
+    const skip = ctx.sim.clock.skip;
+    if (skip) {
+      // already sleeping or waiting: the only sensible choice is to stop
+      opts = [];
+      list.replaceChildren(h('div.mu-card.mu-col.mu-gap-8', null,
+        h('div.mu-row.mu-gap-8', null, icon(skip.kind === 'sleep' ? 'moon_z' : 'hourglass', 22), h('b.mu-big', null, skip.label || (skip.kind === 'sleep' ? 'Sleeping' : 'Waiting'))),
+        h('p.mu-small.mu-dim', null, 'Time is passing quickly. You can stop whenever you like.'),
+        button(skip.kind === 'sleep' ? 'Wake up' : 'Stop waiting', { variant: 'primary', icon: 'sun', onClick: () => { ctx.dispatch({ type: 'cancelSkip' }); ctx.close(); } })));
+      return;
+    }
     opts = options();
     list.replaceChildren(...opts.map((o, i) => {
       const b2 = h<HTMLButtonElement>('button.mu-rest-opt', { type: 'button', class: `${o.primary ? 'primary' : ''}${o.disabled ? ' is-disabled' : ''}`, tip: o.disabled },

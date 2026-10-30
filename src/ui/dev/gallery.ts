@@ -4,14 +4,14 @@
 // Exposes window.__ui for tools/ui-shots.mjs.
 import type { AppRoot } from '../../main';
 import type { Difficulty } from '../../core/domain';
-import { fullName, ageYears, type PersonId } from '../../sim/state';
+import type { PersonId } from '../../sim/state';
 import { gainSkill } from '../../sim/skills';
 import { killPerson } from '../../sim/succession';
 import type { Simulation } from '../../sim/sim';
 import { createUI } from '../index';
 import type { PanelRequest } from '../core/requests';
 import type { GameUIExt } from '../types';
-import { GALLERY_SEED, MockHost, galleryWorld, type MockGame } from './mockHost';
+import { MockHost, galleryWorld, type MockGame } from './mockHost';
 import { MockPlayer } from './mockPlayer';
 import { ICON_NAMES, icon } from '../core/icons';
 
@@ -287,7 +287,6 @@ export async function start(root: AppRoot): Promise<void> {
     {
       id: 'inventory', label: 'Inventory', group: 'Panels', run: async (c) => {
         const mock = await c.open({ panel: 'inventory' });
-        void mock;
         await c.frames(2);
         c.click('.mu-inv-item', 1, 2);
         await c.frames(2);
@@ -336,7 +335,6 @@ export async function start(root: AppRoot): Promise<void> {
         const mock = await c.enter({ bg: 'map', target: 'none' });
         c.ui.openPanel({ panel: 'map' });
         await c.frames(3);
-        void mock;
         c.click('.mu-map-row', 1, 1);
         await c.frames(3);
       },
@@ -465,9 +463,6 @@ export async function start(root: AppRoot): Promise<void> {
   const panel = q.get('panel');
   if (panel && byId.has(panel)) await run(panel);
   else if (!panel) ui.setScreen('menu');
-  void GALLERY_SEED;
-  void fullName;
-  void ageYears;
 }
 
 function buildSidebar(entries: Entry[], run: (id: string) => Promise<void>): void {

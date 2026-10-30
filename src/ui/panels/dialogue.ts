@@ -68,7 +68,7 @@ export function dialoguePanel(ctx: PanelCtx, conversationId: number): UiPanel {
     heads.replaceChildren(
       h('div.mu-dlg-who-big', null,
         h('div.mu-dlg-name', null, name),
-        h('div.mu-dim.mu-small', null, `${conv.relation}${other ? ` · ${age} years old · ${RANK_NAMES[other.rankTier]}` : ''}`)),
+        h('div.mu-dim.mu-small', null, `${conv.relation || ctx.social.relationLabel(conv.actor, conv.with)}${other ? ` · ${age} years old · ${RANK_NAMES[other.rankTier]}` : ''}`)),
       h('div.mu-dlg-mood', null,
         chip(MOOD_LABEL[conv.mood], moodTone(conv.mood), conv.mood === 'hostile' ? 'swords' : conv.mood === 'friendly' ? 'heart' : conv.mood === 'wary' ? 'warning' : 'face'),
         h('div.mu-opinion', { tip: `${opinionWords(conv.opinion, name.split(' ')[0])} (${signed(conv.opinion)})` },

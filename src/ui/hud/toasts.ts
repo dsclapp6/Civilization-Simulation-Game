@@ -30,7 +30,9 @@ export class Toasts {
     if (t.action) {
       const a = t.action;
       el.classList.add('actionable');
-      el.appendChild(h('button.mu-btn.small.primary', { type: 'button', onclick: () => { this.dismissKey(key); this.open(a.request); } }, a.label));
+      el.appendChild(h('div.mu-col.mu-gap-4', { style: { alignItems: 'center' } },
+        h('button.mu-btn.small.primary', { type: 'button', onclick: () => { this.dismissKey(key); this.open(a.request); } }, a.label),
+        h('span.mu-tiny.mu-dim', null, 'or press ', h('span.mu-key', null, 'Enter'))));
     }
     this.el.appendChild(el);
     this.live.push({ key, el, input: t, born: now });

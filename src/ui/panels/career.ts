@@ -29,11 +29,10 @@ function ladder(labels: readonly string[], stage: number): HTMLElement {
   return h('ol.mu-ladder', null, els);
 }
 
-function pathCard(ctx: PanelCtx, p: CareerPath): HTMLElement {
+function pathCard(p: CareerPath): HTMLElement {
   const here = p.stage >= 0;
   const state = here ? chip('You are here', 'lapis', 'pin') : p.open ? chip('Open to you', 'green', 'check') : chip('Not yet', 'vermilion', 'lock');
   const closedBySex = !p.open && !!p.sexRule;
-  void ctx;
   return h('div.mu-card.mu-path', { class: `${here ? 'sel' : ''}${p.open || here ? '' : ' locked'}` },
     h('div.mu-row.mu-between.mu-top', null,
       h('div.mu-row.mu-gap-8', null, h('span.mu-path-ico', null, icon(FIELD_ICON[p.field], 22)), h('h4', null, p.label)),
@@ -89,7 +88,7 @@ export function careerPanel(ctx: PanelCtx, person: PersonId): UiPanel {
   append(win.body,
     present,
     h('div', { style: { height: '14px' } }),
-    h('div.mu-grid.auto.mu-paths', null, paths.map((x) => pathCard(ctx, x))),
+    h('div.mu-grid.auto.mu-paths', null, paths.map((x) => pathCard(x))),
     tests.length ? h('div', { style: { marginTop: '18px' } }, heading('The recruiter’s test', 'melee'),
       h('p.mu-small.mu-dim', { style: { margin: '0 0 8px' } }, 'All men of fifteen to sixty may be called to the levy. These posts ask for more.'),
       h('div.mu-col.mu-gap-8', null, tests.map((t) => testRow(ctx, t)))) : null,

@@ -33,6 +33,13 @@ interface Bound { game: GameServices; offs: Array<() => void>; pause: PauseContr
 
 const ESCAPE_DEBOUNCE_MS = 80;
 
+/** A UI bug must never break the simulation: handlers that run inside `sim.events.emit` swallow and log their errors. */
+function safe<T>(label: string, fn: (e: T) => void): (e: T) => void {
+  return (e) => {
+    try { fn(e); } catch (err) { console.error(`UI handler failed (${label})`, err); }
+  };
+}
+
 export class UiApp implements GameUIExt {
   private readonly root = h('div.mu-root');
   private readonly panelLayer = h('div.mu-layer.mu-panels');
@@ -128,11 +135,30 @@ export class UiApp implements GameUIExt {
       else if (!g) return;
     }
     const sim = this.bound!.game.sim;
-    if (sim.state.run.phase === 'alive') this.hud.update(this.clock);
-    for (const p of this.stack.all()) p.tick?.(this.clock);
+    if (sim.state.run.phase === 'alive') this.guardedHud();
+    for (const p of [...this.stack.all()]) {
+      try { p.tick?.(this.clock); } catch (err) {
+        console.error(`panel "${p.id}" failed while updating; closing it`, err);
+        this.stack.close(p.id);
+      }
+    }
     this.chronicleTimer += dt;
-    if (this.chronicleTimer > 0.6) { this.chronicleTimer = 0; this.pollChronicle(); }
+    if (this.chronicleTimer > 0.6) {
+      this.chronicleTimer = 0;
+      try { this.pollChronicle(); } catch (err) { console.error('chronicle poll failed', err); }
+    }
     this.syncMenuPauseSetting();
+  }
+
+  private hudFailures = 0;
+
+  /** The HUD repaints every frame: if something in the game data trips it, log a few times and keep the game running. */
+  private guardedHud(): void {
+    try {
+      this.hud.update(this.clock);
+    } catch (err) {
+      if (this.hudFailures++ < 3) console.error('HUD update failed', err);
+    }
   }
 
   capturesInput(): boolean {
@@ -197,7 +223,13 @@ export class UiApp implements GameUIExt {
     }
     holder.panel = panel;
     this.records.set(panel, { panel, cleanups: holder.cleanups });
-    this.stack.open(panel);
+    try {
+      this.stack.open(panel);
+    } catch (err) {
+      console.error('panel failed to open', req, err);
+      this.stack.close(panel.id);
+      this.say('warn', 'That page of the book will not open.');
+    }
   }
 
   closePanel(id: string): void { this.stack.close(id); }
@@ -273,29 +305,31 @@ export class UiApp implements GameUIExt {
     const offs: Array<() => void> = [];
     this.bound = { game, offs, pause };
     const eco = game.economy;
+    const on = <K extends keyof SimEvents>(type: K, fn: (e: SimEvents[K]) => void): (() => void) => ev.on(type, safe(type, fn));
     offs.push(
-      ev.on('notify', (n) => { const f = feedForNotify(n, pid()); if (f) this.feed.push(f, this.clock); }),
-      ev.on('points', (p) => this.toasts.push(toastForPoints(p), this.clock)),
-      ev.on('skillLevel', (e) => { const t = toastForSkillLevel(e, pid()); if (t) this.toasts.push(t, this.clock); }),
-      ev.on('rankChanged', (e) => { const t = toastForRank(e, pid()); if (t) this.toasts.push(t, this.clock); }),
-      ev.on('action', (e) => {
+      on('notify', (n) => { const f = feedForNotify(n, pid()); if (f) this.feed.push(f, this.clock); }),
+      on('points', (p) => this.toasts.push(toastForPoints(p), this.clock)),
+      on('skillLevel', (e) => { const t = toastForSkillLevel(e, pid()); if (t) this.toasts.push(t, this.clock); }),
+      on('rankChanged', (e) => { const t = toastForRank(e, pid()); if (t) this.toasts.push(t, this.clock); }),
+      on('action', (e) => {
         if (e.type !== 'completed' || e.actor !== pid() || !e.outcome.gains?.length) return;
         this.hud.addGains(e.outcome.gains.map((g) => gainChip(g, (ref) => { const good = eco.good(ref); return good ? GOOD_ICON[good.category] : undefined; })));
       }),
-      ev.on('trade', (e) => { const f = feedForTrade(e, pid(), (item, qty) => eco.describe(item, qty)); if (f) this.feed.push(f, this.clock); }),
-      ev.on('opinion', (e) => { const f = feedForOpinion(e, pid(), (id) => this.nameOf(id)); if (f) this.feed.push(f, this.clock); }),
-      ev.on('travel', (e) => { const f = feedForTravel(e, (id) => this.placeName(id)); if (f) this.feed.push(f, this.clock); }),
-      ev.on('skip', (e) => {
+      on('trade', (e) => { const f = feedForTrade(e, pid(), (item, qty) => eco.describe(item, qty)); if (f) this.feed.push(f, this.clock); }),
+      on('opinion', (e) => { const f = feedForOpinion(e, pid(), (id) => this.nameOf(id)); if (f) this.feed.push(f, this.clock); }),
+      on('travel', (e) => { const f = feedForTravel(e, (id) => this.placeName(id)); if (f) this.feed.push(f, this.clock); }),
+      on('skip', (e) => {
         if (e.phase === 'start') this.hud.setSkipLabel(e.label);
         const f = feedForSkip(e);
         if (f) this.feed.push(f, this.clock);
       }),
-      ev.on('saved', () => this.hud.flashSaved(this.clock)),
-      ev.on('chronicle', (e) => this.feedChronicle(e)),
-      ev.on('playerDied', () => this.onPlayerDied()),
-      ev.on('playerSwitched', (e) => this.onPlayerSwitched(e)),
-      ev.on('gameOver', (e) => this.onGameOver(e)),
+      on('saved', () => this.hud.flashSaved(this.clock)),
+      on('chronicle', (e) => this.feedChronicle(e)),
+      on('playerDied', () => this.onPlayerDied()),
+      on('playerSwitched', (e) => this.onPlayerSwitched(e)),
+      on('gameOver', (e) => this.onGameOver(e)),
     );
+    this.seenChronicle.clear();
     this.hud.reset();
   }
 
@@ -350,9 +384,16 @@ export class UiApp implements GameUIExt {
     if (!this.stack.has('encounter')) this.openPanel({ panel: 'encounter' });
   }
 
+  private readonly seenChronicle = new Set<string>();
+
   private feedChronicle(e: ChronicleEntry): void {
     const g = this.bound?.game;
     if (!g) return;
+    // the same entry can arrive as an event and again through the poll
+    const key = `${e.day}|${e.kind}|${e.text}`;
+    if (this.seenChronicle.has(key)) return;
+    this.seenChronicle.add(key);
+    if (this.seenChronicle.size > 200) this.seenChronicle.delete(this.seenChronicle.values().next().value as string);
     const player = g.sim.state.persons.get(g.sim.state.run.playerId);
     if (!player) return;
     const family = new Set(familyOf(g.sim.state, player, 3).keys());
@@ -387,7 +428,7 @@ export class UiApp implements GameUIExt {
       open: (req) => this.openPanel(req),
       close: () => { if (holder.panel) this.stack.close(holder.panel.id); },
       closeId: (id) => { this.stack.close(id); },
-      listen: (type, fn) => { holder.cleanups.push(sim.events.on(type, fn)); },
+      listen: (type, fn) => { holder.cleanups.push(sim.events.on(type, safe(`panel ${type}`, fn))); },
       interval: (ms, fn) => { const t = window.setInterval(fn, ms); holder.cleanups.push(() => window.clearInterval(t)); },
       say: (kind, text) => this.say(kind, text),
       toast: (t) => this.toasts.push(t, this.clock),
@@ -522,7 +563,12 @@ export class UiApp implements GameUIExt {
       this.togglePanelKey(intent.panel);
       return true;
     }
-    if (top?.key?.(intent, e)) return true;
+    try {
+      if (top?.key?.(intent, e)) return true;
+    } catch (err) {
+      console.error(`panel "${top?.id}" failed on a key`, err);
+      return false;
+    }
     if (intent.type === 'enter' && !top) {
       const req = this.toasts.pendingAction();
       if (req) { this.toasts.dismissAction(); this.openPanel(req); return true; }
