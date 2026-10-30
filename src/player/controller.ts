@@ -213,13 +213,13 @@ export class PlayerController implements PlayerApi {
     this.avatar = createBody(spot.x, spot.z, spot.yaw, 0, this.traits.endurance);
     placeBody(this.avatar, spot.x, spot.z, spot.yaw, this.zone.nav);
     this.draw = this.makeDraw(p);
-    this.syncDraw(1);
-    this.zone.attachPlayer(id, this.draw);
     if (how === 'load' && ext && ext.mount && ext.person === id) {
       // riding when the run was saved: take the same horse back if the zone still has it
       const claimed = this.zone.claimAnimal ? this.zone.claimAnimal(ext.mount.animal) : false;
       if (claimed || !this.zone.claimAnimal) this.avatar.mounted = { animal: ext.mount.animal, coat: ext.mount.coat, claimed };
     }
+    this.syncDraw(1);
+    this.zone.attachPlayer(id, this.draw);
     this.interaction.invalidate();
     this.scanT = SCAN_INTERVAL;
     this.persistT = PERSIST_INTERVAL;
@@ -392,10 +392,12 @@ export class PlayerController implements PlayerApi {
     if (this.dead || !p) return { ok: false, reason: 'You cannot travel now.' };
     if (this.journey?.encounter) return { ok: false, reason: 'Settle things on the road first.' };
     if (this.avatar.lock) return { ok: false, reason: 'Wait a moment.' };
+    const dest = this.world.settlements.find((s) => s.id === settlement);
+    if (!dest) return { ok: false, reason: 'You do not know the way.' };
+    // inside the settlement is "there": the map is for going somewhere
+    if (dist(this.avatar.x, this.avatar.z, dest.x, dest.z) < Math.max(40, dest.radius * 0.8)) return { ok: false, reason: 'You are already there.' };
     const plan = planRoute(this.world, { x: this.avatar.x, z: this.avatar.z }, settlement);
-    if (!plan) {
-      return { ok: false, reason: this.world.settlements.some((s) => s.id === settlement) ? 'You are already there.' : 'You do not know the way.' };
-    }
+    if (!plan) return { ok: false, reason: 'You are already there.' };
     const sim = this.sim;
     const speedBefore = this.journey && this.journey.state.phase !== 'arrived' ? this.journey.speedBefore : sim.clock.speed;
     if (sim.clock.paused) sim.dispatch({ type: 'resume' });
@@ -912,7 +914,7 @@ export class PlayerController implements PlayerApi {
     this.interaction.invalidate();
     this.sim.dispatch({ type: 'setActionTime', on: false });
     if (out.end) this.stopJourney('cancel', true);
-    else if (out.resume) this.resumeJourney(j);
+    else this.resumeJourney(j); // never leave the party standing in the road
     const { resume: _resume, end: _end, ...outcome } = out;
     void _resume; void _end;
     return outcome;

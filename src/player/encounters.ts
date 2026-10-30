@@ -371,7 +371,7 @@ export function buildChoices(env: EncounterEnv, d: EncounterData): ChoiceDef[] {
               gainSkill(ctx, p, 'persuasion', 6);
               return ok('You convince the sergeant you are expected at the next town. He lets you pass.', true);
             }
-            return ok('"Not good enough." The sergeant bars the road. You turn back.', false, { ok: false, });
+            return { ok: false, message: '"Not good enough." The sergeant bars the road. You turn back.', resume: false, end: true };
           },
         },
         { id: 'turn', label: 'Turn back', enabled: true, run: () => ({ ok: true, message: 'You turn back from the patrol.', resume: false, end: true }) },
