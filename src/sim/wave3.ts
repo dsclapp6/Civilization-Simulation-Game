@@ -8,6 +8,7 @@
 //   installAdvancement(sim, deps) → sim.services.advancement, sim.services.happenings
 //                                   (src/sim/advancement, src/sim/happenings)
 import type { P2 } from '../core/math';
+import type { AnimState, HeldItem } from '../core/view';
 import type { HouseId, PersonId, TitleId } from './state';
 
 // ---------------------------------------------------------------------------------------------
@@ -57,6 +58,81 @@ export interface CombatApi {
   harm(person: PersonId, intensity: number, cause: string): HarmResult;
   wounds(person: PersonId): readonly Wound[];
   onFightEnded(fn: (r: FightResult) => void): () => void;
+
+  // ---- additive (combat module); optional so other modules' fakes need not implement them ----
+  /** The fight a person is in (0 = none). */
+  fightOf?(person: PersonId): number;
+  /** Is any fight going on in the detail zone? */
+  anyFight?(): boolean;
+  /** Blood left (1 = whole); 1 for the unhurt. */
+  blood?(person: PersonId): number;
+  /** Binds the patient's wounds (`healer` may be the patient): the Medicine skill decides how well. */
+  tend?(healer: PersonId, patient: PersonId): { ok: boolean; message: string };
+  /** The player controller's hook (src/player): attack / block / aim and how the body should look and move. */
+  player?: PlayerCombatPort;
+}
+
+/** One sub-step of the player's body, as the controller reports it to the combat module. */
+export interface PlayerCombatFrame {
+  person: PersonId;
+  x: number;
+  y: number;
+  z: number;
+  /** The body's facing (rad, 0 = +z). */
+  yaw: number;
+  /** Ground speed (m/s). */
+  speed: number;
+  mounted: boolean;
+  /** Seconds of the dodge roll left (0 = not rolling). */
+  dodgeT: number;
+  stamina: number;
+  staminaMax: number;
+  /** A timed action, conversation, mount lock or encounter holds the body. */
+  busy: boolean;
+  dt: number;
+}
+
+/** What the combat module asks of the player's body and draw item for this step (reused object). */
+export interface PlayerCombatPose {
+  /** In a fighting posture (weapon out). */
+  engaged: boolean;
+  /** Animation that replaces locomotion (attack, block, hit, stagger, bow…), or null. */
+  anim: AnimState | null;
+  /** Seconds since `anim` started. */
+  animTime: number;
+  mainHand: HeldItem | null;
+  offHand: HeldItem | null;
+  /** Multiplier on walking speed (0 = rooted by a blow or a swing). */
+  moveScale: number;
+  /** Turn the body to this facing (aiming, striking), or null. */
+  faceYaw: number | null;
+  /** Bow aim pitch (rad, + up) for the draw item. */
+  aimPitch: number | null;
+  /** Stamina spent this step. */
+  staminaCost: number;
+  /** The body may not sprint (drawing a bow, swinging). */
+  noSprint: boolean;
+  /** A bow is drawn and the camera should look along the shot. */
+  aiming: boolean;
+  /** The rider has been thrown (the horse went down). */
+  unhorse: boolean;
+  /** Armour and helmet the player's equipment shows (so the character looks as protected as they are). */
+  armour: string | null;
+  helmet: string | null;
+}
+
+/** The camera ray the player aims along (world coordinates; direction is a unit vector). */
+export interface PlayerAim { x: number; y: number; z: number; dx: number; dy: number; dz: number }
+
+export interface PlayerCombatPort {
+  /** Every frame, before the sim steps: held buttons and the camera. Edges are latched inside. */
+  input(attack: boolean, block: boolean, aim: PlayerAim | null, cameraYaw: number): void;
+  /** Every sub-step. */
+  step(f: PlayerCombatFrame, out: PlayerCombatPose): void;
+  /** May the dodge roll begin (not staggered, enough breath)? Spends the stamina when it does. */
+  dodge(): boolean;
+  /** Forget everything held (character switch, death, a panel took the focus). */
+  reset(): void;
 }
 
 // ---------------------------------------------------------------------------------------------
