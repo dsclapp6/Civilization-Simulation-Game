@@ -101,6 +101,24 @@ function crowdPose(c: SceneCtx, want: (a: Zone['agentsArr'][number]) => boolean,
   return null;
 }
 
+/** A camera for the biggest group of animals of a kind (seen from a clear spot 8–24 m away). */
+function animalPose(c: SceneCtx, kind: string): Pose | null {
+  const list = c.zone.animals().filter((a) => a.kind === kind);
+  if (list.length === 0) return null;
+  let cx = 0, cz = 0;
+  for (const a of list) { cx += a.x / list.length; cz += a.z / list.length; }
+  for (const d of [8, 11, 15, 6, 20]) {
+    for (let i = 0; i < 24; i++) {
+      const ang = i / 24 * Math.PI * 2;
+      const x = cx + Math.sin(ang) * d, z = cz + Math.cos(ang) * d;
+      if (c.zone.nav.walkable(x, z) && c.zone.nav.finder.lineClear(x, z, cx, cz)) {
+        return { pos: { x, y: Math.max(0, c.g(x, z)) + 1.5, z }, look: { x: cx, y: Math.max(0, c.g(cx, cz)) + 0.8, z: cz } };
+      }
+    }
+  }
+  return null;
+}
+
 export const SCENES: SceneSpec[] = [
   {
     id: 'dawn', describe: 'dawn: the village wakes and sets off to work', settlement: pickVillage, season: 0, day: 2,
@@ -183,7 +201,8 @@ export const SCENES: SceneSpec[] = [
     },
   },
   {
-    id: 'wildlife', describe: 'wildlife in a wood: deer, boar, foxes', settlement: pickVillage, season: 0, day: 1, time: 0.3, warm: 4,
+    id: 'wildlife', describe: 'wildlife in a wood: deer, boar, foxes', settlement: pickVillage, season: 1, day: 1, time: 0.3, warm: 4,
+    frame: (c) => animalPose(c, 'deer') ?? animalPose(c, 'boar') ?? animalPose(c, 'fox') ?? animalPose(c, 'hare'),
     camera: (c) => {
       const spot = c.zone.fauna.findWildlife('deer', c.s.x, c.s.z, 900) ?? { x: c.s.x + 200, z: c.s.z };
       const yaw = Math.atan2(spot.x - c.s.x, spot.z - c.s.z);

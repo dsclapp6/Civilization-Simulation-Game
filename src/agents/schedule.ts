@@ -464,9 +464,12 @@ export class Schedule {
   private sleep(p: Person, o: Intent, day: number, f: number, T: DayTimes, age: number, sp: SettlementPlaces | null, home: BuildingState | null): void {
     if (f >= T.bed) this.fromUntil(o, day, T.bed, 1 + T.wake); else this.fromUntil(o, day, T.wake - 1, T.wake);
     // the night watch: a quarter of the soldiers of a garrison or walled town walk the streets with a torch
-    const arms = ARMS.has(p.career) && sp && (sp.settlement.kind === 'castle' || sp.settlement.kind === 'town' || sp.settlement.kind === 'city');
+    const walled = !!sp && (sp.settlement.kind === 'castle' || sp.settlement.kind === 'town' || sp.settlement.kind === 'city');
     const watchDay = f >= T.bed ? day : day - 1;
-    if (arms && hash01(p.id, watchDay * 5 + 11) < 0.28 && age >= 16) {
+    // a share of the garrison, plus a few burgesses taking their turn (the town watch was made of citizens)
+    const watchman = walled && age >= 18 && age < 55 && p.sex === 'm' && p.estate !== 'clergy'
+      && (ARMS.has(p.career) ? hash01(p.id, watchDay * 5 + 11) < 0.4 : p.rankTier <= 3 && hash01(p.id, watchDay * 5 + 12) < 0.04);
+    if (watchman) {
       this.watch(p, o, sp!, home);
       return;
     }
