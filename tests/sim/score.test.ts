@@ -24,6 +24,17 @@ describe('points and Legacy gold', () => {
     }
   });
 
+  it('multiplies points by difficulty (SPEC §20), so gold is not multiplied twice', () => {
+    for (const d of ['squire', 'knight', 'lord', 'king'] as const) {
+      const s = sim(d, `pts-${d}`);
+      s.state.run.multiplier = 1;
+      const p = s.profile;
+      const g0 = levelProfile(p).legacyGold;
+      expect(s.score.award('deed', 100, 'test')).toBeCloseTo(100 * DIFFICULTY_GOLD[d], 6);
+      expect(levelProfile(p).legacyGold - g0).toBe(Math.floor(10 * DIFFICULTY_GOLD[d]));
+    }
+  });
+
   it('banks gold immediately: 1 gold per 10 points x the difficulty multiplier, with no rounding loss', () => {
     for (const d of ['squire', 'knight', 'lord', 'king'] as const) {
       const s = sim(d, `gold-${d}`);

@@ -1,5 +1,6 @@
-// Points ledger (SPEC §1, §20). Raw points are multiplied by the birth-class multiplier; each point
-// earned is converted to Legacy gold immediately (1 gold per 10 points × difficulty gold multiplier).
+// Points ledger (SPEC §1, §20). Raw points are multiplied by the birth-class and difficulty
+// multipliers; each point earned is converted to Legacy gold immediately (1 gold per 10 points), so
+// gold follows the difficulty table without multiplying twice.
 import { DIFFICULTY_GOLD, type RankTier } from '../core/domain';
 import type { EventBus } from '../core/events';
 import { DAYS_PER_YEAR } from '../core/time';
@@ -31,12 +32,12 @@ export class ScoreKeeper {
 
   get points(): number { return this.state.score.points; }
 
-  /** Awards `amount` raw points (before the multiplier); returns the points actually added. */
+  /** Awards `amount` raw points (before the multipliers); returns the points actually added. */
   award(kind: ScoreKind, amount: number, reason: string): number {
     const run = this.state.run;
     if (amount <= 0 || run.phase === 'over') return 0;
     const sc = this.state.score;
-    const pts = Math.round(amount * run.multiplier * 100) / 100;
+    const pts = Math.round(amount * run.multiplier * DIFFICULTY_GOLD[this.state.difficulty] * 100) / 100;
     sc.raw += amount;
     sc.points = Math.round((sc.points + pts) * 100) / 100;
     sc.byKind[kind] = (sc.byKind[kind] ?? 0) + pts;
@@ -51,7 +52,7 @@ export class ScoreKeeper {
   /** Converts any unbanked points into Legacy gold. */
   bankGold(): number {
     const sc = this.state.score;
-    const target = Math.floor((sc.points / POINTS_PER_GOLD) * DIFFICULTY_GOLD[this.state.difficulty]);
+    const target = Math.floor(sc.points / POINTS_PER_GOLD);
     const delta = target - sc.goldBanked;
     if (delta > 0) {
       sc.goldBanked = target;
