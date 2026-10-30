@@ -33,6 +33,30 @@ describe('camera rig', () => {
     expect(rig.camera.position.y).toBeGreaterThan(heightAt(rig.camera.position.x, rig.camera.position.z));
   });
 
+  it('cranes up over a low building behind the character instead of diving into its hair', () => {
+    // a 3.4 m tall shed 3 m behind the character (camera side is -z for yaw 0)
+    const box = new THREE.Box3(new THREE.Vector3(495, 0, 486), new THREE.Vector3(505, 3.4, 496));
+    const hit = new THREE.Vector3();
+    const flat = { heightAt: () => 0, worldSize: 16000, raycastBuildings: (ray: THREE.Ray, max: number) => {
+      const p = ray.intersectBox(box, hit);
+      const d = p ? p.distanceTo(ray.origin) : null;
+      return d !== null && d <= max ? d : null;
+    } };
+    const rig = new CameraRig(16 / 9, flat);
+    rig.yaw = 0; rig.pitch = 0.3; rig.distance = 9;
+    const focus = new THREE.Vector3(500, 0, 499);
+    for (let i = 0; i < 90; i++) rig.update(1 / 30, focus);
+    const cam = rig.camera.position;
+    // kept most of the boom and is not inside the box
+    expect(cam.distanceTo(new THREE.Vector3(500, 1.55, 499))).toBeGreaterThan(6);
+    expect(box.containsPoint(cam)).toBe(false);
+    expect(cam.y).toBeGreaterThan(3.4);
+    // in the open the lift eases away again
+    const open = new THREE.Vector3(800, 0, 800);
+    for (let i = 0; i < 200; i++) rig.update(1 / 30, open);
+    expect(rig.camera.position.y).toBeLessThan(1.55 + 9 * Math.sin(0.3) + 0.3);
+  });
+
   it('rises smoothly to the map and back, with altitude interpolated in log space', () => {
     const rig = new CameraRig(16 / 9, env);
     const focus = new THREE.Vector3(4000, 5, 4000);
