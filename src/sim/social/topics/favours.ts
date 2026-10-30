@@ -73,10 +73,10 @@ export const favoursGroup: TopicGroup = {
       for (const d of owed) {
         const pay = Math.min(d.v, actor.money);
         out.push(mkOption(`favour.repay.${d.from}`, pay >= d.v ? `Repay what you owe (${formatMoney(d.v)})` : `Repay what you can (${formatMoney(pay)} of ${formatMoney(d.v)})`, 'favour', {
-          priority: 92, enabled: pay > 0, reason: pay > 0 ? undefined : 'Your purse is empty.',
+          priority: 9.8, enabled: pay > 0, reason: pay > 0 ? undefined : 'Your purse is empty.',
         }));
       }
-      out.push(mkOption('nav.favour', 'Ask a favour…', 'favour', { priority: 55 }));
+      out.push(mkOption('nav.favour', 'Ask a favour…', 'favour', { priority: 4.5 }));
       return;
     }
     if (session.page !== 'favour') return;
@@ -283,7 +283,7 @@ export const giftsGroup: TopicGroup = {
   options(t, out) {
     const { session, core, actor } = t;
     if (session.page === 'root') {
-      out.push(mkOption('nav.gift', 'Give a gift…', 'gift', { priority: 50 }));
+      out.push(mkOption('nav.gift', 'Give a gift…', 'gift', { priority: 3.5 }));
       return;
     }
     if (session.page !== 'gift') return;
@@ -308,6 +308,10 @@ export const giftsGroup: TopicGroup = {
     const { core, actor, other } = t;
     let value = 0;
     let r: Result;
+    const purse = actor.money;
+    // the economy's own handing-over may already have warmed them (it thanks a gift itself): count that once
+    const hooked = !!core.hooks.giveHook;
+    const warmBefore = hooked ? core.opinion.total(other, actor) : 0;
     if (option.id.startsWith('gift.money.')) {
       const amount = Number(option.id.slice('gift.money.'.length));
       t.npc.vars.money = formatMoney(amount);
@@ -326,9 +330,11 @@ export const giftsGroup: TopicGroup = {
     const rec = core.store.talkRec(actor.id, other.id, core.day, true);
     const nth = rec ? rec.g : 0;
     if (rec) { rec.g++; core.store.touch(); }
-    const gain = Math.round(giftGain(other, value) * Math.max(0, 1 - RAPPORT.giftPerUse * nth) * 10) / 10;
+    const earned = Math.round(giftGain(other, value) * Math.max(0, 1 - RAPPORT.giftPerUse * nth) * 10) / 10;
+    const already = hooked ? Math.max(0, core.opinion.total(other, actor) - warmBefore) : 0;
+    const gain = Math.max(0, Math.round((earned - already) * 10) / 10);
     const poor = other.rankTier <= 2 || other.career === 'beggar';
-    if (nth === 0 && value >= 3 && value >= actor.money * 0.04 && poor) core.opinion.addRep(actor, 'generosity', 1);
+    if (nth === 0 && value >= 3 && value >= purse * 0.04 && poor) core.opinion.addRep(actor, 'generosity', 1);
     if (value >= 24 && poor) core.news.rumour('alms', other.settlement, actor.id, other.id);
     const suspicious = t.op < -15;
     const pool = other.career === 'beggar' ? 'gift.beggar' : suspicious ? 'gift.suspicious' : 'gift.thanks';

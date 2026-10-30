@@ -94,7 +94,7 @@ export const familyGroup: TopicGroup = {
     if (session.page === 'root') {
       const probe: ReturnType<typeof mkOption>[] = [];
       collect(t, probe);
-      if (probe.length > 0) out.push(mkOption('nav.family', 'Family matters…', 'family', { priority: 65 }));
+      if (probe.length > 0) out.push(mkOption('nav.family', 'Family matters…', 'family', { priority: 5.5 }));
       return;
     }
     if (session.page !== 'family') return;
@@ -144,15 +144,16 @@ function collect(t: TopicCtx, out: ReturnType<typeof mkOption>[]): void {
   const age = core.age(actor);
   if (age >= 12 && age < 18 && isGuardianOf(other, actor, core) && APPRENTICE_FROM.has(actor.career) && actor.rankTier <= 3) {
     for (const m of masterCandidates(t)) {
-      const premium = premiumFor(m);
-      const hh = st.households.get(other.household);
-      const pay = hh && hh.id === actor.household ? hh : st.households.get(actor.household);
-      const afford = !!pay && pay.purse >= premium;
+      // the economy, when linked, sets the terms; otherwise the household pays our own premium
+      const quote = core.hooks.apprenticeHook?.(actor.id, m.id, true);
+      const premium = quote?.premium ?? premiumFor(m);
+      const pay = st.households.get(actor.household);
+      const afford = quote ? quote.ok : !!pay && pay.purse >= premium;
       const unfree = actor.estate === 'unfree';
       out.push(mkOption(`family.apprentice.${m.id}`, `Be apprenticed to ${m.first} the ${CAREERS[m.career].label.toLowerCase()} (${formatMoney(premium)})`, 'family', {
         chance: apprenticeChance(t, m), priority: 70,
         enabled: afford && !unfree,
-        reason: unfree ? 'A serf\'s child needs the lord\'s leave to leave the manor.' : afford ? undefined : `The household cannot spare ${formatMoney(premium)}.`,
+        reason: unfree ? 'A serf\'s child needs the lord\'s leave to leave the manor.' : afford ? undefined : (quote?.reason ?? `The household cannot spare ${formatMoney(premium)}.`),
       }));
     }
   }
@@ -213,22 +214,29 @@ function apprentice(t: TopicCtx, masterId: PersonId): TopicReply {
   if (!master) return { lines: [] };
   const trade = CAREERS[master.career].label.toLowerCase();
   t.me.vars.third = master.first; t.npc.vars.third = master.first; t.me.vars.trade = trade; t.npc.vars.trade = trade;
-  const premium = premiumFor(master);
+  const hook = core.hooks.apprenticeHook;
+  const premium = hook?.(actor.id, master.id, true)?.premium ?? premiumFor(master);
   t.npc.vars.money = formatMoney(premium);
   const lines = iSay(t, 'family.apprentice.ask');
   const chance = apprenticeChance(t, master);
   if (!(core.rng().next() < chance)) return { lines: [...lines, ...npcSays(t, 'family.apprentice.no', 'wary')], reason: 'asked' };
-  const payer = st.households.get(actor.household);
-  const masterHh = st.households.get(master.household);
-  if (!payer || !masterHh || payer.purse < premium) return { lines: [...lines, ...npcSays(t, 'family.apprentice.poor', 'sad')] };
-  payer.purse -= premium; masterHh.purse += premium;
-  st.touchHousehold(payer); st.touchHousehold(masterHh);
-  const house = st.houses.get(master.house);
-  st.leaveHousehold(actor);
-  st.joinHousehold(actor, masterHh);
-  if (house) { st.setHouse(actor, house.id); if (!house.sworn.includes(actor.id)) house.sworn.push(actor.id); st.touchHouse(house); }
-  actor.career = master.career; actor.careerStage = 0; actor.rankTier = 2; actor.estate = 'free';
-  st.touch(actor);
+  if (hook) {
+    // the economy writes the indenture and takes its own premium
+    const r = hook(actor.id, master.id, false);
+    if (!r.ok) return { lines: [...lines, ...npcSays(t, 'family.apprentice.poor', 'sad')] };
+  } else {
+    const payer = st.households.get(actor.household);
+    const masterHh = st.households.get(master.household);
+    if (!payer || !masterHh || payer.purse < premium) return { lines: [...lines, ...npcSays(t, 'family.apprentice.poor', 'sad')] };
+    payer.purse -= premium; masterHh.purse += premium;
+    st.touchHousehold(payer); st.touchHousehold(masterHh);
+    const house = st.houses.get(master.house);
+    st.leaveHousehold(actor);
+    st.joinHousehold(actor, masterHh);
+    if (house) { st.setHouse(actor, house.id); if (!house.sworn.includes(actor.id)) house.sworn.push(actor.id); st.touchHouse(house); }
+    actor.career = master.career; actor.careerStage = 0; actor.rankTier = 2; actor.estate = 'free';
+    st.touch(actor);
+  }
   core.opinion.adjust(master.id, actor.id, 3, 'apprenticed');
   core.notify(`You are apprenticed to ${fullName(master)}, ${trade}.`, 'gain');
   st.log(core.now, 'career', `${fullName(actor)} was apprenticed to ${fullName(master)}, ${trade}.`, [actor.id, master.id]);

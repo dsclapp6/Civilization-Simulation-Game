@@ -52,7 +52,12 @@ export function emptyData(): SocialData {
   return { v: 1, mem: [], talk: [], court: [], debts: [], rum: [], told: {}, mass: { last: -1, streak: 0, missed: 0, checked: -1, pray: -1, conf: -99 } };
 }
 
-const EMPTY: Readonly<SocialData> = Object.freeze(emptyData());
+/** The shared "nothing saved yet" record, frozen all the way down so a stray write fails loudly. */
+const EMPTY: Readonly<SocialData> = ((): SocialData => {
+  const d = emptyData();
+  Object.freeze(d.mem); Object.freeze(d.talk); Object.freeze(d.court); Object.freeze(d.debts); Object.freeze(d.rum); Object.freeze(d.told); Object.freeze(d.mass);
+  return Object.freeze(d);
+})();
 
 export class SocialStore {
   constructor(private readonly state: GameState) {}

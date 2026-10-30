@@ -127,7 +127,9 @@ export class CourtshipEngine {
     const st = core.state;
     const out: ConsentNeed[] = [];
     const push = (who: Person | undefined, role: ConsentRole, ward: Person): void => {
-      if (who && !who.death && who.id !== ward.id && who.id !== a.id + b.id - ward.id && !out.some((n) => n.who === who.id)) out.push({ who: who.id, role, ward: ward.id });
+      // the two themselves never count as the one who must agree
+      if (!who || who.death || who.id === a.id || who.id === b.id || out.some((n) => n.who === who.id)) return;
+      out.push({ who: who.id, role, ward: ward.id });
     };
     for (const x of [a, b]) {
       const age = core.age(x);

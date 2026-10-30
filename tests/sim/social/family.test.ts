@@ -53,6 +53,36 @@ describe('family matters: a trade for a child of the house', () => {
     expectConsistent(r.sim.state);
   });
 
+  it('leaves the indenture to the economy when it has linked in, quoting its premium', () => {
+    const r = rig({ seed: 'fam-apprentice-hook' });
+    const { me, father } = childOf(r, { age: 13 });
+    const smith = master(r, 'smith');
+    const calls: Array<[number, number, boolean | undefined]> = [];
+    r.social.setHooks?.({
+      apprenticeHook: (youth, m, dryRun) => {
+        calls.push([youth, m, dryRun]);
+        return dryRun ? { ok: true, premium: 777 } : { ok: true };
+      },
+    });
+    const purse = r.sim.state.households.get(father.household)!.purse;
+    let c = pick(r, begin(r, father), 'nav.family');
+    const o = c.options.find((x) => x.id === `family.apprentice.${smith.id}`)!;
+    expect(o.label).toContain('£3 4s 9d'); // 777d as the economy quoted it
+    expect(o.enabled).toBe(true);
+    const yes = forceRolls(r, 0.0);
+    c = pick(r, c, o.id);
+    yes();
+    expect(calls.some(([, , dry]) => dry === false)).toBe(true);
+    expect(r.sim.state.households.get(father.household)!.purse).toBe(purse); // the economy takes the premium, not social
+    expect(me.household).toBe(father.household); // and writes the indenture itself
+    // a refusal from the economy disables the option
+    r.social.setHooks?.({ apprenticeHook: () => ({ ok: false, reason: 'No room at the bench.' }) });
+    c = pick(r, begin(r, father), 'nav.family');
+    const closed = c.options.find((x) => x.id === `family.apprentice.${smith.id}`)!;
+    expect(closed.enabled).toBe(false);
+    expect(closed.reason).toBe('No room at the bench.');
+  });
+
   it('refuses a serf\'s child, a child whose house cannot pay, and trades closed to the sex', () => {
     const r = rig({ seed: 'fam-apprentice-no' });
     const smith = master(r, 'smith');

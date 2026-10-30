@@ -61,6 +61,15 @@ describe('gifts', () => {
     expect(seen).toEqual([[r.player.id, npc.id, 'wheat', 1]]);
     expect(c.opinion).toBeGreaterThan(before);
     // without a hook the goods move between inventories directly
+    // the economy's own give() warms the receiver too: social adds only what is still missing
+    const warm = villager(r);
+    r.social.setHooks?.({ giveHook: (_from, to) => { r.social.adjustOpinion(to, r.player.id, 3, 'a gift'); return { ok: true }; } });
+    setClock(r.sim, 0.5, 4);
+    r.player.inventory['wheat'] = 3;
+    const w0 = r.social.opinion(warm.id, r.player.id);
+    let e = begin(r, warm);
+    e = pick(r, e, 'nav.gift', 'gift.item.wheat');
+    expect(e.opinion - w0).toBe(3); // the economy's +3 already covers a gift this size: nothing is counted twice
     r.social.setHooks?.({ giveHook: undefined });
     setClock(r.sim, 0.5, 5);
     const other = villager(r);

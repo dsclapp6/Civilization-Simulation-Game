@@ -38,7 +38,7 @@ export const chatGroup: TopicGroup = {
   options(t, out) {
     const { session, other, core } = t;
     if (session.page === 'root') {
-      out.push(mkOption('nav.chat', 'Pass the time of day…', 'chat', { priority: 90 }));
+      out.push(mkOption('nav.chat', 'Pass the time of day…', 'chat', { priority: 8.8 }));
       return;
     }
     if (session.page !== 'chat') return;

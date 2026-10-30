@@ -38,8 +38,8 @@ export const askGroup: TopicGroup = {
   options(t, out) {
     const { session, core, other, actor } = t;
     if (session.page === 'root') {
-      out.push(mkOption('news', 'What news?', 'news', { priority: 85 }));
-      out.push(mkOption('nav.ask', 'Ask about…', 'ask', { priority: 80 }));
+      out.push(mkOption('news', 'What news?', 'news', { priority: 7.8 }));
+      out.push(mkOption('nav.ask', 'Ask about…', 'ask', { priority: 6.5 }));
       return;
     }
     if (session.page !== 'ask') return;

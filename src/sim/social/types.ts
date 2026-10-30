@@ -127,6 +127,12 @@ export interface SocialHooks {
   awakeHook?: (person: PersonId) => boolean;
   /** Economy/player: standing (1..8) the clothes someone wears suggest to strangers. Default: rank tier shaded by wealth. */
   dressTierHook?: (person: PersonId) => number;
+  /**
+   * Economy: bind a youth to a master craftsman as an apprentice (parent and master have agreed). With `dryRun` it only
+   * says whether that could be done and at what premium (pence). Without the hook social moves the youth into the
+   * master's household itself and pays a premium of its own from the youth's household purse.
+   */
+  apprenticeHook?: (youth: PersonId, master: PersonId, dryRun?: boolean) => Result & { premium?: number };
 }
 
 export interface SocialApi {

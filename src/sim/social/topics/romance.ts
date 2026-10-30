@@ -56,13 +56,13 @@ export const romanceGroup: TopicGroup = {
     if (session.page === 'root') {
       if (plausible || (rec && !actor.spouse)) {
         const pct = rec ? ` — ${Math.round(rec.p * 100)}% won` : '';
-        out.push(mkOption('nav.court', `Court ${other.first}${pct}`, 'court', { enabled: eligible.ok, reason: eligible.reason, priority: 75, data: { progress: rec?.p ?? 0 } }));
+        out.push(mkOption('nav.court', `Court ${other.first}${pct}`, 'court', { enabled: eligible.ok, reason: eligible.reason, priority: 6.3, data: { progress: rec?.p ?? 0 } }));
       }
       if (rec && rec.p >= 0.5 && !actor.spouse && !other.spouse) {
         const block = core.courtship.proposalBlock(actor, other);
         // always askable: when something stands in the way, they say so themselves (consent, age, "not yet")
         out.push(mkOption('romance.propose', `Ask ${other.first} to marry you`, 'marry', {
-          chance: block === null ? core.courtship.proposalChance(actor, other) : undefined, priority: 95, data: { blocked: block },
+          chance: block === null ? core.courtship.proposalChance(actor, other) : undefined, priority: 10, data: { blocked: block },
         }));
       }
       return;

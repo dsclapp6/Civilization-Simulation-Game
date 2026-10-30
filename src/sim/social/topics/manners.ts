@@ -128,7 +128,7 @@ export const mannersGroup: TopicGroup = {
   options(t, out) {
     const { session, other } = t;
     if (session.page === 'root') {
-      out.push(mkOption('nav.say', 'Speak your mind…', 'persuade', { priority: 60 }));
+      out.push(mkOption('nav.say', 'Speak your mind…', 'persuade', { priority: 5 }));
       return;
     }
     if (session.page !== 'say') return;

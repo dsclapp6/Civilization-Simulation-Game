@@ -146,11 +146,16 @@ export class Conversations {
     }
     s.turns++;
     if (reply.lines.length > 0) conv.lines.push(...reply.lines);
-    const reason = reply.reason ?? option.id;
+    const reason = reply.reason ?? option.label;
     if (reply.opinion) core.opinion.adjust(s.other.id, s.actor.id, reply.opinion, reason);
     if (reply.mood) {
       s.other.needs.mood = Math.round(Math.max(0, Math.min(1, s.other.needs.mood + reply.mood)) * 100) / 100;
       core.state.touch(s.other);
+    }
+    // company is a need too (SPEC §5): kind talk lifts your own spirits a little
+    if ((reply.opinion ?? 0) > 0) {
+      s.actor.needs.mood = Math.round(Math.min(1, s.actor.needs.mood + Math.min(0.02, (reply.opinion ?? 0) * 0.01)) * 100) / 100;
+      core.state.touch(s.actor);
     }
     // pleasant company wins a sweetheart's heart a little
     if ((reply.opinion ?? 0) > 0 && option.kind !== 'court') core.courtship.advance(s.actor, s.other, 0.012, false);
