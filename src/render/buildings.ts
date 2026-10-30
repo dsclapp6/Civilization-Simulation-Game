@@ -508,7 +508,7 @@ export class BuildingSystem {
     if (e.occupied && e.smoke.length) {
       e.smokeTimer -= dt;
       if (e.smokeTimer <= 0) {
-        e.smokeTimer = 0.35 * (0.85 + hash01(e.id, this.frame) * 0.3);
+        e.smokeTimer = 0.28 * (0.85 + hash01(e.id, this.frame) * 0.3);
         for (const p of e.smoke) out.push({ kind: 'hearth_smoke', x: p.x, y: p.y, z: p.z, intensity: 0.6 });
       }
     }

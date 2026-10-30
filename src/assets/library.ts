@@ -38,7 +38,7 @@ interface CacheEntry {
 /** Glow levels for lit windows: setLit quantises to one of these shared materials. */
 const LIT_LEVELS = 5;
 /** Emissive multiplier of a fully lit window at full night. */
-const WINDOW_GLOW = 2.4;
+const WINDOW_GLOW = 1.15;
 
 export interface MillenniaAssetLibrary extends AssetLibrary {
   building(req: BuildingRequest): MillenniaBuildingAsset;
