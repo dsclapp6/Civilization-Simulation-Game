@@ -205,6 +205,8 @@ export interface ClockView {
   calendarRate: number;
   speed: number;
   paused: boolean;
+  /** Set while the sim is skipping time (sleeping or waiting); UI may fade the screen. */
+  skipping?: 'sleep' | 'wait' | null;
 }
 
 export interface WeatherView {
