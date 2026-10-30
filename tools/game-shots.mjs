@@ -83,7 +83,7 @@ mkdirSync(OUT, { recursive: true });
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: W, height: H } });
 page.setDefaultTimeout(0);
-page.on('console', (m) => { const t = m.text(); if (m.type() === 'error' || m.type() === 'warning') { if (!/GPU stall|ReadPixels|WebGL/.test(t)) console.log(`[browser ${m.type()}] ${t}`); } });
+page.on('console', (m) => { const t = m.text(); if (t.startsWith('[millennia]')) console.log(t); if (m.type() === 'error' || m.type() === 'warning') { if (!/GPU stall|ReadPixels|WebGL/.test(t)) console.log(`[browser ${m.type()}] ${t}`); } });
 page.on('pageerror', (e) => console.log(`[pageerror] ${e.message}`));
 
 const base = `http://localhost:${PORT}/?seed=${encodeURIComponent(seed)}&quality=${quality}&shots=1${hud ? '&hud=1' : ''}${devzone ? '&devzone=1' : ''}`;
