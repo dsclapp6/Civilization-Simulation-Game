@@ -133,7 +133,7 @@ export function installPolitics(sim: Simulation, deps: Pick<Wave3Deps, 'economy'
 
     // ---- wars ----
     war: (id) => wars.get(id),
-    canDeclare: (h, t, c) => wars.canDeclare(h, t, c),
+    canDeclare: (h, t, c, b) => wars.canDeclare(h, t, c, b === true),
     declareWar: (h, t, o) => wars.declare(h, t, o),
     peaceOptions: (id, side) => { const w = wars.get(id); return w ? wars.peaceOptions(w, side) : []; },
     makePeace: (id, side, terms) => { const w = wars.get(id); return w ? wars.makePeace(w, side, terms) : { ok: false, reason: 'That war is over.' }; },

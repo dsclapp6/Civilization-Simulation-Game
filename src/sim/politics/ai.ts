@@ -306,7 +306,7 @@ export class Ai {
     const pw = c.personality(h);
     const mind = c.mindOf(h);
     let best: { o: HouseId; d: number; cause: WarCause } | null = null;
-    for (const o of c.neighbours(h)) {
+    for (const o of c.neighbours(h).slice(0, 10)) {
       if (c.stance(h, o) === 'alliance' && !this.betrays(pw)) continue;
       const cause: WarCause = this.bestClaim(h, o) > 0 ? 'claim' : 'conquest';
       const legal = this.wars.canDeclare(h, o, cause);

@@ -85,6 +85,10 @@ export class PoliticsCore {
   /** Bumped whenever title holders or lieges change; invalidates the snapshot. */
   rev = 0;
   private snap: Snapshot | null = null;
+  /** Geometry caches that survive from one day to the next while the titles and links they came from do not change. */
+  private geo: { sig: number; link: number; neighbours: Map<HouseId, HouseId[]>; pts: Map<HouseId, number[]>; dem: Map<HouseId, number[]> } | null = null;
+  /** Bumped when a marriage or alliance link between two Houses appears or goes. */
+  private linkRev = 0;
   private readonly stanceMemo = new Map<string, Stance>();
 
   constructor(sim: Simulation, deps: { social: SocialApi; economy: EconomyApi }) {
@@ -249,7 +253,19 @@ export class PoliticsCore {
     let total = 0;
     for (const h of actors) if (top.get(h) === h) total += strength.get(h) ?? 0;
 
-    return { day, rev: this.rev, titlesOf, actors, actorSet: new Set(actors), liege, vassals, top, own, strength, total, neighbours: new Map(), memo: new Map(), pts: new Map(), dem: new Map(), pers: new Map() };
+    // the geometry caches stay valid while who holds which demesne (and the links between Houses) is unchanged
+    let sig = 17;
+    for (const h of actors) {
+      sig = Math.imul(sig ^ h, 16777619);
+      for (const t of titlesOf.get(h) ?? []) sig = Math.imul(Math.imul(sig ^ t.id, 16777619) ^ t.liege, 16777619);
+    }
+    if (!this.geo || this.geo.sig !== sig || this.geo.link !== this.linkRev) {
+      this.geo = { sig, link: this.linkRev, neighbours: new Map(), pts: new Map(), dem: new Map() };
+    }
+    return {
+      day, rev: this.rev, titlesOf, actors, actorSet: new Set(actors), liege, vassals, top, own, strength, total,
+      neighbours: this.geo.neighbours, memo: new Map(), pts: this.geo.pts, dem: this.geo.dem, pers: new Map(),
+    };
   }
 
   /** Troops a title's own land puts in the field, tenths of a man. */
@@ -447,7 +463,10 @@ export class PoliticsCore {
   /** Runs `change` on the pair's tie and emits a `stance` event for each direction that moved. */
   changeTie(a: HouseId, b: HouseId, change: (t: Tie) => void): void {
     const before = [this.stance(a, b), this.stance(b, a)];
-    change(this.tieRef(a, b));
+    const t = this.tieRef(a, b);
+    const links = t.kin * 2 + (t.alliance ? 1 : 0);
+    change(t);
+    if (t.kin * 2 + (t.alliance ? 1 : 0) !== links) this.linkRev++;
     this.stanceMemo.clear();
     this.announceStance(a, b, before);
     this.dropIfEmpty(a, b);

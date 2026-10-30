@@ -27,6 +27,7 @@ const SEATS: Partial<Record<OfficeId, number>> = { alderman: 2 };
 
 interface Seat { office: OfficeId; place: number }
 
+const MAX_ELECTORS = 24;
 const hash = (n: number): number => (Math.imul(n ^ 0x9e3779b1, 2654435761) >>> 0);
 
 export class Offices {
@@ -248,9 +249,13 @@ export class Offices {
         default: ok = false;
       }
       if (ok) out.push(p);
-      if (out.length >= 40) break;
     }
-    return out;
+    // a large electorate is sampled evenly (a deterministic stride) to keep the vote cheap
+    if (out.length <= MAX_ELECTORS) return out;
+    const k = out.length / MAX_ELECTORS;
+    const sample: Person[] = [];
+    for (let i = 0; i < MAX_ELECTORS; i++) sample.push(out[Math.floor(i * k)]);
+    return sample;
   }
 
   /** The people who might hold the post, best standing first. */
@@ -259,8 +264,7 @@ export class Offices {
     const scored: Array<{ p: Person; s: number }> = [];
     const consider = (p: Person): void => {
       if (!this.eligible(office, p)) return;
-      const held = MANAGED.filter((o) => o !== office && p.offices.some((x) => x.office === o && x.place === place)).length;
-      if (held > 0 && office !== 'alderman') return;
+      if (office !== 'alderman' && p.offices.length > 0 && p.offices.some((x) => x.place === place && x.office !== office && isManaged(x.office))) return;
       scored.push({ p, s: this.standing(p) });
     };
     if (office === 'sheriff') {
@@ -300,7 +304,7 @@ export class Offices {
 
   private tally(office: OfficeId, place: number, rolled: boolean): { tally: Array<{ person: PersonId; votes: number }>; candidates: Person[] } {
     const c = this.core;
-    const candidates = this.pool(office, place, 6);
+    const candidates = this.pool(office, place, 4);
     const electors = this.electors(office, place);
     const incumbent = this.holders(office, place)[0] ?? 0;
     const rng = c.rng('election');

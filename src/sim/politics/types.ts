@@ -311,9 +311,9 @@ export interface PoliticsRuntime extends PoliticsApi {
 
   // ---- wars ----
   war(id: number): War | undefined;
-  canDeclare(house: HouseId, target: HouseId, cause: WarCause): Result;
+  canDeclare(house: HouseId, target: HouseId, cause: WarCause, breakTruce?: boolean): Result;
   /** Declares a war; `goal` is the title fought for (0 = a raid). */
-  declareWar(house: HouseId, target: HouseId, opts?: { cause?: WarCause; goal?: TitleId; claimant?: PersonId; allies?: HouseId[] }): Result & { war?: number };
+  declareWar(house: HouseId, target: HouseId, opts?: { cause?: WarCause; goal?: TitleId; claimant?: PersonId; allies?: HouseId[]; breakTruce?: boolean }): Result & { war?: number };
   peaceOptions(war: number, side: 'attackers' | 'defenders'): PeaceOption[];
   makePeace(war: number, side: 'attackers' | 'defenders', terms: PeaceTerms): Result;
   history(): PoliticsSave['history'];
