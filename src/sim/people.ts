@@ -69,6 +69,8 @@ export function declineFactor(stat: StatId, age: number): number {
 }
 
 const round2 = (v: number): number => Math.round(v * 100) / 100;
+/** Math.round that never returns -0 (which would not survive a JSON round trip). */
+const int = (v: number): number => Math.round(v) + 0;
 
 /** Trained stat levels implied by potential, age and the work a person does. */
 export function trainedFor(potential: StatBlock, age: number, career: CareerId): StatBlock {
@@ -308,13 +310,13 @@ export function createPerson(state: GameState, rng: Rng, spec: PersonSpec): Pers
     health: { hp: hpHealthy, conditions: [] },
     money: spec.money ?? rollMoney(rng, spec.tier),
     inventory: {},
-    prestige: Math.max(0, Math.round(TIER_PRESTIGE[spec.tier] * (0.5 + Math.min(spec.age, 50) / 50) + rng.range(-1, 3))),
+    prestige: Math.max(0, int(TIER_PRESTIGE[spec.tier] * (0.5 + Math.min(spec.age, 50) / 50) + rng.range(-1, 3))),
     rep: {
-      honour: Math.round(rng.gauss(0, 12) + (traits.includes('honest') ? 15 : 0) - (traits.includes('deceitful') ? 15 : 0)),
-      generosity: Math.round(rng.gauss(0, 12) - (traits.includes('greedy') ? 15 : 0)),
-      piety: Math.round(rng.gauss(0, 12) + (traits.includes('pious') ? 20 : 0)),
-      cruelty: Math.round(rng.gauss(-5, 10) + (traits.includes('hot_tempered') ? 8 : 0)),
-      valour: Math.round(rng.gauss(0, 12) + (traits.includes('brave') ? 15 : 0) - (traits.includes('craven') ? 15 : 0)),
+      honour: int(rng.gauss(0, 12) + (traits.includes('honest') ? 15 : 0) - (traits.includes('deceitful') ? 15 : 0)),
+      generosity: int(rng.gauss(0, 12) - (traits.includes('greedy') ? 15 : 0)),
+      piety: int(rng.gauss(0, 12) + (traits.includes('pious') ? 20 : 0)),
+      cruelty: int(rng.gauss(-5, 10) + (traits.includes('hot_tempered') ? 8 : 0)),
+      valour: int(rng.gauss(0, 12) + (traits.includes('brave') ? 15 : 0) - (traits.includes('craven') ? 15 : 0)),
     },
     opinions: {},
     ambition: rollAmbition(rng, spec.tier, traits, spec.career),
