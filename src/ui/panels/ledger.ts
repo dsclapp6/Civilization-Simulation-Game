@@ -77,7 +77,8 @@ export function ledgerPanel(ctx: PanelCtx, startTab: LedgerTab | undefined, sett
         h('div.mu-card', null, h('div.mu-tiny.mu-dim.mu-caps', null, 'Rent and dues'),
           h('div.mu-bold', null, hold.rent > 0 ? `${formatMoney(hold.rent)} a year` : 'No money rent'),
           h('div.mu-small.mu-dim', null, hold.weekWork > 0 ? `${plural(hold.weekWork, 'day')} of week-work on the lord’s land` : 'No week-work')),
-        h('div.mu-card', null, h('div.mu-tiny.mu-dim.mu-caps', null, 'Livestock'),
+        h('div.mu-card', null, h('div.mu-tiny.mu-dim.mu-caps', null, 'Garden and livestock'),
+          h('div.mu-small', { style: { margin: '2px 0 4px' } }, hold.gardenParcel >= 0 ? 'A kitchen garden behind the house' : 'No garden plot'),
           animals.length ? h('div.mu-row.mu-wrap.mu-gap-6', { style: { marginTop: '4px' } }, animals.map(([k, n]) => chip(`${n} ${animalWord(k as AnimalKind, n ?? 0)}`, '', animalIcon(k as AnimalKind))))
             : h('div.mu-dim.mu-small', null, 'None kept'))),
       heading('Open-field strips', 'farming'),

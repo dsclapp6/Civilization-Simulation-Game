@@ -223,7 +223,7 @@ export class MenuLayer {
         h('div.mu-shop-name', null, h('b', null, info.name), h('span.mu-dim.mu-small', null, info.affects)),
         pips(rank, MAX_RANKS_PER_STAT, 'mu-shop-pips'),
         h('div.mu-shop-pot', { tip: `An average roll of ${SHOP_BASE_STAT} becomes ${shop.expectedPotential(id)}. The cap is 18.` },
-          h('span.mu-dim', null, rank > 0 ? `+${rank}` : '—'), h('b', null, rank > 0 ? ` → ${shop.expectedPotential(id)}` : '')),
+          rank > 0 ? [h('span.mu-dim', null, `+${rank}`), icon('chev_right', 12, 'mu-dim'), h('b', null, String(shop.expectedPotential(id)))] : h('span.mu-dim', null, '—')),
         minus, plus,
         h('div.mu-shop-price.mu-num', null, next === null ? 'max' : `${thousands(next)}`, next === null ? null : icon('coin', 13)),
       );

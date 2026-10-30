@@ -59,6 +59,7 @@ export class Hud {
   private readonly speedBtns: HTMLButtonElement[] = [];
   private readonly pauseBtn = h<HTMLButtonElement>('button.mu-hud-speed.pause', { type: 'button', tip: 'Pause (P)', 'aria-label': 'Pause' }, icon('pause', 14));
   private readonly badgesEl = h('div.mu-hud-badges');
+  private readonly dangerChip = h('div.mu-hud-danger-chip.mu-hide', { tip: 'A hostile is near: fast speeds and sleeping are refused.' }, icon('swords', 15), 'Danger nearby');
 
   // centre-bottom
   private readonly gainsEl = h('div.mu-hud-gains');
@@ -193,6 +194,7 @@ export class Hud {
       this.placeEl,
       h('div.mu-hud-speeds', null, this.pauseBtn, mkSpeed('1×', 'Normal speed (1)', 1), mkSpeed('3×', 'Fast (2)', 3), mkSpeed('8×', 'Fastest (3)', 8)),
       this.badgesEl,
+      this.dangerChip,
     );
   }
 
@@ -431,6 +433,7 @@ export class Hud {
 
   private updateOverlays(clock: ReturnType<GameServices['sim']['view']['clock']>, hud: ReturnType<GameServices['player']['hud']>): void {
     this.dangerOn(!!hud?.danger);
+    this.dangerChip.classList.toggle('mu-hide', !hud?.danger);
     const skipping = clock.skipping ?? null;
     this.sleepOn(!!skipping);
     this.sleepEl.classList.toggle('sleep', skipping === 'sleep');

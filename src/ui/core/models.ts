@@ -178,7 +178,7 @@ export function lifeStory(ctx: ReadCtx, deceasedId: PersonId, lifeNumber = 1): L
   const dy = toDate(deathDay).year;
   const career = p ? CAREERS[p.career].label.toLowerCase() : 'person';
   const born = by >= 1 ? `was born in Year ${by}` : 'was born long before this chronicle began';
-  paras.push(`${name} ${born}${place ? ` and lived in ${place}` : ''}. ${capital(they)} ${p ? `worked as a ${career}` : 'made a life'} and ${tier >= 3 ? `rose to the ${rankName.toLowerCase()} station` : `lived as one of the ${rankName.toLowerCase()}`}.`);
+  paras.push(`${name} ${born}${place ? ` and lived in ${place}` : ''}. ${capital(they)} ${p ? `worked as a ${career}` : 'made a life'} and ${stationPhrase(tier)}.`);
   if (spouseP && p) {
     const kids = children.length;
     paras.push(`${capital(they)} married ${fullName(spouseP)} in Year ${toDate(p.marriedDay >= 0 ? p.marriedDay : deathDay).year}${kids ? ` and was ${sex === 'm' ? 'father' : 'mother'} to ${plural(kids, 'child', 'children')}: ${joinList(children.slice(0, 4).map((c) => c.name.split(' ')[0]))}${kids > 4 ? ' and more' : ''}.` : '.'}`);
@@ -197,4 +197,19 @@ export function lifeStory(ctx: ReadCtx, deceasedId: PersonId, lifeNumber = 1): L
 }
 
 function capital(s: string): string { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+/** How a life ended up, by rank tier: reads after "worked as a smith and …". */
+export function stationPhrase(tier: number): string {
+  switch (tier) {
+    case 1: return 'lived and died unfree';
+    case 2: return 'lived as a commoner';
+    case 3: return 'rose to the middling sort';
+    case 4: return 'rose to the gentry';
+    case 5: return 'was a knight';
+    case 6: return 'stood among the barons';
+    case 7: return 'stood among the magnates';
+    case 8: return 'was of royal blood';
+    default: return 'made a life';
+  }
+}
 

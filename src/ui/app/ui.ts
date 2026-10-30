@@ -119,8 +119,9 @@ export class UiApp implements GameUIExt {
     if (this.screen !== 'game') return;
     if (!this.bound) {
       const g = this.host.game();
-      if (g) this.bind(g);
-      else return;
+      if (!g) return;
+      this.bind(g);
+      this.afterEnterGame();
     } else {
       const g = this.host.game();
       if (g && g.sim !== this.bound.game.sim) this.bind(g);
@@ -161,8 +162,9 @@ export class UiApp implements GameUIExt {
       this.menu.hide();
       this.loading.hide();
       const g = this.host.game();
-      if (g) this.bind(g);
-      if (prev !== 'game' || this.pendingBirth) this.afterEnterGame();
+      const fresh = !!g && this.bound?.game.sim !== g.sim;
+      if (g && fresh) this.bind(g);
+      if (g && (prev !== 'game' || this.pendingBirth || fresh)) this.afterEnterGame();
     }
   }
 
@@ -246,10 +248,9 @@ export class UiApp implements GameUIExt {
     }
   }
 
-  /** From the pause menu and the game-over screen. */
+  /** From the pause menu and the game-over screen. The panels stay up (and the world paused) until the host has saved. */
   async leaveToMenu(then?: MenuView): Promise<void> {
     this.afterMenu = then ?? null;
-    this.stack.clear();
     try {
       await this.host.quitToMenu();
     } finally {
@@ -410,6 +411,15 @@ export class UiApp implements GameUIExt {
   }
 
   private onPanelHidden(p: UiPanel): void {
+    if (p.id === 'dialogue' && this.bound) {
+      // a conversation must not outlive its panel — unless the panel was only replaced by a fresh one for the same talk
+      const social = this.bound.game.social;
+      queueMicrotask(() => {
+        if (this.stack.has('dialogue')) return;
+        const cur = social.current();
+        if (cur) social.end(cur.id);
+      });
+    }
     const rec = this.records.get(p);
     this.records.delete(p);
     if (rec) for (const c of rec.cleanups) c();

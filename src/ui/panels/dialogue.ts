@@ -118,7 +118,6 @@ export function dialoguePanel(ctx: PanelCtx, conversationId: number): UiPanel {
   return panelOf({ id: 'dialogue', group: 'dialogue', pauses: 'never', mode: 'dock-bottom', backdropCloses: null }, win.el, {
     tick: refresh,
     onEscape: () => { close(); return true; },
-    dispose: () => { if (conv && !ended) { ended = true; ctx.social.end(conv.id); } },
     key: (intent) => {
       if (intent.type === 'digit' && ordered[intent.n - 1]) { run(ordered[intent.n - 1]); return true; }
       return false;
