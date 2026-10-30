@@ -110,7 +110,7 @@
       "thanks": ["Bless you. You will have it back, every penny.", "I will not forget your kindness, {name}."]
     },
     "work": {
-      "count": [3, 6], "wage": 10, "days": 4,
+      "count": [3, 6], "wage": 3, "days": 4,
       "ask": [
         "My back is bad and the work will not wait. Could you give me {qty} bouts of labour, {name}? I will pay a fair wage.",
         "I need an extra pair of hands for the {qty} jobs that must be done before the weather turns. Will you help?"
