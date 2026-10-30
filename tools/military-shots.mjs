@@ -278,28 +278,43 @@ try {
   if (want('siege')) {
     await load();
     await prepare();
-    const info = await page.evaluate(() => {
-      const { mil, st, w, sim, strongest } = window.__m;
+    const info = await page.evaluate(async () => {
+      const { mil, st, w, sim } = window.__m;
+      const m = await import('/src/sim/military/index.ts');
+      const M = m.militaryContext(sim);
       sim.services.advancement = { knows: () => true, houseHas: (_h, t) => t === 'trebuchet' };
       const castle = w.settlements.filter((s) => s.kind === 'castle')[0];
       const lord = mil.lordHouse(castle.id);
-      const att = strongest([lord]);
+      // the strongest House of another realm besieges it
+      let att = 0, bs = -1;
+      for (const h of st.houses.values()) {
+        if ((h.kind !== 'noble' && h.kind !== 'royal') || h.extinct || M.realm.root(h.id) === M.realm.root(lord)) continue;
+        const f = mil.forces(h.id).strength; if (f > bs) { bs = f; att = h.id; }
+      }
       mil.declareFeud(att, lord, 60, 'demo');
       const id = mil.raiseArmy(att, 'war', { vassals: true });
       mil.order(id, { kind: 'hold' });
       window.__m.passDays(5);
-      // camp on the road to the castle and sit down before the walls
       const A = mil.armyDetail(id);
-      mil.order(id, { kind: 'siege', settlement: castle.id });
-      return { id, castle: { id: castle.id, x: castle.x, z: castle.z, name: castle.name }, size: A.size, lord: mil.armyDetail(id).houseName };
+      return { id, castle: { id: castle.id, x: castle.x, z: castle.z, name: castle.name }, size: A.size, lord: A.houseName };
     });
     console.log('siege', JSON.stringify(info));
-    await page.evaluate(async ([id, cx, cz]) => {
+    await page.evaluate(async ([id, cx, cz, castleId]) => {
       const m = await import('/src/sim/military/index.ts');
       const M = m.militaryContext(window.__m.sim);
-      const A = M.army(id); A.x = cx - 180; A.z = cz + 60; A.px = A.x; A.pz = A.z;
-      window.__m.passDays(9);
-    }, [info.id, info.castle.x, info.castle.z]);
+      // camp a few hundred metres from the walls and sit down before them
+      // no relief army comes for this scene
+      for (const h of window.__m.st.houses.values()) M.data.think['d' + h.id] = window.__m.sim.absDay + 99;
+      const A = M.army(id); A.x = cx - 380; A.z = cz + 60; A.px = A.x; A.pz = A.z;
+      A.supplies = A.men.length * 40;
+      window.__m.mil.order(id, { kind: 'siege', settlement: window.__m.sim.services.military.armies().length ? castleId : castleId });
+      window.__m.passDays(1);
+      // a patient siege: no storm for this scene, the engines and hunger do their work
+      const rec = M.sieges.recOf(castleId); if (rec) rec.lastAssault = window.__m.sim.absDay + 60;
+      window.__m.passDays(5);
+    }, [info.id, info.castle.x, info.castle.z, info.castle.id]);
+    console.log('armies', JSON.stringify(await page.evaluate(() => window.__m.sim.services.military.armies().map((a) => [a.id, a.task, Math.round(a.x), Math.round(a.z), a.target]))));
+    console.log('chronicle', JSON.stringify(await page.evaluate(() => window.__m.sim.state.chronicle.slice(-6).map((c) => c.text))));
     const sv = await page.evaluate((cid) => window.__m.sim.services.military.siegeAt(cid), info.castle.id);
     console.log('siege state', JSON.stringify(sv));
     // stand between the camp and the walls, looking at the keep

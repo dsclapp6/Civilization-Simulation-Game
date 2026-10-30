@@ -39,7 +39,7 @@ export class RaidSystem {
     a.from = undefined;
     a.progress = 0;
     a.intent = 'raid';
-    a.raid = { sid, hours: RAID_HOURS, burned: 0, stolen: 0, captives: 0, strips: 0, loot: 0 };
+    a.raid = { sid, hours: RAID_HOURS, burned: 0, stolen: 0, captives: 0, strips: 0, loot: 0, herd: this.herdsOf(sid) };
     a.task = 'raid';
     M.touch();
     // the village stands to arms
@@ -99,12 +99,13 @@ export class RaidSystem {
         r.strips++;
       }
     }
-    // the herds: oxen, cows, sheep and pigs are driven off, goods carried away
+    // the herds: oxen, cows, sheep and pigs are driven off, goods carried away (at most about three in five beasts of the village)
     const hhs = st.householdList(sid);
     for (let n = 0; n < 4 && hhs.length; n++) {
       const hh = hhs[Math.floor(rng.next() * hhs.length)];
       if (hh.kind === 'monastic' && rng.next() < 0.8) continue;
       for (const key of livestockKeys(M, hh.stores)) {
+        if (r.stolen >= r.herd * 0.6) break;
         const have = hh.stores[key] ?? 0;
         const take = Math.min(have, Math.max(1, Math.round(have * (0.4 + rng.next() * 0.4))));
         if (take <= 0) continue;
@@ -144,6 +145,13 @@ export class RaidSystem {
   }
 
   private captorOf(a: Army): PersonId { return a.commander; }
+
+  /** Beasts kept in the village now (heads). */
+  private herdsOf(sid: number): number {
+    let n = 0;
+    for (const hh of this.M.state.householdsIn(sid)) for (const key of livestockKeys(this.M, hh.stores)) n += hh.stores[key] ?? 0;
+    return n;
+  }
 
   private pickCaptive(sid: number, u: number): Person | undefined {
     const M = this.M;

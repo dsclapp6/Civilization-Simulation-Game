@@ -71,7 +71,7 @@ export interface Army {
   /** Contingents of vassal Houses raised with this army (house ids). */
   vassals: HouseId[];
   /** A raid in progress: the settlement, hours left, and what has been done so far. */
-  raid?: { sid: number; hours: number; burned: number; stolen: number; captives: number; strips: number; loot: number };
+  raid?: { sid: number; hours: number; burned: number; stolen: number; captives: number; strips: number; loot: number; herd: number };
 }
 
 export interface BattleRec {
