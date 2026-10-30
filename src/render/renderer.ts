@@ -286,6 +286,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     const pixelAngle = (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) / Math.max(1, height * renderer.getPixelRatio());
     water.update(atmo, time, weather.rain, mapBlend, pixelAngle);
     g += roads.update(camera, Math.max(0.5 * budgetScale, budget - g));
+    buildings.nightLight = atmo.nightLight * (1 - mapBlend);
     const bfx = buildings.update(view.buildings(), view.buildingsVersion(), camera, time, dt, Math.max(1.5, budget * 0.6), budgetScale > 1);
     g += fields.update(view.strips(), view.stripsVersion(), camera, Math.max(0.5 * budgetScale, budget - g));
     genMs = g;

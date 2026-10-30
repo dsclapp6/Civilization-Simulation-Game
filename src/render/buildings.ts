@@ -110,6 +110,34 @@ function unitGable(): THREE.BufferGeometry {
   return g;
 }
 
+/** Kinds whose lit doorways throw a warm pool of light on the ground at night. */
+const POOL_KINDS = new Set<BuildingKind>(['hovel', 'cottage', 'longhouse', 'townhouse', 'manor_house', 'smithy', 'bakehouse', 'brewhouse', 'alehouse', 'tavern', 'great_hall', 'guildhall', 'market_hall']);
+const MAX_POOLS = 160;
+
+const POOL_VERT = /* glsl */`
+varying vec2 vUv;
+varying float vK;
+void main() {
+  vUv = uv * 2.0 - 1.0;
+  vec4 wp = modelMatrix * instanceMatrix * vec4(position, 1.0);
+  // seen edge-on the flat pool would show its clipped edges: fade it at grazing angles
+  float up = abs(normalize(cameraPosition - wp.xyz).y);
+  vK = instanceColor.r * smoothstep(0.04, 0.3, up);
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}`;
+const POOL_FRAG = /* glsl */`
+uniform float uNight;
+varying vec2 vUv;
+varying float vK;
+void main() {
+  // lamplight spilling out of a doorway: a warm, soft pool, brightest by the door (vUv.y = 1)
+  float r = length(vUv * vec2(1.0, 0.85) - vec2(0.0, 0.25));
+  float a = pow(max(0.0, 1.0 - r), 2.4) * vK * uNight;
+  gl_FragColor = vec4(vec3(1.0, 0.52, 0.17) * a * 0.62, 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}`;
+
 const SMOKE_KINDS = new Set<BuildingKind>(['hovel', 'cottage', 'longhouse', 'townhouse', 'manor_house', 'smithy', 'bakehouse', 'brewhouse', 'alehouse', 'tavern', 'great_hall', 'bloomery', 'kiln', 'charcoal_mound']);
 
 export interface BuildingSettings {
@@ -158,6 +186,11 @@ export class BuildingSystem {
   private genCooldown = 0;
   detailedCount = 0;
   meshesUsed = 0;
+  /** 0 day … 1 night (set by the renderer each frame): lit doorways throw light pools. */
+  nightLight = 0;
+  private readonly poolMesh: THREE.InstancedMesh;
+  private readonly poolMat: THREE.ShaderMaterial;
+  private poolFrame = -100;
 
   constructor(private readonly world: WorldModel, private readonly assets: AssetLibrary, private settings: BuildingSettings) {
     this.root.name = 'buildings';
@@ -180,6 +213,19 @@ export class BuildingSystem {
     this.wallMesh = mk(this.boxGeo, 'building-proxy-walls');
     this.roofMesh = mk(this.gableGeo, 'building-proxy-roofs');
     this.towerMesh = mk(this.boxGeo, 'building-proxy-towers');
+    this.poolMat = new THREE.ShaderMaterial({
+      uniforms: { uNight: { value: 0 } }, vertexShader: POOL_VERT, fragmentShader: POOL_FRAG,
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -12,
+    });
+    const pg = new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2);
+    this.poolMesh = new THREE.InstancedMesh(pg, this.poolMat, MAX_POOLS);
+    this.poolMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX_POOLS * 3), 3);
+    this.poolMesh.name = 'door-light-pools';
+    this.poolMesh.count = 0;
+    this.poolMesh.frustumCulled = false;
+    this.poolMesh.renderOrder = 2;
+    this.root.add(this.poolMesh);
   }
 
   configure(s: BuildingSettings): void { this.settings = s; }
@@ -443,9 +489,54 @@ export class BuildingSystem {
       if (d < 450) this.emitFx(e, dt);
     }
     this.detailedCount = detailed;
+    this.updatePools();
     if (this.proxyDirty) this.rebuildProxies();
     if (this.batchDirty && this.frame - this.lastBatch >= 8) this.rebuildBatches();
     return this.fxOut;
+  }
+
+  /** Warm light pools in front of the doors of lit, occupied homes and inns at night. */
+  private updatePools(): void {
+    const night = this.nightLight;
+    this.poolMat.uniforms.uNight.value = night;
+    if (night < 0.03) { this.poolMesh.count = 0; this.poolMesh.visible = false; return; }
+    this.poolMesh.visible = true;
+    if (this.frame - this.poolFrame < 10) return;
+    this.poolFrame = this.frame;
+    const m = this.tmpM, q = this.tmpQ, p = this.tmpV, s = this.tmpS, c = this.tmpC;
+    let n = 0;
+    const W = this.world.size;
+    for (const e of this.detailedList) {
+      if (n >= MAX_POOLS) break;
+      const a = e.asset;
+      if (!a || !e.occupied || e.onFire || e.construction < 1 || e.dist > 240 || !POOL_KINDS.has(e.kind) || !a.doors.length) continue;
+      const def = BUILDINGS[e.kind];
+      const cr = Math.cos(e.rot), sr = Math.sin(e.rot);
+      for (let k = 0; k < Math.min(2, a.doors.length) && n < MAX_POOLS; k++) {
+        const dx = a.doors[k].x, dz = a.doors[k].z;
+        // outward from the wall the door sits in
+        const ox = Math.abs(dx) / Math.max(0.5, def.w / 2) > Math.abs(dz) / Math.max(0.5, def.d / 2) ? Math.sign(dx) : 0;
+        const oz = ox === 0 ? (Math.sign(dz) || 1) : 0;
+        const lx = dx + ox * 1.7, lz = dz + oz * 1.7;
+        const wx = e.x + lx * cr + lz * sr, wz = e.z - lx * sr + lz * cr;
+        const r = e.kind === 'tavern' || e.kind === 'alehouse' || e.kind === 'great_hall' ? 4.6 : 3.6;
+        // rest on the highest ground under the pool so the terrain does not slice through it
+        let gy = -Infinity;
+        for (let j = 0; j < 5; j++) {
+          const ax = j === 0 ? 0 : (j === 1 ? 1 : j === 2 ? -1 : 0) * r * 0.7, az = j < 3 ? 0 : (j === 3 ? 1 : -1) * r * 0.7;
+          gy = Math.max(gy, this.world.heightAt(Math.min(W, Math.max(0, wx + ax)), Math.min(W, Math.max(0, wz + az))));
+        }
+        q.setFromAxisAngle(this.yAxis, e.rot + Math.atan2(ox, oz));
+        m.compose(p.set(wx, gy + 0.06, wz), q, s.set(r, 1, r * 1.15));
+        this.poolMesh.setMatrixAt(n, m);
+        // not every hearth burns as bright
+        this.poolMesh.setColorAt(n, c.setRGB(0.6 + 0.4 * hash01(e.id, 11 + k), 0, 0));
+        n++;
+      }
+    }
+    this.poolMesh.count = n;
+    this.poolMesh.instanceMatrix.needsUpdate = true;
+    if (this.poolMesh.instanceColor) this.poolMesh.instanceColor.needsUpdate = true;
   }
 
   /** Distances, nearest-first selection within the mesh budget, LODs and the work list. */
@@ -711,6 +802,7 @@ export class BuildingSystem {
     for (const e of this.entries.values()) this.dropAsset(e);
     this.entries.clear();
     this.wallMesh.dispose(); this.roofMesh.dispose(); this.towerMesh.dispose();
+    this.poolMesh.dispose(); this.poolMesh.geometry.dispose(); this.poolMat.dispose();
     this.boxGeo.dispose(); this.gableGeo.dispose(); this.proxyMat.dispose();
   }
 }
