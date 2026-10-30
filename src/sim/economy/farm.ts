@@ -266,7 +266,7 @@ export function farmEff(E: Econ, hh: Household, strips: number): number {
 // ---------------------------------------------------------------------------------------------
 
 /** Advances every strip of a settlement for today. Household efficiency is worked out only for strips that have something to do. */
-export function farmDay(E: Econ, s: Settlement): void {
+export function farmDay(E: Econ, s: Settlement, part = 0, parts = 1): void {
   if (s.strips.length === 0) return;
   const state = E.state;
   const cache = new Map<number, number>();
@@ -285,6 +285,7 @@ export function farmDay(E: Econ, s: Settlement): void {
   };
   let dirty = false;
   for (const id of s.strips) {
+    if (parts > 1 && id % parts !== part) continue;
     const st = state.strips.get(id);
     if (st && macroStrip(E, s, st, effOf)) dirty = true;
   }

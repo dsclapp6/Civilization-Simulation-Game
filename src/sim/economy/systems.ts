@@ -7,7 +7,7 @@ import type { Scheduler } from '../scheduler';
 import type { Econ } from './core';
 import { adoptPlaceholderPhases } from '../farming';
 import { initFarm, yearlyFarm } from './farm';
-import { giveKit, initHouseholds, settlementDay, yearlyProsperity } from './macro';
+import { giveKit, initHouseholds, partsOf, settlementDay, yearlyProsperity } from './macro';
 import { marketFlowsDay } from './market';
 
 /** Hour of the day at which a settlement's economic day is run. */
@@ -27,7 +27,12 @@ export function registerSystems(E: Econ, sched: Scheduler, hooks: SystemHooks): 
   offs.push(sched.register({
     name: 'econ.settlements', phase: 'hourly', order: 40,
     run: (_ctx: SimContext, info: HourInfo) => {
-      for (const s of E.world.settlements) if (slotOf(s.id) === info.hour) settlementDay(E, s);
+      // a big settlement's day runs in slices over consecutive hours (slice k at slot + k), so no frame carries a whole city
+      for (const s of E.world.settlements) {
+        const parts = partsOf(s);
+        const k = (info.hour - slotOf(s.id) + 24) % 24;
+        if (k < parts) settlementDay(E, s, k, parts);
+      }
     },
   }));
   offs.push(sched.register({

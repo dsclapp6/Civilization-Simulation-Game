@@ -51,12 +51,18 @@ const stochastic = (x: number, u: number): number => Math.floor(x) + (u < x - Ma
 // The settlement's day
 // ---------------------------------------------------------------------------------------------
 
-export function settlementDay(E: Econ, s: Settlement): void {
+/** Hours a settlement's day is spread over: a city's households are settled in four slices, a village's in one (static, so a load resumes the same). */
+export function partsOf(s: Settlement): number {
+  return s.population >= 700 ? 4 : s.population >= 320 ? 3 : s.population >= 150 ? 2 : 1;
+}
+
+/** One slice (`part` of `parts`) of the settlement's day; the market and the livestock go with slice 0, strips and households are dealt out. */
+export function settlementDay(E: Econ, s: Settlement, part = 0, parts = 1): void {
   const state = E.state;
   const ss = state.settlements.get(s.id);
   if (!ss) return;
-  if (s.market) marketDay(E, s.id);
-  farmDay(E, s);
+  if (part === 0 && s.market) marketDay(E, s.id);
+  farmDay(E, s, part, parts);
   const hhs = state.householdList(s.id);
   if (hhs.length === 0) return;
   const urban = marketBuyShare(s.kind) > 0.5;
@@ -65,12 +71,13 @@ export function settlementDay(E: Econ, s: Settlement): void {
   const dayNo = Math.floor(E.day);
   beginTick(E, s.id);
   for (const hh of hhs) {
-    // households settle their accounts once a week (a four-day season), each on its own day
+    // households settle their accounts once a week (a four-day season), each on its own day and in its own slice
+    if (parts > 1 && hh.id % parts !== part) continue;
     if ((dayNo + hh.id) % PERIOD !== 0) continue;
     householdDay(E, s, ss, hh, tally, urban, lord?.household, PERIOD);
   }
   endTick(E);
-  if (dayNo % DAYS_PER_YEAR === s.id % DAYS_PER_YEAR) livestockYear(E, s, hhs);
+  if (part === 0 && dayNo % DAYS_PER_YEAR === s.id % DAYS_PER_YEAR) livestockYear(E, s, hhs);
   E.touchSave();
 }
 
