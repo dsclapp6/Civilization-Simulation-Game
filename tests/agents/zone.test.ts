@@ -114,7 +114,8 @@ describe('the zone', () => {
     expect(zone.agentsArr.length).toBeLessThanOrEqual(MAX_AGENTS);
     expect(zone.fauna.count).toBeLessThanOrEqual(MAX_ANIMALS);
     run(sim, 10);
-    expect(zone.agentsArr.length).toBeLessThanOrEqual(MAX_AGENTS);
+    // a body replaced by a nearer one is flagged dead and swept on the next pass
+    expect(zone.agentsArr.filter((a) => !a.dead).length).toBeLessThanOrEqual(MAX_AGENTS);
     // nearest first: the nearest outdoor people are in
     const farthest = Math.max(...zone.agentsArr.map((a) => a.distFocus));
     expect(farthest).toBeLessThanOrEqual(LEAVE_RADIUS + 5);
@@ -440,9 +441,10 @@ describe('the zone is an observer', () => {
         seed: 'observer', difficulty: 'knight', generateWorld: (s) => createMockWorld({ seed: s, preset: 'tiny' }), store, profile: store ? newProfile() : undefined,
         autosave: { intervalMs: 0 },
       });
+      // the real social and economy modules change the state; only the zone must not
+      const social = installSocial(sim);
+      const economy = installEconomy(sim, { social });
       if (withZone) {
-        const social = installSocial(sim);
-        const economy = installEconomy(sim, { social });
         const zone = installAgents(sim, { economy, social });
         const s0 = sim.world.settlements[0];
         sim.view.setSource('focus', () => ({ x: s0.x, z: s0.z }));
