@@ -50,11 +50,36 @@ docs/          SPEC, ARCHITECTURE, ART, screenshots
   the asset owner (keys are contract).
 - Dependency rules (enforced by review):
   - `core` → nothing. `content` → core. `world` → core, content.
-  - `sim`, `agents`, `player` → core, content, world (types + generator), `assets/palette.ts` (data only). **Never three or DOM** (except `sim/save-idb.ts` which may use IndexedDB).
+  - `sim` (incl. `sim/economy`, `sim/social`) → core, content, world (types + generator), `assets/palette.ts` (data only).
+  - `agents` → the same + sim. `player` → the same + sim + `agents` (types / ZoneApi).
+  - None of `sim`, `agents`, `player` may use **three or the DOM** (except `sim/save-idb.ts`, IndexedDB).
   - `assets` → three, core, content, world/types.
   - `render` → three, core, content, world/types, assets (types + library).
-  - `ui` → core, content, world/types, sim (read API), DOM.
+  - `ui` → core, content, world/types, sim (read API `sim/api.ts`, types, commands), `agents/types`,
+    `player/types`, DOM. No three.
   - `app` → everything.
+
+## 4b. Gameplay modules (wave 2) and how they plug together
+Wave 2 contracts: `sim/actions.ts` (player verbs), `sim/calendar.ts`, `sim/skills.ts`, `sim/money.ts`,
+`sim/api.ts` (UI read helpers), `sim/economy/types.ts`, `sim/social/types.ts`, `agents/types.ts`,
+`player/types.ts`, `ui/types.ts`. Each module exposes one entry point in its `index.ts`;
+`app/game.ts` installs them in this order on a `Simulation`:
+```
+social  = installSocial(sim)                          // src/sim/social
+economy = installEconomy(sim, { social })             // src/sim/economy (registers actions + topics)
+zone    = installAgents(sim, { economy, social })     // src/agents (view sources: characters, animals)
+player  = installPlayer(sim, { zone, economy, social })  // src/player (view sources: player, focus, mode, markers)
+ui      = createUI(root.ui, host)                     // src/ui (reads GameServices from the host)
+```
+- **Actions** are how anything gets done: providers register on `sim.actions`; the player controller
+  lists options for the target in front of the player and starts one; timed actions run in simulated
+  seconds while the body plays the action's animation; outcomes reach the HUD via `notify`/`ui` events.
+- **Commands** (`sim.dispatch`) cover global controls (speed, pause, sleep, switch character).
+- **View sources** (`sim.view.setSource`) let modules feed the renderer without touching `view-impl.ts`.
+- **Events** (`sim.events`, `sim/events.ts`) carry ids only; the UI listens for `notify`, `ui`,
+  `action`, `skillLevel`, `playerDied`, `gameOver`…
+- **State**: modules keep their own saved data in `state.ext['<module>']` (call `state.touchExt`), or
+  in existing entity fields (`Person.inventory`, `Household.stores`, `BuildingState`, `StripState`).
 
 ## 5. Units and conventions
 - 1 unit = 1 metre. Three.js axes: **x east, z south, y up**. Map points `{x, z}` (`core/math.P2`).
