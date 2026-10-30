@@ -41,7 +41,7 @@ describe.each(SEEDS)('rivers, lakes, roads (seed %s)', (seed) => {
     }
     expect(withParent).toBeGreaterThan(w.rivers.length * 0.5); // tributaries
     expect(maxW).toBeGreaterThan(30);
-    expect(maxW).toBeLessThanOrEqual(64);
+    expect(maxW).toBeLessThanOrEqual(60.01);
     // at least one river reaches the sea
     const reachesSea = w.rivers.some((r) => { const e = r.points[r.points.length - 1]; return w.heightAt(e.x, e.z) < 0.5 && r.surface[r.surface.length - 1] < 0.6; });
     expect(reachesSea).toBe(true);

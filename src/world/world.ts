@@ -11,7 +11,7 @@ import type { GenState } from './state';
 import { BCOLS, BUCKET, Csr, TerrainModel } from './terrainmodel';
 import type { LayoutCtx } from './layout/common';
 import { Scatter } from './scatter';
-import { pointInQuad } from './geom';
+import { distPointSeg, pointInQuad } from './geom';
 
 const { CELL, N } = G;
 const smoothstep = _smoothstep, Biome = _Biome, Ground = _Ground;
@@ -143,13 +143,12 @@ export class World implements WorldModel {
     // bridge / ford flags
     const segByRoad = new Map<number, number[]>();
     for (let i = 0; i < nSeg; i++) { const a = segByRoad.get(this.rdRoad[i]); if (a) a.push(i); else segByRoad.set(this.rdRoad[i], [i]); }
+    // a segment belongs to a crossing when it passes within the crossing's reach (not merely when its midpoint does: segments can be long)
     for (const b of s.bridges) for (const i of segByRoad.get(b.roadId) ?? []) {
-      const mx = this.rdX0[i] + this.rdDx[i] / 2, mz = this.rdZ0[i] + this.rdDz[i] / 2;
-      if (Math.hypot(mx - b.x, mz - b.z) < b.length / 2 + 3) this.rdFlags[i] |= 1;
+      if (distPointSeg(b.x, b.z, this.rdX0[i], this.rdZ0[i], this.rdX0[i] + this.rdDx[i], this.rdZ0[i] + this.rdDz[i]) < b.length / 2 + 3) this.rdFlags[i] |= 1;
     }
     for (const f of s.fords) for (const i of segByRoad.get(f.roadId) ?? []) {
-      const mx = this.rdX0[i] + this.rdDx[i] / 2, mz = this.rdZ0[i] + this.rdDz[i] / 2;
-      if (Math.hypot(mx - f.x, mz - f.z) < 9) this.rdFlags[i] |= 2;
+      if (distPointSeg(f.x, f.z, this.rdX0[i], this.rdZ0[i], this.rdX0[i] + this.rdDx[i], this.rdZ0[i] + this.rdDz[i]) < 9) this.rdFlags[i] |= 2;
     }
     this.roadCsr = new Csr(nSeg, (i, out) => {
       const r = this.rdHw[i] + ROAD_BLEND + 1;

@@ -181,7 +181,7 @@ export function generateHydrology(s: GenState): void {
   const targetMouth = 52;
   const wRange = Math.max(1.5, targetMouth / 2.4);
   const beta = Math.min(0.85, Math.max(0.42, Math.log(wRange) / Math.log(accMax / T)));
-  const widthOf = (a: number): number => Math.min(62, Math.max(2.0, 2.3 * Math.pow(a / T, beta)));
+  const widthOf = (a: number): number => Math.min(60, Math.max(2.0, 2.3 * Math.pow(a / T, beta)));
 
   // ---------- build smoothed river polylines ----------
   const cxOf = (k: number): number => ((k % N) + 0.5) * CELL;
@@ -249,7 +249,7 @@ export function generateHydrology(s: GenState): void {
     }
     for (let i = 1; i < ss.length; i++) if (ss[i] > ss[i - 1]) ss[i] = ss[i - 1];
     for (let i = 1; i < sw.length; i++) if (sw[i] < sw[i - 1] * 0.97) sw[i] = sw[i - 1] * 0.97;
-    for (let i = 0; i < sw.length; i++) sw[i] = Math.min(64, sw[i]);
+    for (let i = 0; i < sw.length; i++) sw[i] = Math.min(60, sw[i]);
     const id = rivers.length;
     riverIdOfChain[ch.id] = id;
     rivers.push({
