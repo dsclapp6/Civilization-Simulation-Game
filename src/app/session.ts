@@ -16,7 +16,11 @@ import { installSocial } from '../sim/social';
 import type { GameServices, QualitySetting, UiRendererControls } from '../ui/types';
 import { wrapWithDevZone } from './devZone';
 
+/** Where the time of getting a run on screen went (ms). */
+export interface LoadTimings { assets: number; renderer: number; modules: number; settle: number }
+
 export interface Session {
+  readonly loadMs: LoadTimings;
   readonly sim: Simulation;
   readonly services: GameServices;
   readonly renderer: GameRenderer;
@@ -41,10 +45,13 @@ export interface SessionOptions {
 
 export async function buildSession(sim: Simulation, o: SessionOptions): Promise<Session> {
   await o.progress(0.5, 'Gathering the folk…');
+  const t0 = performance.now();
   const assets = createAssetLibrary();
+  const t1 = performance.now();
   const renderer = createRenderer(o.container, sim.world, assets, {
     quality: o.quality, labels: o.labels, preserveDrawingBuffer: o.preserveDrawingBuffer,
   });
+  const t2 = performance.now();
 
   // modules, in the order of ARCHITECTURE §4b
   const social = installSocial(sim);
@@ -64,12 +71,16 @@ export async function buildSession(sim: Simulation, o: SessionOptions): Promise<
     sim.events.on('playerSwitched', alignCamera),
   ];
 
+  const t3 = performance.now();
   await o.progress(0.7, 'Preparing the land…');
+  const t4 = performance.now();
   renderer.settle(sim.view, 25000);
+  const t5 = performance.now();
   await o.progress(0.95, 'Almost there…');
 
   const services: GameServices = { sim, economy, social, zone, player };
   return {
+    loadMs: { assets: t1 - t0, renderer: t2 - t1, modules: t3 - t2, settle: t5 - t4 },
     sim, services, renderer, assets, controls: makeControls(renderer),
     dispose() {
       for (const off of offs) off();

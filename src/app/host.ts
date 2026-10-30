@@ -78,15 +78,20 @@ export class AppHost implements UiHost {
       this.setScreen('loading', { progress: 0.02, label: 'Raising the continent…' });
       await paint();
       const seed = this.env.params.get('seed') ?? randomSeed();
+      const t0 = performance.now();
       const world = generateWorld(seed);
+      const t1 = performance.now();
       this.setScreen('loading', { progress: 0.35, label: 'Settling the people…' });
       await paint();
+      const t2 = performance.now();
       const sim = Simulation.newGame({
         seed, difficulty: opts.difficulty, statUpgrades: opts.statUpgrades, generateWorld: () => world,
         store: this.env.store, profile: this.profileObj,
       });
+      const t3 = performance.now();
       applyDevClock(sim, this.env.params);
       await this.begin(sim);
+      this.reportLoad('new run', t0, { world: t1 - t0, people: t3 - t2 });
     } catch (err) {
       console.error('could not start a run', err);
       this.setScreen('menu');
@@ -103,7 +108,9 @@ export class AppHost implements UiHost {
       await this.endSession();
       this.setScreen('loading', { progress: 0.05, label: 'Remembering where you were…' });
       await paint();
+      const t0 = performance.now();
       const sim = await Simulation.load(this.env.store, generateWorld);
+      const t1 = performance.now();
       if (!sim) {
         this.setScreen('menu');
         return;
@@ -112,6 +119,7 @@ export class AppHost implements UiHost {
       this.profileObj = sim.profile;
       this.settingsObj = readSettings(this.profileObj);
       await this.begin(sim);
+      this.reportLoad('continue', t0, { 'world+state': t1 - t0 });
     } catch (err) {
       console.error('could not continue the run', err);
       this.setScreen('menu');
@@ -153,6 +161,22 @@ export class AppHost implements UiHost {
   quality(): 'low' | 'medium' | 'high' {
     return qualityParam(this.env.params.get('quality')) ?? this.settingsObj.quality;
   }
+
+  /** One line about where the time of loading a run went (developer parameters only). */
+  private reportLoad(what: string, t0: number, parts: Record<string, number>): void {
+    const s = this.session;
+    if (!s) return;
+    const all: Record<string, number> = { ...parts, ...s.loadMs };
+    const total = performance.now() - t0;
+    this.lastLoad = { what, total, parts: all };
+    const p = this.env.params;
+    if (p.has('debug') || p.has('shots')) {
+      console.info(`[millennia] ${what}: ready in ${(total / 1000).toFixed(1)} s — ${Object.entries(all).map(([k, v]) => `${k} ${(v / 1000).toFixed(2)}`).join(', ')} (s)`);
+    }
+  }
+
+  /** Timing of the last run start (developer tools). */
+  lastLoad: { what: string; total: number; parts: Record<string, number> } | null = null;
 
   private async begin(sim: Simulation): Promise<void> {
     const params = this.env.params;

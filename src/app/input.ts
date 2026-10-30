@@ -136,7 +136,7 @@ export class InputLayer {
     if (e.button === 2) this.block = true;
     if (r && r.getCameraMode() === 'follow' && !this.locked && e.button === 0) {
       // the first click takes the mouse for camera look (Esc gives it back); not on maps
-      try { void this.surface.requestPointerLock?.(); } catch { /* denied: dragging still orbits */ }
+      try { this.surface.requestPointerLock()?.catch?.(() => { /* denied: dragging still orbits */ }); } catch { /* old browsers throw instead */ }
     }
   }
 

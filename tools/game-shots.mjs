@@ -5,8 +5,8 @@
 //   node tools/game-shots.mjs village prompt map    # selected shots
 //   node tools/game-shots.mjs --quality=high --size=1600x900 --seed=abc --devzone
 //
-// Shots (in order): menu, run-start (difficulty, shop, if the UI offers them), loading, village, street,
-// prompt, action, riding, gallop, map, travel, encounter, death, successor. The game is driven through the
+// Shots (in order): menu, run-start (difficulty, shop), loading, village, street, prompt, wheel, action, riding,
+// gallop, map, travel, encounter, death, successor. The game is driven through the
 // developer hooks on `window.__game` (src/app/game.ts), with the real-time loop frozen so every shot is
 // deterministic. `--devzone` adds stand-in villagers and a horse (use it only while the real agents module
 // is not in the build); without it the shots show the real village life.
@@ -31,8 +31,8 @@ const quality = opt('quality', 'medium');
 const seed = opt('seed', 'millennia');
 const [W, H] = opt('size', '1280x720').split('x').map(Number);
 const devzone = args.includes('--devzone');
-// the text HUD stands in for the real UI while it is not in the build (always with --devzone)
-const hud = devzone || args.includes('--hud');
+// the text HUD stands in for the real UI (only for builds without it)
+const hud = args.includes('--hud');
 const wanted = args.filter((a) => !a.startsWith('--'));
 const want = (...names) => wanted.length === 0 || names.some((n) => wanted.includes(n));
 
@@ -170,7 +170,7 @@ try {
     }
   }
 
-  if (want('village', 'street', 'prompt', 'action', 'riding', 'gallop')) {
+  if (want('village', 'street', 'prompt', 'wheel', 'action', 'riding', 'gallop')) {
     await load('autostart=1&time=0.42');
     const t = await page.evaluate(() => {
       const s = window.__game.session; const prof = s.sim.scheduler.profile;
@@ -189,7 +189,7 @@ try {
       await shot('street-sprint');
     }
 
-    if (want('prompt')) {
+    if (want('prompt', 'wheel')) {
       // stand in front of the nearest person
       const found = await page.evaluate(() => {
         const s = window.__game.session; const z = s.services.zone; const p = s.services.player; const b = p.body();
@@ -206,6 +206,12 @@ try {
         await advance(0.6);
         console.log('prompt:', JSON.stringify((await state()).prompt));
         await shot('prompt');
+        if (want('wheel')) {
+          await page.evaluate(() => window.__ui.openPanel({ panel: 'actions' }));
+          await page.waitForTimeout(400);
+          await shot('wheel', { settle: false });
+          await page.evaluate(() => window.__ui.closePanel('actions'));
+        }
         await zoom(2);
       } else console.log('prompt: nobody around (run with --devzone while the agents module is not built)');
     }
@@ -265,13 +271,16 @@ try {
   if (want('map', 'travel', 'encounter', 'death', 'successor')) {
     await load('autostart=1&time=0.42');
     if (want('map')) {
+      // the UI's own map panel (it puts the camera on the map and lists the places)
       await page.evaluate(() => {
         const s = window.__game.session; const b = s.services.player.body();
-        s.controls.setCameraMode('map'); s.controls.focusMap(b.x, b.z, 6500);
+        window.__ui.openPanel({ panel: 'map' });
+        s.controls.focusMap(b.x, b.z, 6500);
       });
       await advance(0.1);
+      await page.waitForTimeout(500);
       await shot('map');
-      await page.evaluate(() => { window.__game.session.controls.setCameraMode('follow'); });
+      await page.evaluate(() => { window.__ui.closePanel('map'); });
     }
     if (want('travel', 'encounter')) {
       const dest = await page.evaluate(() => {
