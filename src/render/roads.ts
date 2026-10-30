@@ -28,6 +28,7 @@ export class RoadSystem {
   private frame = 0;
   private readonly roadColor: THREE.Color;
   private readonly pathColor: THREE.Color;
+  private readonly cobbleColor: THREE.Color;
   private readonly cutCentres: { roadId: number; x: number; z: number; r: number }[];
   radius: number;
 
@@ -39,6 +40,7 @@ export class RoadSystem {
     this.root.name = 'roads';
     this.roadColor = new THREE.Color(palette.ground[Ground.Road]).multiplyScalar(0.86);
     this.pathColor = new THREE.Color(palette.ground[Ground.Path]).multiplyScalar(0.86);
+    this.cobbleColor = new THREE.Color(palette.ground[Ground.Cobbles]).lerp(new THREE.Color(palette.ground[Ground.Road]), 0.3).multiplyScalar(0.88);
     this.cutCentres = world.bridges.map((b) => ({ roadId: b.roadId, x: b.x, z: b.z, r: b.length / 2 + 0.6 }));
     this.material = new THREE.MeshLambertMaterial({
       vertexColors: true, transparent: true, depthWrite: false,
@@ -47,6 +49,7 @@ export class RoadSystem {
     this.material.name = 'roads';
     this.material.onBeforeCompile = (shader) => {
       Object.assign(shader.uniforms, this.weather);
+      shader.uniforms.uRoadDirt = { value: this.roadColor.clone() };
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', '#include <common>\nattribute vec3 aRoad;\nvarying vec3 vRoad;\nvarying float vRoadFade;')
         .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRoad = aRoad;')
@@ -55,14 +58,44 @@ export class RoadSystem {
         .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
 vRoadFade = 1.0 - smoothstep(${FADE_START.toFixed(1)}, ${FADE_END.toFixed(1)}, distance((modelMatrix * vec4(transformed, 1.0)).xyz, cameraPosition));`);
       shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform float uSnowCover;\nuniform float uWetness;\nvarying vec3 vRoad;\nvarying float vRoadFade;')
+        .replace('#include <common>', `#include <common>
+uniform float uSnowCover;
+uniform float uWetness;
+uniform vec3 uRoadDirt;
+varying vec3 vRoad;
+varying float vRoadFade;
+float rdHash(vec2 p) { p = fract(p * vec2(233.34, 851.73)); p += dot(p, p + 23.45); return fract(p.x * p.y); }
+float rdNoise(vec2 p) {
+  vec2 i = floor(p); vec2 f = fract(p); vec2 w = f * f * (3.0 - 2.0 * f);
+  return mix(mix(rdHash(i), rdHash(i + vec2(1.0, 0.0)), w.x), mix(rdHash(i + vec2(0.0, 1.0)), rdHash(i + vec2(1.0, 1.0)), w.x), w.y);
+}`)
         .replace('#include <color_fragment>', `#include <color_fragment>
 {
   // vRoad.x: -1..1 across the carriageway, y: metres along, z: rut strength
+  // vRoad.z < 0: cobbled street inside town walls (-z = half width in metres)
   float a = abs(vRoad.x);
-  float rut = smoothstep(0.13, 0.0, abs(a - 0.42)) * vRoad.z;
+  float rut = smoothstep(0.13, 0.0, abs(a - 0.42)) * max(vRoad.z, 0.0);
   float aa = clamp(1.0 - fwidth(vRoad.x) * 6.0, 0.0, 1.0);
   diffuseColor.rgb *= 1.0 - rut * 0.22 * aa;
+  if (vRoad.z < 0.0) {
+    // old setts in staggered courses, half buried in trodden dirt: per-stone shade, earthy
+    // joints, muddy patches and a dirty gutter; the pattern fades out with distance
+    vec2 q = vec2(vRoad.x * -vRoad.z, vRoad.y) / vec2(0.3, 0.22);
+    q.x += step(1.0, mod(floor(q.y), 2.0)) * 0.5;
+    vec2 cell = floor(q);
+    vec2 f = fract(q);
+    float stone = fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453);
+    vec2 fw = fwidth(q);
+    float joint = 1.0 - min(smoothstep(0.0, 0.14 + fw.x, f.x) * smoothstep(1.0, 0.86 - fw.x, f.x), smoothstep(0.0, 0.14 + fw.y, f.y) * smoothstep(1.0, 0.86 - fw.y, f.y));
+    float far = clamp(1.0 - max(fw.x, fw.y) * 1.2, 0.0, 1.0);
+    vec3 setts = diffuseColor.rgb * (1.0 + (stone - 0.5) * 0.22 * far);
+    setts = mix(setts, uRoadDirt * 0.8, joint * 0.7 * far);
+    // trodden dirt over the stones: patches along the street, more at the edges and the gutter
+    vec2 pp = vec2(vRoad.x * -vRoad.z, vRoad.y);
+    float mud = rdNoise(pp * 0.35) * 0.65 + rdNoise(pp * 1.3 + 4.0) * 0.35;
+    mud = smoothstep(0.5, 0.78, mud + smoothstep(0.55, 1.0, a) * 0.35 + smoothstep(0.18, 0.0, a) * 0.25);
+    diffuseColor.rgb = mix(setts, uRoadDirt * (0.92 + 0.12 * stone), mud * 0.85);
+  }
   // trodden snow: whiter towards the verges, wheel ruts stay muddy
   float snowy = smoothstep(0.05, 0.6, uSnowCover) * (0.55 + 0.35 * smoothstep(0.2, 0.9, a)) * (1.0 - rut * 0.6);
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.78, 0.8, 0.84), snowy);
@@ -151,7 +184,9 @@ vRoadFade = 1.0 - smoothstep(${FADE_START.toFixed(1)}, ${FADE_END.toFixed(1)}, d
           tdx /= tl; tdz /= tl;
           const nx = -tdz, nz = tdx;
           const shade = 0.94 + hash01(Math.floor(p.x), Math.floor(p.z)) * 0.1;
-          c.copy(base).multiplyScalar(shade);
+          // streets inside town walls are cobbled (world ground Cobbles)
+          const cobbled = this.world.groundAt(clamp(p.x, 0, this.world.size), clamp(p.z, 0, this.world.size)) === Ground.Cobbles;
+          c.copy(cobbled ? this.cobbleColor : base).multiplyScalar(shade);
           const v0 = pos.length / 3;
           // across: outer verge, edge, centre, edge, outer verge
           for (const u of [-1 - VERGE / hw, -1, 0, 1, 1 + VERGE / hw]) {
@@ -161,7 +196,7 @@ vRoadFade = 1.0 - smoothstep(${FADE_START.toFixed(1)}, ${FADE_END.toFixed(1)}, d
             pos.push(x, y, z);
             // soft verge: the outer vertices are transparent, so the edge fades into the grass
             col.push(c.r, c.g, c.b, Math.abs(u) > 1.001 ? 0 : 1);
-            road.push(u, along, ruts);
+            road.push(u, along, cobbled ? -hw : ruts);
           }
           if (prevKept) {
             for (let q = 0; q < 4; q++) {
@@ -191,7 +226,19 @@ vRoadFade = 1.0 - smoothstep(${FADE_START.toFixed(1)}, ${FADE_END.toFixed(1)}, d
       if (uz * vx - ux * vz < 0) { idx[t + 1] = cc; idx[t + 2] = b; }
     }
     g.setIndex(idx);
-    g.computeVertexNormals();
+    // normals from the ground itself (like the smooth near terrain), not from the ribbon: the
+    // verge strips drape over the little banks beside a lane and their own steep normals turned
+    // the fading edge into a grey-blue seam
+    const nrm = new Float32Array(pos.length);
+    const W = this.world.size;
+    const hAt = (x: number, z: number) => this.world.heightAt(clamp(x, 0, W), clamp(z, 0, W));
+    for (let v = 0; v < pos.length / 3; v++) {
+      const x = pos[v * 3], z = pos[v * 3 + 2], e = 1.2;
+      const dx = (hAt(x + e, z) - hAt(x - e, z)) / (2 * e), dz = (hAt(x, z + e) - hAt(x, z - e)) / (2 * e);
+      const inv = 1 / Math.sqrt(dx * dx + 1 + dz * dz);
+      nrm[v * 3] = -dx * inv; nrm[v * 3 + 1] = inv; nrm[v * 3 + 2] = -dz * inv;
+    }
+    g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
     g.computeBoundingSphere();
     const mesh = new THREE.Mesh(g, this.material);
     mesh.name = `roads:${tx}:${tz}`;
