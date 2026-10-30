@@ -17,6 +17,7 @@ import { GOOD_ICON } from '../core/iconMap';
 import { keyIntent, type KeyIntent, type PanelKey } from '../core/keys';
 import { goldDefs } from '../core/ornament';
 import { PauseController } from '../core/pause';
+import { effectiveScale } from '../core/scale';
 import type { PanelRequest } from '../core/requests';
 import { PanelStack } from '../core/stack';
 import { Hud } from '../hud/hud';
@@ -92,6 +93,8 @@ export class UiApp implements GameUIExt {
     });
     this.hudLayer.appendChild(this.hud.el);
     this.hud.setVisible(false);
+    // #ui > * is pointer-events:auto in base.css; the root must let clicks through to the 3D canvas (map picking, mouse look)
+    this.root.style.pointerEvents = 'none';
     this.root.append(goldDefs(), this.menu.el, this.loading.el, this.hudLayer, this.panelLayer, this.tipLayer);
     parent.appendChild(this.root);
     this.tooltips = new Tooltips(this.root, this.tipLayer);
@@ -99,6 +102,9 @@ export class UiApp implements GameUIExt {
     const onKey = (e: KeyboardEvent): void => this.onKeyDown(e);
     window.addEventListener('keydown', onKey, true);
     this.offs.push(() => window.removeEventListener('keydown', onKey, true));
+    const onResize = (): void => this.applySettings();
+    window.addEventListener('resize', onResize);
+    this.offs.push(() => window.removeEventListener('resize', onResize));
     this.applySettings();
     this.menu.open('main');
     this.root.classList.toggle('mu-still', new URLSearchParams(location.search).has('still'));
@@ -108,8 +114,7 @@ export class UiApp implements GameUIExt {
 
   update(dt: number): void {
     this.clock += Math.min(dt, 0.25);
-    const s = this.host.settings().uiScale;
-    if (s !== this.scale) this.applySettings();
+    if (this.effectiveScale() !== this.scale) this.applySettings();
     if (this.screen === 'loading') this.loading.tick(dt);
     if (this.screen !== 'game') return;
     if (!this.bound) {
@@ -390,7 +395,7 @@ export class UiApp implements GameUIExt {
       nameOf: (id) => this.nameOf(id),
       placeName: (id) => this.placeName(id),
       describe: (key, qty) => g.economy.describe(key, qty),
-      toLocal: (p) => { const s = this.effectiveScale(); return { x: p.x / s, y: p.y / s }; },
+      toLocal: (p) => { const s = this.scale || 1; return { x: p.x / s, y: p.y / s }; },
     };
   }
 
@@ -457,11 +462,11 @@ export class UiApp implements GameUIExt {
     this.syncPause();
   }
 
-  private effectiveScale(): number { return Math.max(0.8, Math.min(1.4, this.host.settings().uiScale || 1)); }
+  private effectiveScale(): number { return effectiveScale(this.host.settings().uiScale, window.innerWidth, window.innerHeight); }
 
   private applySettings(): void {
-    const s = Math.max(0.8, Math.min(1.4, this.host.settings().uiScale || 1));
-    this.scale = this.host.settings().uiScale;
+    const s = this.effectiveScale();
+    this.scale = s;
     const r = this.root.style;
     if (Math.abs(s - 1) < 0.001) {
       r.transform = '';

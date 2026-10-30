@@ -150,8 +150,8 @@
 .mu-hud-danger { inset: 0; opacity: 0; transition: opacity 0.5s; pointer-events: none; background: radial-gradient(ellipse at 50% 50%, rgba(160, 20, 10, 0) 52%, rgba(190, 28, 16, 0.46) 100%); }
 .mu-hud.danger .mu-hud-danger { opacity: 1; animation: mu-pulse 1.5s ease-in-out infinite; }
 
-.mu-hud-sleep { inset: 0; opacity: 0; pointer-events: none; transition: opacity 0.9s ease; display: flex; align-items: center; justify-content: center; background: radial-gradient(ellipse at 50% 55%, rgba(34, 24, 12, 0.78), rgba(8, 5, 2, 0.94)); }
-.mu-hud-sleep.sleep { background: radial-gradient(ellipse at 50% 55%, rgba(18, 24, 58, 0.86), rgba(4, 6, 20, 0.97)); }
+.mu-hud-sleep { inset: 0; opacity: 0; pointer-events: none; transition: opacity 0.9s ease; display: flex; align-items: center; justify-content: center; background: radial-gradient(ellipse at 50% 55%, rgba(34, 24, 12, 0.88), rgba(8, 5, 2, 0.97)); }
+.mu-hud-sleep.sleep { background: radial-gradient(ellipse at 50% 55%, rgba(18, 24, 58, 0.95), rgba(4, 6, 20, 0.995)); }
 .mu-hud-sleep.on { opacity: 1; pointer-events: auto; }
 .mu-hud-sleep-card { display: flex; flex-direction: column; align-items: center; gap: 10px; color: #e9e3cf; text-align: center; }
 .mu-hud-sleep-card svg.mu-ico { color: #cdd6ff; animation: mu-pulse 2.6s ease-in-out infinite; }

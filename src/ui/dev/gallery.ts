@@ -86,6 +86,7 @@ export async function start(root: AppRoot): Promise<void> {
       p.hpFraction = 0.82; p.staminaFraction = 0.68; p.danger = false;
       p.needs = { hunger: 0.62, rest: 0.78, warmth: 0.9, mood: 0.7 };
       p.targetKind = o.target ?? 'strip';
+      p.cancelAction();
       p.clearJourney();
       p.encounterAt = 0;
       p.prompt = p.targetKind === 'person' ? { label: 'Talk', targetLabel: 'Hugh Hayward', enabled: true }
@@ -95,6 +96,7 @@ export async function start(root: AppRoot): Promise<void> {
       const bg = (q.get('bg') as Bg | null) ?? o.bg ?? (night ? 'night' : 'village');
       currentBg = bg === 'map' ? 'village' : bg;
       setBg(bg);
+      ui.update(0.6); // let the HUD's slow refresh pick up the new date
       await frames(2);
       return mock;
     },

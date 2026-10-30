@@ -290,6 +290,8 @@ export class Hud {
     this.lastMinute = -1;
     this.lastFlagsKey = '';
     this.lastSpeedKey = '';
+    this.lastSlow = -10;
+    this.lastPlace = '';
     this.sleepOn(false);
   }
 
