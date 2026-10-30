@@ -27,7 +27,7 @@
     "make_spear":   { "name": "Make a spear", "building": ["carpenter", "smithy"], "skill": "carpentry", "level": 2, "stage": 1, "tool": "saw", "inputs": { "planks": 1, "iron": 0.4 }, "outputs": { "spear": 1 }, "work": 2, "quality": true, "xp": 7, "anim": "work_saw", "held": "saw" },
 
     "burn_charcoal": { "name": "Burn charcoal", "building": ["charcoal_mound"], "skill": "woodcutting", "level": 0, "stage": -1, "inputs": { "firewood": 12 }, "outputs": { "charcoal": 3 }, "work": 5, "xp": 7, "anim": "work_lift", "held": "none" },
-    "smelt_iron":   { "name": "Smelt a bloom of iron", "building": ["bloomery"], "skill": "smithing", "level": 3, "stage": -1, "tool": "hammer", "inputs": { "iron_ore": 6, "charcoal": 3 }, "outputs": { "iron": 2 }, "work": 6, "xp": 10, "anim": "work_hammer", "held": "hammer" },
+    "smelt_iron":   { "name": "Smelt a bloom of iron", "building": ["bloomery"], "skill": "smithing", "level": 3, "stage": -1, "tool": "hammer", "inputs": { "iron_ore": 6, "charcoal": 3 }, "outputs": { "iron": 3 }, "work": 6, "xp": 10, "anim": "work_hammer", "held": "hammer" },
     "cut_stone":    { "name": "Dress stone blocks", "building": ["quarry"], "skill": "masonry", "level": 1, "stage": -1, "tool": "chisel", "inputs": { "stone": 2 }, "outputs": { "stone": 2 }, "work": 3, "quality": true, "xp": 8, "anim": "work_hammer", "held": "chisel" },
     "fire_pots":    { "name": "Fire cooking pots", "building": ["kiln"], "skill": "masonry", "level": 1, "stage": -1, "inputs": { "firewood": 3 }, "outputs": { "pot": 6 }, "work": 4, "xp": 6, "anim": "work_stir", "held": "none" },
 

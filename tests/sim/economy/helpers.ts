@@ -9,34 +9,36 @@ import { fieldRole } from '../../../src/sim/farming';
 import { stockHousehold } from '../../../src/sim/economy/macro';
 import type { Simulation } from '../../../src/sim/sim';
 import { installSocial } from '../../../src/sim/social';
-import type { SocialApi, TopicProvider } from '../../../src/sim/social/types';
+import type { SocialApi, SocialHooks, TopicProvider } from '../../../src/sim/social/types';
 import type { JobOffer } from '../../../src/sim/economy/types';
 import { newSim, type TestSimOptions } from '../helpers';
 
-export interface EconSim { sim: Simulation; eco: EconomyRuntime; social: SocialApi; topics: TopicProvider[] }
+export interface EconSim { sim: Simulation; eco: EconomyRuntime; social: SocialApi; topics: TopicProvider[]; hooks: SocialHooks }
 
 /** A fake social system that records the topics the economy registers and knows no opinions. */
-export function fakeSocial(sim: Simulation): { social: SocialApi; topics: TopicProvider[] } {
+export function fakeSocial(sim: Simulation): { social: SocialApi; topics: TopicProvider[]; hooks: SocialHooks } {
   const base = installSocial(sim);
   const topics: TopicProvider[] = [];
   const opinions = new Map<string, number>();
+  const hooks: SocialHooks = {};
   const social: SocialApi = {
     ...base,
     registerTopic: (t) => { topics.push(t); return () => { const i = topics.indexOf(t); if (i >= 0) topics.splice(i, 1); }; },
+    setHooks: (h) => { Object.assign(hooks, h); base.setHooks?.(h); },
     opinion: (of, about) => opinions.get(`${of}:${about}`) ?? 0,
     adjustOpinion: (of, about, delta) => { const k = `${of}:${about}`; opinions.set(k, (opinions.get(k) ?? 0) + delta); },
   };
-  return { social, topics };
+  return { social, topics, hooks };
 }
 
 const runtimes = new WeakMap<Simulation, EconomyRuntime>();
 
 export function econSim(opts: TestSimOptions = {}): EconSim {
   const sim = newSim({ preset: 'tiny', ...opts });
-  const { social, topics } = fakeSocial(sim);
+  const { social, topics, hooks } = fakeSocial(sim);
   const eco = installEconomy(sim, { social });
   runtimes.set(sim, eco);
-  return { sim, eco, social, topics };
+  return { sim, eco, social, topics, hooks };
 }
 
 /** The economy installed into a simulation by `econSim` (or registered with `adopt`). */

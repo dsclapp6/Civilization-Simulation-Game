@@ -416,7 +416,8 @@ function practise(E: Econ, p: Person, buildingId: number): ActionOutcome {
   const holy = isHolyDay(E.day);
   const heavy = bow.key.startsWith('longbow') ? 1 : 0.55;
   giveXp(E, p, 'archery', holy ? 13 : 9, 1);
-  boutDone(E, p, { skill: 'archery', xp: 0, heavy: 0.5, str: heavy, end: 0.4, bouts: 1 });
+  boutDone(E, p, { skill: 'archery', xp: 0, heavy: 0.5, str: 0, end: 0.4, bouts: 1 });
+  trainStat(E.sim, p, 'str', 0.012 * heavy); // drawing a bow is full-effort strength work: a longbow bout builds as much as a bout at the plough
   trainStat(E.sim, p, 'per', 0.006 * (holy ? 1.2 : 1));
   // arrows are mostly picked up again; now and then one splits
   if (E.rng('arrows').next() < 0.18) bagTake(p.inventory, keyOf('arrow', 1), 1) || bagTake(p.inventory, keyOf('arrow', 0), 1) || bagTake(p.inventory, keyOf('arrow', 2), 1);
