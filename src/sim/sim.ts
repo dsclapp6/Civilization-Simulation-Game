@@ -137,6 +137,10 @@ export class Simulation implements SimContext {
 
   /** Starts a new run: new continent, new character (SPEC §1). */
   static newGame(opts: NewGameOptions): Simulation {
+    if (opts.store && !opts.profile) {
+      // a default profile would overwrite the player's saved Legacy gold
+      throw new Error('Simulation.newGame: pass the loaded profile (save.loadProfile) when a store is given');
+    }
     const { world, state } = newRun({
       seed: opts.seed, difficulty: opts.difficulty, statUpgrades: opts.statUpgrades,
       generateWorld: opts.generateWorld, worldOptions: opts.worldOptions, profile: opts.profile,

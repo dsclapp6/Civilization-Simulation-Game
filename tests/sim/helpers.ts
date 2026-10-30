@@ -1,6 +1,7 @@
 // Shared helpers for the simulation tests.
 import type { Difficulty } from '../../src/core/domain';
 import type { WorldModel } from '../../src/world/types';
+import { newProfile } from '../../src/sim/legacy';
 import { MemorySaveStore } from '../../src/sim/save-memory';
 import { Simulation } from '../../src/sim/sim';
 import { createMockWorld } from '../../src/sim/testing/mockWorld';
@@ -25,6 +26,7 @@ export function newSim(opts: TestSimOptions = {}): Simulation {
     difficulty: opts.difficulty ?? 'knight',
     generateWorld: mockGenerator(opts.preset ?? 'tiny'),
     store: opts.store,
+    profile: opts.store ? newProfile() : undefined,
     statUpgrades: opts.statUpgrades,
     autosave: opts.autosave,
   });

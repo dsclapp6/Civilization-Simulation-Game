@@ -41,6 +41,22 @@ describe('newRun: the player\'s birth (SPEC §6)', () => {
     expect(world.settlements.length).toBeGreaterThan(0);
   });
 
+  it('always births the player as a family member, never as a servant or retainer of the household', () => {
+    for (let i = 0; i < 30; i++) {
+      const { state } = newRun({ seed: `family${i}`, difficulty: 'knight', generateWorld: mockGenerator('tiny') });
+      const p = state.persons.get(state.run.playerId)!;
+      const house = state.houses.get(p.house)!;
+      expect(house.sworn).not.toContain(p.id);
+      const hh = state.households.get(p.household)!;
+      const head = state.persons.get(hh.head)!;
+      expect(p.house).toBe(head.house);
+      // a child of the household's parents (or at least of its head's House)
+      const parents = [p.father, p.mother].filter(Boolean);
+      expect(parents.length === 0 || parents.some((id) => hh.members.includes(id) || state.persons.has(id))).toBe(true);
+      expect(p.rankTier).toBe(head.rankTier);
+    }
+  });
+
   it('is deterministic per seed and varies across seeds', () => {
     const ids = new Set<string>();
     for (const seed of ['a', 'b', 'c', 'd', 'e', 'f']) {
@@ -275,7 +291,7 @@ describe('death of the player and game over', () => {
 
   it('lets the player abandon the run', async () => {
     const store = new MemorySaveStore();
-    const sim = Simulation.newGame({ seed: 'abandon', difficulty: 'knight', generateWorld: mockGenerator('tiny'), store, autosave: { intervalMs: 0 } });
+    const sim = Simulation.newGame({ seed: 'abandon', difficulty: 'knight', generateWorld: mockGenerator('tiny'), store, profile: newProfile(), autosave: { intervalMs: 0 } });
     await sim.flush();
     expect(sim.dispatch({ type: 'abandonRun' })).toEqual({ ok: true });
     expect(sim.state.run.phase).toBe('over');

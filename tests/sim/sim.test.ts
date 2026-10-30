@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ACTION_TIME_FACTOR, DAY_SECONDS, daylight, toDate } from '../../src/core/time';
+import { newProfile } from '../../src/sim/legacy';
 import { MemorySaveStore } from '../../src/sim/save-memory';
 import { Simulation } from '../../src/sim/sim';
 import { newSim, playFor } from './helpers';
@@ -188,7 +189,7 @@ describe('Simulation: events and lifecycle', () => {
 
   it('stops all processing once the run is over', async () => {
     const store = new MemorySaveStore();
-    const sim = Simulation.newGame({ seed: 'over2', difficulty: 'knight', generateWorld: (s) => newSim({ seed: s }).world, store });
+    const sim = Simulation.newGame({ seed: 'over2', difficulty: 'knight', generateWorld: (s) => newSim({ seed: s }).world, store, profile: newProfile() });
     await playFor(sim, 1);
     sim.dispatch({ type: 'abandonRun' });
     const d = sim.absDay;

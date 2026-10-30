@@ -438,8 +438,8 @@ export class GameState {
   readonly dirty = new DirtyTracker();
 
   // ---- derived indexes (rebuilt on load; never saved) ----
-  /** Living persons by home settlement. */
-  readonly residents = new Map<number, Set<Person>>();
+  /** Living persons by home settlement, kept sorted by id (so iteration order is canonical). */
+  readonly residents = new Map<number, Person[]>();
   /** Living persons by House (family line and sworn). */
   readonly houseMembers = new Map<HouseId, Set<Person>>();
   /** Households by settlement. */
@@ -464,7 +464,7 @@ export class GameState {
     const s = new GameState(seed, difficulty);
     for (const st of world.settlements) {
       s.settlements.set(st.id, { id: st.id, target: st.population, prosperity: 1, epidemic: 0, shares: [0, 0.4, 0.45, 0.12, 0.03] });
-      s.residents.set(st.id, new Set());
+      s.residents.set(st.id, []);
       s.householdsAt.set(st.id, new Set());
       s.buildingsAt.set(st.id, []);
     }
@@ -530,8 +530,9 @@ export class GameState {
   titleFor(kind: TitleKind, place: number): Title | undefined { return this.titleIndex.get(`${kind}:${place}`); }
   settlementState(id: number): SettlementState | undefined { return this.settlements.get(id); }
 
-  residentsOf(settlement: number): ReadonlySet<Person> {
-    return this.residents.get(settlement) ?? EMPTY_SET as ReadonlySet<Person>;
+  /** Living residents of a settlement, sorted by id. Do not mutate; copy (`residentList`) before iterating while changing the world. */
+  residentsOf(settlement: number): readonly Person[] {
+    return this.residents.get(settlement) ?? EMPTY_PEOPLE;
   }
   membersOfHouse(house: HouseId): ReadonlySet<Person> {
     return this.houseMembers.get(house) ?? EMPTY_SET as ReadonlySet<Person>;
@@ -548,7 +549,7 @@ export class GameState {
   // simulation continues identically after a load.
   residentList(settlement: number): Person[] {
     const s = this.residents.get(settlement);
-    return s ? Array.from(s).sort(byId) : [];
+    return s ? s.slice() : [];
   }
   householdList(settlement: number): Household[] {
     const s = this.householdsAt.get(settlement);
@@ -568,9 +569,9 @@ export class GameState {
   }
 
   private indexPerson(p: Person): void {
-    let set = this.residents.get(p.settlement);
-    if (!set) { set = new Set(); this.residents.set(p.settlement, set); }
-    set.add(p);
+    let list = this.residents.get(p.settlement);
+    if (!list) { list = []; this.residents.set(p.settlement, list); }
+    insertSorted(list, p);
     if (p.house) {
       let hs = this.houseMembers.get(p.house);
       if (!hs) { hs = new Set(); this.houseMembers.set(p.house, hs); }
@@ -580,7 +581,8 @@ export class GameState {
   }
 
   private unindexPerson(p: Person): void {
-    this.residents.get(p.settlement)?.delete(p);
+    const list = this.residents.get(p.settlement);
+    if (list) removeSorted(list, p);
     if (p.house) this.houseMembers.get(p.house)?.delete(p);
     this.living--;
   }
@@ -612,10 +614,11 @@ export class GameState {
   setSettlement(p: Person, settlement: number): void {
     if (p.settlement === settlement) return;
     if (!p.death) {
-      this.residents.get(p.settlement)?.delete(p);
-      let set = this.residents.get(settlement);
-      if (!set) { set = new Set(); this.residents.set(settlement, set); }
-      set.add(p);
+      const from = this.residents.get(p.settlement);
+      if (from) removeSorted(from, p);
+      let to = this.residents.get(settlement);
+      if (!to) { to = []; this.residents.set(settlement, to); }
+      insertSorted(to, p);
     }
     p.settlement = settlement;
     this.touch(p);
@@ -773,11 +776,12 @@ export class GameState {
     this.titlesOf.clear(); this.titleIndex.clear(); this.buildingsAt.clear();
     this.living = 0;
     for (const id of this.settlements.keys()) {
-      this.residents.set(id, new Set());
+      this.residents.set(id, []);
       this.householdsAt.set(id, new Set());
       this.buildingsAt.set(id, []);
     }
     for (const p of this.persons.values()) if (!p.death) this.indexPerson(p);
+    for (const list of this.residents.values()) list.sort(byId);
     for (const h of this.households.values()) {
       let set = this.householdsAt.get(h.settlement);
       if (!set) { set = new Set(); this.householdsAt.set(h.settlement, set); }
@@ -807,6 +811,22 @@ export class GameState {
 export const CHRONICLE_CAP = 400;
 const byId = (a: { id: number }, b: { id: number }): number => a.id - b.id;
 const EMPTY_SET: ReadonlySet<never> = new Set<never>();
+const EMPTY_PEOPLE: readonly Person[] = [];
+
+function insertSorted(list: Person[], p: Person): void {
+  // new people almost always have the highest id: append
+  const n = list.length;
+  if (n === 0 || list[n - 1].id < p.id) { list.push(p); return; }
+  let lo = 0, hi = n;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (list[mid].id < p.id) lo = mid + 1; else hi = mid; }
+  if (list[lo] !== p) list.splice(lo, 0, p);
+}
+
+function removeSorted(list: Person[], p: Person): void {
+  let lo = 0, hi = list.length;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (list[mid].id < p.id) lo = mid + 1; else hi = mid; }
+  if (list[lo] === p) list.splice(lo, 1);
+}
 
 // ---------------------------------------------------------------------------------------------
 // Person helpers

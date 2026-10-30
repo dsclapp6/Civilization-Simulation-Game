@@ -72,13 +72,13 @@ function lifeHourly(ctx: SimContext, info: HourInfo): void {
 
 function settlementTick(ctx: SimContext, s: Settlement, day: number, now: number): void {
   const state = ctx.state;
-  const set = state.residents.get(s.id);
+  const res = state.residents.get(s.id);
   const ss = state.settlements.get(s.id);
-  if (!set || !ss || set.size === 0) return;
-  const rho = ss.target > 0 ? set.size / ss.target : 1;
+  if (!res || !ss || res.length === 0) return;
+  const rho = ss.target > 0 ? res.length / ss.target : 1;
   const famine = ss.prosperity < 1 ? 1 + (1 - ss.prosperity) * 1.5 : 1;
   const rng = ctx.rng('life');
-  const list = state.residentList(s.id); // tickPerson can create/kill people; keep the snapshot stable
+  const list = res.slice(); // tickPerson can create/kill people; keep the snapshot stable
   for (let i = 0; i < list.length; i++) {
     const p = list[i];
     if (p.death) continue;
@@ -127,11 +127,15 @@ function tickPerson(
 /** Compensates the trigger rate for deaths that are skipped (accident share is immediate, recovery
  *  removes a share of illness deaths) so the realised mortality follows the life table. */
 function triggerBoost(ageInt: number): number {
+  return TRIGGER_BOOST[ageInt > 101 ? 101 : ageInt];
+}
+const TRIGGER_BOOST = new Float64Array(102);
+for (let a = 0; a < 102; a++) {
   const recover = LIFE.illnessRecovery;
-  if (ageInt < 1) return 1 / (0.35 + 0.65 * (1 - recover));
-  if (ageInt < 5) return 1 / (1 - recover);
-  if (ageInt < 55) return 1 / (0.07 + 0.93 * (1 - recover));
-  return 1 / (1 - recover);
+  TRIGGER_BOOST[a] = a < 1 ? 1 / (0.35 + 0.65 * (1 - recover))
+    : a < 5 ? 1 / (1 - recover)
+      : a < 55 ? 1 / (0.07 + 0.93 * (1 - recover))
+        : 1 / (1 - recover);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -228,7 +232,7 @@ function tryConceive(ctx: SimContext, rng: Rng, ss: SettlementState, p: Person, 
   }
   const dens = Math.max(0.25, Math.min(1.8, 1 + LIFE.densityK * (1 - rho)));
   const nutrition = Math.max(0.5, Math.min(1.2, ss.prosperity));
-  const wealth = p.rankTier >= 3 ? 1.08 : p.rankTier === 1 ? 0.96 : 1;
+  const wealth = p.estate === 'noble' ? 0.92 : p.rankTier >= 3 ? 1.05 : p.rankTier === 1 ? 0.96 : 1;
   if (rng.next() >= base * FERTILITY_SCALE * dens * nutrition * wealth) return;
   const husband = ctx.state.persons.get(p.spouse);
   if (!husband || husband.death) return;
@@ -754,6 +758,13 @@ function settlementYearly(ctx: SimContext, s: Settlement, ss: SettlementState, n
   relocateSurplus(ctx, rng, s, ss, now);
 }
 
+/** Which households can plausibly rise into a tier: masters, merchants, tenants who become yeomen. */
+function risesInto(p: Person, tier: number): boolean {
+  const field = CAREERS[p.career].field;
+  if (tier === 3) return field === 'craft' || field === 'trade' || field === 'brewing' || p.career === 'farmer' || p.career === 'yeoman' || p.career === 'shopkeeper';
+  return field === 'trade' || (field === 'craft' && p.careerStage >= 2);
+}
+
 /** A settlement offers only so many master workshops, holdings of yeomen and gentry posts. When a
  *  tier falls short of the settlement's original social order the most prosperous family below
  *  rises into it; when it is overfull the poorest family falls back (SPEC §4: limited mobility). */
@@ -778,14 +789,15 @@ function keepSocialOrder(ctx: SimContext, rng: Rng, s: Settlement, ss: Settlemen
         if (!hh || hh.head !== p.id || hh.kind !== 'family') continue;
         const age = (now - p.birthDay) / AGE;
         if (age < 24 || age > 58) continue;
-        if (p.sex === 'f' && p.career !== 'alewife' && p.career !== 'weaver' && p.career !== 'merchant') continue;
+        if (!risesInto(p, t)) continue;
         cands.push({ p, w: p.money + hh.purse + p.trained.int * 20 + rng.next() * 40 });
       }
       cands.sort((a, b) => b.w - a.w || a.p.id - b.p.id);
       for (const c of cands.slice(0, n)) {
         shiftFamilyRank(ctx, c.p, t);
-        if (CAREERS[c.p.career].field === 'craft') c.p.careerStage = Math.max(c.p.careerStage, 2);
-        else if (c.p.career === 'farmer') c.p.careerStage = Math.max(c.p.careerStage, t === 3 ? 3 : 3);
+        const field = CAREERS[c.p.career].field;
+        if (field === 'craft') c.p.careerStage = Math.max(c.p.careerStage, t === 3 ? 2 : 3); // master / guild warden
+        else if (c.p.career === 'farmer') c.p.careerStage = 3; // yeoman
         else if (c.p.career === 'merchant') c.p.careerStage = Math.max(c.p.careerStage, t === 3 ? 1 : 2);
       }
     } else if (have > want * 1.3) {
@@ -799,7 +811,13 @@ function keepSocialOrder(ctx: SimContext, rng: Rng, s: Settlement, ss: Settlemen
         cands.push({ p, w: p.money + hh.purse + rng.next() * 40 });
       }
       cands.sort((a, b) => a.w - b.w || a.p.id - b.p.id);
-      for (const c of cands.slice(0, n)) shiftFamilyRank(ctx, c.p, (t - 1) as 3 | 2);
+      for (const c of cands.slice(0, n)) {
+        shiftFamilyRank(ctx, c.p, (t - 1) as 3 | 2);
+        const field = CAREERS[c.p.career].field;
+        if (field === 'craft') c.p.careerStage = Math.min(c.p.careerStage, t === 4 ? 2 : 1);
+        else if (c.p.career === 'farmer') c.p.careerStage = Math.min(c.p.careerStage, 2);
+        else if (c.p.career === 'merchant') c.p.careerStage = Math.min(c.p.careerStage, 1);
+      }
     }
   }
 }
@@ -809,7 +827,7 @@ function relocateSurplus(ctx: SimContext, rng: Rng, s: Settlement, ss: Settlemen
   const state = ctx.state;
   const here = state.residents.get(s.id);
   if (!here || ss.target <= 0) return;
-  const rho = here.size / ss.target;
+  const rho = here.length / ss.target;
   if (rho < 1.12) return;
   let dest = -1;
   let destRho = 1.0;
@@ -817,11 +835,11 @@ function relocateSurplus(ctx: SimContext, rng: Rng, s: Settlement, ss: Settlemen
     const t = state.settlements.get(nid);
     const n = state.residents.get(nid);
     if (!t || !n || t.target <= 0) continue;
-    const r = n.size / t.target;
+    const r = n.length / t.target;
     if (r < destRho) { destRho = r; dest = nid; }
   }
   if (dest < 0) return;
-  let excess = here.size - ss.target * 1.04;
+  let excess = here.length - ss.target * 1.04;
   const hhs = rng.shuffle(state.householdList(s.id));
   let moved = 0;
   for (const hh of hhs) {

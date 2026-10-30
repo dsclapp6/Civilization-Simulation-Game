@@ -4,7 +4,8 @@
 // wealth (SPEC §24: serfs in undyed russet and rags, rich dyes and trim for nobles, heraldic
 // surcoats for knights, habits for monks and nuns, robes for clergy and scholars).
 import { PALETTE } from '../assets/palette';
-import type { Palette } from '../assets/types';
+
+type Palette = typeof PALETTE;
 import type { CultureId } from '../core/domain';
 import { clamp, hash01, hash3 } from '../core/math';
 import type { ArmourLook, CharacterLook, ClothingLook, Headwear, HelmetLook, TunicStyle } from '../core/view';

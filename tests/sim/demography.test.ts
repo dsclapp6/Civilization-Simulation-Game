@@ -146,3 +146,18 @@ describe('100 years of macro life', () => {
     expect(st.persons.size).toBeLessThan(st.living * 1.5);
   }, 120_000);
 });
+
+// The full-size check (about 12,000 people, 100 years, ~25 s). Opt in with SIM_LONG=1.
+describe.skipIf(!process.env.SIM_LONG)('100 years on a full-size continent', () => {
+  it('stays within +-0.5%/yr and keeps the social order', () => {
+    const sim = newSim({ seed: 'long', preset: 'large' });
+    noPlayer(sim);
+    const start = census(sim);
+    expect(start.pop).toBeGreaterThan(10_000);
+    sim.advanceDays(DAYS_PER_YEAR * 100);
+    const end = census(sim);
+    expect(Math.abs(Math.pow(end.pop / start.pop, 1 / 100) - 1)).toBeLessThanOrEqual(0.005);
+    expect(end.peasants).toBeGreaterThan(0.78);
+    expect(end.peasants).toBeLessThan(0.92);
+  }, 300_000);
+});

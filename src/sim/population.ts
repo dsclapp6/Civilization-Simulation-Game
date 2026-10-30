@@ -8,7 +8,7 @@
 // men-at-arms and servants; monasteries monks/nuns under an abbot/abbess; each kingdom capital
 // holds the royal family. A knight holds every manor village (one knight may hold several).
 import type { BuildingKind } from '../content/types';
-import type { Estate, RankTier, Sex } from '../core/domain';
+import type { RankTier, Sex } from '../core/domain';
 import { dist2 } from '../core/math';
 import type { Rng } from '../core/rng';
 import type { Settlement, WorldModel } from '../world/types';
@@ -16,7 +16,7 @@ import { CRAFT_CAREERS, VILLAGE_CRAFTS, type CareerId } from './careers';
 import { sampleStationaryAge } from './demography';
 import { refreshStrips } from './farming';
 import {
-  HomeAllocator, foundHouse, makeFamily, makeHeraldry, type FamilySpec, type GenContext, type ServantSpec,
+  HomeAllocator, makeFamily, makeHeraldry, type FamilySpec, type GenContext, type ServantSpec,
 } from './family';
 import { isCloseKin } from './kin';
 import { seedIllness } from './life';
@@ -60,7 +60,7 @@ function kindsIn(state: GameState, s: Settlement): Set<BuildingKind> {
   return set;
 }
 
-function have(state: GameState, s: Settlement): number { return state.residents.get(s.id)?.size ?? 0; }
+function have(state: GameState, s: Settlement): number { return state.residents.get(s.id)?.length ?? 0; }
 
 function makeTitle(state: GameState, kind: TitleKind, name: string, place: number, holder: Person | null, liege: Title | null): Title {
   return state.addTitle({
@@ -673,7 +673,3 @@ function assignStrips(g: GenContext, world: WorldModel): void {
     }
   }
 }
-
-// Re-exports used by other modules / tests
-export { foundHouse };
-export type { Estate };

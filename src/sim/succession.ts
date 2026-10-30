@@ -38,9 +38,12 @@ export function setRank(ctx: SimContext, p: Person, tier: RankTier): void {
     if (hh) {
       for (const id of hh.members) {
         const c = state.persons.get(id);
-        if (c && !c.death && (c.father === p.id || c.mother === p.id) && c.rankTier < tier && ageYears(c, ctx.absDay) < ADULT) {
-          applyTier(c, tier); state.touch(c);
-        }
+        if (!c || c.death || (c.father !== p.id && c.mother !== p.id)) continue;
+        // minors follow the parent; grown children who still live at home follow one rank behind (sons) or alongside (daughters)
+        const grown = ageYears(c, ctx.absDay) >= ADULT;
+        if (grown && c.spouse) continue;
+        const want = grown && c.sex === 'm' ? (tier - 1) as RankTier : tier;
+        if (c.rankTier < want) { applyTier(c, want); state.touch(c); }
       }
     }
     if (p.house === state.run.houseId) ctx.score.onRankReached(tier);
@@ -460,18 +463,29 @@ function appointHolder(ctx: SimContext, t: Title, from: Person, now: number): vo
       : t.place;
   const seat = world.settlements.find((s) => s.id === seatId) ?? world.settlements[0];
   const kingdom = seat.kingdom;
-  let best: Person | null = null;
-  let bestKey = -Infinity;
-  for (const s of world.settlements) {
-    if (s.kingdom !== kingdom) continue;
-    for (const p of state.residentList(s.id)) {
-      if (p.sex !== 'm' || p.estate !== 'noble' || p.flags.player || ageYears(p, now) < 21) continue;
-      if (p.rankTier + 1 < Math.min(tier, 6) || p.id === from.id) continue;
-      const key = p.rankTier * 100 + p.prestige;
-      if (key > bestKey) { bestKey = key; best = p; }
+  // Prefer a man one or two ranks below the title who holds nothing of that kind yet (so earldoms and
+  // manors are not simply swallowed by the crown), most prestigious first; relax if nobody fits.
+  const pick = (strict: boolean): Person | null => {
+    let best: Person | null = null;
+    let bestKey = -Infinity;
+    for (const s of world.settlements) {
+      if (s.kingdom !== kingdom) continue;
+      for (const p of state.residentList(s.id)) {
+        if (p.sex !== 'm' || p.estate !== 'noble' || p.flags.player || p.id === from.id || ageYears(p, now) < 21) continue;
+        const lo = strict ? tier - 2 : tier - 3;
+        const hi = strict ? tier : tier + 1;
+        if (p.rankTier < lo || p.rankTier > hi) continue;
+        const held = state.titlesHeldBy(p.id);
+        let sameKind = false;
+        for (const h of held) if (h.kind === t.kind) { sameKind = true; break; }
+        if (strict && sameKind) continue;
+        const key = (strict ? -p.rankTier : p.rankTier) * 100 + p.prestige - held.size * 150 + (p.rankTier >= tier - 1 ? 60 : 0);
+        if (key > bestKey) { bestKey = key; best = p; }
+      }
     }
-  }
-  if (!best) best = spawnNoble(ctx, seat.id, tier, now);
+    return best;
+  };
+  const best = pick(true) ?? pick(false) ?? spawnNoble(ctx, seat.id, tier, now);
   grantTitle(ctx, t, best, from, [], now);
 }
 

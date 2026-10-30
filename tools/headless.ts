@@ -8,6 +8,7 @@ import { performance } from 'node:perf_hooks';
 import type { Difficulty } from '../src/core/domain';
 import { DAYS_PER_YEAR } from '../src/core/time';
 import type { WorldModel } from '../src/world/types';
+import { newProfile } from '../src/sim/legacy';
 import { MemorySaveStore } from '../src/sim/save-memory';
 import { Simulation } from '../src/sim/sim';
 import { createMockWorld } from '../src/sim/testing/mockWorld';
@@ -69,7 +70,7 @@ async function main(): Promise<void> {
   const tWorld = performance.now();
   const store = withSave ? new MemorySaveStore() : undefined;
   const sim = Simulation.newGame({
-    seed, difficulty, store,
+    seed, difficulty, store, profile: newProfile(),
     generateWorld: (s) => buildWorld(s, preset),
     autosave: { budgetMs: 3, intervalMs: 0 },
   });

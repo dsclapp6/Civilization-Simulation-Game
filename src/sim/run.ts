@@ -79,11 +79,17 @@ export function newRun(opts: NewRunOptions): NewRun {
 // Birth
 // ---------------------------------------------------------------------------------------------
 
+/** True for people of the household's own family, false for sworn servants, apprentices and retainers. */
+function isFamilyMember(state: GameState, p: Person): boolean {
+  const house = state.houses.get(p.house);
+  return !(house && house.sworn.includes(p.id));
+}
+
 function canHaveChildOfAge(state: GameState, hh: Household, age: number): boolean {
   const day = state.clock.absDay;
   for (const id of hh.members) {
     const p = state.persons.get(id);
-    if (!p || p.death) continue;
+    if (!p || p.death || !isFamilyMember(state, p)) continue;
     const a = ageYears(p, day);
     if (p.sex === 'f' ? a - age >= 16 && a - age <= 44 : a - age >= 18) return true;
   }
@@ -96,7 +102,7 @@ function twelveYearOldIn(state: GameState, hh: Household): Person | null {
   let bestD = Infinity;
   for (const id of hh.members) {
     const p = state.persons.get(id);
-    if (!p || p.death) continue;
+    if (!p || p.death || !isFamilyMember(state, p)) continue;
     const d = Math.abs(ageYears(p, day) - START_AGE);
     if (d < 1.5 && d < bestD) { best = p; bestD = d; }
   }
@@ -134,7 +140,7 @@ export function birthPools(state: GameState): BirthPools {
       let w = 1;
       for (const id of hh.members) {
         const p = state.persons.get(id);
-        if (p && !p.death) { const a = ageYears(p, day); if (a >= 8 && a < 16) w += 2; }
+        if (p && !p.death && isFamilyMember(state, p)) { const a = ageYears(p, day); if (a >= 8 && a < 16) w += 2; }
       }
       return twelveYearOldIn(state, hh) ? w + 3 : w;
     });
@@ -204,7 +210,7 @@ function createTwelveYearOld(state: GameState, rng: Rng, hh: Household): Person 
   let father: Person | null = null;
   for (const id of hh.members) {
     const p = state.persons.get(id);
-    if (!p || p.death) continue;
+    if (!p || p.death || !isFamilyMember(state, p)) continue;
     const a = ageYears(p, day);
     if (p.sex === 'f' && !mother && a - START_AGE >= 16 && a - START_AGE <= 44) mother = p;
     if (p.sex === 'm' && !father && a - START_AGE >= 18) father = p;

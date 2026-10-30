@@ -48,6 +48,7 @@ export class SimViewImpl implements SimView {
   private readonly focusPoint: P2 = { x: 0, z: 0 };
   private readonly drawItems = new Map<number, CharacterDrawItem>();
   private readonly drawList: CharacterDrawItem[] = [];
+  private readonly othersScratch: Person[] = [];
   private readonly markers: MapMarker[] = [{ id: 0, kind: 'player', x: 0, z: 0, color: 0xffd24a, size: 1 }];
 
   private buildingList: BuildingView[] = [];
@@ -166,7 +167,8 @@ export class SimViewImpl implements SimView {
     const door = this.playerPosition();
     if (!door) return list;
     const hh = st.households.get(player.household);
-    const others: Person[] = [];
+    const others = this.othersScratch;
+    others.length = 0;
     if (hh) {
       for (const id of hh.members) {
         const m = st.persons.get(id);
@@ -199,6 +201,11 @@ export class SimViewImpl implements SimView {
       const x = door.x + Math.sin(a) * r;
       const z = door.z + Math.cos(a) * r;
       fill(others[i], x, z, yawTo(x, z, door.x, door.z), 0);
+    }
+    // forget people who are no longer around so the pool stays small
+    if (this.drawItems.size > 96) {
+      const keep = new Set(list.map((c) => c.id));
+      for (const id of this.drawItems.keys()) if (!keep.has(id)) this.drawItems.delete(id);
     }
     return list;
   }
@@ -246,8 +253,9 @@ export class SimViewImpl implements SimView {
     let changed = revChanged || this.stripList.length === 0;
     if (this.stripViews.size === 0) {
       const list: StripView[] = [];
+      const worldStrips = new Map(this.world.strips.map((w) => [w.id, w] as const));
       for (const s of st.strips.values()) {
-        const ws = this.world.strips.find((w) => w.id === s.id);
+        const ws = worldStrips.get(s.id);
         const v = { id: s.id, poly: ws ? ws.poly : [], crop: s.crop, growth: s.growth, state: s.state, stage: 0 };
         this.stripViews.set(s.id, v);
         list.push(v);
