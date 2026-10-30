@@ -1,48 +1,186 @@
-// Placeholder (wave 2 ECON replaces this file): an economy with no goods or markets.
-import type { SocialApi } from '../social/types';
+// The economy (wave 2): goods, markets, households, farming, work, careers, obligations and perks.
+// `installEconomy(sim, { social })` registers the macro systems on the scheduler, the action
+// providers on `sim.actions`, the dialogue topics on the social system, and returns the API the UI,
+// the player controller, social and the agents use. Everything works headless.
 import type { Simulation } from '../sim';
-import type { EconomyApi } from './types';
+import type { SocialApi } from '../social/types';
+import { Econ } from './core';
+import { PERK_BY_ID, PERKS, GOODS, GOOD_LIST, ENTRY_TESTS, describeItem } from './data';
+import { holdingsDaily, holding, householdPlan, ledger, listingsAt, buyOrRent, setTask, hire, dismiss, stackList } from './holdings';
+import { applyForJob, careerPaths, employmentDaily, employmentOf, jobsAt, quitJob, workSpot } from './jobs';
+import { bagWeight, bagTake, bagAdd, bagGet } from './items';
+import { apiPrice, doTrade, marketView, partnerLines, quoteTrade } from './market';
+import { consume, playerHour, seasonalNeeds } from './needs';
+import { attachObligationEvents, obligationsDaily, obligationsOf } from './obligations';
+import { addOwned, capacityOf, ownedQty, takeOwned, weightOf, canCarry } from './own';
+import { announcePerkChoices, choosePerk, openChoices } from './perks';
+import { initFresh, registerSystems } from './systems';
+import { economyTopics } from './topics';
+import { craftProvider } from './work-craft';
+import { farmProvider } from './work-farm';
+import { miscProvider, stockProvider } from './work-misc';
+import { giveKit } from './macro';
+import { goodOf } from './data';
+import type { EconomyApi, EquipSlot, InventoryView, ItemKey, ItemStack, Result } from './types';
+import { parseItemKey } from './types';
 
 export interface EconomyDeps { social: SocialApi }
 
-export function installEconomy(sim: Simulation, _deps: EconomyDeps): EconomyApi {
-  const none = { ok: false, reason: 'Not available yet' };
-  return {
-    goods: () => [],
-    good: () => undefined,
-    describe: (key, qty) => (qty && qty !== 1 ? `${qty} ${key}` : key),
-    inventory: (person) => {
-      const p = sim.state.persons.get(person);
-      return { owner: person, items: [], money: p?.money ?? 0, weight: 0, capacity: 30, equipment: {} };
-    },
-    stores: () => [],
-    stash: () => none,
-    equip: () => none,
-    consume: () => none,
-    give: () => none,
-    market: () => null,
-    price: () => 0,
-    partnerStock: () => [],
-    quote: () => ({ lines: [], money: 0, ok: false, reason: 'Not available yet' }),
-    trade: () => none,
-    jobs: () => [],
-    applyForJob: () => none,
-    quitJob: () => none,
-    employment: () => null,
-    careerPaths: () => [],
-    entryTests: () => [],
-    workSpot: () => null,
-    holding: () => null,
-    listings: () => [],
-    buyOrRent: () => none,
-    obligations: () => [],
-    ledger: () => [],
-    householdPlan: () => [],
-    setTask: () => none,
-    hire: () => none,
-    dismiss: () => none,
-    perk: () => undefined,
-    perkChoices: () => [],
-    choosePerk: () => none,
-  };
+/** The API plus the runtime, for tools, tests and the dev pages. */
+export interface EconomyRuntime extends EconomyApi {
+  readonly econ: Econ;
+  /** Removes every system, provider, topic and listener the economy installed. */
+  dispose(): void;
 }
+
+export function installEconomy(sim: Simulation, deps: EconomyDeps): EconomyRuntime {
+  const E = new Econ(sim, deps.social);
+  if (E.save.init === 0) initFresh(E);
+
+  const offs: Array<() => void> = [];
+  offs.push(registerSystems(E, sim.scheduler, {
+    hourly: [playerHour],
+    daily: [employmentDaily, obligationsDaily, holdingsDaily],
+    seasonal: [seasonalNeeds],
+    yearly: [],
+  }));
+  offs.push(sim.actions.register(farmProvider(E)));
+  offs.push(sim.actions.register(craftProvider(E)));
+  offs.push(sim.actions.register(stockProvider(E)));
+  offs.push(sim.actions.register(miscProvider(E)));
+  offs.push(deps.social.registerTopic(economyTopics(E)));
+  offs.push(attachObligationEvents(E));
+  offs.push(announcePerkChoices(E));
+  offs.push(sim.events.on('playerSwitched', (e) => {
+    const np = E.person(e.to);
+    if (np) giveKit(E, np);
+  }));
+
+  const noPerson: Result = { ok: false, reason: 'Nobody there' };
+
+  const api: EconomyRuntime = {
+    econ: E,
+    dispose() { for (const o of offs.splice(0)) o(); },
+
+    // ---- goods ----
+    goods: () => GOOD_LIST,
+    good: (id) => GOODS[id],
+    describe: (key, qty) => describeItem(key, qty),
+
+    // ---- inventories ----
+    inventory(person): InventoryView {
+      const p = E.person(person);
+      if (!p) return { owner: person, items: [], money: 0, weight: 0, capacity: 0, equipment: {} };
+      const eq: Partial<Record<EquipSlot, ItemKey>> = {};
+      const saved = E.save.eq[String(person)];
+      if (saved) for (const [slot, key] of Object.entries(saved)) if (key && (p.inventory[key] ?? 0) > 0) eq[slot as EquipSlot] = key;
+      return { owner: person, items: stackList(E, p.inventory, p.settlement), money: p.money, weight: bagWeight(p.inventory), capacity: capacityOf(p), equipment: eq };
+    },
+    stores(household): ItemStack[] {
+      const hh = E.household(household);
+      return hh ? stackList(E, hh.stores, hh.settlement) : [];
+    },
+    stash(person, key, qty): Result {
+      const p = E.person(person);
+      const hh = p ? E.hhOf(p) : undefined;
+      if (!p || !hh) return noPerson;
+      if (key === 'money') {
+        if (qty > 0) { if (p.money + 1e-9 < qty) return { ok: false, reason: 'You do not have that much' }; p.money = Math.round((p.money - qty) * 100) / 100; hh.purse = Math.round((hh.purse + qty) * 100) / 100; }
+        else { if (hh.head !== p.id) return { ok: false, reason: 'Only the head draws on the household purse' }; const q = -qty; if (hh.purse + 1e-9 < q) return { ok: false, reason: 'The purse holds less' }; hh.purse = Math.round((hh.purse - q) * 100) / 100; p.money = Math.round((p.money + q) * 100) / 100; }
+        E.state.touch(p); E.state.touchHousehold(hh);
+        return { ok: true };
+      }
+      if (goodOf(key)?.category === 'livestock') return { ok: false, reason: 'Animals are kept, not carried' };
+      if (qty > 0) {
+        if (!bagTake(p.inventory, key, qty)) return { ok: false, reason: 'You do not carry that much' };
+        bagAdd(hh.stores, key, qty);
+      } else {
+        const q = -qty;
+        if (!canCarry(p, weightOf(key, q))) return { ok: false, reason: `Too heavy to carry (you can bear ${capacityOf(p)} kg)` };
+        if (!bagTake(hh.stores, key, q)) return { ok: false, reason: 'The stores hold less' };
+        bagAdd(p.inventory, key, q);
+      }
+      E.state.touch(p); E.state.touchHousehold(hh);
+      return { ok: true };
+    },
+    equip(person, slot, key): Result {
+      const p = E.person(person);
+      if (!p) return noPerson;
+      const k = String(person);
+      const cur = E.save.eq[k] ?? (E.save.eq[k] = {});
+      if (key === null) { delete cur[slot]; E.touchSave(); return { ok: true }; }
+      const def = goodOf(key);
+      if (!def) return { ok: false, reason: 'No such item' };
+      if (ownedQty(E, p, key) <= 0) return { ok: false, reason: 'You do not have that' };
+      const fits = def.slot === slot || (slot === 'main' && !!def.held) || (slot === 'off' && def.slot === 'off');
+      if (!fits) return { ok: false, reason: `That does not go in the ${slot} slot` };
+      cur[slot] = key;
+      E.touchSave();
+      return { ok: true };
+    },
+    consume(person, key, qty = 1): Result {
+      const p = E.person(person);
+      return p ? consume(E, p, key, qty) : noPerson;
+    },
+    give(from, to, key, qty): Result {
+      const a = E.person(from), b = E.person(to);
+      if (!a || !b || b.death) return noPerson;
+      if (qty <= 0) return { ok: false, reason: 'Give something' };
+      if (key === 'money') {
+        if (a.money + 1e-9 < qty) return { ok: false, reason: 'You do not have that much' };
+        a.money = Math.round((a.money - qty) * 100) / 100;
+        b.money = Math.round((b.money + qty) * 100) / 100;
+        E.state.touch(a); E.state.touch(b);
+        const hh = E.hhOf(a);
+        if (hh) E.ledgerLine(hh.id, `A gift to ${b.first}`, -qty);
+        if (qty >= 1) E.social.adjustOpinion(to, from, Math.min(8, Math.ceil(qty / 6)), 'a gift');
+        return { ok: true };
+      }
+      if (ownedQty(E, a, key) + 1e-9 < qty) return { ok: false, reason: 'You do not have that' };
+      if (E.isPlayer(to) && !canCarry(b, weightOf(key, qty))) return { ok: false, reason: 'They cannot carry it' };
+      takeOwned(E, a, key, qty);
+      addOwned(E, b, key, qty);
+      const worth = (goodOf(key)?.basePrice ?? 0) * qty;
+      if (worth >= 0.5) E.social.adjustOpinion(to, from, Math.min(8, Math.ceil(worth / 6)), 'a gift');
+      return { ok: true };
+    },
+
+    // ---- markets and trade ----
+    market: (settlement) => marketView(E, settlement, E.person(E.playerId) ?? null),
+    price: (settlement, key, side) => apiPrice(E, settlement, key, side),
+    partnerStock: (partner, actor) => partnerLines(E, partner, E.person(actor) ?? null),
+    quote: (actor, partner, lines) => quoteTrade(E, actor, partner, lines),
+    trade: (actor, partner, lines) => doTrade(E, actor, partner, lines),
+
+    // ---- work and careers ----
+    jobs: (settlement, forPerson) => jobsAt(E, settlement, forPerson),
+    applyForJob: (person, jobId) => applyForJob(E, person, jobId),
+    quitJob: (person) => quitJob(E, person),
+    employment: (person) => employmentOf(E, person),
+    careerPaths: (person) => careerPaths(E, person),
+    entryTests: () => ENTRY_TESTS,
+    workSpot: (person, absDay) => workSpot(E, person, absDay),
+
+    // ---- land, property, obligations ----
+    holding: (household) => holding(E, household),
+    listings: (settlement, forPerson) => listingsAt(E, settlement, forPerson),
+    buyOrRent: (person, listingId, mode) => buyOrRent(E, person, listingId, mode),
+    obligations: (person) => obligationsOf(E, person),
+    ledger: (household) => ledger(E, household),
+
+    // ---- household management ----
+    householdPlan: (household) => householdPlan(E, household),
+    setTask: (head, member, task) => setTask(E, head, member, task),
+    hire: (employer, worker, wage, task) => hire(E, employer, worker, wage, task),
+    dismiss: (employer, worker) => dismiss(E, employer, worker),
+
+    // ---- skills and perks ----
+    perk: (id) => PERK_BY_ID.get(id),
+    perkChoices: (person) => { const p = E.person(person); return p ? openChoices(p) : []; },
+    choosePerk: (person, perkId) => { const p = E.person(person); return p ? choosePerk(E, p, perkId) : noPerson; },
+  };
+  void parseItemKey; void bagGet; void PERKS;
+  return api;
+}
+
+export type { EconomyApi } from './types';

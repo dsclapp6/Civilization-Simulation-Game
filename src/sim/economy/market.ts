@@ -314,7 +314,7 @@ interface Venue {
   maxQuality: Quality;
 }
 
-const MARKET_BUILDINGS: ReadonlySet<string> = new Set(['market_hall', 'market_stall', 'market_cross', 'warehouse']);
+export const MARKET_BUILDINGS: ReadonlySet<string> = new Set(['market_hall', 'market_stall', 'market_cross', 'warehouse']);
 
 function tagsOf(E: Econ, sid: number): Set<string> {
   const tags = new Set<string>();
