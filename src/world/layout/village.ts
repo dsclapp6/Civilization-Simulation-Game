@@ -4,7 +4,7 @@ import { pointInPolygon, type P2 } from '../../core/math';
 import { localToWorld } from '../geom';
 import { TAG, frontPose, type LayoutCtx, type Street, streetAt, yawOf } from './common';
 import {
-  connectToRoad, fillFrontage, incidentStreets, makeLane, placeAround, placeAtRiver, placeWindmill, plotsRadius,
+  connectToRoad, fillFrontage, incidentStreets, makeLane, placeAround, placeAtRiver, placeWindmill, plotsRadius, topUpHomes, fitPopulationToHomes,
 } from './helpers';
 import type { Plot } from '../types';
 
@@ -158,7 +158,7 @@ export function styleFor(culture: string): VillageStyle {
 }
 
 /** A street-less cluster (church, well, cottages in rings facing the middle) for sites too cramped for lanes. */
-function layoutCluster(ctx: LayoutCtx, id: number, nHomes: number, style: VillageStyle, churchLevel: number): void {
+function layoutCluster(ctx: LayoutCtx, id: number, nHomes: number, style: VillageStyle, churchLevel: number): number {
   const site = ctx.s.sites[id];
   const rng = ctx.rng;
   if (!placeChurch(ctx, id, [], churchLevel)) ctx.bump('village.nochurch');
@@ -177,6 +177,8 @@ function layoutCluster(ctx: LayoutCtx, id: number, nHomes: number, style: Villag
     }
   }
   if (placed < nHomes) ctx.bump('village.fewhomes');
+  fitPopulationToHomes(ctx, id, placed, nHomes);
+  return placed;
 }
 
 export function layoutVillage(ctx: LayoutCtx, id: number): void {
@@ -237,7 +239,15 @@ export function layoutVillage(ctx: LayoutCtx, id: number): void {
     if (!lane) continue;
     homes += fillFrontage(ctx, id, [lane], { ...base, count: nHomes - homes, startS: 9, maxS: 110 }).length;
   }
-  if (homes < nHomes) ctx.bump('village.fewhomes');
+  // still short: more lanes, then looser spacing, gardens and ground tolerance
+  if (homes < nHomes) {
+    homes += topUpHomes(ctx, id, streets, {
+      need: nHomes - homes, pick: homeKinds, centre: { x: cx, z: cz }, reach: 200, laneKind: 'path', maxLanes: 16, garden: base.garden, setback: [1.6, 5],
+    });
+  }
+  // (the planned count is population / 4.6, an average: a village within a tenth of it is not short)
+  if (homes < nHomes * 0.9) ctx.bump('village.fewhomes');
+  fitPopulationToHomes(ctx, id, homes, nHomes);
 
   // communal barn and granary at the edge
   tryFront(ctx, id, 'barn', streets, [90, 110, 130, 150], sides, [6, 10], 'storage', 1);
@@ -274,11 +284,15 @@ export function layoutHamlet(ctx: LayoutCtx, id: number): void {
   }
   ctx.reserve(circlePoly(site.x, site.z, 6, 8), id);
   placeAround(ctx, id, 'well', site.x, site.z, [8, 11, 14], 'well', 'centre');
-  fillFrontage(ctx, id, streets, {
-    count: n, startS: 12, maxS: 120,
-    pick: (i) => (i === 0 && rng.chance(0.4) ? { kind: 'longhouse', role: 'home', level: 1 } : rng.chance(0.2) ? { kind: 'hovel', role: 'home_poor', level: 1 } : { kind: 'cottage', role: 'home', level: 1 }),
+  const pickHome = (i: number): { kind: BuildingKind; role: string; level: number } => (i === 0 && rng.chance(0.4) ? { kind: 'longhouse', role: 'home', level: 1 } : rng.chance(0.2) ? { kind: 'hovel', role: 'home_poor', level: 1 } : { kind: 'cottage', role: 'home', level: 1 });
+  let homes = fillFrontage(ctx, id, streets, {
+    count: n, startS: 12, maxS: 120, pick: pickHome,
     setback: [3, 9], gap: [8, 18], garden: { maxDepth: 30, minDepth: 10, extraWidth: 6 }, rotJitter: 0.08,
-  });
+  }).length;
+  if (homes < n) {
+    homes += topUpHomes(ctx, id, streets, { need: n - homes, pick: pickHome, centre: { x: site.x, z: site.z }, reach: 120, laneKind: 'path', maxLanes: 6, garden: { maxDepth: 24, minDepth: 8, extraWidth: 3 }, setback: [2, 6] });
+  }
+  fitPopulationToHomes(ctx, id, homes, n);
   if (rng.chance(0.5)) tryFront(ctx, id, 'barn', streets, [30, 45, 60], [1, -1], [5, 9], 'storage', 1);
   st.radius = Math.max(35, Math.round(plotsRadius(ctx, id, site.x, site.z, 0.95)));
 }

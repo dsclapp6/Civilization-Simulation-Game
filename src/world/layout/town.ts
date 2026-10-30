@@ -4,7 +4,7 @@ import { dist, pointInPolygon, type P2 } from '../../core/math';
 import { ccwFromAbove, normAngle, obbPoly, makeObb, segSegIntersect, polylineLength } from '../geom';
 import { TAG, type LayoutCtx, type Street, resampleStreet, streetAt, yawOf } from './common';
 import { castleSpecs, tryCompound, cutRoadsAtCompound } from './castle';
-import { connectToRoad, fillFrontage, incidentStreets, makeLane, placeAtRiver, plotsRadius } from './helpers';
+import { connectToRoad, fillFrontage, incidentStreets, makeLane, placeAtRiver, plotsRadius, topUpHomes } from './helpers';
 import { placeChurch, tryFront } from './village';
 import type { Plot } from '../types';
 
@@ -209,6 +209,15 @@ export function layoutTown(ctx: LayoutCtx, id: number, isCity: boolean): void {
   const streets = incidentStreets(ctx, id, R + 170, 110);
   if (!streets.length) { ctx.bump('town.nostreets'); }
   const inner = R * 0.82;
+  // a town with fewer than three streets gets a cross plan: streets at right angles through the middle, so that its
+  // church, guildhall and workshops do not exhaust the frontage of its only road and burgage plots have somewhere to stand
+  if (streets.length < 3) {
+    const dir0: { tx: number; tz: number } = streets.length ? streetAt(streets[0], Math.min(streets[0].length, 24)) : { tx: Math.cos(id * 1.3), tz: Math.sin(id * 1.3) };
+    for (const dir of [1, -1]) {
+      const lane = makeLane(ctx, { x: cx - dir0.tz * dir * 16, z: cz + dir0.tx * dir * 16 }, -dir0.tz * dir, dir0.tx * dir, R * 0.95, 'track', 40, poly);
+      if (lane) { streets.push(lane); ctx.bump('town.crossstreet'); }
+    }
+  }
 
   // market square along the main street
   let axis: P2 = { x: 1, z: 0 };
@@ -262,19 +271,29 @@ export function layoutTown(ctx: LayoutCtx, id: number, isCity: boolean): void {
   homes += fillFrontage(ctx, id, lanes, { ...common, count: nHomes - homes + Math.round(nHomes * 0.1), startS: 7, maxS: inner * 0.95 }).length;
   homes += fillFrontage(ctx, id, streets, { ...common, count: Math.max(0, nHomes - homes), startS: 12, maxS: inner }).length;
   homes += fillFrontage(ctx, id, ringStreets.streets, { ...common, count: Math.max(0, nHomes - homes), startS: 4, maxS: 400, sides: ringStreets.sides }).length;
-  if (homes < nHomes * 0.8) ctx.bump('town.fewhomes');
+  // still short: more lanes, then looser spacing, gardens and ground tolerance, until the town has its homes
+  if (homes < nHomes * 0.95) {
+    homes += topUpHomes(ctx, id, [...streets, ...lanes, ...ringStreets.streets], {
+      need: Math.ceil(nHomes) - homes, pick: burgage, centre: { x: cx, z: cz }, reach: inner, inside: poly,
+      laneKind: 'path', maxLanes: isCity ? 70 : 40, garden: common.garden, setback: common.setback,
+    });
+  }
 
   // suburbs along the roads outside the gates
   const suburb = (i: number, sFrac: number) => {
     void sFrac;
     return rng.chance(0.2) ? { kind: 'hovel' as BuildingKind, role: 'home_poor', level: 1 } : rng.chance(0.15) ? { kind: 'longhouse' as BuildingKind, role: 'home', level: 1 } : { kind: 'cottage' as BuildingKind, role: 'home', level: 1 + (i % 5 === 0 ? 1 : 0) };
   };
-  const nSub = Math.round(nHomes * 0.16);
+  // (a shortfall of homes inside the walls spills into the suburbs)
+  const deficit = Math.max(0, Math.ceil(nHomes * 0.9) - homes);
+  const nSub = Math.round(nHomes * 0.16) + deficit;
+  let subHomes = 0;
   if (streets.length) {
-    fillFrontage(ctx, id, streets, {
-      pick: suburb, count: nSub, startS: R + 10, maxS: R + 150, setback: [3, 8], gap: [6, 14], garden: { maxDepth: 30, minDepth: 10, extraWidth: 4 }, rotJitter: 0.05,
-    });
+    subHomes = fillFrontage(ctx, id, streets, {
+      pick: suburb, count: nSub, startS: R + 10, maxS: R + 150 + (deficit ? 110 : 0), setback: [3, 8], gap: [6, 14], garden: { maxDepth: 30, minDepth: 10, extraWidth: 4 }, rotJitter: 0.05,
+    }).length;
   }
+  if (homes + Math.min(subHomes, deficit) < nHomes * 0.8) ctx.bump('town.fewhomes');
   // gallows on a rise outside the walls
   let gl: Plot | null = null;
   for (const rr of [R + 70, R + 110, R + 160]) {
