@@ -5,10 +5,12 @@ import type { ZoneApi } from '../agents/types';
 import type { Difficulty } from '../core/domain';
 import type { PlayerApi } from '../player/types';
 import type { UiRequest } from '../sim/actions';
-import type { EconomyApi } from '../sim/economy/types';
+import type { EconomyApi, ItemKey } from '../sim/economy/types';
 import type { Profile, StatUpgrades } from '../sim/legacy';
 import type { Simulation } from '../sim/sim';
 import type { SocialApi } from '../sim/social/types';
+import type { PersonId } from '../sim/state';
+import type { PanelRequest } from './core/requests';
 
 export interface GameServices {
   readonly sim: Simulation;
@@ -29,10 +31,12 @@ export interface Settings {
   labels: boolean;
   /** 0.8..1.4 */
   uiScale: number;
+  /** Browse panels (character, inventory, ledger…) pause the world while open. Default true. (UI addition) */
+  pauseInMenus?: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  quality: 'medium', mouseSensitivity: 1, invertY: false, volume: 0.7, labels: true, uiScale: 1,
+  quality: 'medium', mouseSensitivity: 1, invertY: false, volume: 0.7, labels: true, uiScale: 1, pauseInMenus: true,
 };
 
 /** Renderer controls the UI may use (map panel, settings). */
@@ -77,3 +81,25 @@ export interface GameUI {
 }
 
 export type CreateUI = (root: HTMLElement, host: UiHost) => GameUI;
+
+// ---- UI additions (optional; the wave 2 contract above is unchanged) ----
+
+/** What `createUI` really returns: the `GameUI` contract plus hooks for the dev gallery, tools and tests. */
+export interface GameUIExt extends GameUI {
+  /** Opens any panel, including the UI-only ones (character sheet, inventory, pause menu, death screen…). */
+  openPanel(req: PanelRequest): void;
+  closePanel(id: string): void;
+  isOpen(id: string): boolean;
+  /** Ids of the open panels, bottom to top. */
+  openPanels(): string[];
+  /** Main-menu views, for the gallery and screenshots. */
+  showMenu(view: 'main' | 'difficulty' | 'shop' | 'records' | 'settings'): void;
+  /** Shows the "You are born …" reveal for the current character. */
+  showBirth(): void;
+}
+
+/** Optional economy members the UI uses when the economy provides them. */
+export interface EconomyUiExtras {
+  /** Drop goods on the ground (the inventory's Drop button; falls back to `give(person, 0, …)`). */
+  drop?(person: PersonId, key: ItemKey, qty: number): { ok: boolean; reason?: string };
+}

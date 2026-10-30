@@ -1,0 +1,540 @@
+// The UI controller: screens (menu / loading / game), the panel stack, hotkeys, the HUD and the wiring
+// from simulation events to the feed, toasts and the death / game-over screens.
+import type { Difficulty } from '../../core/domain';
+import type { UiRequest } from '../../sim/actions';
+import { familyOf } from '../../sim/kin';
+import { levelProfile, type StatUpgrades } from '../../sim/legacy';
+import type { SimEvents } from '../../sim/events';
+import { fullName, type ChronicleEntry, type PersonId } from '../../sim/state';
+import { settlementName } from '../../sim/api';
+import type { Command, CommandResult } from '../../sim/sim';
+import { h, isTypingTarget } from '../core/dom';
+import {
+  Feed, feedForChronicle, feedForNotify, feedForOpinion, feedForSkip, feedForTrade, feedForTravel, gainChip, toastForPoints,
+  toastForRank, toastForSkillLevel, type FeedKind, type ToastInput,
+} from '../core/feed';
+import { GOOD_ICON } from '../core/iconMap';
+import { keyIntent, type KeyIntent, type PanelKey } from '../core/keys';
+import { goldDefs } from '../core/ornament';
+import { PauseController } from '../core/pause';
+import type { PanelRequest } from '../core/requests';
+import { PanelStack } from '../core/stack';
+import { Hud } from '../hud/hud';
+import { Toasts } from '../hud/toasts';
+import { createPanel } from '../panels/registry';
+import { LoadingLayer } from '../screens/loading';
+import { MenuLayer, type MenuView } from '../screens/menu';
+import type { GameServices, GameUIExt, UiHost, UiScreen } from '../types';
+import type { ConfirmOptions, PanelCtx, PanelRecord, UiHooks, UiPanel } from './panel';
+import { Tooltips } from './tooltips';
+
+interface Bound { game: GameServices; offs: Array<() => void>; pause: PauseController }
+
+const ESCAPE_DEBOUNCE_MS = 80;
+
+export class UiApp implements GameUIExt {
+  private readonly root = h('div.mu-root');
+  private readonly panelLayer = h('div.mu-layer.mu-panels');
+  private readonly hudLayer = h('div.mu-layer');
+  private readonly tipLayer = h('div.mu-layer');
+  private readonly feed = new Feed(6);
+  private readonly toasts: Toasts;
+  private readonly hud: Hud;
+  private readonly menu: MenuLayer;
+  private readonly loading = new LoadingLayer();
+  private readonly tooltips: Tooltips;
+  private readonly stack: PanelStack<UiPanel>;
+  private readonly records = new Map<UiPanel, PanelRecord>();
+  private readonly offs: Array<() => void> = [];
+
+  private readonly hooks: UiHooks = {
+    quitToMenu: () => { void this.leaveToMenu(); },
+    newRun: () => { void this.leaveToMenu('difficulty'); },
+    showBirth: () => this.openPanel({ panel: 'birth' }),
+  };
+  private screen: UiScreen = 'menu';
+  private bound: Bound | null = null;
+  private clock = 0;
+  private scale = 1;
+  private pendingBirth = false;
+  private afterMenu: MenuView | null = null;
+  private lastEscapeAt = -1000;
+  private lastChronicle: ChronicleEntry | null = null;
+  private chronicleTimer = 0;
+  private lastEncounterKey = '';
+  private lastMenuPause: boolean | null = null;
+
+  constructor(private readonly parent: HTMLElement, private readonly host: UiHost) {
+    this.toasts = new Toasts((req) => this.openPanel(req));
+    this.hud = new Hud({
+      game: () => this.bound?.game ?? null,
+      host,
+      feed: this.feed,
+      toasts: this.toasts,
+      open: (req) => this.toggleOrOpen(req),
+      isOpen: (id) => this.stack.has(id),
+      say: (kind, text) => this.say(kind, text),
+      placeName: (id) => this.placeName(id),
+      onEncounter: () => this.onEncounter(),
+    });
+    this.menu = new MenuLayer({
+      host,
+      startRun: (opts) => this.startRun(opts),
+      continueRun: () => { void this.continueRun(); },
+      onSettingsChanged: () => this.onSettingsChanged(),
+    });
+    this.stack = new PanelStack<UiPanel>({
+      onShow: (p) => this.onPanelShown(p),
+      onHide: (p) => this.onPanelHidden(p),
+      onChange: () => this.syncPause(),
+    });
+    this.hudLayer.appendChild(this.hud.el);
+    this.hud.setVisible(false);
+    this.root.append(goldDefs(), this.menu.el, this.loading.el, this.hudLayer, this.panelLayer, this.tipLayer);
+    parent.appendChild(this.root);
+    this.tooltips = new Tooltips(this.root, this.tipLayer);
+
+    const onKey = (e: KeyboardEvent): void => this.onKeyDown(e);
+    window.addEventListener('keydown', onKey, true);
+    this.offs.push(() => window.removeEventListener('keydown', onKey, true));
+    this.applySettings();
+    this.menu.open('main');
+    this.root.classList.toggle('mu-still', new URLSearchParams(location.search).has('still'));
+  }
+
+  // ---------------------------------------------------------------------------------- GameUI
+
+  update(dt: number): void {
+    this.clock += Math.min(dt, 0.25);
+    const s = this.host.settings().uiScale;
+    if (s !== this.scale) this.applySettings();
+    if (this.screen === 'loading') this.loading.tick(dt);
+    if (this.screen !== 'game') return;
+    if (!this.bound) {
+      const g = this.host.game();
+      if (g) this.bind(g);
+      else return;
+    } else {
+      const g = this.host.game();
+      if (g && g.sim !== this.bound.game.sim) this.bind(g);
+      else if (!g) return;
+    }
+    const sim = this.bound!.game.sim;
+    if (sim.state.run.phase === 'alive') this.hud.update(this.clock);
+    for (const p of this.stack.all()) p.tick?.(this.clock);
+    this.chronicleTimer += dt;
+    if (this.chronicleTimer > 0.6) { this.chronicleTimer = 0; this.pollChronicle(); }
+    this.syncMenuPauseSetting();
+  }
+
+  capturesInput(): boolean {
+    if (this.screen !== 'game') return true;
+    if (this.stack.captures()) return true;
+    const g = this.bound?.game;
+    if (g && g.sim.view.clock().skipping) return true;
+    return isTypingTarget(document.activeElement) && this.root.contains(document.activeElement);
+  }
+
+  setScreen(screen: UiScreen, info?: { progress?: number; label?: string }): void {
+    const prev = this.screen;
+    this.screen = screen;
+    if (screen === 'menu') {
+      this.unbind();
+      this.loading.hide();
+      this.hud.setVisible(false);
+      this.pendingBirth = false;
+      this.menu.open(this.afterMenu ?? 'main');
+      this.afterMenu = null;
+    } else if (screen === 'loading') {
+      this.menu.hide();
+      this.hud.setVisible(false);
+      this.loading.show(info);
+    } else {
+      this.menu.hide();
+      this.loading.hide();
+      const g = this.host.game();
+      if (g) this.bind(g);
+      if (prev !== 'game' || this.pendingBirth) this.afterEnterGame();
+    }
+  }
+
+  open(req: UiRequest): void { this.openPanel(req); }
+
+  onEscape(): boolean {
+    return this.handleEscape();
+  }
+
+  dispose(): void {
+    this.unbind();
+    this.tooltips.dispose();
+    for (const off of this.offs) off();
+    this.root.remove();
+  }
+
+  // ---------------------------------------------------------------------------------- GameUIExt
+
+  openPanel(req: PanelRequest): void {
+    if (this.screen !== 'game' || !this.bound) return;
+    const holder: { panel: UiPanel | null; cleanups: Array<() => void> } = { panel: null, cleanups: [] };
+    const ctx = this.makeCtx(holder);
+    let panel: UiPanel;
+    try {
+      panel = createPanel(ctx, req, this.hooks);
+    } catch (err) {
+      console.error('panel failed', req, err);
+      this.say('warn', 'That page of the book will not open.');
+      return;
+    }
+    holder.panel = panel;
+    this.records.set(panel, { panel, cleanups: holder.cleanups });
+    this.stack.open(panel);
+  }
+
+  closePanel(id: string): void { this.stack.close(id); }
+  isOpen(id: string): boolean { return this.stack.has(id); }
+  openPanels(): string[] { return this.stack.all().map((p) => p.id); }
+
+  showMenu(view: MenuView): void {
+    this.setScreen('menu');
+    this.menu.go(view);
+  }
+
+  showBirth(): void { this.openPanel({ panel: 'birth' }); }
+
+  // ---------------------------------------------------------------------------------- screens
+
+  private afterEnterGame(): void {
+    const g = this.bound?.game;
+    if (!g) return;
+    this.hud.reset();
+    this.feed.clear();
+    this.toasts.clear();
+    this.lastEncounterKey = '';
+    const run = g.sim.state.run;
+    if (run.phase === 'choosing') { this.hud.setVisible(false); this.openPanel({ panel: 'death' }); return; }
+    this.hud.setVisible(true);
+    if (this.pendingBirth) {
+      this.pendingBirth = false;
+      this.openPanel({ panel: 'birth' });
+    }
+    this.lastChronicle = g.sim.state.chronicle[g.sim.state.chronicle.length - 1] ?? null;
+  }
+
+  private async startRun(opts: { difficulty: Difficulty; statUpgrades: StatUpgrades }): Promise<void> {
+    this.pendingBirth = true;
+    try {
+      await this.host.startNewRun(opts);
+    } catch (err) {
+      this.pendingBirth = false;
+      throw err;
+    }
+  }
+
+  private async continueRun(): Promise<void> {
+    try {
+      await this.host.continueRun();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  /** From the pause menu and the game-over screen. */
+  async leaveToMenu(then?: MenuView): Promise<void> {
+    this.afterMenu = then ?? null;
+    this.stack.clear();
+    try {
+      await this.host.quitToMenu();
+    } finally {
+      if (this.screen === 'game') this.setScreen('menu');
+    }
+  }
+
+  // ---------------------------------------------------------------------------------- binding
+
+  private bind(game: GameServices): void {
+    this.unbind();
+    const sim = game.sim;
+    const ev = sim.events;
+    const pid = (): PersonId => sim.state.run.playerId;
+    const pause = new PauseController({
+      paused: () => sim.clock.paused,
+      pause: () => sim.dispatch({ type: 'pause' }).ok,
+      resume: () => sim.dispatch({ type: 'resume' }).ok,
+    });
+    const offs: Array<() => void> = [];
+    this.bound = { game, offs, pause };
+    const eco = game.economy;
+    offs.push(
+      ev.on('notify', (n) => { const f = feedForNotify(n, pid()); if (f) this.feed.push(f, this.clock); }),
+      ev.on('points', (p) => this.toasts.push(toastForPoints(p), this.clock)),
+      ev.on('skillLevel', (e) => { const t = toastForSkillLevel(e, pid()); if (t) this.toasts.push(t, this.clock); }),
+      ev.on('rankChanged', (e) => { const t = toastForRank(e, pid()); if (t) this.toasts.push(t, this.clock); }),
+      ev.on('action', (e) => {
+        if (e.type !== 'completed' || e.actor !== pid() || !e.outcome.gains?.length) return;
+        this.hud.addGains(e.outcome.gains.map((g) => gainChip(g, (ref) => { const good = eco.good(ref); return good ? GOOD_ICON[good.category] : undefined; })));
+      }),
+      ev.on('trade', (e) => { const f = feedForTrade(e, pid(), (item, qty) => eco.describe(item, qty)); if (f) this.feed.push(f, this.clock); }),
+      ev.on('opinion', (e) => { const f = feedForOpinion(e, pid(), (id) => this.nameOf(id)); if (f) this.feed.push(f, this.clock); }),
+      ev.on('travel', (e) => { const f = feedForTravel(e, (id) => this.placeName(id)); if (f) this.feed.push(f, this.clock); }),
+      ev.on('skip', (e) => {
+        if (e.phase === 'start') this.hud.setSkipLabel(e.label);
+        const f = feedForSkip(e);
+        if (f) this.feed.push(f, this.clock);
+      }),
+      ev.on('saved', () => this.hud.flashSaved(this.clock)),
+      ev.on('chronicle', (e) => this.feedChronicle(e)),
+      ev.on('playerDied', () => this.onPlayerDied()),
+      ev.on('playerSwitched', (e) => this.onPlayerSwitched(e)),
+      ev.on('gameOver', (e) => this.onGameOver(e)),
+    );
+    this.hud.reset();
+  }
+
+  private unbind(): void {
+    const b = this.bound;
+    if (!b) { this.stack.clear(); return; }
+    this.bound = null;
+    this.stack.clear();
+    for (const off of b.offs) off();
+    b.pause.forget();
+    this.feed.clear();
+    this.toasts.clear();
+  }
+
+  // ---------------------------------------------------------------------------------- events
+
+  private onPlayerDied(): void {
+    this.stack.clear();
+    this.hud.setVisible(false);
+    this.openPanel({ panel: 'death' });
+  }
+
+  private onPlayerSwitched(e: SimEvents['playerSwitched']): void {
+    this.stack.close('death');
+    for (const p of [...this.stack.all()]) if (p.group === 'main' || p.group === 'talk') this.stack.close(p.id);
+    this.hud.setVisible(true);
+    this.hud.reset();
+    const g = this.bound?.game;
+    if (g) {
+      const to = g.sim.state.persons.get(e.to);
+      if (to) this.toasts.push({ tone: 'gold', icon: 'user', title: e.reason === 'death' ? 'You carry on' : 'A new life', text: `You are now ${fullName(to)}.`, ttl: 6, key: 'switched' }, this.clock);
+    }
+  }
+
+  private onGameOver(e: SimEvents['gameOver']): void {
+    // the death screen (if any) stays under the game-over card until the player moves on
+    this.stack.close('death');
+    this.hud.setVisible(false);
+    this.openPanel({ panel: 'gameover', summary: e });
+  }
+
+  private onEncounter(): void {
+    const t = this.bound?.game.player.hud()?.travel;
+    if (!t || t.phase !== 'encounter') return;
+    const key = `${t.to}:${t.encounter?.label ?? ''}:${Math.round(t.progress * 100)}`;
+    if (key === this.lastEncounterKey) return;
+    this.lastEncounterKey = key;
+    if (!this.stack.has('encounter')) this.openPanel({ panel: 'encounter' });
+  }
+
+  private feedChronicle(e: ChronicleEntry): void {
+    const g = this.bound?.game;
+    if (!g) return;
+    const player = g.sim.state.persons.get(g.sim.state.run.playerId);
+    if (!player) return;
+    const family = new Set(familyOf(g.sim.state, player, 3).keys());
+    const f = feedForChronicle(e, family);
+    if (f) this.feed.push(f, this.clock);
+  }
+
+  /** The sim core only appends to `state.chronicle`; new entries about the family become feed lines. */
+  private pollChronicle(): void {
+    const g = this.bound?.game;
+    if (!g) return;
+    const list = g.sim.state.chronicle;
+    if (!list.length) return;
+    let i = list.length - 1;
+    const fresh: ChronicleEntry[] = [];
+    while (i >= 0 && list[i] !== this.lastChronicle && fresh.length < 12) { fresh.push(list[i]); i--; }
+    if (!fresh.length) return;
+    this.lastChronicle = list[list.length - 1];
+    for (let k = fresh.length - 1; k >= 0; k--) this.feedChronicle(fresh[k]);
+  }
+
+  // ---------------------------------------------------------------------------------- panels
+
+  private makeCtx(holder: { panel: UiPanel | null; cleanups: Array<() => void> }): PanelCtx {
+    const g = (this.bound as Bound).game;
+    const sim = g.sim;
+    return {
+      host: this.host, game: g, sim, eco: g.economy, social: g.social, player: g.player, zone: g.zone,
+      playerId: () => sim.state.run.playerId,
+      settings: () => this.host.settings(),
+      now: () => this.clock,
+      open: (req) => this.openPanel(req),
+      close: () => { if (holder.panel) this.stack.close(holder.panel.id); },
+      closeId: (id) => { this.stack.close(id); },
+      listen: (type, fn) => { holder.cleanups.push(sim.events.on(type, fn)); },
+      interval: (ms, fn) => { const t = window.setInterval(fn, ms); holder.cleanups.push(() => window.clearInterval(t)); },
+      say: (kind, text) => this.say(kind, text),
+      toast: (t) => this.toasts.push(t, this.clock),
+      confirm: (o) => this.confirm(o),
+      dispatch: (cmd: Command): CommandResult => sim.dispatch(cmd),
+      nameOf: (id) => this.nameOf(id),
+      placeName: (id) => this.placeName(id),
+      describe: (key, qty) => g.economy.describe(key, qty),
+    };
+  }
+
+  private confirm(o: ConfirmOptions): void {
+    this.openPanel({ panel: 'confirm', options: o });
+  }
+
+  private onPanelShown(p: UiPanel): void {
+    this.panelLayer.appendChild(p.el);
+    p.mount?.();
+    if (p.captures && document.pointerLockElement) document.exitPointerLock?.();
+  }
+
+  private onPanelHidden(p: UiPanel): void {
+    const rec = this.records.get(p);
+    this.records.delete(p);
+    if (rec) for (const c of rec.cleanups) c();
+    p.dispose?.();
+    this.tooltips.hide();
+    if (this.root.classList.contains('mu-still')) { p.el.remove(); return; }
+    p.el.classList.add('leaving');
+    window.setTimeout(() => p.el.remove(), 130);
+  }
+
+  private toggleOrOpen(req: PanelRequest): void {
+    const id = req.panel;
+    if (this.stack.has(id)) { this.stack.close(id); return; }
+    this.openPanel(req);
+  }
+
+  private say(kind: FeedKind, text: string): void { this.feed.push({ kind, text }, this.clock); }
+
+  private nameOf(id: PersonId): string {
+    const p = this.bound?.game.sim.state.persons.get(id);
+    return p ? fullName(p) : 'someone';
+  }
+
+  private placeName(id: number): string {
+    const sim = this.bound?.game.sim;
+    return sim ? settlementName(sim.world, id) || 'the road' : 'the road';
+  }
+
+  // ---------------------------------------------------------------------------------- pause and settings
+
+  private menuPauseSetting(): boolean { return this.host.settings().pauseInMenus ?? true; }
+
+  private syncPause(): void {
+    const b = this.bound;
+    if (!b) return;
+    b.pause.sync(this.stack.wantsPause(this.menuPauseSetting()));
+  }
+
+  private syncMenuPauseSetting(): void {
+    const v = this.menuPauseSetting();
+    if (v !== this.lastMenuPause) { this.lastMenuPause = v; this.syncPause(); }
+  }
+
+  private onSettingsChanged(): void {
+    this.applySettings();
+    this.syncPause();
+  }
+
+  private applySettings(): void {
+    const s = Math.max(0.8, Math.min(1.4, this.host.settings().uiScale || 1));
+    this.scale = this.host.settings().uiScale;
+    const r = this.root.style;
+    if (Math.abs(s - 1) < 0.001) {
+      r.transform = '';
+      r.width = '';
+      r.height = '';
+    } else {
+      r.transformOrigin = '0 0';
+      r.transform = `scale(${s})`;
+      r.width = `${100 / s}%`;
+      r.height = `${100 / s}%`;
+    }
+    this.tooltips.setScale(s);
+  }
+
+  // ---------------------------------------------------------------------------------- keyboard
+
+  private onKeyDown(e: KeyboardEvent): void {
+    if (e.repeat && e.code !== 'ArrowUp' && e.code !== 'ArrowDown') {
+      if (e.code === 'Tab' && this.screen === 'game') e.preventDefault();
+      return;
+    }
+    const intent = keyIntent(e.code, { typing: isTypingTarget(e.target), ctrl: e.ctrlKey, alt: e.altKey, meta: e.metaKey });
+    if (this.screen === 'game' && e.code === 'Tab' && !e.ctrlKey && !e.altKey && !e.metaKey && !isTypingTarget(e.target)) e.preventDefault();
+    if (!intent) return;
+    if (this.screen === 'menu') {
+      if (intent.type === 'escape' && this.menu.back()) { e.preventDefault(); e.stopPropagation(); }
+      return;
+    }
+    if (this.screen !== 'game' || !this.bound) return;
+    if (intent.type === 'escape') {
+      if (this.handleEscape()) { e.preventDefault(); e.stopPropagation(); }
+      return;
+    }
+    if (this.dispatchKey(intent, e)) { e.preventDefault(); e.stopPropagation(); }
+  }
+
+  private dispatchKey(intent: KeyIntent, e: KeyboardEvent): boolean {
+    const top = this.stack.top();
+    if (intent.type === 'toggle') {
+      // screens (pause, death, birth…) and conversations own the keyboard
+      if (top && (top.group === 'screen' || top.group === 'talk' || top.escape === 'ignore')) return false;
+      if (this.bound?.game.sim.state.run.phase !== 'alive') return false;
+      this.togglePanelKey(intent.panel);
+      return true;
+    }
+    if (top?.key?.(intent, e)) return true;
+    if (intent.type === 'enter' && !top) {
+      const req = this.toasts.pendingAction();
+      if (req) { this.toasts.dismissAction(); this.openPanel(req); return true; }
+    }
+    return false;
+  }
+
+  private togglePanelKey(key: PanelKey): void {
+    const req: PanelRequest =
+      key === 'command' ? { panel: 'ledger', tab: 'household' } :
+      key === 'map' ? { panel: 'map' } :
+      { panel: key } as PanelRequest;
+    const id = key === 'command' ? 'ledger' : key;
+    if (this.stack.has(id)) this.stack.close(id);
+    else this.openPanel(req);
+  }
+
+  /** Esc: wake from a skip, close the top panel (or step back inside it), else open the pause menu. */
+  private handleEscape(): boolean {
+    if (this.screen === 'menu') return this.menu.back();
+    if (this.screen !== 'game' || !this.bound) return false;
+    const now = performance.now();
+    if (now - this.lastEscapeAt < ESCAPE_DEBOUNCE_MS) return true;
+    this.lastEscapeAt = now;
+    const g = this.bound.game;
+    if (g.sim.view.clock().skipping) { g.sim.dispatch({ type: 'cancelSkip' }); return true; }
+    const top = this.stack.top();
+    if (top) {
+      if (top.onEscape?.()) return true;
+      this.stack.escape();
+      return true;
+    }
+    if (g.sim.state.run.phase !== 'alive') return true;
+    this.openPanel({ panel: 'pause' });
+    return true;
+  }
+
+  // used by panels through the pause menu
+  get game(): GameServices | null { return this.bound?.game ?? null; }
+
+  profileGold(): number { return levelProfile(this.host.profile()).legacyGold; }
+}
+
+export function createUiApp(parent: HTMLElement, host: UiHost): UiApp { return new UiApp(parent, host); }
