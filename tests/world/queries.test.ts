@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { BUILDINGS } from '../../src/content/types';
 import { Biome, CHUNKS_PER_SIDE, CHUNK_SIZE, Ground, SEA_LEVEL, WORLD_SIZE, type ScatterKind } from '../../src/world/types';
 import { pointInPolygon } from '../../src/core/math';
+import { bilerp } from '../../src/world/grid';
 import type { World } from '../../src/world/world';
 import { worldFor } from './helpers';
 
@@ -167,7 +168,7 @@ describe('queries', () => {
       const b = w.biomeAt(x, z), g = w.groundAt(x, z);
       if (g === Ground.Road || g === Ground.Path || g === Ground.Cobbles) roadCosts.push(c);
       else if (b === Biome.Marsh && c !== Infinity) { expect(c).toBeGreaterThanOrEqual(2.2); marsh++; }
-      else if ((b === Biome.Broadleaf || b === Biome.Pine) && w.forestAt(x, z) > 0.6 && c !== Infinity) { expect(c).toBeGreaterThanOrEqual(1.3); forest++; }
+      else if ((b === Biome.Broadleaf || b === Biome.Pine) && w.forestAt(x, z) > 0.6 && bilerp(w.s.forest, x, z) / 255 > 0.55 && c !== Infinity) { expect(c).toBeGreaterThanOrEqual(1.35); forest++; }
       else if (b === Biome.Meadow && g !== Ground.Field && g !== Ground.Yard && c !== Infinity && w.forestAt(x, z) < 0.05 && w.s.slope[Math.floor(z / 31.25) * 512 + Math.floor(x / 31.25)] < 0.05) { expect(c).toBeLessThan(1.4); open++; }
     }
     expect(open).toBeGreaterThan(50); expect(forest).toBeGreaterThan(20); expect(marsh).toBeGreaterThan(10);

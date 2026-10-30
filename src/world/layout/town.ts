@@ -124,14 +124,15 @@ function placeMarket(ctx: LayoutCtx, id: number, cx: number, cz: number, axis: P
   ctx.reserve([corner(-1, -1), corner(-1, 1), corner(1, 1), corner(1, -1)], id);
   const ig = { ignoreTags: [TAG.blocker] };
   // market cross near the middle, beside the road
-  for (const r of [6, 8, 10, 12]) {
-    let done = false;
-    for (let a = 0; a < 8 && !done; a++) {
-      const ang = (a / 8) * Math.PI * 2;
-      done = !!ctx.place(id, 'market_cross', cx + Math.cos(ang) * r, cz + Math.sin(ang) * r, 0, { role: 'market', ...ig });
+  let cross = false;
+  for (const r of [6, 8, 10, 12, 15, 19, 24, 30, 38]) {
+    for (let a = 0; a < 12 && !cross; a++) {
+      const ang = (a / 12) * Math.PI * 2 + 0.3;
+      cross = !!ctx.place(id, 'market_cross', cx + Math.cos(ang) * r, cz + Math.sin(ang) * r, 0, { role: 'market', ...ig });
     }
-    if (done) break;
+    if (cross) break;
   }
+  if (!cross) ctx.bump('town.nomarketcross');
   // stalls on both sides of the main street
   const nStalls = isCity ? 12 : 7;
   let placed = 0;

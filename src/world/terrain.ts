@@ -110,36 +110,9 @@ export function generateTerrain(s: GenState): void {
   }
   lap(s, 't.potential');
 
-  const targetLand = rng.range(0.57, 0.605);
-  const T0 = quantile(P, targetLand - 0.02);
-  s.timings['t.T0'] = T0;
-
-  // offshore islands: bumps in the potential where the sea is deep enough
-  const nIsl = rng.int(3, 6);
-  const islands: { u: number; v: number; r: number }[] = [];
-  for (let attempt = 0; attempt < 300 && islands.length < nIsl; attempt++) {
-    const u = rng.range(0.1, 0.9), v = rng.range(0.1, 0.9);
-    const k = Math.floor(v * N) * N + Math.floor(u * N);
-    const ed = Math.min(u, 1 - u, v, 1 - v) * WORLD_SIZE;
-    if (P[k] > T0 - 0.10 || P[k] < T0 - 0.6 || ed < 1500) continue;
-    let ok = true;
-    for (const o of islands) if (Math.hypot(o.u - u, o.v - v) < 0.12) ok = false;
-    if (!ok) continue;
-    islands.push({ u, v, r: rng.range(0.012, 0.04) });
-  }
-  for (const o of islands) {
-    const r = o.r;
-    const i0 = Math.max(0, Math.floor((o.u - r * 3) * N)), i1 = Math.min(N - 1, Math.ceil((o.u + r * 3) * N));
-    const j0 = Math.max(0, Math.floor((o.v - r * 3) * N)), j1 = Math.min(N - 1, Math.ceil((o.v + r * 3) * N));
-    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
-      const u = (i + 0.5) / N, v = (j + 0.5) / N;
-      const d2 = ((u - o.u) ** 2 + (v - o.v) ** 2) / (r * r);
-      const wob = 0.22 * nCoast.fbm(u * 26 + 3.1, v * 26 + 8.8, 3);
-      P[j * N + i] += 0.95 * Math.exp(-d2) + wob * Math.exp(-d2 * 0.35);
-    }
-  }
-  const T = quantile(P, targetLand);
-  lap(s, 't.islands');
+  const targetLand = rng.range(0.585, 0.62);
+  // the continent takes about 1.2 % less than the target: the offshore islands make up the rest
+  const T = quantile(P, targetLand - 0.012);
   s.timings['t.T'] = T;
 
   // ---------- land mask clean-up ----------
@@ -149,6 +122,34 @@ export function generateTerrain(s: GenState): void {
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
     if (i < hardMargin || j < hardMargin || i >= N - hardMargin || j >= N - hardMargin) land[j * N + i] = 0;
   }
+  // offshore islands, stamped into the mask: each sits 0.9-3 km off the mainland coast, clear of it and of each other
+  {
+    const nIsl = rng.int(3, 6);
+    const dLand = distanceTransform(land); // metres to the nearest land cell
+    const placed: { i: number; j: number; R: number }[] = [];
+    const nIsle = new Simplex2(rng.fork('isles'));
+    for (let attempt = 0; attempt < 600 && placed.length < nIsl; attempt++) {
+      const R = rng.range(7, 20); // cells: roughly 220-620 m across the core
+      const i = rng.int(hardMargin + 40, N - hardMargin - 41), j = rng.int(hardMargin + 40, N - hardMargin - 41);
+      const reach = R * 1.5;
+      const d = dLand[j * N + i];
+      if (land[j * N + i] || d < (reach + 12) * CELL || d > (reach + 12) * CELL + 2600) continue;
+      let ok = true;
+      for (const o of placed) if (Math.hypot(o.i - i, o.j - j) < (reach + o.R * 1.5) + 36) { ok = false; break; }
+      if (!ok) continue;
+      placed.push({ i, j, R });
+      const i0 = Math.floor(i - reach - 1), i1 = Math.ceil(i + reach + 1), j0 = Math.floor(j - reach - 1), j1 = Math.ceil(j + reach + 1);
+      for (let jj = j0; jj <= j1; jj++) for (let ii = i0; ii <= i1; ii++) {
+        const dx = ii - i, dz = jj - j;
+        const r = Math.hypot(dx, dz);
+        // a lobed, noisy outline rather than a disc
+        const lobe = 1 + 0.34 * nIsle.fbm(Math.cos(Math.atan2(dz, dx)) * 1.6 + placed.length * 7.1, Math.sin(Math.atan2(dz, dx)) * 1.6 + 3.7, 3);
+        if (r < R * lobe) land[jj * N + ii] = 1;
+      }
+    }
+    s.timings['t.islandsPlaced'] = placed.length;
+  }
+  lap(s, 't.islands');
   const majority = (src: Uint8Array): Uint8Array => {
     const out = new Uint8Array(NN);
     for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
@@ -292,8 +293,8 @@ export function generateTerrain(s: GenState): void {
   {
     let peak = 0;
     for (let k = 0; k < NN; k++) if (height[k] > peak) peak = height[k];
-    const wanted = rng.range(1020, 1180);
-    if (peak > 320 && (peak < 980 || peak > 1250)) {
+    const wanted = rng.range(1020, 1150);
+    if (peak > 320 && (peak < 1000 || peak > 1150)) {
       const f = (wanted - 300) / (peak - 300);
       for (let k = 0; k < NN; k++) if (height[k] > 300) height[k] = 300 + (height[k] - 300) * f;
     }
