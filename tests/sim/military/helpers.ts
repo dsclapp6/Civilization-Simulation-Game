@@ -1,14 +1,16 @@
 // Helpers for the military tests: a simulation with economy and military installed, plus small fakes for the
 // other wave 3 modules (politics with scripted wars; combat with deterministic harm).
 import { installEconomy, type EconomyRuntime } from '../../../src/sim/economy';
-import { installMilitary } from '../../../src/sim/military';
+import { installMilitary, militaryContext } from '../../../src/sim/military';
 import type { MilitaryRuntime } from '../../../src/sim/military/types';
 import { installSocial } from '../../../src/sim/social';
 import type { Simulation } from '../../../src/sim/sim';
+import type { ZoneApi } from '../../../src/agents/types';
+import type { PlayerApi } from '../../../src/player/types';
 import type { SocialApi } from '../../../src/sim/social/types';
 import type { HouseId, Person } from '../../../src/sim/state';
 import type { CombatApi, FightResult, HarmResult, PoliticsApi, WarView } from '../../../src/sim/wave3';
-import { newSim, type TestSimOptions } from '../helpers';
+import { autoSuccessor, newSim, type TestSimOptions } from '../helpers';
 
 export interface MilSim {
   sim: Simulation;
@@ -17,12 +19,31 @@ export interface MilSim {
   mil: MilitaryRuntime;
 }
 
-export function milSim(opts: TestSimOptions = {}): MilSim {
+export interface FakeBody { x: number; z: number; moves: number }
+
+export function milSim(opts: TestSimOptions & { body?: boolean } = {}): MilSim & { body: FakeBody; commands: Array<{ person: number; order: unknown }>; summoned: number[] } {
   const sim = newSim({ preset: 'small', ...opts });
   const social = installSocial(sim);
   const eco = installEconomy(sim, { social });
-  const mil = installMilitary(sim, { economy: eco, social });
-  return { sim, eco, social, mil };
+  // with `body: true` a stand-in player controller and detail zone are given to the module (they only record)
+  const body: FakeBody = { x: 0, z: 0, moves: 0 };
+  const commands: Array<{ person: number; order: unknown }> = [];
+  const summoned: number[] = [];
+  const player = opts.body ? {
+    body: () => ({ x: body.x, y: 0, z: body.z, yaw: 0 }),
+    placeAt: (x: number, z: number) => { body.x = x; body.z = z; body.moves++; },
+  } as unknown as PlayerApi : undefined;
+  const zone = opts.body ? {
+    nav: { walkable: () => true, nearestWalkable: () => false },
+    agent: () => null, agents: () => [],
+    command: (person: number, order: unknown) => { commands.push({ person, order }); },
+    summon: (person: number) => { summoned.push(person); },
+    dismiss: () => undefined,
+  } as unknown as ZoneApi : undefined;
+  const mil = installMilitary(sim, { economy: eco, social, player, zone });
+  // a long run must not end in game over when the random player dies
+  autoSuccessor(sim);
+  return { sim, eco, social, mil, body, commands, summoned };
 }
 
 /** A scripted politics module: wars are whatever the test puts in `wars`. */
@@ -36,6 +57,9 @@ export function fakePolitics(sim: Simulation): FakePolitics {
   const wars_: WarView[] = [];
   const reports: FakePolitics['reports'] = [];
   const liege = new Map<HouseId, HouseId>();
+  // the lieges as the titles give them (the real politics module owns this once it exists)
+  const M = militaryContext(sim);
+  for (const h of sim.state.houses.values()) liege.set(h.id, M.realm.liege(h.id));
   const api: FakePolitics = {
     wars_, reports, liege,
     stance: (a, b) => (wars_.some((w) => (w.attackers.includes(a) && w.defenders.includes(b)) || (w.attackers.includes(b) && w.defenders.includes(a))) ? 'war' : 'neutral'),
@@ -46,6 +70,7 @@ export function fakePolitics(sim: Simulation): FakePolitics {
     reportBattle: (war, attackerWon, weight) => { reports.push({ war, attackerWon, weight }); },
   };
   sim.services.politics = api;
+  M.realm.invalidate();
   return api;
 }
 

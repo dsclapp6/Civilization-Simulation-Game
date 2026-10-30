@@ -1,17 +1,17 @@
 import { describe, it } from 'vitest';
+import { militaryContext } from '../../../src/sim/military';
 import { milSim } from './helpers';
 
 describe('explore', () => {
-  it('prints forces', () => {
-    const { sim, mil } = milSim({ preset: 'large', seed: 'explore' });
+  it('prints realm', () => {
+    const { sim } = milSim({ preset: 'small', seed: 'siege-a' });
+    const M = militaryContext(sim);
     const rows: string[] = [];
-    let n = 0;
-    for (const h of sim.state.houses.values()) {
-      if (h.kind !== 'royal' && h.kind !== 'noble') continue;
-      const f = mil.forces(h.id);
-      if (n++ < 40 || h.kind === 'royal') rows.push(`${h.id} ${h.kind} ${h.name} seat=${h.seat} ret=${f.retinue} gar=${f.garrison} pool=${f.levyPool} mil=${f.militia} str=${f.strength}`);
+    for (const s of sim.world.settlements) {
+      const lord = M.realm.lordHouse(s.id);
+      rows.push(`${s.id} ${s.kind} k${s.kingdom} lord=${lord} chain=${M.realm.chain(lord).join('>')}`);
     }
     console.log(rows.join('\n'));
-    console.log('settlements', sim.world.settlements.length, 'houses', sim.state.houses.size, 'pop', sim.state.population);
+    console.log([...sim.state.houses.values()].filter((h) => h.kind === 'royal').map((h) => `${h.id}:${h.seat}`).join(' '));
   });
 });

@@ -97,7 +97,7 @@ export class SiegeSystem {
     if (this.recOf(sid)) return null;
     const rec: SiegeRec = {
       settlement: sid, army: a.id, house: a.house, war: M.realm.warBetween(a.house, M.realm.lordHouse(sid)).war, since: M.day,
-      blockadeDays: 0, rams: 0, ladders: false, trebuchets: 0, mine: 0, lastAssault: -9, assaults: 0, morale: 0.75,
+      blockadeDays: 0, food: this.provisions(sid), rams: 0, ladders: false, trebuchets: 0, mine: 0, lastAssault: -9, assaults: 0, morale: 0.75,
     };
     M.data.sieges.push(rec);
     M.data.stats.sieges++;
@@ -146,10 +146,11 @@ export class SiegeSystem {
 
     // blockade: the besieged eat their stores, nothing comes in
     const pop = inhabitants(M, sid);
-    const eaten = pop * CFG.siege.foodPerPerson;
-    const had = drainStores(M, sid, eaten * 4);
+    const eaten = pop * CFG.ration;
+    drainStores(M, sid, eaten);
     rec.blockadeDays++;
-    const starving = had < eaten * 4 * 0.5;
+    rec.food = Math.max(0, rec.food - eaten);
+    const starving = rec.food <= 0;
     const ss = M.state.settlementState(sid);
     if (ss) { ss.prosperity = Math.max(0.3, ss.prosperity - (starving ? 0.08 : 0.02)); M.state.touchSettlement(ss); }
     rec.morale = Math.max(0, Math.min(1, rec.morale - (starving ? 0.06 : 0.012) + (men < 20 ? 0.02 : 0)));
@@ -191,6 +192,14 @@ export class SiegeSystem {
     // assault: when the engines are ready and the odds are fair (the AI is patient, not reckless)
     if (now - rec.lastAssault >= CFG.siege.assaultGap && this.readyToStorm(rec, a)) this.assault(rec, a);
     void kinds;
+  }
+
+  /** Food inside when the ring closes: the households' stores, and a stronghold's laid-in provisions (a fortified place is stocked for a siege). */
+  private provisions(sid: number): number {
+    const M = this.M;
+    const stock = foodStock(M, sid);
+    const fortified = fortifications(M, sid).length > 0;
+    return fortified ? Math.max(stock, inhabitants(M, sid) * 18) : stock;
   }
 
   private famine(sid: number): void {
@@ -342,16 +351,13 @@ export class SiegeSystem {
 
   view(rec: SiegeRec): SiegeView {
     const M = this.M;
-    const food = foodStock(M, rec.settlement);
     const pop = Math.max(1, inhabitants(M, rec.settlement));
-    const a = M.army(rec.army);
     return {
       settlement: rec.settlement, name: M.placeName(rec.settlement), besieger: rec.house, army: rec.army, since: rec.since,
-      foodDays: Math.round((food / (pop * CFG.siege.foodPerPerson * 4)) * 10) / 10,
+      foodDays: Math.round((rec.food / (pop * CFG.ration)) * 10) / 10,
       walls: Math.round(wallIntegrity(M, rec.settlement) * 100) / 100,
       defenders: defendersOf(M, rec.settlement, M.realm.lordHouse(rec.settlement)).people.length,
       morale: Math.round(rec.morale * 100) / 100, rams: rec.rams, trebuchets: rec.trebuchets, mine: Math.min(1, rec.mine),
-      ...(a ? {} : {}),
     };
   }
 

@@ -177,7 +177,8 @@ export function raise(M: Mil, house: HouseId, reason: string, opts: RaiseOptions
     M.data.player.call = cu;
     M.notify(`${M.houseName(call.house)} calls the levy: report to ${M.placeName(seat)} within ${Math.max(1, Math.ceil(cu.due - now))} days.`, 'quest', playerId);
     M.sim.events.emit('ui', { panel: 'ext', name: 'army' });
-  } else if (householdCall.length > 0 && M.playerId) {
+  }
+  if (householdCall.length > 0 && M.playerId) {
     M.notify(`${householdCall.length} men of your household are called to the muster at ${M.placeName(seat)}.`, 'warn', M.playerId);
   }
   if (M.concernsPlayer(house, ...a.vassals) || a.men.length >= 40) {

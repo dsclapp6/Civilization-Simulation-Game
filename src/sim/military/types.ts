@@ -109,6 +109,8 @@ export interface SiegeRec {
   since: number;
   /** Days the stores have been drained. */
   blockadeDays: number;
+  /** Man-days of food left inside (the garrison's provisions and what the households held when the ring closed). */
+  food: number;
   /** Siege engines built: rams, ladders ready, trebuchets, mine progress 0..1. */
   rams: number;
   ladders: boolean;
