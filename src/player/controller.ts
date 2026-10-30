@@ -18,6 +18,7 @@ import { ageYears, fullName, type Person, type PersonId } from '../sim/state';
 import { doorPoint } from '../sim/view-impl';
 import { formatMoney } from '../sim/money';
 import type { FightResult, PlayerCombatFrame, PlayerCombatPort, PlayerCombatPose } from '../sim/wave3';
+import type { PlayerCombatHud } from './types';
 import type { WorldModel } from '../world/types';
 import {
   DISMOUNT_SECONDS, MOUNT_SECONDS, createBody, placeBody, stepBody, type BodyEnv, type BodyState, type BodyTraits,
@@ -98,6 +99,8 @@ export class PlayerController implements PlayerApi {
   /** The pose of the current step (null when nothing combat-like is asked of the body). */
   private combatPose: PlayerCombatPose | null = null;
   private readonly combatInput: InputState = { ...EMPTY_INPUT };
+  /** What the HUD draws of the fight (reused object); `hitSeq` counts blows taken. */
+  private readonly hudCombat: PlayerCombatHud = { engaged: false, state: 'ready', ranged: false, hitSeq: 0 };
   /** A road fight in progress: the journey it interrupted and the way to stop listening for its end. */
   private fighting: { journey: Journey; data: EncounterData; id: number; off: () => void } | null = null;
   private shownArmour = '';
@@ -362,7 +365,33 @@ export class PlayerController implements PlayerApi {
     h.speed = b.speed;
     h.gait = b.sitting ? 'sit' : b.gait;
     h.following = this.followId ? this.nameOf(this.followId) : null;
+    h.combat = this.combat() ? this.hudCombat : undefined;
     return h;
+  }
+
+  /** Refreshes the fighting state for the HUD from the pose the combat module last asked of the body (every sub-step, so no blow is missed). */
+  private combatHud(): PlayerCombatHud {
+    const c = this.hudCombat;
+    const cp = this.combatPose;
+    const a = cp?.anim ?? null;
+    let state: PlayerCombatHud['state'] = 'ready';
+    if (this.avatar.dodgeT > 0) state = 'roll';
+    else if (a === null) state = 'ready';
+    else if (a.startsWith('attack_') || a === 'ride_charge') state = 'attack';
+    else if (a === 'block') state = 'guard';
+    else if (a === 'draw_bow') state = 'draw';
+    else if (a === 'aim_bow' || a === 'aim_crossbow') state = 'aim';
+    else if (a === 'shoot_bow' || a === 'shoot_crossbow') state = 'shoot';
+    else if (a === 'reload_crossbow') state = 'reload';
+    else if (a === 'hit') state = 'hit';
+    else if (a === 'stagger') state = 'stagger';
+    else if (a === 'fall' || a === 'dead') state = 'down';
+    if ((state === 'hit' || state === 'stagger' || state === 'down') && c.state !== state && c.state !== 'stagger' && c.state !== 'down') c.hitSeq++;
+    c.state = state;
+    c.engaged = cp?.engaged ?? false;
+    const main = cp?.mainHand ?? null;
+    c.ranged = state === 'draw' || state === 'aim' || state === 'shoot' || state === 'reload' || main === 'longbow' || main === 'shortbow' || main === 'crossbow';
+    return c;
   }
 
   target(): InteractCandidate | null { return this.dead || this.journey?.encounter ? null : this.interaction.target; }
@@ -637,7 +666,7 @@ export class PlayerController implements PlayerApi {
   private stepCombat(p: Person, working: boolean, held: boolean, dt: number): PlayerCombatPose | null {
     const port = this.combat();
     this.combatPose = null;
-    if (!port || this.journey?.state.phase === 'travelling') return null;
+    if (!port || this.journey?.state.phase === 'travelling') { this.combatHud(); return null; }
     const b = this.avatar;
     const f = this.cframe;
     f.person = p.id; f.x = b.x; f.y = b.y; f.z = b.z; f.yaw = b.yaw; f.speed = b.speed; f.mounted = b.mounted !== null;
@@ -646,8 +675,9 @@ export class PlayerController implements PlayerApi {
     f.dt = dt;
     port.step(f, this.cpose);
     const pose = this.cpose;
-    if (!pose.engaged && pose.anim === null && pose.moveScale === 1 && pose.staminaCost === 0 && pose.effort === 0 && pose.faceYaw === null) return null;
+    if (!pose.engaged && pose.anim === null && pose.moveScale === 1 && pose.staminaCost === 0 && pose.effort === 0 && pose.faceYaw === null) { this.combatHud(); return null; }
     this.combatPose = pose;
+    this.combatHud();
     return pose;
   }
 

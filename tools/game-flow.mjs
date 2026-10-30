@@ -151,6 +151,44 @@ try {
   await tick(0.2);
   check('Resume closes it', (await ui()).panels.length === 0);
 
+  // ---- the wave 3 pages are reachable by key and from the dock; notices open the right page; the guide speaks
+  for (const [key, id] of [['KeyK', 'politics'], ['KeyT', 'techs'], ['KeyR', 'requests'], ['KeyB', 'wounds'], ['KeyC', 'army'], ['F1', 'help']]) {
+    await page.keyboard.press(key);
+    await tick(0.2);
+    s = await ui();
+    check(`${key} opens ${id}`, s.panels.join() === id && s.captures, JSON.stringify(s));
+    if (id === 'politics' || id === 'help') {
+      await page.keyboard.press('ArrowRight');
+      await tick(0.1);
+      check(`${id}: the arrow keys switch tabs`, (await page.locator('.mu-tab.active').allTextContents()).join().length > 0 && (await page.locator('.mu-tab.active').first().textContent()) !== (id === 'politics' ? 'Standing' : 'Controls'), await page.locator('.mu-tab.active').first().textContent());
+    }
+    await page.keyboard.press('Escape');
+    await tick(0.2);
+    check(`Esc closes ${id}`, (await ui()).panels.length === 0, JSON.stringify(await ui()));
+  }
+  const dockBtns = await page.locator('.mu-dock .mu-dockbtn:not(.mu-hide)').count();
+  check('the dock has buttons for the core pages and the realm pages', dockBtns >= 12, String(dockBtns));
+  await page.locator('.mu-dock .mu-dockbtn[aria-label="Realm and politics"]').click();
+  await tick(0.2);
+  check('the dock button opens the politics page', (await ui()).panels.join() === 'politics', JSON.stringify(await ui()));
+  await page.keyboard.press('Escape');
+  await tick(0.2);
+  await sim(() => { window.__game.session.sim.services.happenings.offerRequest('fetch'); window.__game.tick(0.3); });
+  await tick(0.3);
+  check('a request puts up a notice with a button', (await page.locator('.mu-toast.actionable').count()) >= 1, String(await page.locator('.mu-toast.actionable').count()));
+  check('and a dot on the requests button', (await page.locator('.mu-dockbtn[aria-label="Requests and news"] .mu-dockdot').count()) === 1);
+  await page.keyboard.press('Enter');
+  await tick(0.2);
+  check('Enter takes the notice to the requests journal', (await ui()).panels.join() === 'requests', JSON.stringify(await ui()));
+  await page.keyboard.press('Escape');
+  await tick(0.2);
+  await sim(() => window.__ui.showHint('interact'));
+  await tick(0.2);
+  check('the guide shows a hint card', (await page.locator('.mu-guide:not(.mu-hide)').count()) === 1 && (await page.locator('.mu-guide-title').textContent()) === 'Lend a hand');
+  await page.locator('.mu-guide-x').click();
+  await tick(0.2);
+  check('the hint can be dismissed', (await page.locator('.mu-guide:not(.mu-hide)').count()) === 0);
+
   // ---- hold E for the action wheel; tap E acts
   await page.keyboard.down('KeyE');
   await tick(0.6);

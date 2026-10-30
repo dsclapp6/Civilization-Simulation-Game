@@ -230,6 +230,8 @@ export async function start(root: AppRoot): Promise<void> {
     },
     { id: 'birth', label: 'Birth reveal', group: 'Game', run: async (c) => { await c.enter({ fresh: true }); c.ui.showBirth(); await c.frames(3); } },
     { id: 'pause', label: 'Pause menu', group: 'Game', run: async (c) => { await c.open({ panel: 'pause' }); } },
+    { id: 'help', label: 'Help and controls', group: 'Game', run: async (c) => { await c.open({ panel: 'help' }); } },
+    { id: 'help-combat', label: 'Help: fighting', group: 'Game', run: async (c) => { await c.open({ panel: 'help', tab: 'combat' }); } },
     { id: 'settings', label: 'Settings (in game)', group: 'Game', run: async (c) => { await c.open({ panel: 'settings' }); } },
     {
       id: 'confirm', label: 'Confirm (abandon)', group: 'Game', run: async (c) => {

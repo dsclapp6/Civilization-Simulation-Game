@@ -75,6 +75,8 @@ export interface ToastInput {
   /** Stable key so a repeated toast replaces the old one instead of stacking. */
   key?: string;
   action?: { label: string; request: PanelRequest };
+  /** With an action: Enter takes this one before newer, less pressing notices (a levy call, a war). */
+  urgent?: boolean;
 }
 
 export function toastForPoints(p: SimEvents['points']): ToastInput {
