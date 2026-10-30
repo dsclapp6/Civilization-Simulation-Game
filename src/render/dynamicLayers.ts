@@ -59,6 +59,14 @@ export class DynamicLayers {
     }
   }
 
+  /** Loading screens: let the layers build every body now (they build a few per frame otherwise). */
+  warm(chars: readonly CharacterDrawItem[], animals: readonly AnimalDrawItem[], camera: THREE.Camera, rounds: number): void {
+    for (let i = 0; i < rounds; i++) {
+      this.characters.update(chars, 0, camera);
+      this.animals.update(animals, 0, camera);
+    }
+  }
+
   update(chars: readonly CharacterDrawItem[], animals: readonly AnimalDrawItem[], projectiles: readonly ProjectileDrawItem[],
     fx: readonly FxEvent[], extraFx: readonly FxEvent[], camera: THREE.Camera, dt: number, showLabels: boolean): void {
     if (!this.adopted) { adoptObject(this.root); this.adopted = true; }

@@ -17,7 +17,7 @@ export function buildMapBase(world: WorldModel, palette: Palette): THREE.DataTex
   const grass = gradeGround(palette.ground[Ground.Grass]);
   for (let c = 0; c < N * N; c++) {
     const b = m.biome[c];
-    const g = b === Biome.Broadleaf ? Ground.Meadow : b === Biome.Pine ? Ground.Grass : biomeGround(b);
+    const g = b === Biome.Broadleaf || b === Biome.River ? Ground.Meadow : b === Biome.Pine ? Ground.Grass : biomeGround(b);
     let [r, gg, bl] = g === Ground.Snow ? [238, 242, 245] : gradeGround(palette.ground[g]);
     if (g === Ground.Heath || g === Ground.Moor) { r = (r + grass[0]) / 2; gg = (gg + grass[1]) / 2; bl = (bl + grass[2]) / 2; }
     data[c * 4] = r; data[c * 4 + 1] = gg; data[c * 4 + 2] = bl;

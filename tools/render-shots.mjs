@@ -5,6 +5,8 @@
 //   node tools/render-shots.mjs                 # all presets, medium quality
 //   node tools/render-shots.mjs village night   # selected presets
 //   node tools/render-shots.mjs --quality=high --size=1600x900 --seed=millennia
+//   flags: --ui (viewer with its dev overlay), --bench (fly-through timings),
+//          --breakdown (draw calls / triangles per system; re-renders each shot several times)
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { mkdirSync, statSync } from 'node:fs';
@@ -96,21 +98,28 @@ try {
   const list = wanted.length ? wanted : presets;
   for (const name of list) {
     const t1 = Date.now();
-    const info = await page.evaluate((n) => window.__viewer.preset(n), name);
+    const info = await page.evaluate(([n, b]) => window.__viewer.preset(n, b), [name, args.includes('--breakdown')]);
     const file = resolve(OUT, `${name}${suffix}.png`);
     await page.screenshot({ path: file });
     const kb = Math.round(statSync(file).size / 1024);
     console.log(`${name}: ${((Date.now() - t1) / 1000).toFixed(1)} s, ${kb} KB  ${info}`);
   }
   if (args.includes('--ui')) {
-    // the interactive viewer with its dev overlay (real-time loop, no shots mode)
-    await page.goto(`http://localhost:${PORT}/?mode=world&seed=${encodeURIComponent(seed)}&quality=${quality}&preset=village`, { timeout: 120000 });
-    await page.waitForFunction(() => window.__viewer !== undefined, null, { timeout: 600000, polling: 500 });
-    await page.waitForFunction(() => (document.querySelector('pre')?.textContent ?? '').includes('draw calls'), null, { timeout: 120000, polling: 500 });
-    await page.waitForTimeout(1500);
+    // the interactive viewer with its dev overlay (real-time loop, no shots mode), in a fresh page
+    const ui = await browser.newPage({ viewport: { width: W, height: H } });
+    ui.on('pageerror', (e) => console.log(`[pageerror] ${e.message}`));
+    await ui.goto(`http://localhost:${PORT}/?mode=world&seed=${encodeURIComponent(seed)}&quality=${quality}&preset=village`, { timeout: 180000 });
+    await ui.waitForFunction(() => window.__viewer !== undefined, null, { timeout: 600000, polling: 500 });
+    try {
+      await ui.waitForFunction(() => (document.querySelector('pre')?.textContent ?? '').includes('draw calls'), null, { timeout: 300000, polling: 1000 });
+      await ui.waitForTimeout(1500);
+    } catch {
+      console.log('viewer-ui: overlay stats not ready in time, capturing anyway');
+    }
     const file = resolve(OUT, `viewer-ui${suffix}.png`);
-    await page.screenshot({ path: file });
+    await ui.screenshot({ path: file });
     console.log(`viewer-ui: ${Math.round(statSync(file).size / 1024)} KB`);
+    await ui.close();
   }
   if (args.includes('--bench')) {
     const b = await page.evaluate(() => window.__viewer.benchmark(240, 22));

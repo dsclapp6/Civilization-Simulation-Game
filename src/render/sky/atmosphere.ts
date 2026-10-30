@@ -70,7 +70,7 @@ export interface AtmosphereState {
   cloudShadow: number;
   /** 0..1 lamp/window glow for assets. */
   nightLight: number;
-  /** Scene grade: desaturation and colour multiplier (moonlight). */
+  /** Scene grade: desaturation amount and shadow-lift colour (linear, pre-scaled) for moonlit nights. */
   gradeDesat: number;
   gradeTint: THREE.Color;
 }
@@ -88,7 +88,7 @@ export function createAtmosphereState(): AtmosphereState {
     starAlpha: 0, lightDir: new THREE.Vector3(0, 1, 0), lightColor: new THREE.Color(), lightIntensity: 3,
     lightIsMoon: false, shadowStrength: 1, hemiSky: new THREE.Color(), hemiGround: new THREE.Color(), hemiIntensity: 0.9,
     exposure: 1, cloudCover: 0.2, cloudLit: new THREE.Color(), cloudShade: new THREE.Color(), cloudShadow: 0, nightLight: 0,
-    gradeDesat: 0, gradeTint: new THREE.Color(1, 1, 1),
+    gradeDesat: 0, gradeTint: new THREE.Color(0, 0, 0),
   };
 }
 
@@ -212,32 +212,36 @@ export function computeAtmosphere(input: AtmosphereInput, palette: Palette, out:
   out.sunDisc.copy(sunCol).multiplyScalar(26 * sunVis);
   out.sunHalo.copy(sunCol).multiplyScalar((0.35 + dusk * 0.9) * sunVis);
 
-  // ---- direct light: sun by day, moon by night (swapped while both are ~0) ----
-  const sunI = 3.0 * Math.pow(smoothstep(-0.035, 0.2, sh), 0.75) * (1 - overcast * 0.72);
-  if (sh > -0.035) {
+  // ---- direct light and sky fill (docs/ART.md §6; gallery computeLighting is the reference) ----
+  const dayAmt = smoothstep(-0.04, 0.22, sh);
+  const golden = 1 - smoothstep(0.05, 0.42, sh);
+  const artNight = 1 - smoothstep(-0.1, 0.1, sh);
+  // one DirectionalLight serves sun and moon: the sun fades out just below the horizon, then the
+  // moon fades in ("moonlit blue": moon 0.9, phase only trims it slightly)
+  const sunI = 3.0 * dayAmt * (0.75 + 0.25 * (1 - golden)) * (1 - overcast * 0.72);
+  if (sh > -0.02) {
     out.lightDir.copy(out.sunDir);
     if (out.lightDir.y < 0.02) out.lightDir.y = 0.02;
     out.lightDir.normalize();
-    out.lightColor.setHex(palette.sun.dusk).lerp(_b.setHex(palette.sun.day), smoothstep(0.02, 0.42, sh));
+    out.lightColor.setHex(palette.sun.day).lerp(_b.setHex(palette.sun.dusk), golden * 0.85);
     out.lightIntensity = sunI;
     out.lightIsMoon = false;
     out.shadowStrength = 1 - overcast * 0.75;
   } else {
     out.lightDir.copy(out.moonDir);
-    if (out.lightDir.y < 0.05) out.lightDir.y = 0.05;
+    if (out.lightDir.y < 0.08) out.lightDir.y = 0.08;
     out.lightDir.normalize();
     out.lightColor.setHex(palette.sun.moon);
-    out.lightIntensity = 0.35 * (0.55 + 0.45 * fullness) * moonUp * smoothstep(-0.035, -0.12, sh) * (1 - overcast * 0.6) * 1.35;
+    out.lightIntensity = 0.9 * smoothstep(-0.02, -0.12, sh) * (0.72 + 0.28 * fullness) * Math.max(0.35, moonUp) * (1 - overcast * 0.6);
     out.lightIsMoon = true;
-    out.shadowStrength = 0.55 * (1 - overcast);
+    out.shadowStrength = 0.6 * (1 - overcast);
   }
 
-  // ---- hemisphere ----
-  out.hemiSky.setHex(palette.ambient.night).lerp(_a.setHex(0xbfd9ef), dayWide);
-  out.hemiSky.lerp(_b.setHex(palette.sky.duskHorizon), dusk * 0.28 * (1 - night));
-  out.hemiGround.setHex(0x1b1c22).lerp(_a.setHex(0x6b5a3a), dayWide);
-  out.hemiIntensity = lerp(3.4, 0.9, dayWide) * (1 + overcast * 0.22) - dusk * 0.12 * (1 - night);
-  out.exposure = lerp(1.6, 1.0, dayWide) * (1 + overcast * 0.06);
+  // ---- hemisphere: cool sky fill, warmed at golden hour, deep blue at night ----
+  out.hemiSky.setHex(0xbfd9ef).lerp(_a.setHex(0xe8b896), golden * dayAmt * 0.45).lerp(_b.setHex(palette.ambient.night), artNight);
+  out.hemiGround.setHex(0x6b5a3a).lerp(_a.setHex(0x1e2433), artNight);
+  out.hemiIntensity = (0.9 * (0.3 + 0.7 * dayAmt) + 0.75 * artNight) * (1 + overcast * 0.2);
+  out.exposure = 1.0 + overcast * 0.06;
 
   // ---- clouds ----
   out.cloudCover = clamp(0.34 + input.cloud * 0.6 + input.rain * 0.3 + input.snow * 0.2, 0, 1);
@@ -248,8 +252,10 @@ export function computeAtmosphere(input: AtmosphereInput, palette: Palette, out:
   out.cloudShadow = (1 - night) * smoothstep(0.05, 0.3, sh) * (0.25 + 0.45 * smoothstep(0.3, 0.7, out.cloudCover)) * (1 - overcast * 0.7);
 
   out.nightLight = clamp(smoothstep(0.1, -0.08, sh) + overcast * 0.25 * (1 - night), 0, 1);
-  // night vision: colours fade and shift towards blue under moonlight
-  out.gradeDesat = night * 0.6 + overcast * 0.12 * (1 - night);
-  out.gradeTint.setRGB(1 - night * 0.18, 1 - night * 0.04, 1 + night * 0.3);
+  // night grade (ART §6): desaturate ~30 % and lift shadows toward the night ambient, bright lights untouched
+  out.gradeDesat = artNight * 0.35 + overcast * 0.1 * (1 - artNight);
+  // display-space lift for the darkest tones (shadows lift toward the night ambient)
+  const lift = 0.42 * out.nightLight * artNight;
+  out.gradeTint.setRGB(((palette.ambient.night >> 16) & 255) / 255 * lift, ((palette.ambient.night >> 8) & 255) / 255 * lift, (palette.ambient.night & 255) / 255 * lift);
   return out;
 }

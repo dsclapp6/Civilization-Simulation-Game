@@ -1,10 +1,11 @@
-// Instanced vegetation and rocks from world.scatterInChunk. Chunks near the camera are loaded
-// (time-sliced), split per kind into ready-made instance arrays, and aggregated into one
-// InstancedMesh per (LOD band, kind) from the chunks currently in that band and in view.
-// Felled scatter ids (view.felled()) are skipped; chunks containing changed ids are rebuilt.
+// Instanced vegetation and rocks from world.scatterInChunk, plus hedgerows along world.hedges.
+// Chunks near the camera are loaded (time-sliced), split per kind into ready-made instance arrays,
+// and aggregated into one InstancedMesh per (LOD band, kind) from the chunks currently in that
+// band and in view. Felled scatter ids (view.felled()) are skipped; chunks containing changed ids
+// are rebuilt. Shadows use the kit's depth material so they follow sway and leaf fall.
 import * as THREE from 'three';
 import { hash01, hash3 } from '../../core/math';
-import { CHUNK_SIZE, CHUNKS_PER_SIDE, type ScatterKind, type WorldModel } from '../../world/types';
+import { CHUNK_SIZE, CHUNKS_PER_SIDE, type ScatterItem, type ScatterKind, type WorldModel } from '../../world/types';
 import type { AssetLibrary, InstancedKit } from '../../assets/types';
 
 const KINDS: ScatterKind[] = [
@@ -13,13 +14,18 @@ const KINDS: ScatterKind[] = [
 ];
 const KIND_INDEX = new Map<ScatterKind, number>(KINDS.map((k, i) => [k, i]));
 
-/** Max band per kind: 0 = grass radius only, 1 = near+mid, 2 = all bands. */
+/**
+ * How far each kind is drawn: 0 = grass radius only, 1 = near band only, 2 = near + mid,
+ * 3 = all bands. Small things stop at the near band: further out they only read as speckle.
+ */
 const REACH: Record<ScatterKind, 0 | 1 | 2 | 3> = {
-  oak: 3, beech: 3, birch: 3, ash: 3, willow: 3, pine: 3, spruce: 3, apple: 3, deadtree: 3, boulder: 3, rock_large: 2,
-  bush: 2, bramble: 1, reeds: 1, fern: 1, rock_small: 1, stump: 1, log: 1, grass_tuft: 0, flowers: 0,
+  oak: 3, beech: 3, birch: 3, ash: 3, willow: 3, pine: 3, spruce: 3, apple: 3, deadtree: 2, boulder: 2, rock_large: 1,
+  bush: 1, bramble: 1, reeds: 1, fern: 1, rock_small: 1, stump: 1, log: 1, grass_tuft: 0, flowers: 0,
 };
+const TREES = new Set<ScatterKind>(['oak', 'beech', 'birch', 'ash', 'willow', 'pine', 'spruce', 'apple', 'deadtree']);
 
-interface KindArrays { matrices: Float32Array; colors: Float32Array; count: number }
+/** Instances of one kind in a chunk; woodland trees come first (the first `farCount` are drawn in the far band). */
+interface KindArrays { matrices: Float32Array; count: number; farCount: number }
 
 interface VegChunk {
   key: number;
@@ -71,6 +77,7 @@ const _v2 = new THREE.Vector3();
 export class VegetationSystem {
   readonly root = new THREE.Group();
   private readonly chunks = new Map<number, VegChunk>();
+  private readonly hedgeBuckets = new Map<number, number[]>();
   /** band (0 grass, 1 near, 2 mid, 3 far) × kind */
   private readonly meshes: BandMesh[][] = [];
   private readonly kits = new Map<string, InstancedKit>();
@@ -84,11 +91,31 @@ export class VegetationSystem {
   private readonly wideFrustum = new THREE.Frustum();
   private readonly wideCam = new THREE.PerspectiveCamera();
   private forceEval = true;
+  /** Running cost of loading one chunk (ms) and frames without progress. */
+  private chunkMs = 0.8;
+  private starved = 0;
   instances = 0;
   loadedChunks = 0;
 
   constructor(private readonly world: WorldModel, private readonly assets: AssetLibrary, private settings: VegetationSettings) {
     this.root.name = 'vegetation';
+    // hedgerow segments bucketed by the scatter chunks they cross
+    const h = world.hedges;
+    if (h) {
+      for (let si = 0; si < h.length / 4; si++) {
+        const x0 = Math.min(h[si * 4], h[si * 4 + 2]), x1 = Math.max(h[si * 4], h[si * 4 + 2]);
+        const z0 = Math.min(h[si * 4 + 1], h[si * 4 + 3]), z1 = Math.max(h[si * 4 + 1], h[si * 4 + 3]);
+        for (let cz = Math.floor((z0 - 1) / CHUNK_SIZE); cz <= Math.floor((z1 + 1) / CHUNK_SIZE); cz++) {
+          for (let cx = Math.floor((x0 - 1) / CHUNK_SIZE); cx <= Math.floor((x1 + 1) / CHUNK_SIZE); cx++) {
+            if (cx < 0 || cz < 0 || cx >= CHUNKS_PER_SIDE || cz >= CHUNKS_PER_SIDE) continue;
+            const key = cz * CHUNKS_PER_SIDE + cx;
+            let list = this.hedgeBuckets.get(key);
+            if (!list) { list = []; this.hedgeBuckets.set(key, list); }
+            list.push(si);
+          }
+        }
+      }
+    }
     for (let b = 0; b < 4; b++) {
       this.meshes.push(KINDS.map(() => ({ mesh: null, capacity: 0, dirty: false, count: 0 })));
     }
@@ -137,14 +164,21 @@ export class VegetationSystem {
       this.lastDir.copy(_v1);
       this.evaluate(camera);
     }
-    // load queued chunks within budget
+    // load queued chunks within budget (a chunk starts only if it is expected to fit; one is
+    // forced after a few starved frames so loading always progresses)
     const deadline = t0 + budgetMs;
-    while (this.queue.length && performance.now() < deadline) {
+    let loaded = 0;
+    while (this.queue.length) {
+      const now = performance.now();
+      if (now + this.chunkMs > deadline && !(loaded === 0 && this.starved >= 4)) break;
       const key = this.queue.shift()!;
       if (this.chunks.has(key)) continue;
       this.loadChunk(key);
+      this.chunkMs = this.chunkMs * 0.85 + (performance.now() - now) * 0.15;
       this.forceEval = true;
+      loaded++;
     }
+    this.starved = loaded > 0 || !this.queue.length ? 0 : this.starved + 1;
     this.rebuildDirty();
     return performance.now() - t0;
   }
@@ -237,24 +271,57 @@ export class VegetationSystem {
   private bandFor(kind: ScatterKind, chunkBand: number): number {
     const reach = REACH[kind];
     if (reach === 0) return chunkBand === 0 ? 0 : -1;
-    if (reach === 1) return chunkBand <= 1 ? 1 : chunkBand === 2 ? 2 : -1;
+    if (reach === 1) return chunkBand <= 1 ? 1 : -1;
     if (reach === 2) return chunkBand <= 1 ? 1 : chunkBand === 2 ? 2 : -1;
     return chunkBand <= 1 ? 1 : chunkBand;
   }
 
+  /** Hedgerow plants falling in a chunk: dense bushes every ~1.7 m and the odd hedgerow tree. */
+  private hedgeItems(key: number, cx: number, cz: number): ScatterItem[] {
+    const segs = this.hedgeBuckets.get(key);
+    if (!segs) return [];
+    const h = this.world.hedges!;
+    const out: ScatterItem[] = [];
+    const x0 = cx * CHUNK_SIZE, z0 = cz * CHUNK_SIZE;
+    for (const si of segs) {
+      const ax = h[si * 4], az = h[si * 4 + 1], bx = h[si * 4 + 2], bz = h[si * 4 + 3];
+      const len = Math.hypot(bx - ax, bz - az);
+      const n = Math.max(1, Math.floor(len / 1.7));
+      const nx = -(bz - az) / (len || 1), nz = (bx - ax) / (len || 1);
+      for (let i = 0; i <= n; i++) {
+        const t = i / n;
+        const hs = hash3(si, i, 77);
+        const off = ((hs & 255) / 255 - 0.5) * 0.7;
+        const x = ax + (bx - ax) * t + nx * off, z = az + (bz - az) * t + nz * off;
+        if (x < x0 || x >= x0 + CHUNK_SIZE || z < z0 || z >= z0 + CHUNK_SIZE) continue;
+        const tree = (hs >>> 8) % 23 === 0;
+        out.push({
+          // synthetic ids stay negative so they never collide with felled scatter ids
+          id: -(si * 4096 + i + 1), kind: tree ? ((hs >>> 16) % 3 === 0 ? 'ash' : 'oak') : 'bush',
+          x, z, scale: tree ? 0.75 + ((hs >>> 20) & 15) / 40 : 1.05 + ((hs >>> 20) & 15) / 40, rot: ((hs >>> 4) % 628) / 100, variant: hs % 4,
+        });
+      }
+    }
+    return out;
+  }
+
   private loadChunk(key: number): void {
     const cx = key % CHUNKS_PER_SIDE, cz = Math.floor(key / CHUNKS_PER_SIDE);
-    const items = this.world.scatterInChunk(cx, cz);
+    const hedge = this.hedgeItems(key, cx, cz);
+    const scatter = this.world.scatterInChunk(cx, cz);
+    const items = hedge.length ? [...scatter, ...hedge] : scatter;
     const counts = new Int32Array(KINDS.length);
     for (const it of items) if (!this.felled.has(it.id)) counts[KIND_INDEX.get(it.kind) ?? 0]++;
-    const kinds: (KindArrays | null)[] = KINDS.map((_, k) => counts[k] ? { matrices: new Float32Array(counts[k] * 16), colors: new Float32Array(counts[k] * 3), count: 0 } : null);
+    const kinds: (KindArrays | null)[] = KINDS.map((_, k) => counts[k] ? { matrices: new Float32Array(counts[k] * 16), count: 0, farCount: 0 } : null);
     let minY = Infinity, maxY = -Infinity;
     let idChunk = key;
-    // deterministic shuffle so prefixes are spatially uniform (used when thinning)
-    const order = items.map((_, i) => i).sort((a, b) => hash3(items[a].id, 3) - hash3(items[b].id, 3));
+    // far band: only trees standing in woodland (isolated field trees far away read as speckle);
+    // woodland trees first, then a deterministic shuffle so prefixes are spatially uniform (thinning)
+    const inWood = items.map((it) => TREES.has(it.kind) && it.id >= 0 && this.world.forestAt(it.x, it.z) > 0.3);
+    const order = items.map((_, i) => i).sort((a, b) => (inWood[a] === inWood[b] ? hash3(items[a].id, 3) - hash3(items[b].id, 3) : inWood[a] ? -1 : 1));
     for (const idx of order) {
       const it = items[idx];
-      idChunk = Math.floor(it.id / 4096);
+      if (it.id >= 0) idChunk = Math.floor(it.id / 4096);
       if (this.felled.has(it.id)) continue;
       const k = KIND_INDEX.get(it.kind) ?? 0;
       const arr = kinds[k]!;
@@ -265,12 +332,8 @@ export class VegetationSystem {
       _q.setFromAxisAngle(_y, it.rot);
       _m.compose(_p.set(it.x, y, it.z), _q, _s.set(it.scale, it.scale * stretch, it.scale));
       _m.toArray(arr.matrices, arr.count * 16);
-      const b = 0.88 + hash01(it.id, 11) * 0.22;
-      const warm = (hash01(it.id, 12) - 0.5) * 0.08;
-      arr.colors[arr.count * 3] = b * (1 + warm);
-      arr.colors[arr.count * 3 + 1] = b;
-      arr.colors[arr.count * 3 + 2] = b * (1 - warm);
       arr.count++;
+      if (inWood[idx]) arr.farCount++;
     }
     if (minY === Infinity) { minY = this.world.heightAt(cx * CHUNK_SIZE + 32, cz * CHUNK_SIZE + 32); maxY = minY; }
     const chunk: VegChunk = { key, cx, cz, minY, maxY, kinds, idChunk, band: -1, visible: false, lastUsed: this.frame, dist: Infinity };
@@ -299,15 +362,17 @@ export class VegetationSystem {
           const arr = c.kinds[k];
           if (!arr || !arr.count) continue;
           if (this.bandFor(KINDS[k], c.band) !== b) continue;
+          if (b === 3 && !arr.farCount) continue;
           list.push(arr);
           // coarser terrain LODs sag below hilltops; sink distant plants so they never float
           sinks.push(Math.min(4, Math.max(0, (c.dist - 140) * 0.0035)));
-          need += arr.count;
+          need += b === 3 ? arr.farCount : arr.count;
         }
         const lodK = (b <= 1 ? 0 : b === 2 ? 1 : 2) as 0 | 1 | 2;
         const cap = Math.min(s.maxPerKind, Math.floor(s.kindTris / kitTriangles(this.kit(KINDS[k], lodK))));
         const ratio = need > cap ? cap / need : 1;
-        if (ratio < 1) need = 0, list.forEach((a) => { need += Math.floor(a.count * ratio); });
+        const avail = (a: KindArrays) => (b === 3 ? a.farCount : a.count);
+        if (ratio < 1) need = 0, list.forEach((a) => { need += Math.floor(avail(a) * ratio); });
         if (need === 0) {
           if (bm.mesh) bm.mesh.count = 0;
           bm.count = 0;
@@ -320,10 +385,10 @@ export class VegetationSystem {
           const cap = Math.ceil(need * 1.4) + 64;
           const mesh = new THREE.InstancedMesh(kit.geometry, kit.material, cap);
           mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-          mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
-          mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
           mesh.frustumCulled = false;
           mesh.castShadow = b <= 1 && KINDS[k] !== 'grass_tuft' && KINDS[k] !== 'flowers';
+          // shadows follow wind sway and leaf fall (docs/ART.md section 6)
+          if (kit.depthMaterial) mesh.customDepthMaterial = kit.depthMaterial;
           mesh.receiveShadow = true;
           mesh.name = `veg:${KINDS[k]}:${b}`;
           mesh.matrixAutoUpdate = false;
@@ -332,14 +397,12 @@ export class VegetationSystem {
           bm.capacity = cap;
         }
         const mats = bm.mesh.instanceMatrix.array as Float32Array;
-        const cols = bm.mesh.instanceColor!.array as Float32Array;
         let o = 0;
         for (let li = 0; li < list.length; li++) {
           const a = list[li];
-          const n = ratio < 1 ? Math.floor(a.count * ratio) : a.count;
+          const n = ratio < 1 ? Math.floor(avail(a) * ratio) : avail(a);
           if (!n) continue;
           mats.set(a.matrices.subarray(0, n * 16), o * 16);
-          cols.set(a.colors.subarray(0, n * 3), o * 3);
           const sink = sinks[li];
           if (sink > 0) for (let q = 0; q < n; q++) mats[(o + q) * 16 + 13] -= sink;
           o += n;
@@ -348,9 +411,6 @@ export class VegetationSystem {
         bm.mesh.instanceMatrix.clearUpdateRanges();
         bm.mesh.instanceMatrix.addUpdateRange(0, o * 16);
         bm.mesh.instanceMatrix.needsUpdate = true;
-        bm.mesh.instanceColor!.clearUpdateRanges();
-        bm.mesh.instanceColor!.addUpdateRange(0, o * 3);
-        bm.mesh.instanceColor!.needsUpdate = true;
         bm.count = o;
         total += o;
       }

@@ -17,6 +17,8 @@ export interface WaterShared {
   uSkyTop: { value: THREE.Color };
   uSkyHorizon: { value: THREE.Color };
   uRain: { value: number };
+  /** Specular glint strength: full under the sun, damped under the moon (no sparkle in the dark). */
+  uGlint: { value: number };
   uWorldSize: { value: number };
   uMask: { value: THREE.Texture | null };
   uDepthTex: { value: THREE.Texture | null };
@@ -34,6 +36,7 @@ export function createWaterShared(worldSize: number): WaterShared {
     uSkyTop: { value: new THREE.Color() },
     uSkyHorizon: { value: new THREE.Color() },
     uRain: { value: 0 },
+    uGlint: { value: 1 },
     uWorldSize: { value: worldSize },
     uMask: { value: null },
     uDepthTex: { value: null },
@@ -44,7 +47,10 @@ const VERTEX = /* glsl */`
 attribute float aDepth;
 attribute vec2 aFlow;
 attribute float aSpeed;
+attribute float aWidth;
 uniform float uTime;
+uniform float uPixelAngle;
+varying float vFade;
 uniform float uWaveAmp;
 uniform float uWorldSize;
 uniform sampler2D uDepthTex;
@@ -68,12 +74,21 @@ void main() {
           + sin(wp.z * 0.097 - uTime * 0.93 + wp.x * 0.031) * 0.35
           + sin((wp.x - wp.z) * 0.27 + uTime * 1.9) * 0.15;
   wp.y += w * amp;
+#ifdef RIVER
+  // coarse distant terrain tiles cut through narrow channels; ride a little higher far away so
+  // rivers stay continuous lines instead of breaking into dashes (sub-pixel vertically)
+  wp.y += clamp((distance(wp.xyz, cameraPosition) - 250.0) * 0.0012, 0.0, 6.0);
+#endif
   vWorld = wp.xyz;
   vDepth = d;
 #ifdef RIVER
   vFlow = aFlow;
   vSpeed = aSpeed;
+  // streams thinner than ~2 px alias into bright dashes: fade them out with distance
+  float px = aWidth / max(1.0, distance(wp.xyz, cameraPosition) * uPixelAngle);
+  vFade = smoothstep(0.9, 2.6, px);
 #else
+  vFade = 1.0;
   vFlow = vec2(0.0);
   vSpeed = 0.0;
 #endif
@@ -94,7 +109,10 @@ uniform vec3 uAmbient;
 uniform vec3 uSkyTop;
 uniform vec3 uSkyHorizon;
 uniform float uRain;
+uniform float uGlint;
+varying float vFade;
 uniform float uFoamScale;
+uniform vec3 uTint;
 uniform float uWorldSize;
 uniform sampler2D uMask;
 uniform sampler2D uDepthTex;
@@ -134,7 +152,7 @@ void main() {
   n = normalize(n + vec3(bg.x, 0.0, bg.y) * 0.18);
   vec3 V = normalize(cameraPosition - vWorld);
   float deepT = 1.0 - exp(-depth / 3.2);
-  vec3 body = mix(uShallow, uDeep, deepT);
+  vec3 body = mix(uShallow, uDeep, deepT) * uTint;
   float ndl = max(dot(n, uSunDir), 0.0);
   vec3 col = body * (uAmbient * 0.75 + uSunColor * (0.25 + ndl * 0.35));
   vec3 R = reflect(-V, n);
@@ -143,7 +161,7 @@ void main() {
   col = mix(col, sky, clamp(fres, 0.0, 1.0) * 0.62);
   vec3 H = normalize(uSunDir + V);
   float spec = pow(max(dot(n, H), 0.0), 220.0) * (0.4 + 0.6 * near);
-  col += uSunColor * spec * 2.6;
+  col += uSunColor * spec * 2.6 * uGlint;
   float foam = 0.0;
 #ifndef FAR_WATER
   // shoreline foam: bands that roll towards the shore and break into noisy edges
@@ -156,11 +174,11 @@ void main() {
 #endif
 #ifdef RIVER
   // flowing streaks along the current and foam at the banks
-  vec2 fp = vec2(vFlow.y * 6.0, vFlow.x * 0.35 - uTime * vSpeed * 0.9);
+  vec2 fp = vec2(vFlow.y * 7.0, vFlow.x * 0.6 - uTime * vSpeed * 1.2);
   float streak = wNoise(fp) * 0.6 + wNoise(fp * vec2(2.0, 3.1) + 7.0) * 0.4;
-  col += uFoam * smoothstep(0.62, 0.9, streak) * 0.12 * (uAmbient + uSunColor * 0.5);
+  col += uFoam * smoothstep(0.68, 0.92, streak) * 0.05 * (uAmbient + uSunColor * 0.5);
   float bank = smoothstep(0.38, 0.5, abs(vFlow.y - 0.5));
-  foam = max(foam, bank * smoothstep(0.35, 0.8, streak) * 0.6);
+  foam = max(foam, bank * smoothstep(0.35, 0.8, streak) * 0.6 * (1.0 - smoothstep(150.0, 320.0, camDist)));
 #endif
   col = mix(col, uFoam * (uAmbient * 0.85 + uSunColor * (0.2 + ndl * 0.5)), clamp(foam, 0.0, 1.0));
   float alpha = mix(0.5, 0.93, smoothstep(0.0, 2.5, depth));
@@ -170,6 +188,8 @@ void main() {
 #endif
   alpha = max(alpha, foam);
   alpha = mix(alpha, 1.0, clamp(fres * 0.5, 0.0, 0.5));
+  alpha *= vFade;
+  if (alpha < 0.01) discard;
   gl_FragColor = vec4(col, alpha);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -191,6 +211,10 @@ export function createWaterMaterial(kind: WaterKind, shared: WaterShared): THREE
     uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
       uWaveAmp: { value: kind === 'sea' ? 0.22 : kind === 'lake' ? 0.07 : kind === 'river' ? 0.04 : 0 },
       uFoamScale: { value: kind === 'sea' ? 1 : kind === 'lake' ? 0.6 : 0.5 },
+      // radians per pixel (set from the camera each frame)
+      uPixelAngle: { value: 0.0013 },
+      // rivers run greener and darker than open water
+      uTint: { value: kind === 'river' ? new THREE.Color(0.62, 0.78, 0.7) : kind === 'lake' ? new THREE.Color(0.85, 0.94, 0.92) : new THREE.Color(1, 1, 1) },
     }]),
   });
   Object.assign(mat.uniforms, shared, atmoUniforms);

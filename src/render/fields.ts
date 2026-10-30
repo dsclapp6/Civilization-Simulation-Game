@@ -1,4 +1,5 @@
-// Open-field strips from view.strips(): draped surface meshes (per 1 km tile) coloured by
+// Open-field strips from view.strips(): draped surface meshes per 1 km tile (built lazily near the
+// camera: a terrain-hugging grid within FINE_DIST, a few long quads further out) coloured by
 // StripState with procedural furrows/crop rows, and crop instances (assets.crop) in rows inside
 // strips near the camera, rebuilt time-sliced as the camera moves.
 import * as THREE from 'three';
@@ -11,6 +12,10 @@ import { Ground } from '../world/types';
 import type { TerrainUniforms } from './terrain/terrainMaterial';
 
 const TILE = 1024;
+/** Crops nearer than this to the camera cast shadows. */
+const CROP_SHADOW_DIST = 30;
+/** Tiles closer than this use the fine, terrain-hugging strip grid. */
+const FINE_DIST = 600;
 
 interface StripGeom {
   id: number;
@@ -23,9 +28,6 @@ interface StripGeom {
   longIsV: boolean;
   width: number;
   length: number;
-  nu: number;
-  nv: number;
-  heights: Float32Array;
   cx: number;
   cz: number;
   radius: number;
@@ -34,7 +36,15 @@ interface StripGeom {
   growth: number;
 }
 
-interface Tile { key: number; mesh: THREE.Mesh; geo: THREE.BufferGeometry; cx: number; cz: number }
+interface Tile {
+  key: number;
+  strips: StripGeom[];
+  mesh: THREE.Mesh | null;
+  geo: THREE.BufferGeometry | null;
+  lod: -1 | 0 | 1;
+  cx: number;
+  cz: number;
+}
 
 const CROP_GREEN: Record<CropKind, number> = {
   wheat: 0x6f9a3e, rye: 0x6a9440, barley: 0x7aa448, oats: 0x7ea64e, peas: 0x4f8a3a, beans: 0x4a7f36, flax: 0x5f9a5a,
@@ -65,14 +75,23 @@ export class FieldSystem {
   private readonly strips = new Map<number, StripGeom>();
   private version = -1;
   private readonly cropMeshes = new Map<string, THREE.InstancedMesh>();
+  private readonly cropShadowMeshes = new Map<string, THREE.InstancedMesh>();
   private readonly kits = new Map<string, InstancedKit>();
   private cropJob: { order: StripGeom[]; idx: number; cx: number; cz: number; buf: Map<string, number[]>; total: number } | null = null;
   private lastCropPos = new THREE.Vector2(Infinity, Infinity);
+  private lastList: readonly StripView[] = [];
+  private pendingTiles = 0;
+  private readonly tmpC = new THREE.Color();
+  private readonly tmpC2 = new THREE.Color();
+  private readonly fieldColor: THREE.Color;
+  private readonly grassColor: THREE.Color;
   private cropsDirty = true;
   cropInstances = 0;
 
   constructor(private readonly world: WorldModel, private readonly assets: AssetLibrary, terrainU: TerrainUniforms, private settings: FieldSettings) {
     this.root.name = 'fields';
+    this.fieldColor = new THREE.Color(assets.palette.ground[Ground.Field]);
+    this.grassColor = new THREE.Color(assets.palette.ground[Ground.Grass]);
     this.material = new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -6 });
     this.material.name = 'strips';
     this.material.onBeforeCompile = (shader) => {
@@ -119,11 +138,11 @@ float fNoise(vec2 p) {
 
   private tileKey(x: number, z: number): number { return Math.floor(z / TILE) * 64 + Math.floor(x / TILE); }
 
-  private buildGeometry(list: readonly StripView[]): void {
-    for (const t of this.tiles.values()) { this.root.remove(t.mesh); t.geo.dispose(); }
+  /** Strip frames and states only; tile geometry is built lazily near the camera. */
+  private buildIndex(list: readonly StripView[]): void {
+    for (const t of this.tiles.values()) this.dropTile(t);
     this.tiles.clear();
     this.strips.clear();
-    const byTile = new Map<number, StripGeom[]>();
     for (const sv of list) {
       if (sv.poly.length < 4) continue;
       const p = sv.poly.slice(0, 4).map((q) => new THREE.Vector2(q.x, q.z));
@@ -131,137 +150,184 @@ float fNoise(vec2 p) {
       const longIsV = e1 >= e0;
       const width = longIsV ? e0 : e1, length = longIsV ? e1 : e0;
       const cx = (p[0].x + p[1].x + p[2].x + p[3].x) / 4, cz = (p[0].y + p[1].y + p[2].y + p[3].y) / 4;
-      const nu = Math.max(1, Math.round((longIsV ? e0 : e1) / 3.5)), nv = Math.max(1, Math.round((longIsV ? e1 : e0) / 5));
       const g: StripGeom = {
-        id: sv.id, tile: this.tileKey(cx, cz), start: 0, count: 0, p, longIsV, width, length, nu, nv,
-        heights: new Float32Array((nu + 1) * (nv + 1)), cx, cz, radius: Math.hypot(width, length) / 2,
-        state: sv.state, crop: sv.crop, growth: sv.growth,
+        id: sv.id, tile: this.tileKey(cx, cz), start: 0, count: 0, p, longIsV, width, length,
+        cx, cz, radius: Math.hypot(width, length) / 2, state: sv.state, crop: sv.crop, growth: sv.growth,
       };
       this.strips.set(sv.id, g);
-      let arr = byTile.get(g.tile);
-      if (!arr) { arr = []; byTile.set(g.tile, arr); }
-      arr.push(g);
-    }
-    for (const [key, arr] of byTile) {
-      let verts = 0;
-      for (const g of arr) verts += g.nu * g.nv * 6;
-      const pos = new Float32Array(verts * 3), nor = new Float32Array(verts * 3), col = new Float32Array(verts * 3), fld = new Float32Array(verts * 4);
-      let v = 0;
-      for (const g of arr) {
-        g.start = v;
-        const P = (u: number, w: number, out: THREE.Vector2) => {
-          // bilinear over the quad; u across (p0→p1 or p0→p3), w along
-          const a = g.p[0], b = g.longIsV ? g.p[1] : g.p[3], c = g.p[2], d = g.longIsV ? g.p[3] : g.p[1];
-          out.set(
-            (a.x * (1 - u) + b.x * u) * (1 - w) + (d.x * (1 - u) + c.x * u) * w,
-            (a.y * (1 - u) + b.y * u) * (1 - w) + (d.y * (1 - u) + c.y * u) * w,
-          );
-          return out;
-        };
-        const q = new THREE.Vector2();
-        for (let j = 0; j <= g.nv; j++) {
-          for (let i = 0; i <= g.nu; i++) {
-            P(i / g.nu, j / g.nv, q);
-            g.heights[j * (g.nu + 1) + i] = this.world.heightAt(q.x, q.y) + 0.07;
-          }
-        }
-        for (let j = 0; j < g.nv; j++) {
-          for (let i = 0; i < g.nu; i++) {
-            for (let t = 0; t < 2; t++) {
-              const ids = t === 0 ? [[i, j], [i, j + 1], [i + 1, j + 1]] : [[i, j], [i + 1, j + 1], [i + 1, j]];
-              const pts = ids.map(([a, b]) => {
-                P(a / g.nu, b / g.nv, q);
-                return new THREE.Vector3(q.x, g.heights[b * (g.nu + 1) + a], q.y);
-              });
-              const nrm = new THREE.Vector3().subVectors(pts[1], pts[0]).cross(new THREE.Vector3().subVectors(pts[2], pts[0])).normalize();
-              if (nrm.y < 0) {
-                nrm.negate();
-                [pts[1], pts[2]] = [pts[2], pts[1]];
-                [ids[1], ids[2]] = [ids[2], ids[1]];
-              }
-              for (let k = 0; k < 3; k++) {
-                const [a, b] = ids[k];
-                pos[v * 3] = pts[k].x; pos[v * 3 + 1] = pts[k].y; pos[v * 3 + 2] = pts[k].z;
-                nor[v * 3] = nrm.x; nor[v * 3 + 1] = nrm.y; nor[v * 3 + 2] = nrm.z;
-                // across metres from the strip edge (furrows) and along metres
-                fld[v * 4] = (a / g.nu) * g.width;
-                fld[v * 4 + 1] = (b / g.nv) * g.length;
-                v++;
-              }
-            }
-          }
-        }
-        g.count = v - g.start;
+      let t = this.tiles.get(g.tile);
+      if (!t) {
+        t = { key: g.tile, strips: [], mesh: null, geo: null, lod: -1, cx: (g.tile % 64 + 0.5) * TILE, cz: (Math.floor(g.tile / 64) + 0.5) * TILE };
+        this.tiles.set(g.tile, t);
       }
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-      geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
-      geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-      geo.setAttribute('aField', new THREE.BufferAttribute(fld, 4));
-      geo.computeBoundingSphere();
-      const mesh = new THREE.Mesh(geo, this.material);
-      mesh.receiveShadow = true;
-      mesh.name = `strips:${key}`;
-      mesh.matrixAutoUpdate = false;
-      this.root.add(mesh);
-      const tx = (key % 64 + 0.5) * TILE, tz = (Math.floor(key / 64) + 0.5) * TILE;
-      this.tiles.set(key, { key, mesh, geo, cx: tx, cz: tz });
+      t.strips.push(g);
     }
   }
 
-  private recolor(list: readonly StripView[]): void {
-    const c = new THREE.Color();
-    const field = new THREE.Color(this.assets.palette.ground[Ground.Field]);
-    const grass = new THREE.Color(this.assets.palette.ground[Ground.Grass]);
-    for (const sv of list) {
-      const g = this.strips.get(sv.id);
-      if (!g) continue;
-      g.state = sv.state; g.crop = sv.crop; g.growth = sv.growth;
-      const tile = this.tiles.get(g.tile);
-      if (!tile) continue;
-      let furrow = 0.15, rows = 0;
-      const vary = 0.94 + hash01(sv.id, 3) * 0.12;
-      switch (sv.state) {
-        case 'bare': c.copy(field).multiplyScalar(1.05); furrow = 0.1; break;
-        case 'ploughed': c.copy(field).multiplyScalar(0.78); furrow = 0.85; break;
-        case 'sown': c.copy(field).multiplyScalar(0.84).lerp(new THREE.Color(CROP_GREEN[sv.crop]), 0.12); furrow = 0.7; break;
-        case 'growing': {
-          const t = clamp(sv.growth, 0, 1);
-          c.copy(field).multiplyScalar(0.85).lerp(lerpHex(CROP_GREEN[sv.crop], CROP_RIPE[sv.crop], Math.max(0, t - 0.6) * 1.6, new THREE.Color()), 0.3 + t * 0.65);
-          furrow = 0.5 * (1 - t); rows = 0.6 * t + 0.2;
-          break;
+  private dropTile(t: Tile): void {
+    if (t.mesh) { this.root.remove(t.mesh); t.geo!.dispose(); }
+    t.mesh = null;
+    t.geo = null;
+    t.lod = -1;
+  }
+
+  /** Bilinear point inside a strip: u across (0..1), w along (0..1). */
+  private stripPoint(g: StripGeom, u: number, w: number, out: THREE.Vector2): THREE.Vector2 {
+    const a = g.p[0], b = g.longIsV ? g.p[1] : g.p[3], c = g.p[2], d = g.longIsV ? g.p[3] : g.p[1];
+    return out.set(
+      (a.x * (1 - u) + b.x * u) * (1 - w) + (d.x * (1 - u) + c.x * u) * w,
+      (a.y * (1 - u) + b.y * u) * (1 - w) + (d.y * (1 - u) + c.y * u) * w,
+    );
+  }
+
+  /**
+   * Indexed draped grid per strip. LOD 0 (near) follows the terrain closely (2 x 2.5 m cells) so
+   * fine terrain facets cannot poke through; LOD 1 (far) is a few long quads lifted a little more.
+   */
+  private buildTile(t: Tile, lod: 0 | 1): void {
+    let verts = 0, tris = 0;
+    const dims = t.strips.map((g) => {
+      const nu = lod === 0 ? Math.max(2, Math.round(g.width / 2)) : 1;
+      const nv = lod === 0 ? Math.max(2, Math.round(g.length / 2.5)) : Math.max(1, Math.round(g.length / 25));
+      verts += (nu + 1) * (nv + 1);
+      tris += nu * nv * 2;
+      return { nu, nv };
+    });
+    const pos = new Float32Array(verts * 3), col = new Float32Array(verts * 3), fld = new Float32Array(verts * 4);
+    const index = new Uint32Array(tris * 3);
+    const q = new THREE.Vector2();
+    const lift = lod === 0 ? 0.1 : 0.35;
+    let v = 0, ii = 0;
+    t.strips.forEach((g, si) => {
+      const { nu, nv } = dims[si];
+      g.start = v;
+      for (let j = 0; j <= nv; j++) {
+        for (let i = 0; i <= nu; i++) {
+          this.stripPoint(g, i / nu, j / nv, q);
+          pos[v * 3] = q.x; pos[v * 3 + 1] = this.world.heightAt(q.x, q.y) + lift; pos[v * 3 + 2] = q.y;
+          fld[v * 4] = (i / nu) * g.width;
+          fld[v * 4 + 1] = (j / nv) * g.length;
+          v++;
         }
-        case 'ripe': c.setHex(CROP_RIPE[sv.crop]); rows = 0.5; furrow = 0; break;
-        case 'harvested': c.setHex(0xc8b07a); furrow = 0.25; rows = 0.4; break;
-        case 'stubble': c.setHex(0xb59f6c); furrow = 0.2; rows = 0.5; break;
-        case 'fallow': c.copy(grass).lerp(field, 0.35).multiplyScalar(0.95); furrow = 0.05; break;
       }
-      c.multiplyScalar(vary);
-      const col = tile.geo.getAttribute('color') as THREE.BufferAttribute;
-      const fld = tile.geo.getAttribute('aField') as THREE.BufferAttribute;
+      g.count = v - g.start;
+      for (let j = 0; j < nv; j++) {
+        for (let i = 0; i < nu; i++) {
+          const a = g.start + j * (nu + 1) + i, b = a + 1, c = a + nu + 1, d = c + 1;
+          index[ii++] = a; index[ii++] = c; index[ii++] = b;
+          index[ii++] = b; index[ii++] = c; index[ii++] = d;
+        }
+      }
+    });
+    // make every face point up (strip corners may wind either way)
+    for (let k = 0; k < index.length; k += 3) {
+      const a = index[k], b = index[k + 1], c = index[k + 2];
+      const ux = pos[b * 3] - pos[a * 3], uz = pos[b * 3 + 2] - pos[a * 3 + 2];
+      const vx = pos[c * 3] - pos[a * 3], vz = pos[c * 3 + 2] - pos[a * 3 + 2];
+      if (uz * vx - ux * vz < 0) { index[k + 1] = c; index[k + 2] = b; }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    geo.setAttribute('aField', new THREE.BufferAttribute(fld, 4));
+    geo.setIndex(new THREE.BufferAttribute(index, 1));
+    geo.computeVertexNormals();
+    geo.computeBoundingSphere();
+    if (t.mesh) { this.root.remove(t.mesh); t.geo!.dispose(); }
+    const mesh = new THREE.Mesh(geo, this.material);
+    mesh.receiveShadow = true;
+    mesh.name = `strips:${t.key}:${lod}`;
+    mesh.matrixAutoUpdate = false;
+    this.root.add(mesh);
+    t.mesh = mesh;
+    t.geo = geo;
+    t.lod = lod;
+    this.colorTile(t);
+  }
+
+  private stripLook(g: StripGeom, c: THREE.Color): { furrow: number; rows: number } {
+    const field = this.fieldColor, grass = this.grassColor;
+    let furrow = 0.15, rows = 0;
+    const vary = 0.94 + hash01(g.id, 3) * 0.12;
+    switch (g.state) {
+      case 'bare': c.copy(field).multiplyScalar(1.05); furrow = 0.1; break;
+      case 'ploughed': c.copy(field).multiplyScalar(0.78); furrow = 0.85; break;
+      case 'sown': c.copy(field).multiplyScalar(0.84).lerp(this.tmpC.setHex(CROP_GREEN[g.crop]), 0.12); furrow = 0.7; break;
+      case 'growing': {
+        const t = clamp(g.growth, 0, 1);
+        c.copy(field).multiplyScalar(0.85).lerp(lerpHex(CROP_GREEN[g.crop], CROP_RIPE[g.crop], Math.max(0, t - 0.6) * 1.6, this.tmpC), 0.3 + t * 0.65);
+        furrow = 0.5 * (1 - t); rows = 0.6 * t + 0.2;
+        break;
+      }
+      case 'ripe': c.setHex(CROP_RIPE[g.crop]); rows = 0.5; furrow = 0; break;
+      case 'harvested': c.setHex(0xc8b07a); furrow = 0.25; rows = 0.4; break;
+      case 'stubble': c.setHex(0xb59f6c); furrow = 0.2; rows = 0.5; break;
+      case 'fallow': c.copy(grass).lerp(field, 0.35).multiplyScalar(0.95); furrow = 0.05; break;
+    }
+    c.multiplyScalar(vary);
+    return { furrow, rows };
+  }
+
+  private colorTile(t: Tile): void {
+    if (!t.geo) return;
+    const col = t.geo.getAttribute('color') as THREE.BufferAttribute;
+    const fld = t.geo.getAttribute('aField') as THREE.BufferAttribute;
+    const c = this.tmpC2;
+    for (const g of t.strips) {
+      const { furrow, rows } = this.stripLook(g, c);
       for (let v = g.start; v < g.start + g.count; v++) {
         col.setXYZ(v, c.r, c.g, c.b);
         fld.setZ(v, furrow);
         fld.setW(v, rows);
       }
-      col.needsUpdate = true;
-      fld.needsUpdate = true;
     }
+    col.needsUpdate = true;
+    fld.needsUpdate = true;
+  }
+
+  private recolor(list: readonly StripView[]): void {
+    const dirty = new Set<Tile>();
+    for (const sv of list) {
+      const g = this.strips.get(sv.id);
+      if (!g) continue;
+      if (g.state === sv.state && g.crop === sv.crop && Math.abs(g.growth - sv.growth) < 1e-3) continue;
+      g.state = sv.state; g.crop = sv.crop; g.growth = sv.growth;
+      const t = this.tiles.get(g.tile);
+      if (t) dirty.add(t);
+    }
+    for (const t of dirty) this.colorTile(t);
   }
 
   update(list: readonly StripView[], version: number, camera: THREE.Camera, budgetMs: number): number {
     const t0 = performance.now();
+    this.lastList = list;
     if (version !== this.version) {
       const sameSet = list.length === this.strips.size && list.every((s) => this.strips.has(s.id));
-      if (!sameSet) this.buildGeometry(list);
+      if (!sameSet) this.buildIndex(list);
       this.recolor(list);
       this.version = version;
       this.cropsDirty = true;
     }
     const cp = camera.position;
+    // tiles: fine near, coarse further out, none beyond the strip distance; nearest built first
+    const todo: { t: Tile; lod: 0 | 1; d: number }[] = [];
     for (const t of this.tiles.values()) {
-      t.mesh.visible = Math.hypot(t.cx - cp.x, t.cz - cp.z) - TILE * 0.71 < this.settings.stripDistance && cp.y < this.settings.stripDistance;
+      const d = Math.max(0, Math.hypot(t.cx - cp.x, t.cz - cp.z) - TILE * 0.71);
+      const far = d > this.settings.stripDistance || cp.y > this.settings.stripDistance;
+      if (far) {
+        if (t.mesh) { t.mesh.visible = false; if (d > this.settings.stripDistance * 1.4) this.dropTile(t); }
+        continue;
+      }
+      const want: 0 | 1 = d < FINE_DIST ? 0 : t.lod === 0 && d < FINE_DIST * 1.25 ? 0 : 1;
+      if (t.mesh) t.mesh.visible = true;
+      if (t.lod !== want) todo.push({ t, lod: want, d });
     }
+    todo.sort((a, b) => a.d - b.d);
+    for (let k = 0; k < todo.length; k++) {
+      if (k > 0 && performance.now() - t0 > budgetMs) break;
+      this.buildTile(todo[k].t, todo[k].lod);
+    }
+    this.pendingTiles = Math.max(0, todo.length - 1);
     // crops
     if (Math.hypot(this.lastCropPos.x - cp.x, this.lastCropPos.y - cp.z) > 10 || this.cropsDirty) {
       if (!this.cropJob) {
@@ -279,8 +345,10 @@ float fNoise(vec2 p) {
   }
 
   settle(camera: THREE.Camera): void {
-    for (let i = 0; i < 200 && this.cropJob; i++) this.stepCrops(performance.now() + 50);
-    void camera;
+    for (let i = 0; i < 200 && (this.cropJob || this.pendingTiles > 0); i++) {
+      this.update(this.lastList, this.version, camera, 1000);
+      if (this.cropJob) this.stepCrops(performance.now() + 50);
+    }
   }
 
   private stage(g: StripGeom): 0 | 1 | 2 | 3 {
@@ -315,10 +383,7 @@ float fNoise(vec2 p) {
           if (dist > R) continue;
           // thin out with distance
           if (dist > R * 0.45 && h > 1.25 - dist / R) continue;
-          const gi = Math.min(g.nu - 1, Math.floor(u * g.nu)), gj = Math.min(g.nv - 1, Math.floor(w * g.nv));
-          const fu = u * g.nu - gi, fw = w * g.nv - gj, W1 = g.nu + 1;
-          const y = (g.heights[gj * W1 + gi] * (1 - fu) + g.heights[gj * W1 + gi + 1] * fu) * (1 - fw)
-            + (g.heights[(gj + 1) * W1 + gi] * (1 - fu) + g.heights[(gj + 1) * W1 + gi + 1] * fu) * fw - 0.07;
+          const y = this.world.heightAt(x, z) + 0.02;
           arr.push(x, y, z, h * 6.283, 0.85 + hash01(h * 1e6, 3) * 0.3);
           job.total++;
         }
@@ -342,9 +407,8 @@ float fNoise(vec2 p) {
     this.cropJob = null;
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), y = new THREE.Vector3(0, 1, 0);
     let total = 0;
-    for (const [key, mesh] of this.cropMeshes) {
-      if (!job.buf.has(key)) mesh.count = 0;
-    }
+    for (const [key, mesh] of this.cropMeshes) if (!job.buf.has(key)) mesh.count = 0;
+    for (const [key, mesh] of this.cropShadowMeshes) if (!job.buf.has(key)) mesh.count = 0;
     // keep within the triangle budget: instances were gathered nearest strip first, so trimming
     // each list's tail drops the farthest plants
     let tris = 0;
@@ -353,36 +417,54 @@ float fNoise(vec2 p) {
       tris += (arr.length / 5) * ((g.index ? g.index.count : g.getAttribute('position').count) / 3);
     }
     const keep = tris > this.settings.cropTris ? this.settings.cropTris / tris : 1;
-    for (const [key, arr] of job.buf) {
-      const n = Math.floor((arr.length / 5) * keep);
-      let mesh = this.cropMeshes.get(key);
-      if (!mesh || (mesh.instanceMatrix.count < n)) {
+    const mk = (key: string, n: number, shadow: boolean): THREE.InstancedMesh => {
+      const pool = shadow ? this.cropShadowMeshes : this.cropMeshes;
+      let mesh = pool.get(key);
+      if (!mesh || mesh.instanceMatrix.count < n) {
         if (mesh) { this.root.remove(mesh); mesh.dispose(); }
         const kit = this.kit(key);
         mesh = new THREE.InstancedMesh(kit.geometry, kit.material, Math.ceil(n * 1.3) + 32);
         mesh.frustumCulled = false;
-        mesh.castShadow = false;
         mesh.receiveShadow = true;
-        mesh.name = `crop:${key}`;
-        this.cropMeshes.set(key, mesh);
+        // only crops close to the camera cast shadows (they follow the sway via the kit's depth material)
+        mesh.castShadow = shadow;
+        if (shadow && kit.depthMaterial) mesh.customDepthMaterial = kit.depthMaterial;
+        mesh.name = `crop:${key}${shadow ? ':near' : ''}`;
+        pool.set(key, mesh);
         this.root.add(mesh);
       }
+      return mesh;
+    };
+    const near2 = CROP_SHADOW_DIST * CROP_SHADOW_DIST;
+    for (const [key, arr] of job.buf) {
+      const n = Math.floor((arr.length / 5) * keep);
+      const tall = Number(key.split(':')[1]) >= 2;
+      let nNear = 0;
+      if (tall) for (let i = 0; i < n; i++) if ((arr[i * 5] - job.cx) ** 2 + (arr[i * 5 + 2] - job.cz) ** 2 < near2) nNear++;
+      const far = mk(key, Math.max(1, n - nNear), false);
+      const nearMesh = tall ? mk(key, Math.max(1, nNear), true) : null;
+      let iFar = 0, iNear = 0;
       for (let i = 0; i < n; i++) {
         q.setFromAxisAngle(y, arr[i * 5 + 3]);
         const sc = arr[i * 5 + 4];
         m.compose(p.set(arr[i * 5], arr[i * 5 + 1], arr[i * 5 + 2]), q, s.set(sc, sc, sc));
-        mesh.setMatrixAt(i, m);
+        const isNear = tall && (arr[i * 5] - job.cx) ** 2 + (arr[i * 5 + 2] - job.cz) ** 2 < near2;
+        if (isNear) nearMesh!.setMatrixAt(iNear++, m);
+        else far.setMatrixAt(iFar++, m);
       }
-      mesh.count = n;
-      mesh.instanceMatrix.needsUpdate = true;
+      far.count = iFar;
+      far.instanceMatrix.needsUpdate = true;
+      if (nearMesh) { nearMesh.count = iNear; nearMesh.instanceMatrix.needsUpdate = true; }
+      else { const sm = this.cropShadowMeshes.get(key); if (sm) sm.count = 0; }
       total += n;
     }
     this.cropInstances = total;
   }
 
   dispose(): void {
-    for (const t of this.tiles.values()) t.geo.dispose();
+    for (const t of this.tiles.values()) t.geo?.dispose();
     for (const m of this.cropMeshes.values()) m.dispose();
+    for (const m of this.cropShadowMeshes.values()) m.dispose();
     this.material.dispose();
     this.root.clear();
   }

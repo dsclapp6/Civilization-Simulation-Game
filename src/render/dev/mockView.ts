@@ -59,7 +59,7 @@ export class MockView implements SimView {
     this.world = world;
     const season = opts.season ?? 1;
     this.absDay = DAYS_PER_YEAR + season * DAYS_PER_SEASON + 1 + (opts.time ?? 0.42);
-    this.village = world.settlements.find((s) => s.kind === 'village' && s.strips.length > 0) ?? world.settlements[0];
+    this.village = pickVillage(world);
 
     this.buildingList = world.plots.map((p) => {
       const cat = BUILDINGS[p.kind].cat;
@@ -225,6 +225,24 @@ export class MockView implements SimView {
     this.weatherState.snowCover = v ?? this.autoSnowCover();
   }
   fell(id: number): void { this.felledSet.add(id); this.felledVer++; }
+
+  /** Move the crowd (not the avatar) to another settlement, e.g. for a market-town shot. */
+  populate(s: Settlement): void {
+    const plots = this.world.plots.filter((p) => p.settlement === s.id && BUILDINGS[p.kind].blocks);
+    if (!plots.length) return;
+    this.walkers.forEach((w, i) => {
+      if (w.item.mount) return;
+      const p = plots[(i * 7) % plots.length];
+      const def = BUILDINGS[p.kind];
+      const x = p.x + Math.sin(p.rot) * (def.d / 2 + 2.5) + (hash01(w.item.id, 31) - 0.5) * 3;
+      const z = p.z + Math.cos(p.rot) * (def.d / 2 + 2.5) + (hash01(w.item.id, 32) - 0.5) * 3;
+      w.item.x = x; w.item.z = z; w.item.y = this.world.heightAt(x, z);
+      w.goal = { x, z };
+      w.home = s;
+      w.worker = false;
+      if (w.item.anim.startsWith('work')) { w.item.anim = 'idle'; w.item.mainHand = 'none'; }
+    });
+  }
   select(id: number): void {
     this.selectedId = id;
     for (const c of this.chars) if (c !== this.avatar) c.highlight = c.id === id ? 2 : 0;
@@ -426,6 +444,18 @@ export class MockView implements SimView {
     this.stepAvatar(0, null);
   }
   bumpBuildings(): void { this.buildingsVer++; }
+}
+
+/** The viewer's home village: a churched village with fields, preferring the home realm. */
+function pickVillage(world: WorldModel): Settlement {
+  const home = world.homeKingdom ?? world.settlements[0]?.kingdom ?? 0;
+  const score = (s: Settlement) => {
+    const hasChurch = s.plots.some((id) => world.plots[id].kind === 'church');
+    return (s.kingdom === home ? 100 : 0) + (hasChurch ? 50 : 0) + Math.min(40, s.strips.length / 3) + s.plots.length;
+  };
+  const villages = world.settlements.filter((s) => s.kind === 'village' && s.strips.length > 0);
+  villages.sort((a, b) => score(b) - score(a));
+  return villages[0] ?? world.settlements[0];
 }
 
 function centroid(poly: readonly P2[]): P2 {

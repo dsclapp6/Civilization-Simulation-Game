@@ -8,10 +8,12 @@ export interface RibbonData {
   depth: Float32Array;
   flow: Float32Array;
   speed: Float32Array;
+  /** Channel width (m) per vertex: narrow streams fade out once they are thinner than a pixel or two. */
+  width: Float32Array;
   index: Uint32Array;
 }
 
-const ACROSS = 5;
+const ACROSS = 3;
 
 /** Catmull-Rom resampling of a polyline with attached per-point values. */
 function resampleRiver(r: River, spacing: number): { p: P2[]; w: number[]; s: number[] } {
@@ -57,7 +59,7 @@ export function buildRiverRibbons(world: WorldModel, river: River, maxSamplesPer
     return { x0, x1, z0, z1 };
   });
   const avgW = river.widths.reduce((a, b) => a + b, 0) / Math.max(1, river.widths.length);
-  const { p, w, s } = resampleRiver(river, clamp(avgW * 0.7, 4, 10));
+  const { p, w, s } = resampleRiver(river, clamp(avgW * 1.1, 6, 16));
   const m = world.macro;
   const isSea = (x: number, z: number) => {
     const i = clamp(Math.floor(x / m.cell), 0, m.res - 1), j = clamp(Math.floor(z / m.cell), 0, m.res - 1);
@@ -85,6 +87,7 @@ function buildPiece(world: WorldModel, p: P2[], w: number[], s: number[], a: num
   const depth = new Float32Array(n * ACROSS);
   const flow = new Float32Array(n * ACROSS * 2);
   const speed = new Float32Array(n * ACROSS);
+  const width = new Float32Array(n * ACROSS);
   let along = 0;
   for (let k = 0; k < n; k++) {
     const i = a + k;
@@ -107,6 +110,7 @@ function buildPiece(world: WorldModel, p: P2[], w: number[], s: number[], a: num
       depth[v] = s[i] - world.heightAt(x, z);
       flow[v * 2] = along; flow[v * 2 + 1] = u;
       speed[v] = sp;
+      width[v] = w[i];
     }
   }
   const index = new Uint32Array((n - 1) * (ACROSS - 1) * 6);
@@ -127,7 +131,7 @@ function buildPiece(world: WorldModel, p: P2[], w: number[], s: number[], a: num
     const ny = (bz - az) * (cx - ax) - (bx - ax) * (cz - az);
     if (ny < 0) for (let q = 0; q < index.length; q += 3) { const tmp = index[q + 1]; index[q + 1] = index[q + 2]; index[q + 2] = tmp; }
   }
-  return { position, depth, flow, speed, index };
+  return { position, depth, flow, speed, width, index };
 }
 
 export function ribbonGeometry(d: RibbonData): THREE.BufferGeometry {
@@ -136,6 +140,7 @@ export function ribbonGeometry(d: RibbonData): THREE.BufferGeometry {
   g.setAttribute('aDepth', new THREE.BufferAttribute(d.depth, 1));
   g.setAttribute('aFlow', new THREE.BufferAttribute(d.flow, 2));
   g.setAttribute('aSpeed', new THREE.BufferAttribute(d.speed, 1));
+  g.setAttribute('aWidth', new THREE.BufferAttribute(d.width, 1));
   g.setIndex(new THREE.BufferAttribute(d.index, 1));
   g.computeBoundingSphere();
   return g;

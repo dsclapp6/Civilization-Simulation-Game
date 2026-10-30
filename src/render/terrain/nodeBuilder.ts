@@ -19,6 +19,8 @@ export interface TerrainBuildParams {
   res: number;
   /** Seed for per-triangle colour jitter. */
   seed: number;
+  /** Fine tiles leave roads to the ribbon meshes (render/roads.ts) instead of stair-stepped colour. */
+  skipRoads?: boolean;
 }
 
 export interface TerrainNodeData {
@@ -35,6 +37,10 @@ export interface TerrainNodeData {
   /** Heights on the (res+1)^2 grid (row-major by z) for queries. */
   heights: Float32Array;
 }
+
+/** Grounds that are usually thin lines (lanes, river beds): undersampled on coarse tiles. */
+const LINEAR = new Uint8Array(32);
+LINEAR[Ground.Road] = 1; LINEAR[Ground.Path] = 1; LINEAR[Ground.Shingle] = 1; LINEAR[Ground.Mud] = 1;
 
 export class TerrainNodeJob {
   private phase = 0;
@@ -58,6 +64,7 @@ export class TerrainNodeJob {
   private readonly seaCell: Uint8Array | null;
   /** Total build time accumulated across slices (ms). */
   elapsed = 0;
+  private readonly samples = new Int32Array(4);
 
   constructor(p: TerrainBuildParams) {
     this.p = p;
@@ -75,25 +82,42 @@ export class TerrainNodeJob {
   }
 
   /** Advance until finished or the deadline (performance.now() ms) passes. Returns true when done. */
-  step(deadline: number): boolean {
+  /**
+   * Advance until finished or until the next unit of work (one grid row, or the skirts) is not
+   * expected to fit before the deadline. Returns true when done. `progressed` tells the caller
+   * whether anything happened (nothing fits = stop for this frame).
+   */
+  step(deadline: number, mustProgress = false): boolean {
     const t0 = performance.now();
     const n = this.n;
+    this.progressed = false;
     while (this.phase < 3) {
+      const est = this.phase === 0 ? this.heightRowMs : this.phase === 1 ? this.quadRowMs : this.quadRowMs * 2;
+      const now = performance.now();
+      if (now + est > deadline && !(mustProgress && !this.progressed)) break;
       if (this.phase === 0) {
         this.sampleHeightRow(this.row);
         if (++this.row > n) { this.phase = 1; this.row = 0; }
+        this.heightRowMs = this.heightRowMs * 0.8 + (performance.now() - now) * 0.2;
       } else if (this.phase === 1) {
         this.buildQuadRow(this.row);
         if (++this.row >= n) { this.phase = 2; this.row = 0; }
+        this.quadRowMs = this.quadRowMs * 0.8 + (performance.now() - now) * 0.2;
       } else {
         this.buildSkirts();
         this.phase = 3;
       }
-      if (performance.now() > deadline && this.phase < 3) break;
+      this.progressed = true;
     }
     this.elapsed += performance.now() - t0;
     return this.phase === 3;
   }
+
+  /** Whether the last step() did any work. */
+  progressed = false;
+  /** Running per-row cost estimates (ms), shared across jobs through the system. */
+  heightRowMs = 0.04;
+  quadRowMs = 0.12;
 
   get done(): boolean { return this.phase === 3; }
 
@@ -148,7 +172,29 @@ export class TerrainNodeJob {
       const lx = i * s, lz = j * s;
       const qcx = x0 + lx + s * 0.5, qcz = z0 + lz + s * 0.5;
       const forest = world.forestAt(qcx, qcz);
-      const quadGround = fineGround ? -1 : world.groundAt(qcx, qcz);
+      // coarse tiles: one representative ground (for shading weights) plus a 2x2 supersampled
+      // colour. Thin linear grounds (roads, paths, river beds) count half and lend the other half
+      // to the tile's dominant ground, so undersampled lanes and streams do not alias into dashes.
+      let quadGround = -1, avgR = 0, avgG = 0, avgB = 0;
+      if (!fineGround) {
+        quadGround = world.groundAt(qcx, qcz);
+        const gsArr = this.samples;
+        let dominant = -1;
+        for (let k = 0; k < 4; k++) {
+          gsArr[k] = world.groundAt(x0 + lx + s * (0.25 + 0.5 * (k & 1)), z0 + lz + s * (0.25 + 0.5 * (k >> 1)));
+          if (dominant < 0 && !LINEAR[gsArr[k]]) dominant = gsArr[k];
+        }
+        if (dominant < 0) dominant = quadGround;
+        if (!LINEAR[quadGround] || dominant !== quadGround) quadGround = LINEAR[quadGround] ? dominant : quadGround;
+        for (let k = 0; k < 4; k++) {
+          const gs = gsArr[k];
+          const own = LINEAR[gs] && gs !== dominant ? 0.5 : 1;
+          avgR += style.rgb[gs * 3] * own + style.rgb[dominant * 3] * (1 - own);
+          avgG += style.rgb[gs * 3 + 1] * own + style.rgb[dominant * 3 + 1] * (1 - own);
+          avgB += style.rgb[gs * 3 + 2] * own + style.rgb[dominant * 3 + 2] * (1 - own);
+        }
+        avgR *= 0.25; avgG *= 0.25; avgB *= 0.25;
+      }
       const n0 = noise.noise(qcx / 420 - 31.7, qcz / 420 + 8.3);
       const n1 = noise.noise(qcx / 85, qcz / 85);
       const n2 = noise.noise(qcx / 23 + 17.3, qcz / 23 - 4.1);
@@ -170,9 +216,11 @@ export class TerrainNodeJob {
         const nl = Math.hypot(nx, ny, nz) || 1;
         nx /= nl; ny /= nl; nz /= nl;
         const tx = x0 + (ax + bx + cx) / 3, tz = z0 + (az + bz + cz) / 3, ty = (ay + by + cy) / 3;
-        const g = fineGround ? world.groundAt(tx, tz) : quadGround;
+        let g = fineGround ? world.groundAt(tx, tz) : quadGround;
+        // the finest tiles (near the camera) leave roads to the smooth ribbons in render/roads.ts
+        if (s <= 2.5 && this.p.skipRoads && (g === Ground.Road || g === Ground.Path)) g = Ground.Grass;
         const rgb = style.rgb;
-        let r = rgb[g * 3], gg = rgb[g * 3 + 1], b = rgb[g * 3 + 2];
+        let r = fineGround ? rgb[g * 3] : avgR, gg = fineGround ? rgb[g * 3 + 1] : avgG, b = fineGround ? rgb[g * 3 + 2] : avgB;
         if (g === Ground.Heath || g === Ground.Moor) {
           // heather and moorland are patchy, mixed with grass
           const t = 0.2 + 0.35 * (0.5 + 0.5 * n1);

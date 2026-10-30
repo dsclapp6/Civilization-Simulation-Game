@@ -21,8 +21,8 @@ export const atmoUniforms = {
   atmoParams: { value: new Float32Array([0, 0.04, 0, 8]) },
   /** x: cloud coverage 0..1, y/z: cloud offset (m), w: cloud shadow strength 0..1. */
   atmoCloud: { value: new Float32Array([0, 0, 0, 0]) },
-  /** Final grade applied with the fog: x = desaturation 0..1, yzw = colour multiplier (night blue shift). */
-  atmoGrade: { value: new Float32Array([0, 1, 1, 1]) },
+  /** Final grade applied with the fog: x = desaturation 0..1, yzw = shadow lift colour (night blue). */
+  atmoGrade: { value: new Float32Array([0, 0, 0, 0]) },
 };
 
 const PARS_VERTEX = /* glsl */`
@@ -103,10 +103,12 @@ const FRAGMENT = /* glsl */`
 	vec3 fogCol = fogColor + atmoSunFog * pow( max( dot( fogDir, atmoSunDir ), 0.0 ), atmoParams.w );
 	// scene grade (moonlit nights desaturate and shift blue); zeros from un-adopted shaders are ignored
 	if ( atmoGrade.x > 0.0 ) {
-		// dim surfaces lose colour (scotopic vision); bright lights such as lit windows keep it
+		// dim surfaces lose colour and their shadows lift towards the night blue (scotopic vision);
+		// bright lights such as lit windows and fires keep theirs
 		float gl = dot( gl_FragColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );
-		float keep = smoothstep( 0.25, 0.6, gl );
-		gl_FragColor.rgb = mix( mix( gl_FragColor.rgb, vec3( gl ), atmoGrade.x ) * atmoGrade.yzw, gl_FragColor.rgb, keep );
+		float keep = smoothstep( 0.3, 0.7, gl );
+		vec3 graded = mix( gl_FragColor.rgb, vec3( gl ), atmoGrade.x ) + atmoGrade.yzw * ( 1.0 - smoothstep( 0.0, 0.45, gl ) );
+		gl_FragColor.rgb = mix( graded, gl_FragColor.rgb, keep );
 	}
 	gl_FragColor.rgb = mix( gl_FragColor.rgb, fogCol, clamp( fogFactor, 0.0, 1.0 ) );
 #endif

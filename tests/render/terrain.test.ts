@@ -106,7 +106,10 @@ describe('terrain node builder', () => {
   it('can be time-sliced', () => {
     const job = new TerrainNodeJob({ world, style, noise, x0: 3000, z0: 3000, size: 500, res: 32, seed: 3 });
     let steps = 0;
-    while (!job.step(performance.now() - 1)) steps++;
+    // a deadline already passed: no unit fits, so only forced progress advances the job
+    expect(job.step(performance.now() - 1)).toBe(false);
+    expect(job.progressed).toBe(false);
+    while (!job.step(performance.now() - 1, true)) steps++;
     expect(steps).toBeGreaterThan(10);
     expect(job.result().vertexCount).toBe(32 * 32 * 6 + 4 * 32 * 6);
   });

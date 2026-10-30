@@ -13,7 +13,7 @@ import { createTerrainMaterial, createTerrainUniforms, type TerrainUniforms } fr
 import { buildFarTerrainGeometry } from './farTerrain';
 
 const NODE_RES = 32;
-const MASK_RES = 256;
+const MASK_RES = 512;
 
 interface TerrainNode {
   key: number;
@@ -35,6 +35,8 @@ export interface TerrainSettings {
   splitFactor: number;
   drawDistance: number;
   cacheNodes: number;
+  /** Road ribbons are drawn near the camera, so fine tiles leave roads out. */
+  roadRibbons?: boolean;
 }
 
 export class TerrainSystem implements QuadBoundsSource {
@@ -58,6 +60,10 @@ export class TerrainSystem implements QuadBoundsSource {
   private readonly v2 = new THREE.Vector3();
   private readonly pb = { min: 0, max: 0 };
   private buildCount = 0;
+  private heightRowMs = 0.04;
+  private quadRowMs = 0.12;
+  private finishMs = 0.3;
+  private starved = 0;
   private buildTotal = 0;
   private buildMax = 0;
   drawn = 0;
@@ -135,11 +141,20 @@ export class TerrainSystem implements QuadBoundsSource {
       this.rebuildMask();
     }
 
-    // generation within budget
+    // generation within budget: work units start only when they are expected to fit; after a
+    // few frames without progress one unit is forced so streaming never starves
     const t0 = performance.now();
     const deadline = t0 + budgetMs;
     let guard = 0;
+    let progressed = false;
     while (performance.now() < deadline && guard++ < 64) {
+      if (this.job && this.job.job.done) {
+        // building the GPU-side mesh is the last unit of a node
+        if (!progressed || performance.now() + this.finishMs < deadline) this.finishJob();
+        else break;
+        progressed = true;
+        continue;
+      }
       if (!this.job) {
         const key = this.pickNext(frustum);
         if (key < 0) break;
@@ -149,14 +164,18 @@ export class TerrainSystem implements QuadBoundsSource {
           key,
           job: new TerrainNodeJob({
             world: this.world, style: this.style, noise: this.noise,
-            x0: i * size, z0: j * size, size, res: NODE_RES, seed: key % 1000003,
+            x0: i * size, z0: j * size, size, res: NODE_RES, seed: key % 1000003, skipRoads: !!s.roadRibbons,
           }),
         };
       }
-      if (this.job.job.step(deadline)) {
-        this.finishJob();
-      }
+      const job = this.job.job;
+      job.heightRowMs = this.heightRowMs; job.quadRowMs = this.quadRowMs;
+      job.step(deadline, this.starved >= 3);
+      this.heightRowMs = job.heightRowMs; this.quadRowMs = job.quadRowMs;
+      if (!job.progressed) break;
+      progressed = true;
     }
+    this.starved = progressed || !this.job && this.selector.wanted.length === 0 ? 0 : this.starved + 1;
     this.evict();
     return performance.now() - t0;
   }
@@ -197,6 +216,7 @@ export class TerrainSystem implements QuadBoundsSource {
 
   private finishJob(): void {
     if (!this.job) return;
+    const tf = performance.now();
     const { key, job } = this.job;
     this.job = null;
     const data = job.result();
@@ -245,6 +265,7 @@ export class TerrainSystem implements QuadBoundsSource {
       key, level, x0, z0, size, group, terrain, water,
       minY: data.minY, maxY: data.maxY + 0.5, lastUsed: this.frame, visible: false,
     });
+    this.finishMs = this.finishMs * 0.8 + (performance.now() - tf) * 0.2;
   }
 
   private evict(): void {

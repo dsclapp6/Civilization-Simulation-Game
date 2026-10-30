@@ -48,7 +48,8 @@ export function buildFarTerrainGeometry(world: WorldModel, style: GroundStyle, n
       const ci = clamp(Math.floor(cx / m.cell), 0, m.res - 1), cj = clamp(Math.floor(cz / m.cell), 0, m.res - 1);
       const biome = m.biome[cj * m.res + ci];
       // forests are coloured from the smooth density below, so wooded biomes start from grassland
-      const g = biome === Biome.Broadleaf ? biomeGround(Biome.Meadow) : biome === Biome.Pine ? biomeGround(Biome.Upland) : biomeGround(biome);
+      // rivers are drawn as ribbons (and bold on the map overlay); their cells take the land colour
+      const g = biome === Biome.Broadleaf || biome === Biome.River ? biomeGround(Biome.Meadow) : biome === Biome.Pine ? biomeGround(Biome.Upland) : biomeGround(biome);
       const forest = sample(m.forest, cx, cz) / 255;
       const n1 = noise.noise(cx / 420 - 31.7, cz / 420 + 8.3);
       const split = Math.abs(h00 - h11) <= Math.abs(h10 - h01);

@@ -31,7 +31,7 @@ export interface GroundStyle {
 export function gradeGround(hex: number): [number, number, number] {
   let r = (hex >> 16) & 255, g = (hex >> 8) & 255, b = hex & 255;
   const lum = 0.3 * r + 0.59 * g + 0.11 * b;
-  const sat = 1.16, dark = 0.8;
+  const sat = 0.96, dark = 0.84;
   r = (lum + (r - lum) * sat) * dark;
   g = (lum + (g - lum) * sat) * dark;
   b = (lum + (b - lum) * sat) * dark;

@@ -1,6 +1,7 @@
 // All static water: lake surfaces, river ribbons, the far ocean plane, bridges and fords.
 // (The coastal sea near the camera is built per terrain node; see terrain/nodeBuilder.ts.)
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { clamp, pointInPolygon } from '../../core/math';
 import type { WorldModel } from '../../world/types';
 import type { Palette } from '../../assets/types';
@@ -20,6 +21,8 @@ export class WaterSystem {
   private readonly depthTex: THREE.DataTexture;
   private readonly geometries: THREE.BufferGeometry[] = [];
   readonly bridges: THREE.Mesh | null = null;
+  /** River tiles (hidden at map altitude, where the overlay draws bold rivers instead). */
+  readonly riverMeshes: THREE.Mesh[] = [];
   private readonly tmpC = new THREE.Color();
 
   constructor(private readonly world: WorldModel, private readonly palette: Palette, mask: THREE.Texture) {
@@ -61,15 +64,30 @@ export class WaterSystem {
       mesh.renderOrder = 2;
       this.root.add(mesh);
     }
+    // river ribbons merged per 2 km tile: one draw call per tile however many streams it holds
+    const RT = 2048;
+    const byTile = new Map<number, THREE.BufferGeometry[]>();
     for (const river of world.rivers) {
-      for (const piece of buildRiverRibbons(world, river)) {
+      for (const piece of buildRiverRibbons(world, river, 160)) {
         const g = ribbonGeometry(piece);
-        this.geometries.push(g);
-        const mesh = new THREE.Mesh(g, this.riverMaterial);
-        mesh.name = `river:${river.id}`;
-        mesh.renderOrder = 3;
-        this.root.add(mesh);
+        const c = g.boundingSphere!.center;
+        const key = Math.floor(c.z / RT) * 64 + Math.floor(c.x / RT);
+        let list = byTile.get(key);
+        if (!list) { list = []; byTile.set(key, list); }
+        list.push(g);
       }
+    }
+    for (const [key, list] of byTile) {
+      const merged = list.length === 1 ? list[0] : mergeGeometries(list, false);
+      if (list.length > 1) for (const g of list) g.dispose();
+      if (!merged) continue;
+      merged.computeBoundingSphere();
+      this.geometries.push(merged);
+      const mesh = new THREE.Mesh(merged, this.riverMaterial);
+      mesh.name = `rivers:${key % 64}:${Math.floor(key / 64)}`;
+      mesh.renderOrder = 3;
+      this.root.add(mesh);
+      this.riverMeshes.push(mesh);
     }
     const bg = buildBridgesGeometry(world, palette);
     if (bg) {
@@ -123,7 +141,9 @@ export class WaterSystem {
   }
 
   /** Per-frame uniforms. `linearOutput` selects the colour space used for display-space colours. */
-  update(atmo: AtmosphereState, time: number, rain: number): void {
+  update(atmo: AtmosphereState, time: number, rain: number, mapBlend = 0, pixelAngle = 0.0013): void {
+    for (const m of this.riverMeshes) m.visible = mapBlend < 0.9;
+    this.riverMaterial.uniforms.uPixelAngle.value = pixelAngle;
     const s = this.shared;
     s.uTime.value = time;
     const p = this.palette.water;
@@ -145,6 +165,7 @@ export class WaterSystem {
     s.uSkyTop.value.copy(atmo.skyTop).multiplyScalar(0.58);
     s.uSkyHorizon.value.copy(atmo.skyHorizon).multiplyScalar(0.62).lerp(this.tmpC.copy(atmo.sunHalo), 0.25 * atmo.dusk);
     s.uRain.value = rain;
+    s.uGlint.value = atmo.lightIsMoon ? 0.3 : 1;
   }
 
   dispose(): void {
