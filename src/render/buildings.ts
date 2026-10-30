@@ -846,6 +846,9 @@ export class BuildingSystem {
       local.copy(ray).applyMatrix4(inv);
       box.min.set(-def.w / 2, 0, -def.d / 2);
       box.max.set(def.w / 2, Math.max(1, h), def.d / 2);
+      // standing inside a walk-through footprint (market stall, cross, well): the boom must stay
+      // short, under the awning, rather than run out to the far side of the box
+      if (box.containsPoint(local.origin)) { if (!best || best.distance > 0) best = { id: e.id, distance: 0 }; continue; }
       if (local.intersectBox(box, hit)) {
         const d = hit.distanceTo(local.origin);
         if (d <= maxDist && (!best || d < best.distance)) best = { id: e.id, distance: d };

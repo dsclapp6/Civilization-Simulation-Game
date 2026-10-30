@@ -307,8 +307,8 @@ export class CameraRig {
     // pulled in close by a wall: look over the character's head down the way ahead instead of
     // filling the screen with the back of it
     const close = want > 4 ? smoothstep(4.5, 1.6, this.curDistance) : 0;
-    pos.y += close * 0.25;
-    const look = this.tmp2.set(head.x + fwdX * close * 2, head.y + Math.max(0, (0.2 - pitch)) * 0.8 + close * 0.1, head.z + fwdZ * close * 2);
+    pos.y += close * 0.15;
+    const look = this.tmp2.set(head.x + fwdX * close * 1.1, head.y + Math.max(0, (0.2 - pitch)) * 0.8, head.z + fwdZ * close * 1.1);
     this.lookPose(out, pos, look, 55);
   }
 
