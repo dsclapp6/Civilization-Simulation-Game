@@ -134,7 +134,7 @@ export function grossYield(E: Econ, strip: StripState, ex: StripExtra | undefine
   const weeds = ex?.w ? 1 : 0.86;
   const thin = ex?.t ?? 1;
   const late = ex?.r !== undefined ? Math.max(0.35, 1 - 0.06 * Math.max(0, E.day - ex.r - 1.5)) : 1;
-  return base * fert * wf * care * weeds * thin * (ex?.y ?? 1) * late * mult;
+  return base * fert * wf * care * weeds * thin * (ex?.y ?? 1) * late * mult * (1 + E.techBonus(sid, 'farm.yield'));
 }
 
 /** Seed corn a holder wants in the barn for the coming year's sowings: one strip's seed for each strip held, a little over. */
@@ -253,7 +253,8 @@ export function farmEff(E: Econ, hh: Household, strips: number): number {
   const labour = labourUnits(E, hh);
   const head = E.state.persons.get(hh.head);
   const serf = head?.estate === 'unfree';
-  const need = strips * 0.42 * (serf ? 1.3 : 1);
+  // a serf's own land waits on the lord's week-work; a heavy manor takes more of his hands (politics sets the policy)
+  const need = strips * 0.42 * (serf ? 1.3 + 0.15 * E.manorPolicy(hh.settlement).labour : 1);
   if (need <= 0) return 1;
   const playerHere = hh.members.some((id) => E.isPlayer(id));
   if (labour <= 0) return playerHere ? 0 : 0.35;

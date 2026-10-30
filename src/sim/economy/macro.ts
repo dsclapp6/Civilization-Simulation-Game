@@ -370,7 +370,7 @@ function sellSurplus(E: Econ, s: Settlement, hh: Household, units: number, tier:
     const v = st[g] ?? 0;
     if (g === 'ale' ? v > units * 2 : v > 0.5) {
       const spare = g === 'ale' ? v - units * 1.5 : v;
-      const money = GOODS[g].basePrice * spare * 0.8;
+      const money = GOODS[g].basePrice * spare * 0.8 * (g === 'wool' ? 1 + E.techBonus(s.id, 'wool.price') : 1);
       bagAdd(st, g, -spare);
       hh.purse = Math.round((hh.purse + money) * 100) / 100;
     }
@@ -389,6 +389,7 @@ function payRent(E: Econ, s: Settlement, hh: Household, head: Person, lordHH: Ho
   let rent = 0;
   if (head.estate === 'free') rent = strips * RENT_PER_STRIP / 2;
   else if (strips > 0) rent = strips * 0.6; // chevage and fines in place of money rent for the unfree
+  rent *= Math.max(0.3, 1 + 0.35 * E.manorPolicy(s.id).rent); // the lord's policy: relief to harsh
   if (rent <= 0) return;
   const paid = Math.min(rent, hh.purse * 0.5);
   hh.purse = Math.round((hh.purse - paid) * 100) / 100;

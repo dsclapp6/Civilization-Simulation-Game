@@ -312,6 +312,7 @@ function guildFee(E: Econ, p: Person): number {
 function qualityRoll(E: Econ, p: Person, r: RecipeDef, toolQ: number, bonus = 0): Quality {
   const lvl = skillLevel(p.skills[r.skill]);
   const s = (lvl / 20) * 2.4 + (toolQ - 1) * 0.45 + (p.trained.int - 10) * 0.04 + (p.trained.agi - 10) * 0.02 + perkSum(p, r.skill, 'quality') + bonus
+    + E.techBonus(p.settlement, 'craft.quality') * 4 // the guild's standards (+0.05 → a fifth of a grade)
     + E.rng('quality').range(-0.45, 0.45);
   return Math.max(0, Math.min(4, Math.round(s))) as Quality;
 }

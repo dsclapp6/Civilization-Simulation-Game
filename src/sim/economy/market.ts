@@ -172,12 +172,8 @@ function glutFactor(E: Econ, sid: number, good: string): number {
 /** How much the market of a settlement can absorb of one manufactured good before prices sag (pence). */
 function depthOf(E: Econ, sid: number): number {
   const s = E.settlementById.get(sid);
-  switch (s?.kind) {
-    case 'city': return 900;
-    case 'town': return 320;
-    case 'village': return 70;
-    default: return 40;
-  }
+  const base = s?.kind === 'city' ? 900 : s?.kind === 'town' ? 320 : s?.kind === 'village' ? 70 : 40;
+  return base * (1 + E.techBonus(sid, 'market.depth'));
 }
 
 /** Daily upkeep of one market: spoilage, imports and exports, the glut of sold goods fading. */
@@ -500,6 +496,12 @@ function edgeOf(E: Econ, actor: Person, v: Venue, side: 'buy' | 'sell', goodId: 
   let e = 0.006 * tr + 0.004 * (actor.trained.cha - 10) + opinion / 1500;
   e += perkSum(actor, 'trade', side) + perkSum(actor, 'persuasion', side);
   if (side === 'sell') e += perkSum(actor, skillOfGood(goodId), 'sell');
+  // the town's trading techniques: letters of credit, accounts, the wool trade and the fulling mill
+  e += E.techBonus(v.settlement, 'trade.margin');
+  if (side === 'sell') {
+    if (goodId === 'wool') e += E.techBonus(v.settlement, 'wool.price');
+    else if (goodId === 'cloth') e += E.techBonus(v.settlement, 'cloth.value');
+  }
   return Math.max(-0.1, Math.min(v.spread * 0.92, e));
 }
 

@@ -251,6 +251,16 @@ export class Econ {
   touchMarkets(): void { this.state.touchExt(MARKETS_KEY); }
   touchFarm(): void { this.state.touchExt(FARM_KEY); }
 
+  /** The lord's policy on a manor (politics): rents and labour beyond custom, −1 relief … 2 harsh; customary without politics. */
+  manorPolicy(settlement: number): { rent: number; labour: number } {
+    return this.sim.services.politics?.manorPolicy?.(settlement) ?? { rent: 0, labour: 0 };
+  }
+
+  /** Sum of a technique effect known in the settlement (`farm.yield`, `mill.speed`, …); 0 without the advancement module. */
+  techBonus(settlement: number, key: string): number {
+    return this.sim.services.advancement?.settlementBonus?.(settlement, key) ?? 0;
+  }
+
   /** Market (settlement id) a settlement trades with, or −1. */
   marketFor(settlement: number): number { return this.marketOf.get(settlement) ?? -1; }
 

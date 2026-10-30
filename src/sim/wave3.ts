@@ -167,6 +167,8 @@ export interface PoliticsApi {
   strength(house: HouseId): number;
   /** Battles and sieges report their outcome so wars progress. */
   reportBattle(war: number, attackerWon: boolean, weight: number): void;
+  /** Additive: the manor's policy (−1 relief · 0 customary · 1 heavy · 2 harsh) for rents and for week- and boon-work; the economy's dues read it. */
+  manorPolicy?(settlement: number): { rent: number; labour: number };
 }
 
 // ---------------------------------------------------------------------------------------------

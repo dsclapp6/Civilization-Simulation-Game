@@ -25,7 +25,25 @@ import { MARKET_BUILDINGS } from './market';
 import { parseItemKey, type ItemKey } from './types';
 
 const FARM_BUILDINGS: ReadonlySet<string> = new Set(['barn', 'tithe_barn', 'cowshed', 'stable', 'sheepfold', 'pigsty', 'henhouse', 'granary']);
-const HOME_KINDS: ReadonlySet<string> = new Set(['hovel', 'cottage', 'longhouse', 'townhouse', 'manor_house']);
+const HOME_KINDS: ReadonlySet<string> = new Set(['hovel', 'cottage', 'longhouse']);
+
+/** Which animal work belongs at which building: what is offered, and for which beasts. A townhouse door offers none. */
+interface StockSite { acts: ReadonlySet<'feed' | 'muck' | 'milk' | 'shear' | 'slaughter'>; animals: ReadonlySet<string> }
+const site = (acts: Array<'feed' | 'muck' | 'milk' | 'shear' | 'slaughter'>, animals: string[]): StockSite => ({ acts: new Set(acts), animals: new Set(animals) });
+const STOCK_SITES: Readonly<Record<string, StockSite>> = {
+  cowshed: site(['feed', 'muck', 'milk', 'slaughter'], ['cow', 'ox']),
+  stable: site(['feed', 'muck'], ['ox', 'horse']),
+  sheepfold: site(['feed', 'muck', 'shear', 'slaughter'], ['sheep', 'goat']),
+  pigsty: site(['feed', 'muck', 'slaughter'], ['pig']),
+  henhouse: site(['feed', 'slaughter'], ['chicken']),
+  barn: site(['feed'], ['cow', 'ox', 'horse', 'sheep', 'goat']),
+  tithe_barn: site(['feed'], ['cow', 'ox', 'horse', 'sheep', 'goat']),
+  granary: site(['feed'], []),
+  // the longhouse shelters the household's beasts under its own roof; a cottage or hovel keeps a pig and hens
+  longhouse: site(['feed', 'muck', 'milk', 'slaughter'], ['cow', 'ox', 'sheep', 'goat', 'pig', 'chicken']),
+  cottage: site(['feed', 'slaughter'], ['pig', 'chicken', 'goat']),
+  hovel: site(['feed', 'slaughter'], ['pig', 'chicken']),
+};
 
 // ---------------------------------------------------------------------------------------------
 // Livestock
@@ -44,12 +62,15 @@ export function stockProvider(E: Econ): ActionProvider {
       if (!hh) return;
       let id = -1;
       let pasture = false;
+      let here: StockSite | undefined;
       if (target.kind === 'building') {
         const b = E.state.buildings.get(target.id);
         if (!b) return;
         const own = hh.home === b.id || b.household === hh.id;
         if (!(FARM_BUILDINGS.has(b.kind) || (own && HOME_KINDS.has(b.kind)))) return;
         if (b.settlement !== p.settlement) return;
+        here = STOCK_SITES[b.kind];
+        if (!here) return;
         id = b.id;
       } else if (target.kind === 'parcel') {
         const q = E.world.parcels.find((x) => x.id === target.id);
@@ -63,10 +84,18 @@ export function stockProvider(E: Econ): ActionProvider {
       const block = holyDayBlock(E) ?? incapable(p);
       const cows = bagGet(st, 'cow'), sheep = bagGet(st, 'sheep'), pigs = bagGet(st, 'pig'), oxen = bagGet(st, 'ox'), goats = bagGet(st, 'goat'), hens = bagGet(st, 'chicken');
       const horses = [0, 1, 2, 3, 4].reduce((s, q) => s + bagGet(st, `horse#${q}`), 0);
-      const total = cows + sheep + pigs + oxen + goats + hens + horses;
+      // only what is kept at this kind of building counts here (cows at the cowshed, hens at the henhouse, …)
+      const kept = (animal: string, n: number): number => (!here || here.animals.has(animal) ? n : 0);
+      const total = pasture ? cows + sheep + pigs + oxen + goats + hens + horses
+        : kept('cow', cows) + kept('sheep', sheep) + kept('pig', pigs) + kept('ox', oxen) + kept('goat', goats) + kept('chicken', hens) + kept('horse', horses);
+      const can = (act: 'feed' | 'muck' | 'milk' | 'shear' | 'slaughter'): boolean => !here || here.acts.has(act);
       const push = (o: ActionOption): void => { if (block) { o.enabled = false; o.reason = block; } out.push(o); };
       const base = { target: t, range: pasture ? 18 : 8 };
-      if (total < 1) { out.push(disabled({ id: 'stock.none', label: 'Tend the animals', ...base }, 'Your household keeps no animals')); return; }
+      if (total < 1) {
+        // nothing of the household's is kept here: a byre or a pen says so only when the household has no animals at all
+        if ((!here || here.animals.size > 0) && cows + sheep + pigs + oxen + goats + hens + horses < 1) out.push(disabled({ id: 'stock.none', label: 'Tend the animals', ...base }, 'Your household keeps no animals'));
+        return;
+      }
       const speed = speedOf(E, p, 'husbandry', 'end', null);
       if (pasture) {
         const emp = employmentOf(E, p.id);
@@ -79,19 +108,19 @@ export function stockProvider(E: Econ): ActionProvider {
       }
       const hay = bagGet(st, 'hay') + bagGet(p.inventory, 'hay');
       const fodder = bagGet(st, '~f');
-      if (sea === 3 || fodder > 0) {
+      if (can('feed') && (sea === 3 || fodder > 0)) {
         if (hay < 1) out.push(disabled({ id: 'stock.feed', label: 'Feed the animals', ...base }, 'No hay left: cut some in summer, or buy it'));
         else push(option({ id: 'stock.feed', label: 'Feed the animals with hay', seconds: secondsFor(0.8, speed, 6, 30), anim: 'work_lift', mainHand: 'pitchfork', carry: 'none', priority: sea === 3 ? 50 : 20, preview: 'A fed animal survives the winter · Husbandry', ...base, data: { act: 'feed', bld: id } as StockData }));
       }
-      if (oxen + cows + horses + sheep > 0) {
+      if (can('muck') && kept('ox', oxen) + kept('cow', cows) + kept('horse', horses) + kept('sheep', sheep) + kept('pig', pigs) > 0) {
         push(option({ id: 'stock.muck', label: 'Muck out the stalls', seconds: secondsFor(1, speedOf(E, p, 'husbandry', 'str', toolFor(E, p, 'pitchfork')?.quality ?? 0), 6, 30), anim: 'work_lift', mainHand: 'pitchfork', carry: 'none', priority: 15,
           preview: 'A load of manure for the strips · Husbandry', ...base, data: { act: 'muck', bld: id } as StockData }));
       }
-      if (cows > 0 && sea !== 3) {
+      if (can('milk') && kept('cow', cows) > 0 && sea !== 3) {
         push(option({ id: 'stock.milk', label: 'Milk the cows', seconds: secondsFor(1, speed, 6, 30), anim: 'work_milk', mainHand: 'bucket', priority: 45,
           preview: `About ${round1(Math.min(cows, 4) * 0.8)} gallons of milk; it keeps one day · Husbandry`, ...base, data: { act: 'milk', bld: id } as StockData }));
       }
-      if (sheep > 0 && sea <= 1 && E.dayOfYear >= 2) {
+      if (can('shear') && kept('sheep', sheep) > 0 && sea <= 1 && E.dayOfYear >= 2) {
         const marker = `~shY`;
         const done = bagGet(st, marker) === E.yearIndex + 1 ? bagGet(st, '~shN') : 0;
         if (done >= sheep) out.push(disabled({ id: 'stock.shear', label: 'Shear the sheep', ...base }, 'Every sheep has been clipped this year'));
@@ -99,7 +128,7 @@ export function stockProvider(E: Econ): ActionProvider {
           preview: `About ${round1(Math.min(sheep - done, 6) * 1.4)} lb of wool · Husbandry`, ...base, data: { act: 'shear', bld: id } as StockData }));
       }
       for (const [animal, n, lb] of [['pig', pigs, 11], ['sheep', sheep, 4], ['goat', goats, 3], ['chicken', hens, 0.3]] as const) {
-        if (n < 1) continue;
+        if (n < 1 || !can('slaughter') || !kept(animal, n)) continue;
         push(option({ id: `stock.slaughter.${animal}`, label: `Slaughter a ${animal}`, seconds: secondsFor(1.2, speedOf(E, p, 'husbandry', 'str', null), 8, 40), anim: 'work_lift', mainHand: 'none', priority: 5, repeat: false,
           preview: `${lb} lb of meat and a hide · you lose a breeding animal · Husbandry`, ...base, data: { act: 'slaughter', animal, bld: id } as StockData }));
       }

@@ -21,7 +21,9 @@ export const MANUMISSION_PRICE = 120;
 export function weekWorkDays(E: Econ, p: Person): number {
   if (p.estate !== 'unfree' || E.age(p) < 14) return 0;
   const sea = Math.floor(E.dayOfYear / 4);
-  return sea === 1 || sea === 2 ? 2 : 1;
+  const custom = sea === 1 || sea === 2 ? 2 : 1;
+  // the lord's labour policy (politics): relief a day less, heavy and harsh one and two days more
+  return Math.max(0, custom + E.manorPolicy(p.settlement).labour);
 }
 
 export function merchetFee(E: Econ, father: Person): number {
@@ -142,7 +144,7 @@ export function rentOf(E: Econ, hh: Household): { annual: number; next: number }
   const s = E.settlementById.get(hh.settlement);
   if (s) {
     // a free tenant pays the customary rent on strips held without a lease; the unfree pay in labour (week-work)
-    const customary = E.person(hh.head)?.estate === 'free' ? RENT_PER_STRIP : 0;
+    const customary = E.person(hh.head)?.estate === 'free' ? RENT_PER_STRIP * Math.max(0.3, 1 + 0.35 * E.manorPolicy(hh.settlement).rent) : 0;
     for (const id of s.strips) {
       const st = E.state.strips.get(id);
       if (st && st.holder === hh.id) annual += E.save.lease[String(id)] ?? customary;
