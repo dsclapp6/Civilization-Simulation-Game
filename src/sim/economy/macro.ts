@@ -331,7 +331,7 @@ function produceFromTrade(E: Econ, s: Settlement, hh: Household, head: Person, w
 // ---------------------------------------------------------------------------------------------
 
 function sellSurplus(E: Econ, s: Settlement, hh: Household, units: number, tier: number, full: boolean): void {
-  if (E.marketFor(s.id) < 0) return;
+  if (E.marketFor(s.id) < 0 || E.tick?.besieged) return; // a blockaded place sells nothing
   const st = hh.stores;
   const diet = dietOf(tier);
   const dth = daysToHarvest(E.dayOfYear);

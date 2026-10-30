@@ -320,7 +320,7 @@ export function beginTick(E: Econ, sid: number): void {
   const per = (g: string): number => buy[MACRO_INDEX[g]] / RATION[g];
   const order = STAPLE_GRAINS.slice().sort((a, b) => per(a) - per(b));
   const orderBread = [...order, 'bread'].sort((a, b) => per(a) - per(b));
-  E.tick = { sid, buy, sell, order, orderBread };
+  E.tick = { sid, buy, sell, order, orderBread, besieged: !!E.sim.services.military?.siegeAt?.(sid) };
 }
 
 export function endTick(E: Econ): void { E.tick = null; }
@@ -336,7 +336,7 @@ export function tickPrice(E: Econ, sid: number, good: string, side: 'buy' | 'sel
 /** A household buys up to `qty` of a macro good for at most `budget` pence at its market. Returns what it got and paid. */
 export function marketBuy(E: Econ, sid: number, good: string, qty: number, budget: number): { qty: number; cost: number } {
   const mid = E.marketFor(sid);
-  if (mid < 0 || qty <= 0 || budget <= 0) return { qty: 0, cost: 0 };
+  if (mid < 0 || qty <= 0 || budget <= 0 || E.tick?.besieged) return { qty: 0, cost: 0 };
   const stock = stockOf(E, mid, good);
   const unit = tickPrice(E, sid, good, 'buy');
   if (unit <= 0) return { qty: 0, cost: 0 };
@@ -350,7 +350,7 @@ export function marketBuy(E: Econ, sid: number, good: string, qty: number, budge
 /** A household sells `qty` of a macro good into its market; returns the money received. */
 export function marketSell(E: Econ, sid: number, good: string, qty: number): number {
   const mid = E.marketFor(sid);
-  if (mid < 0 || qty <= 0) return 0;
+  if (mid < 0 || qty <= 0 || E.tick?.besieged) return 0;
   const unit = tickPrice(E, sid, good, 'sell');
   addStock(E, mid, good, qty);
   E.probe?.(`sell:${good}`, 0, qty * unit);

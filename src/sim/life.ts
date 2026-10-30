@@ -59,7 +59,10 @@ function lifeHourly(ctx: SimContext, info: HourInfo): void {
   const day = info.day;
   const now = info.absDay;
   for (const s of world.settlements) {
-    if (s.id % 24 === hour) settlementTick(ctx, s, day, now);
+    // a big settlement's day runs in slices over consecutive hours (slice k at its hour + k): no frame carries a whole city
+    const parts = lifeParts(s);
+    const k = (hour - (s.id % 24) + 24) % 24;
+    if (k < parts) settlementTick(ctx, s, day, now, k, parts);
   }
   if (hour === 12) {
     for (const k of world.kingdoms) if ((day + k.id) % 4 === 0) nobleMatchmaking(ctx, k.id, now);
@@ -75,7 +78,12 @@ function lifeHourly(ctx: SimContext, info: HourInfo): void {
 // Settlement tick
 // ---------------------------------------------------------------------------------------------
 
-function settlementTick(ctx: SimContext, s: Settlement, day: number, now: number): void {
+/** Hours a settlement's people are ticked over (static from its size, so a load resumes the same). */
+function lifeParts(s: Settlement): number {
+  return s.population >= 700 ? 4 : s.population >= 320 ? 3 : s.population >= 150 ? 2 : 1;
+}
+
+function settlementTick(ctx: SimContext, s: Settlement, day: number, now: number, part = 0, parts = 1): void {
   const state = ctx.state;
   const res = state.residents.get(s.id);
   const ss = state.settlements.get(s.id);
@@ -87,11 +95,13 @@ function settlementTick(ctx: SimContext, s: Settlement, day: number, now: number
   for (let i = 0; i < list.length; i++) {
     const p = list[i];
     if (p.death) continue;
+    if (parts > 1 && p.id % parts !== part) continue;
     tickPerson(ctx, rng, ss, p, day, now, rho, famine);
   }
-  if ((day + s.id) % 4 === 0) matchmakeSettlement(ctx, s, now);
-  if ((day + s.id) % 8 === 0) serviceRefill(ctx, s, now);
-  if (day % AGE === s.id % AGE) settlementYearly(ctx, s, ss, now);
+  // the periodic jobs go in different slices from one another
+  if (part === 1 % parts && (day + s.id) % 4 === 0) matchmakeSettlement(ctx, s, now);
+  if (part === 2 % parts && (day + s.id) % 8 === 0) serviceRefill(ctx, s, now);
+  if (part === parts - 1 && day % AGE === s.id % AGE) settlementYearly(ctx, s, ss, now);
 }
 
 function tickPerson(

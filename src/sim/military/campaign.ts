@@ -91,9 +91,7 @@ export function dailyCampaign(M: Mil): void {
       else M.notify('The war is over. Your army may go home.', 'info');
     }
   }
-  // each army thinks once a day, in the hour of its own number (see `thinkHour`)
-  M.time('defend', () => defend(M, dayNo));
-  M.time('queue', () => runQueue(M));
+  // each army thinks once a day, in the hour of its own number (see `thinkHour`); the defence and the muster queue have hours of their own
   // expire feuds and lapsed occupations
   for (const k of Object.keys(data.occupied)) if (data.occupied[k].until <= now) { delete data.occupied[k]; M.touch(); }
   const feuds = data.feuds.filter((f) => f.until >= now);
@@ -109,6 +107,11 @@ export function thinkHour(M: Mil, hour: number): void {
     M.time('think', () => think(M, a));
   }
 }
+
+/** The day's defence call-ups (an enemy near our land and none of ours in the field): its own hour of the day. */
+export function defendHour(M: Mil): void { M.time('defend', () => defend(M, Math.floor(M.day))); }
+/** Raises the queued armies: its own hour of the day. */
+export function queueHour(M: Mil): void { M.time('queue', () => runQueue(M)); }
 
 function warBegins(M: Mil, war: number, attackers: readonly number[], defenders: readonly number[]): void {
   const all = [...attackers, ...defenders];

@@ -198,6 +198,8 @@ export interface MilitaryApi {
   strength?(house: HouseId): number;
   /** Additive: fighting weight of the standing forces only (retinue, garrison households, mercenaries), cheap and cached for the day. */
   standing?(house: HouseId): number;
+  /** Additive: is the settlement under siege (the economy lets nothing in or out of a blockaded place)? */
+  siegeAt?(settlement: number): unknown;
   /** A raiding party of `house` goes against a settlement (burn, steal herds, take captives). Returns the army id, 0 = none raised. */
   raid?(house: HouseId, settlement: number, opts?: { size?: number }): number;
   /** The two Houses (or their lieges) are at war or in a feud: their armies fight when they meet. */

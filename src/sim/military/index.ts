@@ -12,7 +12,7 @@ import {
   armiesOf, detailOf, disband, giveOrder, nearestSettlementId, raise, removeMen, settlementPoint, upkeepDay, viewOf,
 } from './armies';
 import { battleInfo, checkContacts, onFightEnded, stepBattles } from './battle';
-import { dailyCampaign, hourlyArmies, thinkHour } from './campaign';
+import { dailyCampaign, defendHour, hourlyArmies, queueHour, thinkHour } from './campaign';
 import { CareerSystem } from './career';
 import { CFG } from './config';
 import { ForceCache, armsQuality, levySizeFor, recruitTests } from './forces';
@@ -59,13 +59,28 @@ export function installMilitary(sim: Simulation, deps: Wave3Deps): MilitaryRunti
   };
 
   // ---- systems ----
+  // The day's military work is dealt out over the hours so no frame carries all of it: wars at midnight (military.day),
+  // then each part at an hour of its own; armies think and draw their keep in the hour of their number.
   offs.push(sim.registerSystem({
     name: 'military.hour', phase: 'hourly', order: 60,
     run: (_ctx, info) => {
       ensureHooks();
+      const h = info.hour;
+      if (h === 5) queueHour(M);
+      else if (h === 8) M.career.daily();
+      else if (h === 11) defendHour(M);
+      else if (h === 14) M.time('day.captives', () => tickCaptives(M));
+      else if (h === 17) M.time('day.sieges', () => M.sieges.tick());
+      else if (h === 20) M.time('day.repair', () => repairDamage(M));
       if (M.data.armies.length === 0 && M.data.battles.length === 0) return;
       M.time('hour.armies', () => hourlyArmies(M));
-      thinkHour(M, info.hour);
+      thinkHour(M, h);
+      M.time('day.upkeep', () => {
+        for (const a of M.allArmies().slice()) {
+          if (a.id % 24 !== h || !M.armyById.has(a.id) || a.reason === 'sally') continue;
+          upkeepDay(M, a);
+        }
+      });
       M.time('hour.contacts', () => checkContacts(M));
       M.touch();
     },
@@ -78,17 +93,6 @@ export function installMilitary(sim: Simulation, deps: Wave3Deps): MilitaryRunti
       M.forces.clear();
       M.realm.invalidate();
       M.time('day.campaign', () => dailyCampaign(M));
-      M.time('day.upkeep', () => {
-        for (const a of M.allArmies().slice()) {
-          if (!M.armyById.has(a.id)) continue;
-          if (a.reason === 'sally') continue;
-          upkeepDay(M, a);
-        }
-      });
-      M.time('day.sieges', () => M.sieges.tick());
-      M.time('day.captives', () => tickCaptives(M));
-      M.career.daily();
-      M.time('day.repair', () => repairDamage(M));
       void CFG;
     },
   }));

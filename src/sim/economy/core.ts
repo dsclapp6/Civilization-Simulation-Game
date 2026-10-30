@@ -123,6 +123,8 @@ export interface TickPrices {
   /** Staple foods to buy, cheapest ration first (without and with bread). */
   order: string[];
   orderBread: string[];
+  /** Under siege: the households buy and sell nothing at market. */
+  besieged: boolean;
 }
 
 export class Econ {
@@ -258,8 +260,18 @@ export class Econ {
 
   /** Sum of a technique effect known in the settlement (`farm.yield`, `mill.speed`, …); 0 without the advancement module. */
   techBonus(settlement: number, key: string): number {
-    return this.sim.services.advancement?.settlementBonus?.(settlement, key) ?? 0;
+    const adv = this.sim.services.advancement;
+    if (!adv?.settlementBonus) return 0;
+    // memoised for the game hour (the techniques of a community change at most daily)
+    const hour = Math.floor(this.sim.absDay * 24);
+    if (hour !== this.bonusHour) { this.bonusMemo.clear(); this.bonusHour = hour; }
+    const k = `${settlement}:${key}`;
+    let v = this.bonusMemo.get(k);
+    if (v === undefined) { v = adv.settlementBonus(settlement, key); this.bonusMemo.set(k, v); }
+    return v;
   }
+  private bonusHour = -1;
+  private readonly bonusMemo = new Map<string, number>();
 
   /** Market (settlement id) a settlement trades with, or −1. */
   marketFor(settlement: number): number { return this.marketOf.get(settlement) ?? -1; }
