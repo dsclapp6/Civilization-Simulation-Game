@@ -4,6 +4,7 @@
 import { BUILDINGS } from '../../content/types';
 import type { GameState } from '../../sim/state';
 import { CHUNKS_PER_SIDE, CHUNK_SIZE, type ScatterItem, type ScatterKind, type WorldModel } from '../../world/types';
+import { hash3 } from '../../core/math';
 import { obbNearest } from '../geometry';
 
 const BUCKET = 16;
@@ -66,11 +67,58 @@ export class Obstacles {
 
   constructor(private readonly world: WorldModel, private readonly state: GameState) {}
 
-  /** Rebuilds the building boxes when the sim's buildings changed. Returns true if it did. */
+  /** Rectangles (x0, z0, x1, z1 …) whose navigation tiles are stale after the last building change. */
+  readonly dirty: number[] = [];
+  private geomHash = 0;
+  private geomCount = -1;
+
+  /**
+   * Picks up changes to the sim's buildings. The sim bumps its building revision for any flag (smoke, lit
+   * windows, owners) every hour or so, so the geometry is compared by an order-independent hash and the
+   * boxes and navigation tiles are only rebuilt when a footprint was really added, moved or removed.
+   * Returns true when the footprints changed (the affected areas are in `dirty`).
+   */
   refreshBuildings(): boolean {
     const st = this.state;
     if (st.buildingRevision === this.builtRevision) return false;
     this.builtRevision = st.buildingRevision;
+    let h = 0, count = 0;
+    for (const b of st.buildings.values()) {
+      if (!BUILDINGS[b.kind].blocks) continue;
+      count++;
+      h = (h + hash3(b.id, Math.round(b.x * 8) ^ (Math.round(b.rot * 64) << 20), Math.round(b.z * 8) ^ b.kind.length)) | 0;
+    }
+    if (h === this.geomHash && count === this.geomCount) return false;
+    const first = this.geomCount < 0;
+    this.geomHash = h; this.geomCount = count;
+    this.dirty.length = 0;
+    // remember the old boxes by id to find what moved
+    const oldIndex = new Map<number, number>();
+    for (let i = 0; i < this.n; i++) oldIndex.set(this.bid[i], i);
+    const oldX = this.bx, oldZ = this.bz, oldC = this.bcos, oldS = this.bsin, oldW = this.bhw, oldD = this.bhd;
+    this.buildBoxes();
+    if (first) return true;
+    const near = (x: number, z: number, hw: number, hd: number): void => {
+      const r = Math.hypot(hw, hd) + 3;
+      this.dirty.push(x - r, z - r, x + r, z + r);
+    };
+    const seen = new Set<number>();
+    for (let i = 0; i < this.n; i++) {
+      const id = this.bid[i];
+      seen.add(id);
+      const o = oldIndex.get(id);
+      if (o === undefined) near(this.bx[i], this.bz[i], this.bhw[i], this.bhd[i]);
+      else if (oldX[o] !== this.bx[i] || oldZ[o] !== this.bz[i] || oldC[o] !== this.bcos[i] || oldS[o] !== this.bsin[i] || oldW[o] !== this.bhw[i] || oldD[o] !== this.bhd[i]) {
+        near(this.bx[i], this.bz[i], this.bhw[i], this.bhd[i]);
+        near(oldX[o], oldZ[o], oldW[o], oldD[o]);
+      }
+    }
+    for (const [id, o] of oldIndex) if (!seen.has(id)) near(oldX[o], oldZ[o], oldW[o], oldD[o]);
+    return this.dirty.length > 0;
+  }
+
+  private buildBoxes(): void {
+    const st = this.state;
     const list: { id: number; x: number; z: number; rot: number; hw: number; hd: number }[] = [];
     for (const b of st.buildings.values()) {
       const def = BUILDINGS[b.kind];
@@ -102,7 +150,6 @@ export class Obstacles {
         }
       }
     }
-    return true;
   }
 
   /** Building box indices whose bucket cells touch the rectangle (may repeat across calls; dedupe by caller). */

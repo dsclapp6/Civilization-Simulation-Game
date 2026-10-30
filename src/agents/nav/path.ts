@@ -47,6 +47,9 @@ export class Pathfinder {
   // stats
   searches = 0;
   failures = 0;
+  failStart = 0;
+  failGoal = 0;
+  partials = 0;
   totalMs = 0;
   maxMs = 0;
   totalExpanded = 0;
@@ -116,14 +119,14 @@ export class Pathfinder {
     this.searches++;
     const grid = this.grid;
     const i0 = Math.floor(fx / CELL), j0 = Math.floor(fz / CELL);
-    if (!this.nearestFree(i0, j0, 3)) { this.failures++; return false; }
+    if (!this.nearestFree(i0, j0, 3)) { this.failures++; this.failStart++; return false; }
     const si = this.sf.i, sj = this.sf.j;
     let gi = Math.floor(tx / CELL), gj = Math.floor(tz / CELL);
     // keep the goal inside the search box; a goal beyond it becomes a partial path
     let clipped = false;
     if (Math.abs(gi - si) > R) { gi = si + Math.sign(gi - si) * R; clipped = true; }
     if (Math.abs(gj - sj) > R) { gj = sj + Math.sign(gj - sj) * R; clipped = true; }
-    if (!this.nearestFree(gi, gj, 5)) { this.failures++; return false; }
+    if (!this.nearestFree(gi, gj, 5)) { this.failures++; this.failGoal++; return false; }
     const ei = this.sf.i, ej = this.sf.j;
 
     const run = ++this.run;
@@ -194,6 +197,7 @@ export class Pathfinder {
     }
     if (!startFree) out.push(this.ptsX[0], this.ptsZ[0]);
     out.complete = found && !clipped;
+    if (!out.complete) this.partials++;
     this.pull(np, out);
     // the exact goal: walk the last stretch from the final free cell to the real target when it is open
     const lastX = out.n > 0 ? out.x[out.n - 1] : this.ptsX[0];

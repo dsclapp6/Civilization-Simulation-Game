@@ -99,12 +99,17 @@ export class NavGrid {
     this.setCentre(fx, fz);
     const t0 = performance.now();
     const ti0 = Math.floor(fx / (TILE_CELLS * CELL)), tj0 = Math.floor(fz / (TILE_CELLS * CELL));
-    let built = 0;
+    let built = 0, coldLoads = 0;
     for (let k = 0; k < KEEP_TILES.length; k++) {
       const ti = ti0 + KEEP_TILES[k][0], tj = tj0 + KEEP_TILES[k][1];
       if (ti < 0 || tj < 0 || ti >= WORLD_SIZE / (TILE_CELLS * CELL) || tj >= WORLD_SIZE / (TILE_CELLS * CELL)) continue;
       const slot = ((tj & 15) << 4) | (ti & 15);
       if (this.tag[slot] === ti * 65536 + tj) continue;
+      // generating a cold scatter chunk can take several milliseconds: at most one per call, when the budget allows
+      if (!this.obstacles.hasChunk(ti >> 1, tj >> 1)) {
+        if (coldLoads >= 1 || performance.now() - t0 > budgetMs * 0.5) continue;
+        coldLoads++;
+      }
       this.buildTile(ti, tj);
       built++;
       if (performance.now() - t0 > budgetMs) break;

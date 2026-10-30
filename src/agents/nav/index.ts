@@ -104,7 +104,10 @@ export class Nav implements NavApi {
 
   /** Per-frame upkeep: building changes, felled trees, incremental tile building around the focus. */
   update(fx: number, fz: number, budgetMs = NAV_BUILD_BUDGET_MS): void {
-    if (this.obstacles.refreshBuildings()) this.grid.invalidateAll();
+    if (this.obstacles.refreshBuildings()) {
+      const d = this.obstacles.dirty;
+      for (let i = 0; i < d.length; i += 4) this.grid.invalidateRect(d[i], d[i + 1], d[i + 2], d[i + 3]);
+    }
     const felled = this.obstacles.syncFelled(this.view.felledVersion(), this.view.felled());
     for (let i = 0; i < felled.length; i += 2) this.grid.invalidateRect(felled[i] - 4, felled[i + 1] - 4, felled[i] + 4, felled[i + 1] + 4);
     this.grid.update(fx, fz, budgetMs);

@@ -2,11 +2,11 @@
 // carry out the micro-behaviour at its spot (work loops with breaks, chatting, archery, play,
 // errands), and react to the player (look, greet, kneel, wave). Everything here is visual: the
 // macro tier stays the truth, so none of it touches simulation state or random streams.
-import { angleDiff, clamp, hash01, smoothstep, yawTo } from '../core/math';
+import { angleDiff, clamp, distToSegment, hash01, smoothstep, yawTo } from '../core/math';
 import type { AnimState } from '../core/view';
 import { ageYears, hasFlag } from '../sim/state';
 import { Agent, Ph, St } from './agent';
-import { RUN_SPEED, WARP_FAR, WARP_MAX, WARP_NEAR } from './config';
+import { RUN_SPEED, SEEN_RADIUS, WARP_FAR, WARP_MAX, WARP_NEAR } from './config';
 import { Mode, type Intent } from './schedule';
 import type { Zone } from './zone';
 
@@ -73,7 +73,7 @@ export function replan(z: Zone, a: Agent, spawning: boolean): void {
   a.main = I.main; a.off = I.off; a.carry = I.carry; a.back = I.back; a.seat = I.seat;
   a.radiusWander = I.radius;
   a.facing = NaN;
-  a.leg = 0; a.ph = Ph.Work; a.timer = 2 + 8 * rnd(a, 3);
+  a.leg = 0; a.ph = Ph.Work; a.timer = WORK_ANIMS.has(a.anim) ? 6 + 24 * rnd(a, 3) : 2 + 8 * rnd(a, 3);
   a.bx = I.bx; a.bz = I.bz;
   a.wantIn = false; a.wantAway = false;
   a.building = I.building;
@@ -101,12 +101,61 @@ export function replan(z: Zone, a: Agent, spawning: boolean): void {
   else if (a.wantIn) { a.st = St.Door; } else { a.st = St.Idle; a.timer = 1 + 5 * rnd(a, 4); }
 }
 
+/**
+ * Finishes a trip nobody can see: the person is simply there. A person bound for a door goes in, one
+ * leaving the settlement is gone.
+ */
+function teleport(z: Zone, a: Agent, tx: number, tz: number): void {
+  if (a.wantIn || a.wantAway) { a.dead = true; return; }
+  const out = z.tmpP;
+  if (z.nav.nearestWalkable(tx, tz, 2.5, out)) { tx = out.x; tz = out.z; }
+  a.x = tx; a.z = tz; a.y = z.nav.groundY(tx, tz);
+  a.pathN = a.pathI = 0; a.st = St.Idle; a.stuck = 0;
+  legDone(z, a);
+}
+
+/** A path that starts out of sight: the walker joins it where it comes into view (or the trip is skipped). */
+function enterSeen(z: Zone, a: Agent): void {
+  const fx = z.focusX, fz = z.focusZ, R = SEEN_RADIUS;
+  let px = a.x, pz = a.z;
+  for (let i = 0; i < a.pathN; i++) {
+    const qx = a.path[i * 2], qz = a.path[i * 2 + 1];
+    const dx = qx - px, dz = qz - pz;
+    const ox = px - fx, oz = pz - fz;
+    const A = dx * dx + dz * dz, B = 2 * (ox * dx + oz * dz), C = ox * ox + oz * oz - R * R;
+    if (C <= 0) return;
+    const disc = B * B - 4 * A * C;
+    if (A > 1e-6 && disc >= 0) {
+      const t = (-B - Math.sqrt(disc)) / (2 * A);
+      if (t >= 0 && t <= 1) {
+        a.x = px + dx * t; a.z = pz + dz * t; a.y = z.nav.groundY(a.x, a.z);
+        // drop the waypoints already passed
+        const keep = a.pathN - i;
+        for (let k = 0; k < keep; k++) { a.path[k * 2] = a.path[(i + k) * 2]; a.path[k * 2 + 1] = a.path[(i + k) * 2 + 1]; }
+        a.pathN = keep; a.pathI = 0;
+        return;
+      }
+    }
+    px = qx; pz = qz;
+  }
+  teleport(z, a, a.tx, a.tz);
+}
+
 /** Heads for (tx, tz): straight when close and clear, else through the path finder. */
 export function goTo(z: Zone, a: Agent, tx: number, tz: number, pace: number): void {
   a.paceScale = pace;
   const dx = tx - a.x, dz = tz - a.z;
   const d = Math.sqrt(dx * dx + dz * dz);
   if (d < 0.45) { a.st = St.Idle; a.pathN = a.pathI = 0; return; }
+  if (a.control === 'ai' && d > 6) {
+    // out of sight and not coming into it: no need to walk
+    const fx = z.focusX, fz = z.focusZ;
+    if (a.distFocus > SEEN_RADIUS && Math.hypot(tx - fx, tz - fz) > SEEN_RADIUS && distToSegment(fx, fz, a.x, a.z, tx, tz) > SEEN_RADIUS) {
+      teleport(z, a, tx, tz);
+      return;
+    }
+    if (!z.nav.grid.inWindow(Math.floor(tx / 2), Math.floor(tz / 2))) { a.setDirect(tx, tz); a.st = St.Walk; return; }
+  }
   if (d < 9 && z.nav.finder.lineClear(a.x, a.z, tx, tz)) { a.setDirect(tx, tz); a.st = St.Walk; return; }
   a.st = St.Wait;
   a.pathAsked = z.zoneT;
@@ -114,9 +163,15 @@ export function goTo(z: Zone, a: Agent, tx: number, tz: number, pace: number): v
     owner: a.personId, fx: a.x, fz: a.z, tx, tz, maxLength: 0, priority: a.distFocus,
     done: (ok, buf) => {
       if (a.dead || a.st !== St.Wait) return;
-      if (ok && buf.n > 0) { a.setPath(buf.x, buf.z, buf.n); a.st = St.Walk; a.pathFails = 0; return; }
+      if (ok && buf.n > 0) {
+        a.setPath(buf.x, buf.z, buf.n); a.st = St.Walk; a.pathFails = 0;
+        if (a.control === 'ai' && a.distFocus > SEEN_RADIUS) enterSeen(z, a);
+        return;
+      }
       a.pathFails++;
-      if (d < 24 && a.pathFails < 3) { a.setDirect(tx, tz); a.st = St.Walk; return; }
+      // no route (the goal lies beyond the navigation window, or is sealed in): walk straight at it when it is
+      // close or far from the player's eyes; stuck handling folds the body back if it cannot get there
+      if (d > 3 && (d < 24 || a.distFocus > 150) && a.pathFails < 4) { a.setDirect(tx, tz); a.st = St.Walk; return; }
       // nowhere to go from here: stay put and look again a little later (or just be there when unseen)
       a.st = St.Idle; a.replanAt = z.now + 0.04;
       if (a.distFocus > 90 && a.pathFails >= 2) { a.x = tx; a.z = tz; a.y = z.nav.groundY(tx, tz); }
@@ -209,6 +264,11 @@ function walk(z: Zone, a: Agent, dt: number): void {
   const mr = z.mr;
   z.nav.move(a.x, a.z, vx * dt, vz * dt, a.radius, mr);
   a.x = mr.x; a.z = mr.z;
+  // walkers who have left the area people can see finish their trip out of sight
+  if (a.control === 'ai' && a.distFocus > SEEN_RADIUS + 10 && a.pathN > 0) {
+    const ex = a.path[(a.pathN - 1) * 2], ez = a.path[(a.pathN - 1) * 2 + 1];
+    if (Math.hypot(ex - z.focusX, ez - z.focusZ) > SEEN_RADIUS + 10 && Math.hypot(ex - a.x, ez - a.z) > 10) { teleport(z, a, ex, ez); return; }
+  }
   if (mr.wading) a.wading = true; else a.wading = false;
   // face the way of travel
   const want = Math.atan2(vx, vz);
@@ -216,8 +276,10 @@ function walk(z: Zone, a: Agent, dt: number): void {
   // animation
   const sp2 = Math.sqrt(vx * vx + vz * vz);
   if (a.overlay === '') {
+    // 'run' only when the person is really running; people hurrying far from the focus (time warp) just walk
     const loaded = a.draw.carry !== 'none';
-    setAnim(a, loaded && sp2 < 2.4 ? 'carry_walk' : sp2 > 2.35 ? 'run' : 'walk');
+    const pace = sp2 / Math.max(0.3, warp(a.distFocus));
+    setAnim(a, loaded && pace < 2.4 ? 'carry_walk' : pace > 2.35 ? 'run' : 'walk');
   }
   // stuck? (walking into something that will not give)
   a.progT += dt;
@@ -250,9 +312,10 @@ function arrive(z: Zone, a: Agent): void {
 function legDone(z: Zone, a: Agent): void {
   switch (a.mode) {
     case Mode.Errand: case Mode.Patrol:
-      if (a.leg === 1) { a.leg = 2; a.timer = 1.5 + 2.5 * rnd(a, 5); a.draw.carry = a.mode === Mode.Errand ? a.carry : 'none'; }
-      else if (a.leg === 3) { a.leg = 0; a.timer = 1 + 3 * rnd(a, 6); a.draw.carry = 'none'; }
-      else { a.leg = 0; a.timer = 0.5 + 2 * rnd(a, 7); }
+      // a long pause at the home end, a short one at the far end, so errand runners are not forever on the move
+      if (a.leg === 1) { a.leg = 2; a.timer = a.mode === Mode.Patrol ? 3 + 5 * rnd(a, 5) : 2 + 3 * rnd(a, 5); a.draw.carry = a.mode === Mode.Errand ? a.carry : 'none'; }
+      else if (a.leg === 3) { a.leg = 0; a.timer = a.mode === Mode.Patrol ? 5 + 8 * rnd(a, 6) : 8 + 22 * rnd(a, 6); a.draw.carry = 'none'; }
+      else { a.leg = 0; a.timer = 2 + 8 * rnd(a, 7); }
       break;
     case Mode.Wander: a.leg = 0; a.timer = 3 + 7 * rnd(a, 8); break;
     case Mode.Play: a.timer = 0.4 + 2.2 * rnd(a, 9); setAnim(a, 'idle'); break;

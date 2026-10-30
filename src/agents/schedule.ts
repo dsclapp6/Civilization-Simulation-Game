@@ -413,8 +413,8 @@ export class Schedule {
     T.sr = sunrise; T.ss = sunset;
     T.wake = sunrise - 0.012 + 0.02 * j(1);
     T.chore = T.wake + 0.035;
-    T.mealA = 0.485 + 0.02 * j(2);
-    T.mealB = T.mealA + 0.05;
+    T.mealA = 0.47 + 0.04 * j(2);
+    T.mealB = T.mealA + 0.04 + 0.02 * j(6);
     T.workEnd = sunset - 0.085 + 0.025 * j(3);
     T.bed = Math.min(0.985, sunset + 0.05 + 0.05 * j(4));
     T.massA = sunrise + 0.085 + 0.012 * hash01(p.settlement, 5);
@@ -666,14 +666,21 @@ export class Schedule {
   }
 
   private meal(p: Person, o: Intent, day: number, home: BuildingState | null, sp: SettlementPlaces | null, wet: number, marketDay: boolean): void {
-    // a packed meal in the field for those who work far from home, at home for the rest
+    // The day is a minute long and a walk across the village takes longer than that, so nobody goes home for dinner
+    // unless home is (nearly) where they work: a packed meal at the workplace for the rest (as field workers had)
     const wp = this.workTemplate(p);
-    const far = wp && (wp.where === 'strip' || wp.where === 'pasture' || wp.where === 'wood');
-    if (far && wet < 0.6) {
+    if (wp && wet < 0.6 && home) {
       this.working(p, o, day, 0.5, this.times, 30, wet, home, sp, marketDay, true);
-      o.activity = 'eat'; o.label = 'Eating a packed meal'; o.anim = 'eat'; o.main = 'none'; o.off = 'none'; o.carry = 'none'; o.mode = Mode.Stay;
-      o.group = -1; o.x += 0.9; o.z -= 0.5;
-      return;
+      if (!o.indoors && !o.away && o.building !== home.id) {
+        const dh = Math.hypot(o.x - home.x, o.z - home.z);
+        if (dh > 40) {
+          o.activity = 'eat'; o.label = 'Eating a packed meal'; o.anim = 'eat'; o.main = 'none'; o.off = 'none'; o.carry = 'none'; o.mode = Mode.Stay;
+          o.group = -1; o.x += 0.9; o.z -= 0.5;
+          return;
+        }
+      }
+      this.clearLook(o);
+      this.homeDoor(p, home, sp, o);
     }
     if (hash01(p.id, day % 5 + 90) < 0.3 && wet < 0.3) {
       this.homeYard(p, home, sp, o, 91);
@@ -992,7 +999,8 @@ export class Schedule {
         return true;
       }
       case 'errand': {
-        const m = sp.lordSeat ?? home ?? null;
+        // servants run errands for the household they live in (a cottage, or the manor for the lord's own)
+        const m = home ?? sp.lordSeat ?? null;
         if (m) { doorStand(m, this.door2, 0.4); o.x = this.door2.x; o.z = this.door2.z; o.yaw = this.door2.yaw; o.building = m.id; } else { o.x = s.x; o.z = s.z; }
         const target = hash01(key, day % 6 + 33) < 0.55 ? sp.first('well') : (sp.first('barn') ?? sp.first('stable') ?? sp.first('well'));
         if (target) { doorStand(target, this.door2, 0.6); o.bx = this.door2.x; o.bz = this.door2.z; } else { o.bx = o.x + 14; o.bz = o.z + 6; }

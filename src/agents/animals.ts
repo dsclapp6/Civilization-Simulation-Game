@@ -637,6 +637,25 @@ export class AnimalSystem {
     }
   }
 
+  /** Dev tools: the home of the nearest wild animal of a kind within `radius` (m) of a point, or null. */
+  findWildlife(kind: AnimalKind, x: number, z: number, radius: number): { x: number; z: number } | null {
+    let best: { x: number; z: number } | null = null, bd = radius * radius;
+    const c0x = Math.floor((x - radius) / CHUNK_SIZE), c1x = Math.floor((x + radius) / CHUNK_SIZE);
+    const c0z = Math.floor((z - radius) / CHUNK_SIZE), c1z = Math.floor((z + radius) / CHUNK_SIZE);
+    for (let cz = c0z; cz <= c1z; cz++) {
+      for (let cx = c0x; cx <= c1x; cx++) {
+        const specs = this.chunkWildlife(cx, cz);
+        if (!specs) continue;
+        for (const sp of specs) {
+          if (sp.kind !== kind) continue;
+          const d = (sp.homeX - x) ** 2 + (sp.homeZ - z) ** 2;
+          if (d < bd) { bd = d; best = { x: sp.homeX, z: sp.homeZ }; }
+        }
+      }
+    }
+    return best;
+  }
+
   /** The wildlife of a 64 m chunk, a pure function of the world (cached). */
   private chunkWildlife(cx: number, cz: number): Spec[] | null {
     const key = cz * 250 + cx;
@@ -694,16 +713,16 @@ export function defaultLivestock(hh: Household, head: Person, kind: string): Par
     case 'farmer': case 'yeoman':
       if (rural) {
         out.ox = head.rankTier >= 2 || head.careerStage >= 1 ? 1 + (h(1) < 0.5 ? 1 : 0) : h(1) < 0.4 ? 1 : 0;
-        out.pig = 1 + (h(2) < 0.4 ? 1 : 0);
-        out.chicken = 3 + Math.floor(h(3) * 6);
+        if (h(2) < 0.55) out.pig = 1 + (h(7) < 0.25 ? 1 : 0);
+        out.chicken = 2 + Math.floor(h(3) * 3);
         if (h(4) < 0.45) out.cow = 1;
         if (h(5) < 0.2) out.goose = 2 + Math.floor(h(6) * 3);
       } else { out.chicken = 2 + Math.floor(h(3) * 4); if (h(2) < 0.3) out.pig = 1; }
       dog(0.4); cat(0.3);
       break;
     case 'cottar': case 'labourer':
-      if (h(1) < 0.7) out.chicken = 2 + Math.floor(h(3) * 3);
-      if (h(2) < 0.45) out.pig = 1;
+      if (h(1) < 0.5) out.chicken = 2 + Math.floor(h(3) * 2);
+      if (h(2) < 0.3) out.pig = 1;
       if (h(4) < 0.12) out.cow = 1;
       dog(0.25); cat(0.3);
       break;
@@ -719,9 +738,9 @@ export function defaultLivestock(hh: Household, head: Person, kind: string): Par
     case 'miller': out.pig = 1; out.chicken = 3; dog(0.5); cat(0.5); break;
     case 'monk': case 'nun': case 'abbot': case 'prior': break;
     default:
-      if (rural && h(1) < 0.5) out.chicken = 2 + Math.floor(h(3) * 3);
-      else if (h(1) < 0.25) out.chicken = 2;
-      if (h(2) < 0.08) out.pig = 1;
+      if (rural && h(1) < 0.35) out.chicken = 2 + Math.floor(h(3) * 2);
+      else if (h(1) < 0.2) out.chicken = 2;
+      if (h(2) < 0.06) out.pig = 1;
       dog(0.15); cat(0.3);
   }
   if (hh.kind === 'monastic') { out.sheep = 6; out.cow = 2; out.pig = 2; out.chicken = 5; out.goose = 3; }

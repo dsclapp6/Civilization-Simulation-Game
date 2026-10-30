@@ -37,13 +37,20 @@ export const PATH_BUDGET_MS = 1.0;
 export const SPAWN_BUDGET_MS = 1.0;
 
 // ---- walking ----
-export const WALK_SPEED = 1.38;
+export const WALK_SPEED = 1.42;
 export const RUN_SPEED = 3.4;
 /**
  * The day is only 60 s, so a 300 m walk to the fields would take several days. People far from the
  * focus therefore move faster than a stroll (they are small dots out there); close to the player
  * they walk at a natural pace.
  */
-export const WARP_NEAR = 85;
-export const WARP_FAR = 170;
-export const WARP_MAX = 3.2;
+export const WARP_NEAR = 80;
+export const WARP_FAR = 160;
+export const WARP_MAX = 3;
+/**
+ * Trips are only walked where someone can see them: within this distance of the focus (metres). A trip
+ * that starts and ends beyond it, and never comes near, is done instantly; a trip that enters the area
+ * starts at its edge; one that leaves it ends when the walker is out of sight.
+ */
+export const SEEN_RADIUS = 80;
+export const WALK_SPEED_BASE = 1.42;
