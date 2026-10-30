@@ -70,7 +70,7 @@ tolerance), animated parts excepted (windmill sails sweep beyond).
 | Channel | Material | Notes |
 |---|---|---|
 | Opaque | `MeshStandardMaterial` vertexColors, flatShading, roughness 0.9, metalness 0 | Patched: snow on up-facing faces (`aSurf.x`), seasonal grass tint (`aSurf.y`, turf roofs/mounds). DoubleSide twin used only for construction/damage states. |
-| Window | Standard, dark glass `#1d1814`, roughness 0.5 | Emissive = vertex colour (warm `#ffb057` × per-window 0.18–1.0) × level × night. 5 shared lit levels (`setLit`). |
+| Window | Standard, dark glass `#1d1814`, roughness 0.5 | Emissive = vertex colour (warm `#ffb057` × per-window 0.18–1.0) × level × night × 1.15 (amber, not tone-mapped to white). 5 shared lit levels (`setLit`). |
 | Glow | `MeshBasicMaterial` ×1.9 with flicker | Forges, kilns, bloomeries, campfires. Always on (bloom-friendly). |
 | Cloth | Standard, DoubleSide | Flags, awnings, tents, tenter cloth: travelling wave from `aSway`; matching depth material. |
 | Water | Standard, roughness 0.12 | Mill races, wells, vats; slow shimmer. |
@@ -83,12 +83,18 @@ position (no `instanceColor` needed; if the renderer sets one it multiplies in).
 
 * `WebGLRenderer`, `outputColorSpace = SRGBColorSpace`, `toneMapping = ACESFilmicToneMapping`,
   exposure **1.0**. No `scene.environment` (or ≤ 0.3 intensity) — Lambert vegetation ignores it.
-* **Day:** sun `DirectionalLight` 3.0 at noon (colour `palette.sun.day`), easing to 0.75× and
-  `palette.sun.dusk` near the horizon; `HemisphereLight` 0.9 (sky `#bfd9ef`, ground `#6b5a3a`),
-  warmed toward `#e8b896` at golden hour.
+* **Day (game renderer, `src/render/sky/atmosphere.ts`):** sun `DirectionalLight` 2.9 at noon
+  (colour `palette.sun.day`), keeping ~0.92× and turning `palette.sun.dusk` near the horizon;
+  `HemisphereLight` **1.6** (sky `#bfd9ef`, warm ground bounce `#8f7b58`), warmed toward `#e8b896` /
+  `#a8764a` at golden hour, plus a **shadowless sky fill** `DirectionalLight` 0.7 (`#c9dcf0`, bluer at
+  golden hour) from the sky opposite the sun, 37° up. Under three's physically based lights a Lambert
+  face reflects albedo × E / π, so the old hemisphere 0.9 left every wall out of the sun at a tenth of
+  the sunlit brightness and streets read grey at noon; the fill keeps shaded walls at roughly a third of
+  sunlit ground and gives them form. Exposure rises ~12 % at golden hour. (The gallery stage still uses
+  the older 3.0 / 0.9 numbers.)
 * **Night (moonlit blue):** moon `DirectionalLight` **0.9** `palette.sun.moon`; hemisphere
-  0.27 + **0.75** (sky `palette.ambient.night #3a4c80`, ground `#1e2433`). The gallery's
-  `computeLighting()` (`src/gallery/stage.ts`) is the reference implementation.
+  0.27 + **0.75** (sky `palette.ambient.night #3a4c80`, ground `#1e2433`), no sky fill. Lit homes and
+  inns throw a warm additive light pool on the ground at their doors (renderer, one draw call).
 * **Optional night grade** (post): desaturate ~30 % and lift shadows toward `#3a4c80` scaled by
   `nightLight`, leaving emissive windows/fires untouched — sells moonlight on grass and fields.
 * **Shadows:** PCF, 2048–4096 map over the near view, `bias ≈ -0.0004`, `normalBias 0.02–0.05`.
@@ -130,7 +136,8 @@ smoke drift and windmill speed.
   seamlessly (stake/merlon/course periods divide the segment length).
 * **Water side:** watermills, fulling mills and tanneries carry their own raised mill race / pits
   behind the building (local −z); docks put the river on local −z.
-* **LOD:** `request.lod` 0 ≤ 120 m (all detail), 1 ≤ 400 m (no yard decor, coarse roofs, corner posts
+* **LOD:** (the renderer cross-fades a swap with a 0.6 s screen-door dither; vegetation bands fade
+  per instance over 18 m) `request.lod` 0 ≤ 120 m (all detail), 1 ≤ 400 m (no yard decor, coarse roofs, corner posts
   only), 2 beyond (silhouette, lit windows kept for night views).
 
 ## 9. Vegetation, crops, props
@@ -148,7 +155,8 @@ smoke drift and windmill speed.
 
 * FX: one ring buffer each of alpha-blended (4096) and additive (2048) billboards → **2 draw calls**.
   Motion (drag, gravity/buoyancy, wind) is evaluated in the vertex shader from spawn data; shapes:
-  soft puff, droplet, tumbling chip, velocity-aligned spark streak, flame teardrop. Smoke dims at night.
+  soft puff, droplet, tumbling chip, velocity-aligned spark streak, flame teardrop. Hearth smoke is a
+  dense blue-grey plume (α 0.62, 0.5 → 3.6 m, buoyant, a puff every ~0.28 s) that dims to ~45 % at night.
 * Projectiles: arrow / bolt / stone / javelin, one InstancedMesh each (≤ 4 draw calls, hidden when
   empty), oriented by velocity, origin just behind the tip so stuck projectiles show their shaft.
 

@@ -360,6 +360,7 @@ const GLSL_VEG_VERTEX = /* glsl */ `
 
 function bindVegUniforms(s: THREE.WebGLProgramParametersWithUniforms, u: SharedUniforms, f: FoliageUniforms): void {
   s.uniforms.uTime = u.uTime;
+  s.uniforms.uNight = u.uNight;
   s.uniforms.uWindDir = u.uWindDir;
   s.uniforms.uWindAmp = u.uWindAmp;
   s.uniforms.uSnow = u.uSnow;
@@ -413,17 +414,20 @@ varying float vLeaf;
 varying float vInst;
 varying vec3 vWPos;
 uniform vec4 uLodFade;
+uniform float uNight;
 varying float vLodDist;
 ${GLSL_NOISE}
 ${GLSL_SNOW}`)
       .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 {
-  // dithered LOD cross-fade: a 4x4 ordered pattern, offset per instance
-  float lf = smoothstep(uLodFade.x, uLodFade.y, vLodDist) * (1.0 - smoothstep(uLodFade.z, uLodFade.w, vLodDist));
-  if (lf < 0.999) {
+  // dithered LOD cross-fade: a 4x4 ordered pattern; the fading-out band keeps the cells below
+  // its weight and the fading-in band the complementary cells, so a tree is never see-through
+  float lfIn = smoothstep(uLodFade.x, uLodFade.y, vLodDist);
+  float lfOut = 1.0 - smoothstep(uLodFade.z, uLodFade.w, vLodDist);
+  if (lfIn * lfOut < 0.999) {
     vec2 fc = mod(floor(gl_FragCoord.xy), 4.0);
-    float bayer = mod(fc.x * 4.0 + fc.y * 7.0 + floor(vInst * 16.0), 16.0) / 16.0 + 1.0 / 32.0;
-    if (lf <= bayer) discard;
+    float bayer = mod(fc.x * 4.0 + fc.y * 7.0, 16.0) / 16.0 + 1.0 / 32.0;
+    if (bayer >= lfOut || bayer < 1.0 - lfIn) discard;
   }
 }`)
       .replace('#include <color_fragment>', `
@@ -434,7 +438,8 @@ ${GLSL_SNOW}`)
     // Wildflower petals: poppy, cornflower, ox-eye daisy, buttercup, campion by instance.
     float k = fract(vInst * 3.31 + floor(vLeaf * 3.0) * 0.37);
     vec3 pc = k < 0.22 ? vec3(0.78, 0.06, 0.04) : k < 0.42 ? vec3(0.16, 0.26, 0.85) : k < 0.66 ? vec3(0.92, 0.9, 0.84) : k < 0.86 ? vec3(0.95, 0.72, 0.05) : vec3(0.75, 0.22, 0.45);
-    diffuseColor.rgb *= pc * base;
+    // flowers lose their colour in the dark instead of glowing in the grass
+    diffuseColor.rgb *= mix(pc * base, vec3(dot(pc * base, vec3(0.3, 0.55, 0.15))), uNight * 0.7) * (1.0 - uNight * 0.45);
   } else if (vLeaf >= 0.0) {
     vec3 tint = mix(uTintA, uTintB, smoothstep(0.15, 0.85, vInst));
     vec3 c = tint * base * iv;
