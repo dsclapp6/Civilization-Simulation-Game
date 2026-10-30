@@ -6,7 +6,7 @@
   "barley":  { "name": "Barley", "unit": "gallons of barley", "unitOne": "gallon of barley", "category": "grain", "basePrice": 0.6,  "weight": 2.7, "quality": true, "qualityPrice": [0.65, 1, 1, 1, 1], "spoilDays": 500, "macro": true, "sold": ["market"] },
   "oats":    { "name": "Oats",   "unit": "gallons of oats",   "unitOne": "gallon of oats",   "category": "grain", "basePrice": 0.4,  "weight": 1.8, "quality": true, "qualityPrice": [0.65, 1, 1, 1, 1], "spoilDays": 500, "macro": true, "sold": ["market"] },
   "peas":    { "name": "Peas",   "unit": "gallons of peas",   "unitOne": "gallon of peas",   "category": "grain", "basePrice": 0.55, "weight": 3.3, "quality": true, "qualityPrice": [0.65, 1, 1, 1, 1], "spoilDays": 500, "macro": true, "sold": ["market"] },
-  "beans":   { "name": "Beans",  "unit": "gallons of beans",  "unitOne": "gallon of beans",  "category": "grain", "basePrice": 0.5,  "weight": 3.3, "quality": true, "qualityPrice": [0.65, 1, 1, 1, 1], "spoilDays": 500, "sold": ["market"] },
+  "beans":   { "name": "Beans",  "unit": "gallons of beans",  "unitOne": "gallon of beans",  "category": "grain", "basePrice": 0.5,  "weight": 3.3, "quality": true, "qualityPrice": [0.65, 1, 1, 1, 1], "spoilDays": 500, "macro": true, "sold": ["market"] },
   "seed_corn": { "name": "Seed corn", "unit": "gallons of seed corn", "unitOne": "gallon of seed corn", "category": "grain", "basePrice": 1.2, "weight": 3.0, "spoilDays": 400, "sold": ["market"] },
 
   "wheat_sheaf":  { "name": "Wheat sheaf",  "unit": "sheaves of wheat",  "unitOne": "sheaf of wheat",  "category": "produce", "basePrice": 0.75, "weight": 3.0, "spoilDays": 40 },
@@ -16,7 +16,7 @@
   "legume_sheaf": { "name": "Pea and bean haulm", "unit": "bundles of pea and bean haulm", "unitOne": "bundle of pea and bean haulm", "category": "produce", "basePrice": 0.4, "weight": 3.0, "spoilDays": 40 },
 
   "flour":   { "name": "Flour",   "unit": "pounds of flour", "unitOne": "pound of flour", "category": "food", "basePrice": 0.15, "weight": 0.45, "spoilDays": 90, "food": 0.06, "sold": ["market", "watermill", "windmill", "bakehouse"] },
-  "bread":   { "name": "Bread",   "unit": "loaves", "unitOne": "loaf", "category": "food", "basePrice": 0.75, "weight": 0.7, "spoilDays": 5, "food": 0.4, "macro": true, "sold": ["market", "bakehouse"] },
+  "bread":   { "name": "Bread",   "unit": "loaves", "unitOne": "loaf", "category": "food", "basePrice": 0.45, "weight": 0.7, "spoilDays": 5, "food": 0.4, "macro": true, "sold": ["market", "bakehouse"] },
   "malt":    { "name": "Malt",    "unit": "gallons of malt", "unitOne": "gallon of malt", "category": "grain", "basePrice": 0.8, "weight": 2.4, "spoilDays": 200, "sold": ["market", "brewhouse"] },
   "ale":     { "name": "Ale",     "unit": "gallons of ale", "unitOne": "gallon of ale", "category": "drink", "basePrice": 1.2, "weight": 4.0, "spoilDays": 24, "food": 0.3, "macro": true, "sold": ["market", "alehouse", "tavern", "brewhouse"] },
   "vegetables": { "name": "Vegetables", "unit": "pounds of vegetables", "unitOne": "pound of vegetables", "category": "produce", "basePrice": 0.15, "weight": 0.45, "spoilDays": 12, "food": 0.08, "macro": true, "sold": ["market"] },
@@ -25,17 +25,17 @@
   "eggs":    { "name": "Eggs",    "unit": "dozens of eggs", "unitOne": "dozen eggs", "category": "food", "basePrice": 0.5, "weight": 0.7, "spoilDays": 10, "food": 0.2, "macro": true, "sold": ["market"] },
   "meat":    { "name": "Meat",    "unit": "pounds of meat", "unitOne": "pound of meat", "category": "food", "basePrice": 0.5, "weight": 0.45, "spoilDays": 6, "food": 0.3, "macro": true, "sold": ["market"] },
   "fish":    { "name": "Fish",    "unit": "pounds of fish", "unitOne": "pound of fish", "category": "food", "basePrice": 0.35, "weight": 0.45, "spoilDays": 4, "food": 0.25, "macro": true, "sold": ["market"] },
-  "salt":    { "name": "Salt",    "unit": "pounds of salt", "unitOne": "pound of salt", "category": "misc", "basePrice": 0.25, "weight": 0.45, "macro": true, "sold": ["market"] },
+  "salt":    { "name": "Salt",    "unit": "pounds of salt", "unitOne": "pound of salt", "category": "misc", "basePrice": 0.25, "weight": 0.45, "sold": ["market"] },
   "honey":   { "name": "Honey",   "unit": "pounds of honey", "unitOne": "pound of honey", "category": "food", "basePrice": 1.0, "weight": 0.5, "food": 0.3, "sold": ["market"] },
 
-  "wool":    { "name": "Wool",    "unit": "pounds of wool", "unitOne": "pound of wool", "category": "textile", "basePrice": 2.0, "weight": 0.45, "macro": true, "sold": ["market", "weaver"] },
+  "wool":    { "name": "Wool",    "unit": "pounds of wool", "unitOne": "pound of wool", "category": "textile", "basePrice": 2.0, "weight": 0.45, "sold": ["market", "weaver"] },
   "yarn":    { "name": "Yarn",    "unit": "pounds of yarn", "unitOne": "pound of yarn", "category": "textile", "basePrice": 3.0, "weight": 0.45, "sold": ["market", "weaver"] },
   "cloth":   { "name": "Woollen cloth", "unit": "ells of cloth", "unitOne": "ell of cloth", "category": "textile", "basePrice": 8.0, "weight": 0.6, "sold": ["market", "weaver"] },
   "linen":   { "name": "Linen",   "unit": "ells of linen", "unitOne": "ell of linen", "category": "textile", "basePrice": 6.0, "weight": 0.35, "sold": ["market", "weaver"] },
   "flax":    { "name": "Flax",    "unit": "pounds of flax", "unitOne": "pound of flax", "category": "textile", "basePrice": 0.5, "weight": 0.45, "sold": ["market"] },
 
   "hide":    { "name": "Hide",    "unit": "hides", "unitOne": "hide", "category": "material", "basePrice": 24, "weight": 10, "spoilDays": 30, "sold": ["market", "tannery"] },
-  "leather": { "name": "Leather", "unit": "pieces of leather", "unitOne": "piece of leather", "category": "material", "basePrice": 48, "weight": 6, "sold": ["market", "tannery"] },
+  "leather": { "name": "Leather", "unit": "pieces of leather", "unitOne": "piece of leather", "category": "material", "basePrice": 36, "weight": 6, "sold": ["market", "tannery"] },
   "timber":  { "name": "Timber",  "unit": "logs", "unitOne": "log", "category": "material", "basePrice": 12, "weight": 40, "sold": ["market", "carpenter", "sawpit"] },
   "planks":  { "name": "Planks",  "unit": "planks", "unitOne": "plank", "category": "material", "basePrice": 2.5, "weight": 8, "sold": ["market", "carpenter", "sawpit"] },
   "stone":   { "name": "Stone",   "unit": "blocks of stone", "unitOne": "block of stone", "category": "material", "basePrice": 3.0, "weight": 25, "sold": ["market", "quarry"] },
@@ -46,7 +46,7 @@
 
   "firewood": { "name": "Firewood", "unit": "bundles of firewood", "unitOne": "bundle of firewood", "category": "fuel", "basePrice": 0.4, "weight": 6, "macro": true, "sold": ["market"] },
   "charcoal": { "name": "Charcoal", "unit": "sacks of charcoal", "unitOne": "sack of charcoal", "category": "fuel", "basePrice": 3.0, "weight": 12, "sold": ["market", "charcoal_mound", "smithy"] },
-  "iron":     { "name": "Iron",     "unit": "iron bars", "unitOne": "iron bar", "category": "metal", "basePrice": 9.0, "weight": 3, "sold": ["market", "smithy", "bloomery"] },
+  "iron":     { "name": "Iron",     "unit": "iron bars", "unitOne": "iron bar", "category": "metal", "basePrice": 7.0, "weight": 3, "sold": ["market", "smithy", "bloomery"] },
   "nails":    { "name": "Nails",    "unit": "handfuls of nails", "unitOne": "handful of nails", "category": "metal", "basePrice": 1.0, "weight": 0.2, "sold": ["market", "smithy", "carpenter"] },
 
   "sickle":    { "name": "Sickle",    "unit": "sickles", "unitOne": "sickle", "category": "tool", "basePrice": 4,  "weight": 0.5, "quality": true, "slot": "main", "held": "sickle",    "sold": ["smithy"] },
