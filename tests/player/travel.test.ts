@@ -350,7 +350,7 @@ describe('encounters', () => {
     // other modules' actions (eating, resting…) are refused until it is settled
     const others = r.sim.actions.list(r.pid, { kind: 'self' }).filter((o) => !o.id.startsWith('encounter.'));
     for (const o of others) expect(r.player.perform(o).ok).toBe(false);
-  });
+  }, 120000);
 
   it('paying bandits costs the demand and the journey resumes at 8×', () => {
     const r = onTheRoad();

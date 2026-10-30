@@ -271,6 +271,7 @@ describe('terrain', () => {
     }
     expect(zone.nav.grid.pendingTiles(far.x, far.z)).toBe(0);
     expect(frames).toBeGreaterThan(5);
-    expect(maxMs).toBeLessThan(80);
+    // wall-clock bound only in the perf pass (npm run test:perf): a loaded machine stretches any frame
+    if (process.env.PERF) expect(maxMs).toBeLessThan(80);
   });
 });

@@ -63,6 +63,8 @@ export async function buildSession(sim: Simulation, o: SessionOptions): Promise<
   let zone: ZoneApi = installAgents(sim, { economy, social });
   if (o.devZone) zone = wrapWithDevZone(sim, zone);
   const player = installPlayer(sim, { zone, economy, social, cameraMode: () => renderer.getCameraMode() });
+  // spread each game hour's calendar work over frames so an hour boundary never stalls one frame
+  sim.hookBudgetMs = 4;
   // wave 3: they find each other through sim.services (sim/wave3.ts)
   const w3 = { economy, social, zone, player };
   installPolitics(sim, w3);

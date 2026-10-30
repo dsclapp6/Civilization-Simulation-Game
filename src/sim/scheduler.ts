@@ -71,6 +71,33 @@ export class Scheduler {
   /** Systems of a phase in execution order. */
   list(phase: Phase): readonly System[] { return this.byPhase[phase].map((e) => e.sys); }
 
+  /**
+   * Runs the systems of a phase starting at index `from`, stopping once `deadline` (on this
+   * scheduler's clock) has passed after at least one system. Returns the index to resume from, or -1
+   * when the phase is complete. Order and results are identical to `run`; only the frame changes.
+   */
+  runFrom<P extends Phase>(phase: P, ctx: SimContext, info: PhaseInfo[P], from: number, deadline: number): number {
+    const list = this.byPhase[phase];
+    for (let i = from; i < list.length; i++) {
+      if (i > from && this.clock() >= deadline) return i;
+      const sys = list[i].sys as System<P>;
+      if (!this.profiling) { sys.run(ctx, info); continue; }
+      const t0 = this.clock();
+      sys.run(ctx, info);
+      this.record(sys.name, this.clock() - t0);
+    }
+    return -1;
+  }
+
+  private record(name: string, dt: number): void {
+    let p = this.profile.get(name);
+    if (!p) { p = { calls: 0, totalMs: 0, maxMs: 0, slow: 0 }; this.profile.set(name, p); }
+    p.calls++;
+    p.totalMs += dt;
+    if (dt > p.maxMs) p.maxMs = dt;
+    if (dt > SLOW_MS) p.slow++;
+  }
+
   run<P extends Phase>(phase: P, ctx: SimContext, info: PhaseInfo[P]): void {
     const list = this.byPhase[phase];
     if (!this.profiling) {

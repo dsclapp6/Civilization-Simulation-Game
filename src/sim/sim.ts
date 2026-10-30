@@ -20,7 +20,7 @@ import { registerLifeSystems } from './life';
 import { abandonRun, attachRunHandlers, eligibleSwitchTargets, newRun, switchTo } from './run';
 import { RunSaver, loadProfile, loadRun, saveProfile, type SaveStore, type SaverOptions } from './save';
 import { hashState, warmUpSerializer } from './serialize';
-import { Scheduler, type System } from './scheduler';
+import { Scheduler, type Phase, type PhaseInfo, type System } from './scheduler';
 import { ScoreKeeper } from './score';
 import type { GameState, PersonId } from './state';
 import { SimViewImpl } from './view-impl';
@@ -101,6 +101,14 @@ export class Simulation implements SimContext {
   private readonly handlers = new Map<string, CommandHandler>();
   private readonly hooks: ClockHooks;
   private subAcc = 0;
+  private deferHooks = false;
+  /**
+   * Real milliseconds per frame for calendar work fired in normal play; the rest waits a frame.
+   * Infinity (the default) runs it at once, which keeps tests and tools exactly reproducible; the
+   * live game sets a budget (it depends on wall-clock time, so play is not frame-reproducible anyway).
+   */
+  hookBudgetMs = Infinity;
+  private readonly hookQueue: Array<{ phase: Phase; info: unknown; next: number; emit: () => void }> = [];
   private stepCounter = 0;
 
   constructor(opts: SimulationOptions) {
@@ -129,10 +137,10 @@ export class Simulation implements SimContext {
     registerLifeSystems(this.scheduler);
 
     this.hooks = {
-      yearly: (info) => { this.scheduler.run('yearly', this, info); this.events.emit('yearStarted', info); },
-      seasonal: (info) => { this.scheduler.run('seasonal', this, info); this.events.emit('seasonStarted', info); },
-      daily: (info) => { this.scheduler.run('daily', this, info); this.events.emit('dayStarted', info); },
-      hourly: (info) => { this.scheduler.run('hourly', this, info); this.events.emit('hourStarted', info); },
+      yearly: (info) => this.onHook('yearly', info, () => this.events.emit('yearStarted', info)),
+      seasonal: (info) => this.onHook('seasonal', info, () => this.events.emit('seasonStarted', info)),
+      daily: (info) => this.onHook('daily', info, () => this.events.emit('dayStarted', info)),
+      hourly: (info) => this.onHook('hourly', info, () => this.events.emit('hourStarted', info)),
     };
 
     if (this.store) {
@@ -208,6 +216,8 @@ export class Simulation implements SimContext {
     if (run.phase === 'over') { this.saver?.tick(); return; }
     const dt = Math.min(Math.max(0, realDt), MAX_FRAME_DT);
     if (run.phase === 'choosing' && !this.clock.paused) this.clock.pause();
+    // still working through an earlier hour boundary: finish that first, then carry on
+    if (this.hookQueue.length > 0 && !this.drainHooks(this.hookBudgetMs)) return;
     this.fireHooks();
     if (this.clock.skip) this.stepSkip(dt);
     else if (!this.clock.paused) this.stepNormal(dt);
@@ -226,6 +236,34 @@ export class Simulation implements SimContext {
 
   advanceDays(days: number): void { this.advanceHours(Math.round(days * 24)); }
 
+  /**
+   * Calendar work fired during a normal frame is queued and run within a per-frame budget, so an hour
+   * boundary never stalls one frame with every system at once. While work is queued the calendar and
+   * sub-steps wait (and no save starts), so the order of everything is exactly as if it ran at once.
+   */
+  private onHook<P extends 'yearly' | 'seasonal' | 'daily' | 'hourly'>(phase: P, info: PhaseInfo[P], emit: () => void): void {
+    if (!this.deferHooks) {
+      this.scheduler.run(phase, this, info);
+      emit();
+      return;
+    }
+    this.hookQueue.push({ phase, info, next: 0, emit });
+  }
+
+  /** Runs queued calendar work until done (true) or the budget is spent (false). */
+  private drainHooks(budgetMs: number): boolean {
+    const deadline = this.scheduler.clock() + budgetMs;
+    while (this.hookQueue.length > 0) {
+      const job = this.hookQueue[0];
+      const resume = this.scheduler.runFrom(job.phase, this, job.info as never, job.next, deadline);
+      if (resume >= 0) { job.next = resume; return false; }
+      this.hookQueue.shift();
+      job.emit();
+      if (this.hookQueue.length > 0 && this.scheduler.clock() >= deadline) return false;
+    }
+    return true;
+  }
+
   private fireHooks(): void {
     if (this.saver?.holdingHooks) return;
     // after a save cycle has held the hooks back, catch up over a few frames instead of in one burst
@@ -235,7 +273,10 @@ export class Simulation implements SimContext {
   private stepNormal(dt: number): void {
     const days = this.clock.advance(dt);
     if (days > 0) this.state.dirty.meta = true;
+    this.deferHooks = this.hookBudgetMs !== Infinity;
     this.fireHooks();
+    this.deferHooks = false;
+    if (!this.drainHooks(this.hookBudgetMs)) return;
     // detailed agents advance in fixed sub-steps; movement stays real-time even in action time
     this.subAcc += dt * this.clock.speed;
     let n = 0;
@@ -384,6 +425,7 @@ export class Simulation implements SimContext {
 
   /** Saves everything now (before quitting, and in tests). */
   async flush(): Promise<void> {
+    this.drainHooks(Infinity); // never save in the middle of an hour's work
     if (!this.saver) return;
     this.state.dirty.meta = true;
     await this.saver.flush();
