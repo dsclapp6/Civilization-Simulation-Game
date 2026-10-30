@@ -25,6 +25,13 @@ export type * from './types';
 
 const installed = new WeakMap<Simulation, PoliticsRuntime>();
 
+/** The parts behind the API, for tests and tools. Not part of any contract. */
+export interface PoliticsInternals {
+  core: PoliticsCore; wars: Wars; diplo: Diplomacy; realms: Realms; offices: Offices; unrest: Unrest; manage: Management; ai: Ai;
+}
+const internals = new WeakMap<Simulation, PoliticsInternals>();
+export function politicsInternals(sim: Simulation): PoliticsInternals | undefined { return internals.get(sim); }
+
 /** The runtime installed in a simulation, if any (tests, tools, the UI). */
 export function politicsOf(sim: Simulation): PoliticsRuntime | undefined { return installed.get(sim); }
 
@@ -180,6 +187,7 @@ export function installPolitics(sim: Simulation, deps: Pick<Wave3Deps, 'economy'
 
   sim.services.politics = runtime;
   installed.set(sim, runtime);
+  internals.set(sim, { core, wars, diplo, realms, offices, unrest, manage, ai });
   void offs;
   return runtime;
 }
@@ -192,10 +200,12 @@ function decayTies(core: PoliticsCore): void {
     const before: Array<ReturnType<PoliticsCore['stance']>> = [core.stance(a, b), core.stance(b, a)];
     let changed = false;
     if (t.grievance > 0) { t.grievance = Math.max(0, Math.round((t.grievance - 3) * 10) / 10); changed = true; }
+    // a truce that runs out was the House's stance until now: say what it has become
+    const lapsed = t.truce > 0 && t.truce <= day && !t.alliance && !t.kin && !t.trade;
     if (t.truce > 0 && t.truce <= day) { t.truce = 0; changed = true; }
     if (changed) {
       core.touch();
-      core.announceStance(a, b, before);
+      core.announceStance(a, b, lapsed ? (['truce', 'truce'] as typeof before) : before);
       core.dropIfEmpty(a, b);
     }
   }

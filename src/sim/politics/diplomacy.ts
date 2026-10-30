@@ -117,7 +117,7 @@ export class Diplomacy {
   /** Puts the agreed pact into effect. */
   apply(from: HouseId, to: HouseId, kind: ProposalKind): void {
     const c = this.core;
-    const now = Math.floor(c.day);
+    const now = Math.floor(c.day) + 1; // 'since' fields count from 1: 0 means no pact
     const hf = c.headOf(from), ht = c.headOf(to);
     switch (kind) {
       case 'truce':

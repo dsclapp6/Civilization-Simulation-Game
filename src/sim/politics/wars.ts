@@ -115,14 +115,13 @@ export class Wars {
       if (liege !== house && rng.chance(0.85) && !c.isOverlord(liege, house)) defenders.push(liege);
       else if (liege !== house) c.social.adjustOpinion(c.headOf(target)?.id ?? 0, c.headOf(liege)?.id ?? 0, -8, 'abandoned');
     }
+    addFollowers(house, attackers, defenders);
     if (cause === 'independence') {
       // the rebel's own vassals follow him; the liege and his other vassals defend
       const lg = c.liegeOf(house);
       if (lg && !defenders.includes(lg)) defenders.splice(0, defenders.length, lg);
       addFollowers(lg, defenders, attackers);
-    }
-    addFollowers(house, attackers, defenders);
-    if (cause !== 'independence') addFollowers(target, defenders, attackers);
+    } else addFollowers(target, defenders, attackers);
     for (const l of defenders.slice()) if (l !== target) addFollowers(l, defenders, attackers);
     // allies answer the call
     const rng = c.rng('war');
@@ -321,6 +320,9 @@ export class Wars {
       const aliveLeaders = c.isActor(w.attackers[0]) && c.isActor(w.defenders[0]);
       if (!aliveLeaders) { this.end(w, 'white_peace', 'white'); continue; }
       if (w.cause === 'raid') { if (length >= 3) this.end(w, w.score >= 0 ? 'attackers' : 'white_peace', 'white'); continue; }
+      // a war the armies have decided ends at once
+      if (w.score >= 100) { this.finish(w, 'attackers', this.victorTerms(w, 'attackers')); continue; }
+      if (w.score <= -100) { this.finish(w, 'defenders', this.victorTerms(w, 'defenders')); continue; }
       // occupation presses on
       for (const s of w.occupied) {
         const side = this.settlementOwnerSide(w, s);
