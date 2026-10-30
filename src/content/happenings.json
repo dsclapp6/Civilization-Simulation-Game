@@ -1,0 +1,160 @@
+{
+  "_doc": "Events, disasters, festivals and NPC requests (SPEC §18, §19, §21). `rates` are per game year for the whole continent at Knight difficulty; `difficulty` multiplies them (SPEC §1: Squire fewer plagues and famines, King frequent famine, plague and heavy banditry). `calendar` days are the day of the 16-day year. Text pools use {place}, {kingdom}, {name}, {who}, {good}, {qty}, {pence}.",
+  "difficulty": {
+    "squire": { "plague": 0.5, "famine": 0.5, "disaster": 0.6, "bandits": 0.5, "revolt": 0.5, "requests": 1 },
+    "knight": { "plague": 1, "famine": 1, "disaster": 1, "bandits": 1, "revolt": 1, "requests": 1 },
+    "lord": { "plague": 1.5, "famine": 1.5, "disaster": 1.4, "bandits": 1.5, "revolt": 1.3, "requests": 1 },
+    "king": { "plague": 2.4, "famine": 2.2, "disaster": 2, "bandits": 3, "revolt": 2, "requests": 1 }
+  },
+  "rates": { "plague": 0.1, "drought": 0.2, "flood": 0.3, "fire": 3, "bandits": 3.5, "winter": 0.4, "tournament": 1, "progress": 1 },
+  "calendar": { "midsummer": 6, "harvest": 9, "christmas": 12, "fair": 5, "tournament": 6, "progress": 9, "yearEnd": 15 },
+  "famine": { "start": 0.78, "end": 0.92 },
+  "plague": { "duration": [6, 10], "infect": 0.04, "recover": 0.3, "spread": 0.4 },
+  "names": {
+    "plague": "Plague", "famine": "Famine", "fire": "Fire", "flood": "Flood", "drought": "Drought", "winter": "Hard winter",
+    "bandits": "Bandits", "revolt": "Peasant revolt", "succession": "Succession crisis", "tournament": "Tournament", "fair": "Fair",
+    "progress": "Royal progress", "midsummer": "Midsummer", "harvest": "Harvest festival", "christmas": "Christmas",
+    "wedding": "Wedding", "funeral": "Funeral", "christening": "Christening"
+  },
+  "text": {
+    "plague": {
+      "start": ["The pestilence has come to {place}. The sick are carried out and the church bell tolls all day.", "A fever with black swellings strikes {place}; the priest has buried six this week.", "Plague in {place}: the market is shut and the gates are watched."],
+      "end": ["The plague has passed from {place}, leaving empty houses and fresh graves."]
+    },
+    "famine": {
+      "start": ["The harvest failed. In {place} the poor are boiling nettles and the price of bread grows.", "Hunger in {place}: the granaries are bare and the children cry for bread.", "Famine stalks {place}; folk are eating seed corn."],
+      "end": ["The hunger in {place} is over: the new corn is in."]
+    },
+    "fire": {
+      "start": ["Fire in {place}! The thatch is burning and the whole street is out with buckets.", "A blaze has broken out in {place}; sparks fly from roof to roof.", "{place} is aflame: ring the bell, fetch water!"],
+      "end": ["The fire in {place} is out. The neighbours will help to rebuild."]
+    },
+    "flood": {
+      "start": ["The river has burst its banks at {place}; the low houses stand in water.", "Floodwater is rising in {place}: folk carry their goods to the church."],
+      "end": ["The waters round {place} are falling; mud and ruin are left behind."]
+    },
+    "drought": {
+      "start": ["No rain has fallen in {kingdom} for weeks. The wells are low and the corn is withering.", "A drought grips {kingdom}: the brooks have dried and the ricks are tinder."],
+      "end": ["Rain at last in {kingdom}, too late for much of the corn."]
+    },
+    "winter": {
+      "start": ["A hard winter has set in over {kingdom}. Hungry wolves come down from the hills at night.", "Snow lies deep across {kingdom}; the wolves are bold and the poor are cold."],
+      "end": ["The thaw has come in {kingdom}; the wolves go back to the woods."]
+    },
+    "bandits": {
+      "start": ["A gang of outlaws has been seen near {place}; folk bar their doors at dusk.", "Bandits lurk in the woods by {place}, and the reeve fears for the stores."],
+      "end": ["The bandits near {place} have scattered."]
+    },
+    "revolt": {
+      "start": ["The villagers of {place} have refused their dues and gathered with scythes and bills.", "Unrest in {place}: the villeins demand an end to the week-work."],
+      "end": ["The unrest in {place} is over."]
+    },
+    "succession": {
+      "start": ["{who} is without a grown heir: the great men of {place} whisper of claims and regents.", "The succession at {place} is disputed; {who} leaves the title to uncertain hands."],
+      "end": ["The question of the succession at {place} has been settled for now."]
+    },
+    "tournament": {
+      "start": ["A tournament is held at {place}: banners, heralds and every young knight in the county."],
+      "end": ["The tournament at {place} is over."]
+    },
+    "fair": {
+      "start": ["The yearly fair opens at {place}: merchants from far off, jugglers, and the tolls of three days.", "Fair days at {place}! The streets are full of stalls and strangers."],
+      "end": ["The fair at {place} has closed."]
+    },
+    "progress": {
+      "start": ["The king's progress has come to {place}; the lord must feed the whole court."],
+      "end": ["The king's court has moved on from {place}."]
+    },
+    "midsummer": {
+      "start": ["Midsummer eve: bonfires on the hills, garlands on the doors and dancing on the green."],
+      "end": ["The midsummer fires have burnt down."]
+    },
+    "harvest": {
+      "start": ["The harvest is in: the last sheaf is carried home with song, and the lord sets the harvest supper."],
+      "end": ["The harvest festival is over; the barns are full."]
+    },
+    "christmas": {
+      "start": ["Christmastide: the church is dressed with holly, the lord's hall is open and the Yule log burns."],
+      "end": ["Twelfth night has passed."]
+    },
+    "wedding": { "start": ["{name} are wed at the church door of {place}."], "end": ["The wedding feast is over."] },
+    "funeral": { "start": ["{name} is laid to rest in the churchyard of {place}."], "end": ["The mourners go home."] },
+    "christening": { "start": ["{name} is christened at the font of {place}."], "end": ["The christening is over."] }
+  },
+  "requests": {
+    "maxOpen": 4,
+    "minGapDays": 1.2,
+    "dailyChance": 0.45,
+    "offerDays": 4,
+    "weights": { "fetch": 3, "loan": 1.4, "work": 3, "message": 1.6, "lost_animal": 1.3, "watch": 0.5, "godparent": 0.5, "marriage": 0.25 },
+    "fetch": {
+      "goods": [
+        { "good": "firewood", "qty": [4, 8] }, { "good": "ale", "qty": [2, 4] }, { "good": "cheese", "qty": [2, 4] },
+        { "good": "wool", "qty": [3, 6] }, { "good": "wheat", "qty": [3, 6] }, { "good": "bread", "qty": [4, 8] }
+      ],
+      "famineGoods": [{ "good": "wheat", "qty": [4, 8] }, { "good": "bread", "qty": [6, 10] }],
+      "premium": 1.35, "days": 5,
+      "ask": [
+        "I am short of {good}, {name}. Could you bring me {qty}? I will pay you well.",
+        "My family has run out of {good}. If you could spare {qty}, I would make it worth your while.",
+        "{name}, you are always about. Fetch me {qty} of {good} and there is silver in it for you."
+      ],
+      "thanks": ["That will do nicely, {name}. Here is your silver.", "God bless you, {name}. We shall not forget this."]
+    },
+    "loan": {
+      "amounts": [24, 48, 72, 120, 240], "interest": 0.2, "days": 24, "offerDays": 4,
+      "ask": [
+        "I am in a bad way, {name}. Could you lend me {pence}? I will pay it back with interest by the next harvest, on my word.",
+        "The reeve has fined me and I cannot pay. Lend me {pence}, {name}, and I shall repay you with a gift on top."
+      ],
+      "thanks": ["Bless you. You will have it back, every penny.", "I will not forget your kindness, {name}."]
+    },
+    "work": {
+      "count": [3, 6], "wage": 3, "days": 4,
+      "ask": [
+        "My back is bad and the work will not wait. Could you give me {qty} bouts of labour, {name}? I will pay a fair wage.",
+        "I need an extra pair of hands for the {qty} jobs that must be done before the weather turns. Will you help?"
+      ],
+      "thanks": ["Well done, {name}. Here is your wage."]
+    },
+    "message": {
+      "days": 8, "pay": 24, "radius": 7500,
+      "ask": [
+        "Would you carry a message to {who} at {place}? It is nothing secret, only family business, and I will make it worth the walk.",
+        "{name}, I must get word to {who} in {place}, and I have no one to send. Will you go?"
+      ],
+      "thanks": ["Thank you for bringing it, {name}. That is a weight off my mind."],
+      "delivered": ["So {from} sends word. Thank you for coming all this way; here is something for your trouble."]
+    },
+    "lost_animal": {
+      "radius": [140, 380], "found": 30, "days": 3, "pay": 24,
+      "ask": [
+        "My {animal} has strayed again, {name}. I think she went towards the {dir}, a few hundred paces out. Would you look for her?",
+        "A {animal} of mine is missing since yesterday, somewhere {dir} of the village. I would pay you to find her."
+      ],
+      "thanks": ["You found her! God be thanked. Here, take this for your trouble."]
+    },
+    "watch": {
+      "hours": 5, "days": 3, "pay": 36,
+      "ask": [
+        "Folk are afraid, {name}. Would you stand watch over the village tonight? It would put our minds at rest.",
+        "There are strange men in the woods. A sturdy watchman at the green tonight would be a comfort, {name}."
+      ],
+      "thanks": ["The village slept sound because of you. Thank you, {name}."]
+    },
+    "godparent": {
+      "days": 3, "gift": 48,
+      "ask": [
+        "We want to christen the child at the font in two days, and you would honour us by standing godparent, {name}. Will you?"
+      ],
+      "thanks": ["It was a fine christening. You are family to us now, {name}."]
+    },
+    "marriage": {
+      "days": 6,
+      "ask": [
+        "My {relation} {ward} is of an age to wed, and I think highly of you, {name}. Would you wed {ward}? There is a dowry of {pence}."
+      ],
+      "thanks": ["Then it is settled. May God bless you both."]
+    }
+  }
+}
