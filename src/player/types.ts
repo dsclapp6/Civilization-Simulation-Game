@@ -16,6 +16,8 @@ export const KEYMAP = {
   input: {
     forward: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD', sprint: 'ShiftLeft', walk: 'KeyX',
     interact: 'KeyE', mount: 'KeyF', dodge: 'Space', speed1: 'Digit1', speed2: 'Digit2', speed3: 'Digit3', pause: 'KeyP',
+    /** Stop the timed action in progress (added by the player module; moving also cancels). */
+    cancel: 'KeyQ',
   },
   ui: {
     menu: 'Escape', character: 'Tab', inventory: 'KeyI', ledger: 'KeyJ', map: 'KeyM', command: 'KeyC',
@@ -64,7 +66,15 @@ export interface TravelState {
   progress: number;
   /** Calendar days left at travel speed. */
   daysLeft: number;
-  encounter?: { kind: EncounterKind; label: string; hostile: boolean };
+  encounter?: {
+    kind: EncounterKind;
+    label: string;
+    hostile: boolean;
+    /** What happens, in a sentence or two (shown above the choices). */
+    text?: string;
+    /** What the player can do: `perform(choice)` resolves the encounter (also listed by `options()` while it is open). */
+    choices?: ActionOption[];
+  };
 }
 
 export interface PlayerHud {
@@ -91,6 +101,15 @@ export interface PlayerHud {
   travel: TravelState | null;
   /** A hostile is within the fast-speed refusal radius. */
   danger: boolean;
+  // ---- additive (player module) ----
+  /** Out of breath: the player can only walk until stamina recovers. */
+  exhausted?: boolean;
+  /** Current ground speed (m/s). */
+  speed?: number;
+  /** 'walk' | 'run' | 'sprint' | 'trot' | 'gallop' | 'sit' | 'idle' … for a small gait indicator. */
+  gait?: string;
+  /** The person being followed (walking after them), if any. */
+  following?: string | null;
 }
 
 export interface Result { ok: boolean; reason?: string }
@@ -117,4 +136,31 @@ export interface PlayerApi {
   body(): { x: number; y: number; z: number; yaw: number } | null;
   /** Put the body somewhere (after switching character, debug). */
   placeAt(x: number, z: number, yaw?: number): void;
+
+  // ---- additive (player module); all optional so UI mocks and tests need not implement them ----
+  /** Every frame after `sim.step` and before the renderer: smooths the draw position between 20 Hz steps, advances animation clocks. */
+  frame?(dt: number): void;
+  /** Where the map camera should be centred while the player module drives it (travel, character switch), else null. */
+  mapFocus?(): { x: number; z: number; altitude?: number } | null;
+  /** Writes the body's position into the saved run now (call before `sim.flush()` on quit / page hide). */
+  persist?(): void;
+  /** Resolves the open road encounter with one of `travel().encounter.choices` (same as `perform(choice)`). */
+  chooseEncounter?(choiceId: string): ActionOutcome;
+  /** Mount / dismount the household's horse (F key). */
+  mountHorse?(): Result;
+  dismount?(): Result;
+  mounted?(): boolean;
+  /** Test and dev hooks (the dev overlay, screenshots, unit tests). */
+  debug?: PlayerDebug;
+}
+
+export interface PlayerDebug {
+  /** Starts an encounter of this kind on the spot (map travel must be under way, or it is started at street level). */
+  forceEncounter(kind: EncounterKind): void;
+  /** Rides a horse with this coat without needing an owned animal nearby. */
+  forceMount(coat?: number): void;
+  /** Stamina set directly (0..max). */
+  setStamina(value: number): void;
+  /** Stand still and let the world carry on: the number of body steps run so far. */
+  steps(): number;
 }
