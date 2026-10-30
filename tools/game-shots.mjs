@@ -369,7 +369,13 @@ try {
     }
 
     if (want('requests')) {
-      await ui(() => window.__ui.openPanel({ panel: 'ext', name: 'requests' }));
+      await ui(() => {
+        const hap = window.__game.session.sim.services.happenings;
+        for (const type of ['work', 'lost_animal', 'message']) hap.offerRequest(type);
+        const open = hap.openRequests();
+        if (open[1]) hap.acceptRequest(open[1].id);
+        window.__ui.openPanel({ panel: 'ext', name: 'requests' });
+      });
       await pause(500);
       await shot('requests', { settle: false });
       await closeAll();
@@ -383,13 +389,6 @@ try {
       });
       await pause(600);
       await shot('techs', { settle: false });
-      await closeAll();
-    }
-
-    if (want('politics')) {
-      await ui(() => window.__ui.openPanel({ panel: 'ext', name: 'politics' }));
-      await pause(600);
-      await shot('politics', { settle: false });
       await closeAll();
     }
 
@@ -494,8 +493,9 @@ try {
         if (want('wounds-hud')) await shot('wounds-hud', { settle: false });
         if (want('down')) {
           await page.evaluate(async () => {
+            const { S } = await import('/src/combat/fighter.ts');
             const combat = window.__game.session.sim.services.combat; const pf = combat.arena.player;
-            if (pf) { combat.arena.fall(pf); pf.riseAt = 30; }
+            if (pf) pf.set(S.Down, 'fall', 60);
           });
           await advance(2.0, {});
           await pause(900);
@@ -510,13 +510,16 @@ try {
         const s = window.__game.session; const sim = s.sim; const mil = sim.services.military; const st = sim.state;
         const me = st.persons.get(st.run.playerId);
         const lord = mil.lordHouse(me.settlement);
-        const id = mil.raiseArmy(lord, 'defence', {});
+        me.birthDay = Math.floor(sim.absDay) - 16 * 26;
+        const id = mil.raiseArmy(lord, 'war', { fraction: 1, vassals: true });
         return { lord, id, call: mil.service().call ? true : false };
       });
       console.log('army', JSON.stringify(info));
       await advance(0.5);
-      await pause(800);
+      await pause(900);
       await shot('notice-call', { settle: false });
+      await page.evaluate(() => { window.__game.session.sim.services.military.answerCall(true); });
+      await advance(0.5);
       await ui(() => window.__ui.openPanel({ panel: 'ext', name: 'army' }));
       await pause(600);
       await shot('command', { settle: false });
@@ -532,6 +535,32 @@ try {
       await advance(1.0);
       await pause(800);
       await shot('fair', { settle: true });
+    }
+
+    if (want('politics')) {
+      // a few years of history, then the player is raised to a crown (a screenshot device: the same thing happens to a successful climber)
+      await page.evaluate(async () => {
+        const sim = window.__game.session.sim;
+        for (let i = 0; i < 16 * 4; i++) { sim.advanceDays(1); await new Promise((r) => setTimeout(r, 12)); }
+      });
+      const who = await page.evaluate(() => {
+        const s = window.__game.session; const st = s.sim.state; const pol = s.sim.services.politics;
+        const kings = [...st.titles.values()].filter((t) => t.kind === 'kingdom').map((t) => st.persons.get(t.holder)).filter(Boolean);
+        const king = kings.sort((a, b) => pol.strength(b.house) - pol.strength(a.house))[0];
+        const old = st.persons.get(st.run.playerId);
+        delete old.flags.player; king.flags.player = true; st.run.playerId = king.id; st.run.houseId = king.house;
+        const near = pol.neighbours(king.house).find((o) => pol.canDeclare(king.house, o, 'conquest').ok);
+        const war = near ? pol.declareWar(king.house, near, { cause: 'conquest' }) : null;
+        return { king: king.first, near, war };
+      });
+      console.log('politics: player is', JSON.stringify(who));
+      await advance(0.5);
+      await pause(900);
+      await shot('notice-war', { settle: false });
+      await ui(() => window.__ui.openPanel({ panel: 'ext', name: 'politics' }));
+      await pause(700);
+      await shot('politics', { settle: false });
+      await closeAll();
     }
   }
 } finally {
