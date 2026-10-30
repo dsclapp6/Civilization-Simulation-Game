@@ -47,6 +47,10 @@ export interface Conversation {
   /** "your father", "the reeve", "a stranger". */
   relation: string;
   ended: boolean;
+  /** Menu page the built-in topics are showing ("root", "chat", "ask", "say", "favour", "gift", "court", "family"). Optional for UIs. */
+  page?: string;
+  /** Title of that page ("Pass the time of day", "Speak your mind"). */
+  pageLabel?: string;
 }
 
 export interface TopicReply {
@@ -56,6 +60,10 @@ export interface TopicReply {
   end?: boolean;
   /** Open a panel (trade, jobs…) — the conversation stays open underneath unless `end`. */
   ui?: UiRequest;
+  /** Short code for why the opinion moved ("gift", "insult"…); kept in the NPC's memory of the actor. */
+  reason?: string;
+  /** Change to the NPC's mood need (−1..1 scale of the 0..1 need). */
+  mood?: number;
 }
 
 export interface TopicProvider {
@@ -83,8 +91,12 @@ export interface Courtship {
   b: PersonId;
   /** 0..1 how far it has gone; marriage can be proposed at 1. */
   progress: number;
-  /** Families' consent needed (minors, nobles, serfs need the lord's leave — merchet). */
+  /** Families' consent still outstanding (minors, nobles, serfs need the lord's leave — merchet). */
   needsConsentFrom: PersonId[];
+  /** Consents already given. */
+  consentGiven?: PersonId[];
+  /** Promised in marriage (an arranged match for a ward below the age to wed); the wedding follows by itself. */
+  betrothed?: boolean;
 }
 
 export interface Result { ok: boolean; reason?: string }
@@ -92,6 +104,36 @@ export interface Result { ok: boolean; reason?: string }
 export type BarkSituation =
   | 'greet' | 'greet_superior' | 'greet_kin' | 'busy' | 'working' | 'bump' | 'weather' | 'holy_day'
   | 'market' | 'night' | 'fear' | 'angry' | 'thanks' | 'farewell' | 'idle';
+
+/** One line of market gossip supplied by the economy: how dear a good is against its reference price. */
+export interface PriceTip {
+  /** Good id ("wheat"). */
+  good: string;
+  /** −1 (very cheap) … +1 (very dear) against the reference price. */
+  trend: number;
+  /** Current price in pence per unit, if known. */
+  price?: number;
+}
+
+/** Optional links other modules set so social stays decoupled from them (`SocialApi.setHooks`). */
+export interface SocialHooks {
+  /** Economy: move goods or money between two people (carry limits, equipment…). Without it gifts move Person.money / Person.inventory directly. */
+  giveHook?: (from: PersonId, to: PersonId, key: string | 'money', qty: number) => Result;
+  /** Economy: display name and reference value (pence per unit) of an item key. */
+  itemInfoHook?: (key: string) => { name: string; value: number } | null;
+  /** Economy: market gossip for a settlement ("wheat is dear"). */
+  priceTipsHook?: (settlement: number) => PriceTip[];
+  /** Agents/player: is this person awake and able to talk right now? Default: asleep at night unless on watch. */
+  awakeHook?: (person: PersonId) => boolean;
+  /** Economy/player: standing (1..8) the clothes someone wears suggest to strangers. Default: rank tier shaded by wealth. */
+  dressTierHook?: (person: PersonId) => number;
+  /**
+   * Economy: bind a youth to a master craftsman as an apprentice (parent and master have agreed). With `dryRun` it only
+   * says whether that could be done and at what premium (pence). Without the hook social moves the youth into the
+   * master's household itself and pays a premium of its own from the youth's household purse.
+   */
+  apprenticeHook?: (youth: PersonId, master: PersonId, dryRun?: boolean) => Result & { premium?: number };
+}
 
 export interface SocialApi {
   // conversations
@@ -123,4 +165,7 @@ export interface SocialApi {
   bark(speaker: PersonId, situation: BarkSituation, listener?: PersonId): string | null;
   /** Local news and rumours in a settlement (recent chronicle, prices, deaths, weddings…). */
   news(settlement: number, limit?: number): string[];
+
+  /** Links to other modules (see SocialHooks); merges into the current hooks. */
+  setHooks?(hooks: SocialHooks): void;
 }

@@ -290,6 +290,14 @@ export class LayoutCtx {
     return r;
   }
 
+  /** Drop the road that was added last (a lane that turned out to serve nothing). Returns false when it is not the last one. */
+  discardLastRoad(roadId: number): boolean {
+    if (roadId !== this.s.roads.length - 1) return false;
+    this.roadIdx.removeRoad(roadId);
+    this.s.roads.pop();
+    return true;
+  }
+
   /** Replace a road's polyline (e.g. cut at a castle gate) keeping indexes consistent. */
   setRoadPoints(road: Road, points: P2[]): void {
     this.roadIdx.removeRoad(road.id);

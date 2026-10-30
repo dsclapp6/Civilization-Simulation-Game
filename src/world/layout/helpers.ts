@@ -2,7 +2,7 @@
 import { BUILDINGS, type BuildingKind } from '../../content/types';
 import { dist, pointInPolygon, type P2 } from '../../core/math';
 import { distPointSeg, obbPoly, makeObb } from '../geom';
-import { STREET_STEP, TAG, frontPose, resampleStreet, type LayoutCtx, type Street, yawOf } from './common';
+import { STREET_STEP, TAG, frontPose, resampleStreet, streetAt, type LayoutCtx, type Street, yawOf } from './common';
 import type { Plot, Road, RoadKind } from '../types';
 
 /**
@@ -239,18 +239,22 @@ export interface FrontageOpts {
   streetFilter?: (i: number) => boolean;
   /** restrict to one side of every street (+1 / -1) */
   sides?: (1 | -1)[];
+  /** ground relief tolerated under one building (m); defaults to the placement rules' own */
+  maxRange?: number;
+  /** clearance beyond the road edge (m); houses may stand close to a lane */
+  roadMargin?: number;
 }
 
 /** Fill street frontage with buildings, nearest to the centre first and round-robin over streets/sides. */
 export function fillFrontage(ctx: LayoutCtx, id: number, streets: Street[], o: FrontageOpts): Plot[] {
   const placed: Plot[] = [];
-  type Slot = { street: Street; side: 1 | -1; s: number; fails: number; limit: number };
+  type Slot = { street: Street; side: 1 | -1; s: number; fails: number; limit: number; skips: number };
   const slots: Slot[] = [];
   streets.forEach((street, i) => {
     if (o.streetFilter && !o.streetFilter(i)) return;
     for (const side of (o.sides ?? [1, -1]) as (1 | -1)[]) {
       const limit = Math.min(o.maxS, street.length - 6);
-      if (limit > o.startS + 8) slots.push({ street, side, s: o.startS + (i > 1 ? 4 : 0), fails: 0, limit });
+      if (limit > o.startS + 8) slots.push({ street, side, s: o.startS + (i > 1 ? 4 : 0), fails: 0, limit, skips: 0 });
     }
   });
   const rng = ctx.rng;
@@ -269,7 +273,7 @@ export function fillFrontage(ctx: LayoutCtx, id: number, streets: Street[], o: F
     const setback = rng.range(o.setback[0], o.setback[1]);
     const pose = frontPose(sl.street, sl.s + def.w / 2, sl.side, setback, def.d);
     const rot = pose.rot + (o.rotJitter ? rng.range(-o.rotJitter, o.rotJitter) : 0);
-    const plot = ctx.place(id, pick.kind, pose.x, pose.z, rot, { role: pick.role, level: pick.level });
+    const plot = ctx.place(id, pick.kind, pose.x, pose.z, rot, { role: pick.role, level: pick.level, maxRange: o.maxRange, roadMargin: o.roadMargin });
     if (plot) {
       placed.push(plot);
       if (o.garden) ctx.parcelBehind(plot, def.w + o.garden.extraWidth, o.garden.maxDepth, o.garden.minDepth);
@@ -278,7 +282,92 @@ export function fillFrontage(ctx: LayoutCtx, id: number, streets: Street[], o: F
     } else {
       sl.s += 5;
       sl.fails++;
+      if (sl.fails > patience && sl.skips < 3 && sl.s + 24 < sl.limit) {
+        // a long blocked stretch (market square, church, workshops): carry on beyond it instead of giving the side up
+        sl.s += 22; sl.fails = 0; sl.skips++;
+      }
     }
   }
   return placed;
+}
+
+
+export interface TopUpOpts {
+  /** homes still missing */
+  need: number;
+  pick: FrontageOpts['pick'];
+  /** settlement centre and how far from it new lanes may start (m) */
+  centre: P2;
+  reach: number;
+  /** keep new lanes inside this outline (town walls) */
+  inside?: P2[];
+  laneKind: RoadKind;
+  maxLanes: number;
+  garden?: FrontageOpts['garden'];
+  /** frontage setbacks of the first round */
+  setback: [number, number];
+}
+
+/**
+ * The last line of defence against thin layouts. While homes are missing, branch more lanes off the streets and lanes,
+ * one at a time (nearest the middle first), fill each one's frontage, and loosen spacing, gardens and ground tolerance a
+ * little more each round, so that a settlement is never left without its homes whatever its streets and ground look like.
+ */
+export function topUpHomes(ctx: LayoutCtx, id: number, roots: Street[], o: TopUpOpts): number {
+  const rng = ctx.rng;
+  let added = 0;
+  let lanesMade = 0;
+  const pool: Street[] = roots.filter((st) => st.length >= 24);
+  for (let round = 0; round < 5 && added < o.need; round++) {
+    const loose = {
+      setback: [Math.max(0.5, o.setback[0] - 0.3 * round), Math.max(1.2, o.setback[1] - 0.4 * round)] as [number, number],
+      gap: [0.4, Math.max(0.8, 2.6 - 0.6 * round)] as [number, number],
+      garden: round >= 2 ? { maxDepth: 12, minDepth: 5, extraWidth: 0.4 } : o.garden,
+      rotJitter: 0.04, patience: 8 + 2 * round, maxRange: [1.9, 2.4, 3.0, 3.6, 4.6][round], roadMargin: 0.6,
+    };
+    // the gaps that tighter spacing and rougher ground leave on the existing frontage
+    if (round >= 1) {
+      added += fillFrontage(ctx, id, pool, { pick: o.pick, count: o.need - added, startS: 5, maxS: 400, ...loose }).length;
+      if (added >= o.need) break;
+    }
+    // candidate branch points along every street, nearest the centre first
+    const spacing = [34, 26, 20, 15, 11][round];
+    const cands: { st: Street; s: number; dir: 1 | -1; key: number }[] = [];
+    for (const st of pool) {
+      for (let s = 12 + rng.range(0, 10); s < Math.min(st.length - 8, o.reach); s += spacing + rng.range(-3, 6)) {
+        for (const dir of [1, -1] as const) cands.push({ st, s, dir, key: s + rng.range(0, 40) });
+      }
+    }
+    cands.sort((a, b) => a.key - b.key);
+    for (const c of cands) {
+      if (added >= o.need || lanesMade >= o.maxLanes + 6 * round) break;
+      const p = streetAt(c.st, c.s);
+      if (o.inside && !pointInPolygon(p.x, p.z, o.inside)) continue;
+      const lane = makeLane(ctx, { x: p.x, z: p.z }, -p.tz * c.dir, p.tx * c.dir, [110, 95, 80, 70, 60][round], o.laneKind, 18, o.inside);
+      if (!lane) continue;
+      const placed = fillFrontage(ctx, id, [lane], { pick: o.pick, count: o.need - added, startS: 5, maxS: 400, ...loose });
+      if (!placed.length) { ctx.discardLastRoad(lane.road); continue; } // a lane that serves no house is not kept
+      lanesMade++;
+      pool.push(lane);
+      added += placed.length;
+    }
+  }
+  if (added > 0) ctx.bump('homes.topup');
+  return added;
+}
+
+/**
+ * A settlement can only hold the people its homes can. When the ground allowed far fewer homes than planned (a cramped
+ * island, a steep shore), the population is brought down to what was built, so that the people simulated there are
+ * not crowded into a handful of houses.
+ */
+export function fitPopulationToHomes(ctx: LayoutCtx, id: number, homes: number, wanted: number): void {
+  if (homes >= wanted * 0.7) return;
+  const site = ctx.s.sites[id], st = ctx.s.settlements[id];
+  const pop = Math.max(8, Math.round(Math.max(homes, 1) * 4.6 * 1.15));
+  if (pop < site.population) {
+    site.population = pop;
+    st.population = pop;
+    ctx.bump('population.fitted');
+  }
 }

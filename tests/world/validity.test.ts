@@ -219,6 +219,30 @@ describe.each(SEEDS)('world validity (seed %s)', (seed) => {
     expect(kindsAll.has('watermill')).toBe(true);
   });
 
+  it('population is mostly rural (towns and cities hold about 25-30 %) and every town and village gets its homes', () => {
+    let total = 0, urban = 0;
+    for (const st of w.settlements) { total += st.population; if (st.kind === 'town' || st.kind === 'city') urban += st.population; }
+    expect(total).toBeGreaterThan(13000);
+    expect(total).toBeLessThan(16000);
+    expect(urban / total).toBeGreaterThan(0.25);
+    expect(urban / total).toBeLessThan(0.31);
+    // towns and cities rank above villages, villages above hamlets, by mean population
+    const mean = (k: string): number => { const a = w.settlements.filter((x) => x.kind === k); return a.reduce((t, x) => t + x.population, 0) / Math.max(1, a.length); };
+    expect(mean('city')).toBeGreaterThan(mean('town'));
+    expect(mean('town')).toBeGreaterThan(mean('village'));
+    expect(mean('village')).toBeGreaterThan(mean('hamlet'));
+    // the layout never comes up short: no town below 80 % of its planned homes, and next to no village
+    expect(w.diagnostics['town.fewhomes'] ?? 0).toBe(0);
+    expect(w.diagnostics['village.fewhomes'] ?? 0).toBeLessThanOrEqual(1);
+    const HOMES = new Set(['townhouse', 'cottage', 'hovel', 'longhouse']);
+    for (const st of w.settlements) {
+      if (st.kind !== 'town' && st.kind !== 'city' && st.kind !== 'village') continue;
+      const planned = st.kind === 'village' ? Math.max(4, Math.min(34, Math.round(st.population / 4.6))) : Math.round(st.population / 4.6);
+      const homes = st.plots.filter((p) => HOMES.has(w.plots[p].kind)).length;
+      expect(`${st.kind} ${st.name}: ${homes} homes of ${planned}`).toSatisfy(() => homes >= Math.floor(planned * 0.7));
+    }
+  });
+
   it('towns and cities are walled with gates, market squares and a cathedral in each city; castles and abbeys have their compounds', () => {
     const has = (s: (typeof w.settlements)[number], k: string) => s.plots.some((p) => w.plots[p].kind === k);
     for (const t of w.settlements.filter((s) => s.kind === 'town' || s.kind === 'city')) {
