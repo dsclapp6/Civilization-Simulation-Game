@@ -5,8 +5,8 @@ import type { Palette } from './types';
 
 export const PALETTE: Palette = {
   ground: {
-    [Ground.Grass]: 0x7da452,
-    [Ground.Meadow]: 0x93b45a,
+    [Ground.Grass]: 0x74a04c,
+    [Ground.Meadow]: 0x8aae56,
     [Ground.Heath]: 0x86745f,
     [Ground.Moor]: 0x8b8452,
     [Ground.ForestFloor]: 0x56613a,
@@ -31,14 +31,14 @@ export const PALETTE: Palette = {
   },
   fog: { day: 0xc8dcea, dusk: 0xd9a98a, night: 0x1a2236 },
   sun: { day: 0xfff1d6, dusk: 0xffb070, moon: 0x9fb4d9 },
-  ambient: { day: 0xb8c8d8, night: 0x2a3550 },
+  ambient: { day: 0xb8c8d8, night: 0x3a4c80 },
   foliage: { spring: 0x9ccc65, summer: 0x6f9e3a, autumn: 0xc7883a, winter: 0x8a8f86 },
   thatch: 0xc8a35a,
   daub: 0xe6dcc3,
   timber: 0x5a3d26,
   stone: 0xa9a397,
   slate: 0x5d636b,
-  roofTile: 0xa8553a,
+  roofTile: 0x9b5a3f,
   dyes: [
     [],
     [0x8c7b62, 0x7a6a52, 0x9a8a70, 0x6e5f4a],            // 1 unfree: undyed wool, russet
