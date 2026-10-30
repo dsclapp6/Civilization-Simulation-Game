@@ -107,6 +107,23 @@ export function recruitTests(M: Mil, p: Person, issued: boolean): TestResult[] {
 // Kinds of men
 // ---------------------------------------------------------------------------------------------
 
+interface Thresholds { archer: { str: number; archery: number }; maa: { str: number; end: number; melee: number } }
+const thresholdCache = new WeakMap<object, Thresholds>();
+/** The numbers of the archer and man-at-arms tests, read once from the economy's `entryTests()`. */
+function thresholds(M: Mil): Thresholds {
+  let t = thresholdCache.get(M);
+  if (t) return t;
+  const tests = M.economy.entryTests?.() ?? [];
+  const find = (career: string) => tests.find((x) => x.career === career);
+  const a = find('archer'), m = find('man_at_arms');
+  t = {
+    archer: { str: a?.stats.str ?? 10, archery: a?.skills.archery ?? 3 },
+    maa: { str: m?.stats.str ?? 12, end: m?.stats.end ?? 10, melee: m?.skills.melee ?? 4 },
+  };
+  thresholdCache.set(M, t);
+  return t;
+}
+
 /** What kind of fighting man this person is when he takes the field. */
 export function unitKindOf(M: Mil, p: Person, ctx: { levy: boolean; town?: boolean; crossbows?: boolean }): UnitKind {
   const hired = M.data.hired[p.id];
@@ -116,13 +133,11 @@ export function unitKindOf(M: Mil, p: Person, ctx: { levy: boolean; town?: boole
   if (p.career === 'man_at_arms') return 'man_at_arms';
   if (p.career === 'archer') return 'archer';
   if (p.career === 'soldier') return skillLevel(p.skills.archery) > skillLevel(p.skills.melee) ? 'archer' : 'man_at_arms';
-  // levy men: the better-trained and better-armed are drawn out of the ranks
-  const tests = recruitTests(M, p, false);
-  const arch = tests.find((t) => t.role === 'archer');
-  const maa = tests.find((t) => t.role === 'man_at_arms');
-  if (maa?.met && hasArmour(p)) return 'man_at_arms';
+  // levy men: the better-trained and better-armed are drawn out of the ranks (the recruiter's tests, SPEC §13)
+  const th = thresholds(M);
+  if (hasArmour(p) && p.trained.str >= th.maa.str && p.trained.end >= th.maa.end && skillLevel(p.skills.melee) >= th.maa.melee) return 'man_at_arms';
   if (ctx.town && ctx.crossbows && p.rankTier >= 2 && p.career !== 'labourer' && (p.id % 3 !== 0)) return 'crossbow';
-  if (arch?.met && (hasBow(p) || p.career === 'yeoman' || p.career === 'woodward')) return 'archer';
+  if (p.trained.str >= th.archer.str && skillLevel(p.skills.archery) >= th.archer.archery && (hasBow(p) || p.career === 'yeoman' || p.career === 'woodward')) return 'archer';
   return 'levy';
 }
 

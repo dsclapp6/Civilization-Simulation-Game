@@ -28,7 +28,7 @@ export function emptyPlayerMil(): PlayerMil {
 export function emptyMilState(): MilState {
   return {
     v: VERSION, nextArmy: 1, nextBattle: 1, armies: [], battles: [], sieges: [], captives: [], feuds: [], hired: {},
-    player: emptyPlayerMil(), think: {}, wars: {}, stats: { battles: 0, dead: 0, raids: 0, sieges: 0, ransoms: 0, ransomPaid: 0 },
+    player: emptyPlayerMil(), think: {}, wars: {}, occupied: {}, queue: [], stats: { battles: 0, dead: 0, raids: 0, sieges: 0, ransoms: 0, ransomPaid: 0 },
   };
 }
 
@@ -142,6 +142,20 @@ export class Mil {
   /** A civilian hurt in a raid (the same wound model as the soldiers). */
   harmFolk(p: Person, intensity: number, cause: string): void {
     harm(this, p, intensity, cause);
+  }
+
+  /** Section timings for tools and perf tests (null = off). */
+  timings: Record<string, { ms: number; calls: number; max: number; over8?: number }> | null = null;
+  time<T>(name: string, fn: () => T): T {
+    const t = this.timings;
+    if (!t) return fn();
+    const t0 = performance.now();
+    try { return fn(); } finally {
+      const dt = performance.now() - t0;
+      const e = t[name] ?? (t[name] = { ms: 0, calls: 0, max: 0 });
+      e.ms += dt; e.calls++; if (dt > e.max) e.max = dt;
+      if (dt > 8) e.over8 = (e.over8 ?? 0) + 1;
+    }
   }
 
   // ---- messages ----

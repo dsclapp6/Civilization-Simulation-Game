@@ -92,10 +92,12 @@ export function dailyCampaign(M: Mil): void {
   for (const a of M.allArmies().slice()) {
     if (!M.armyById.has(a.id) || a.task === 'muster' || a.engaged) continue;
     if (playerCommanded(M, a)) continue;
-    think(M, a);
+    M.time('think', () => think(M, a));
   }
-  defend(M, dayNo);
-  // expire feuds
+  M.time('defend', () => defend(M, dayNo));
+  M.time('queue', () => runQueue(M));
+  // expire feuds and lapsed occupations
+  for (const k of Object.keys(data.occupied)) if (data.occupied[k].until <= now) { delete data.occupied[k]; M.touch(); }
   const feuds = data.feuds.filter((f) => f.until >= now);
   if (feuds.length !== data.feuds.length) { data.feuds = feuds; M.touch(); }
 }
@@ -126,7 +128,21 @@ function reinforce(M: Mil, house: number, war: number, participants?: readonly n
   const last = M.data.think[`r${house}`] ?? -99;
   if (M.day - last < 6) return;
   M.data.think[`r${house}`] = M.day;
-  raise(M, house, 'war', { war });
+  M.data.queue.push({ h: house, w: war, r: 'war' });
+  M.touch();
+}
+
+/** Raises at most one queued army a day (the work is spread out so no frame pays for a whole war at once). */
+function runQueue(M: Mil): void {
+  const q = M.data.queue;
+  if (q.length === 0) return;
+  const n = q.length > 6 ? 2 : 1;
+  for (let i = 0; i < n && q.length > 0; i++) {
+    const e = q.shift()!;
+    if (M.allArmies().some((a) => a.house === e.h && a.reason !== 'sally' && a.reason === e.r)) continue;
+    raise(M, e.h, e.r, { war: e.w });
+  }
+  M.touch();
 }
 
 /** An enemy army near our land and none of ours in the field: raise the defence. */
@@ -138,14 +154,15 @@ function defend(M: Mil, dayNo: number): void {
     const nearId = nearestSettlementId(M, e.x, e.z);
     const s = M.settlementById.get(nearId);
     if (!s || dist(e.x, e.z, s.x, s.z) > 3200) continue;
-    const lord = M.realm.lordHouse(nearId);
+    const lord = M.realm.holderOf(nearId);
     if (!lord || lord === mine || !M.realm.hostile(lord, e.house)) continue;
     if (M.allArmies().some((a) => a.house === lord || M.realm.chain(lord).includes(a.house))) continue;
     const last = M.data.think[`d${lord}`] ?? -99;
     if (M.day - last < 5) continue;
     if ((lord + dayNo) % 2 !== 0) continue;
     M.data.think[`d${lord}`] = M.day;
-    raise(M, lord, 'defence', { war: M.realm.warBetween(lord, e.house).war });
+    M.data.queue.push({ h: lord, w: M.realm.warBetween(lord, e.house).war, r: 'defence' });
+    M.touch();
   }
 }
 
@@ -209,6 +226,13 @@ function nearestOwnCastle(M: Mil, a: Army): number | undefined {
   return best;
 }
 
+/** Men of garrison households living at a settlement (a cheap measure of how well it is held). */
+function garrisonAt(M: Mil, sid: number): number {
+  let n = 0;
+  for (const hh of M.state.householdsIn(sid)) if (hh.kind === 'garrison') n += hh.members.length;
+  return n;
+}
+
 /** The most rewarding enemy place we can take or ravage: value over distance, weaker and hungrier first. */
 function pickTarget(M: Mil, a: Army): { id: number; how: 'siege' | 'raid' } | null {
   const size = a.men.length;
@@ -217,7 +241,7 @@ function pickTarget(M: Mil, a: Army): { id: number; how: 'siege' | 'raid' } | nu
   let best: { id: number; how: 'siege' | 'raid'; score: number } | null = null;
   const pol = M.politics;
   for (const s of M.world.settlements) {
-    const lord = M.realm.lordHouse(s.id);
+    const lord = M.realm.holderOf(s.id);
     if (!lord || !M.realm.hostile(a.house, lord)) continue;
     const d = dist(a.x, a.z, s.x, s.z);
     if (d > 9000) continue;
@@ -231,7 +255,7 @@ function pickTarget(M: Mil, a: Army): { id: number; how: 'siege' | 'raid' } | nu
     if (ss) { score *= 1 + Math.max(0, 1 - ss.prosperity) * 1.5 + ss.epidemic * 0.5; }
     const happ = M.sim.services.happenings;
     if (happ && happ.activeAt(s.id).length > 0) score *= 1.25;
-    const defenders = Math.max(4, M.forces.summary(lord).garrison * 0.6 + (strong ? 20 : 4));
+    const defenders = Math.max(4, garrisonAt(M, s.id) * 0.8 + (strong ? 18 : 4) + (ss ? ss.target * 0.03 : 0));
     const odds = power / (defenders * (strong ? 2.2 : 1));
     let how: 'siege' | 'raid' = 'raid';
     if (strong) {

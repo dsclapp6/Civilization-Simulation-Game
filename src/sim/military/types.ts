@@ -185,6 +185,10 @@ export interface MilState {
   think: Record<string, number>;
   /** Wars already seen (so each war raises its armies once): war id → day. */
   wars: Record<string, number>;
+  /** Places held by a conqueror for a while after a siege: settlement id → the House and the day it lapses. */
+  occupied: Record<string, { by: HouseId; until: number }>;
+  /** Armies waiting to be raised (one a day keeps the frame cost flat): House, war, reason. */
+  queue: Array<{ h: HouseId; w: number; r: string }>;
   stats: { battles: number; dead: number; raids: number; sieges: number; ransoms: number; ransomPaid: number };
 }
 

@@ -33,7 +33,7 @@ export class RaidSystem {
   /** The raiders reach the village: the villagers' militia may stand against them, else the work begins. */
   arrive(a: Army, sid: number): void {
     const M = this.M;
-    const lord = M.realm.lordHouse(sid);
+    const lord = M.realm.holderOf(sid);
     if (lord && !M.realm.hostile(a.house, lord) && !M.realm.chain(lord).includes(a.house)) M.declareFeud(a.house, lord, 24, 'raid');
     a.target = undefined;
     a.from = undefined;

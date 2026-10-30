@@ -13,7 +13,7 @@ export function arrivalOf(M: Mil, a: Army): void {
     return;
   }
   if (sid === undefined) { idle(); if (a.intent === 'attack' || a.intent === 'defend') a.intent = 'none'; return; }
-  const lord = M.realm.lordHouse(sid);
+  const lord = M.realm.holderOf(sid);
   const friendly = !lord || lord === a.house || M.realm.chain(a.house).includes(lord) || M.realm.chain(lord).includes(a.house);
   switch (a.intent) {
     case 'raid':

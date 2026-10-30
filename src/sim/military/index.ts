@@ -62,8 +62,8 @@ export function installMilitary(sim: Simulation, deps: Wave3Deps): MilitaryRunti
     run: () => {
       ensureHooks();
       if (M.data.armies.length === 0 && M.data.battles.length === 0) return;
-      hourlyArmies(M);
-      checkContacts(M);
+      M.time('hour.armies', () => hourlyArmies(M));
+      M.time('hour.contacts', () => checkContacts(M));
       M.touch();
     },
   }));
@@ -71,17 +71,21 @@ export function installMilitary(sim: Simulation, deps: Wave3Deps): MilitaryRunti
     name: 'military.day', phase: 'daily', order: 60,
     run: () => {
       ensureHooks();
+      // caches are rebuilt at the start of every day, so a loaded game decides exactly as the original
       M.forces.clear();
-      dailyCampaign(M);
-      for (const a of M.allArmies().slice()) {
-        if (!M.armyById.has(a.id)) continue;
-        if (a.reason === 'sally') continue;
-        upkeepDay(M, a);
-      }
-      M.sieges.tick();
-      tickCaptives(M);
+      M.realm.invalidate();
+      M.time('day.campaign', () => dailyCampaign(M));
+      M.time('day.upkeep', () => {
+        for (const a of M.allArmies().slice()) {
+          if (!M.armyById.has(a.id)) continue;
+          if (a.reason === 'sally') continue;
+          upkeepDay(M, a);
+        }
+      });
+      M.time('day.sieges', () => M.sieges.tick());
+      M.time('day.captives', () => tickCaptives(M));
       M.career.daily();
-      repairDamage(M);
+      M.time('day.repair', () => repairDamage(M));
       void CFG;
     },
   }));
@@ -95,6 +99,8 @@ export function installMilitary(sim: Simulation, deps: Wave3Deps): MilitaryRunti
 
   // ---- the player's world ----
   offs.push(sim.events.on('playerSwitched', () => M.career.reset()));
+  // who rules what changes with deaths and oaths
+  for (const ev of ['death', 'inheritance', 'stance', 'war', 'office'] as const) offs.push(sim.events.on(ev, () => M.realm.invalidate()));
   offs.push(sim.events.on('captured', (e) => adoptCaptive(M, e.captive, e.captor, e.ransom)));
   const prevHostile = sim.hostileNear;
   sim.hostileNear = () => M.data.battles.some((b) => b.fight !== 0 && b.result === '') || prevHostile();

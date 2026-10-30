@@ -13,9 +13,10 @@ export class Realm {
   private readonly lord = new Map<number, HouseId>();
   /** House → settlements it holds. */
   private readonly domain = new Map<HouseId, number[]>();
+  /** Liege by titles (used when there is no politics module). */
   private readonly liegeOfHouse = new Map<HouseId, HouseId>();
-  private readonly vassals = new Map<HouseId, HouseId[]>();
-  private readonly enemyCache = new Map<HouseId, Set<HouseId>>();
+  /** Noble and royal Houses (the only ones that hold men and titles of consequence). */
+  private nobles: HouseId[] = [];
 
   constructor(private readonly M: Mil) {}
 
@@ -40,7 +41,8 @@ export class Realm {
   private rebuild(): void {
     const M = this.M;
     const st = M.state;
-    this.lord.clear(); this.domain.clear(); this.liegeOfHouse.clear(); this.vassals.clear(); this.enemyCache.clear();
+    this.lord.clear(); this.domain.clear(); this.liegeOfHouse.clear();
+    this.nobles = [];
 
     // the House that sits at each castle / capital
     const seatHouse = new Map<number, HouseId>();
@@ -70,38 +72,45 @@ export class Realm {
       list.push(s.id);
     }
 
-    // liege of each House: politics if present, else the holder of the liege of its highest title
-    const pol = M.politics;
+    // liege of each House by titles: the holder of the liege of its highest title (politics, when present, is asked live)
     for (const h of st.houses.values()) {
-      if (h.extinct || h.kind === 'church') continue;
+      if (h.extinct || h.kind === 'church' || (h.kind !== 'noble' && h.kind !== 'royal')) continue;
+      this.nobles.push(h.id);
+      let best: Title | undefined;
+      for (const p of st.houseMembers.get(h.id) ?? []) {
+        for (const t of st.titlesHeldBy(p.id)) if (!best || TITLE_RANK[t.kind] > TITLE_RANK[best.kind]) best = t;
+      }
       let liege: HouseId = NONE;
-      if (pol) liege = pol.liegeOf(h.id);
-      else {
-        let best: Title | undefined;
-        for (const p of st.houseMembers.get(h.id) ?? []) {
-          for (const t of st.titlesHeldBy(p.id)) if (!best || TITLE_RANK[t.kind] > TITLE_RANK[best.kind]) best = t;
-        }
-        if (best && best.liege) liege = this.holderHouse(st.titles.get(best.liege));
-        else if (!best) {
-          const sh = seatHouse.get(h.seat);
-          liege = sh && sh !== h.id ? sh : this.lord.get(h.seat) ?? NONE;
-          if (liege === h.id) liege = NONE;
-        }
+      if (best && best.liege) liege = this.holderHouse(st.titles.get(best.liege));
+      else if (!best) {
+        const sh = seatHouse.get(h.seat);
+        liege = sh && sh !== h.id ? sh : this.lord.get(h.seat) ?? NONE;
       }
-      if (liege && liege !== h.id) {
-        this.liegeOfHouse.set(h.id, liege);
-        let v = this.vassals.get(liege);
-        if (!v) { v = []; this.vassals.set(liege, v); }
-        v.push(h.id);
-      }
+      if (liege && liege !== h.id) this.liegeOfHouse.set(h.id, liege);
     }
-    for (const v of this.vassals.values()) v.sort((a, b) => a - b);
+    this.nobles.sort((a, b) => a - b);
   }
 
   lordHouse(settlement: number): HouseId { this.fresh(); return this.lord.get(settlement) ?? NONE; }
+  /** Who holds the place now: a conqueror within his occupation, else its lord. */
+  holderOf(settlement: number): HouseId {
+    const o = this.M.data.occupied[settlement];
+    if (o && o.until > this.M.sim.absDay) return o.by;
+    return this.lordHouse(settlement);
+  }
   settlementsOf(house: HouseId): readonly number[] { this.fresh(); return this.domain.get(house) ?? EMPTY; }
-  liege(house: HouseId): HouseId { this.fresh(); return this.liegeOfHouse.get(house) ?? NONE; }
-  directVassals(house: HouseId): readonly HouseId[] { this.fresh(); return this.vassals.get(house) ?? EMPTY; }
+  liege(house: HouseId): HouseId {
+    const pol = this.M.politics;
+    if (pol) return pol.liegeOf(house);
+    this.fresh();
+    return this.liegeOfHouse.get(house) ?? NONE;
+  }
+  directVassals(house: HouseId): HouseId[] {
+    this.fresh();
+    const out: HouseId[] = [];
+    for (const h of this.nobles) if (h !== house && this.liege(h) === house) out.push(h);
+    return out;
+  }
 
   /** Vassals down the chain (depth-limited), nearest first. */
   allVassals(house: HouseId, depth = 3): HouseId[] {
@@ -168,10 +177,7 @@ export class Realm {
 
   /** Houses at war with `house` directly (politics wars) or in a feud. */
   directEnemies(house: HouseId): Set<HouseId> {
-    this.fresh();
-    let s = this.enemyCache.get(house);
-    if (s) return s;
-    s = new Set();
+    const s = new Set<HouseId>();
     for (const { war, side } of this.warsOf(house)) for (const e of side === 'attacker' ? war.defenders : war.attackers) s.add(e);
     const now = this.M.sim.absDay;
     for (const f of this.M.data.feuds) {
@@ -179,7 +185,6 @@ export class Realm {
       if (f.a === house) s.add(f.b);
       else if (f.b === house) s.add(f.a);
     }
-    this.enemyCache.set(house, s);
     return s;
   }
 

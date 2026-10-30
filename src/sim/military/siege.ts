@@ -96,7 +96,7 @@ export class SiegeSystem {
     const M = this.M;
     if (this.recOf(sid)) return null;
     const rec: SiegeRec = {
-      settlement: sid, army: a.id, house: a.house, war: M.realm.warBetween(a.house, M.realm.lordHouse(sid)).war, since: M.day,
+      settlement: sid, army: a.id, house: a.house, war: M.realm.warBetween(a.house, M.realm.holderOf(sid)).war, since: M.day,
       blockadeDays: 0, food: this.provisions(sid), rams: 0, ladders: false, trebuchets: 0, mine: 0, lastAssault: -9, assaults: 0, morale: 0.75,
     };
     M.data.sieges.push(rec);
@@ -137,7 +137,7 @@ export class SiegeSystem {
     const a = M.army(rec.army);
     const s = M.settlementById.get(sid);
     if (!a || !s) { this.lift(rec, 'the besiegers are gone'); return; }
-    const lordHouse = M.realm.lordHouse(sid);
+    const lordHouse = M.realm.holderOf(sid);
     if (lordHouse && !M.realm.hostile(a.house, lordHouse) && !M.realm.chain(lordHouse).includes(a.house)) { this.lift(rec, 'peace was made'); return; }
     if (a.engaged) return;
     const now = M.day;
@@ -223,7 +223,7 @@ export class SiegeSystem {
     const M = this.M;
     const sid = rec.settlement;
     const bonus = this.defenceBonus(rec);
-    const def = defendersOf(M, sid, M.realm.lordHouse(sid));
+    const def = defendersOf(M, sid, M.realm.holderOf(sid));
     const att = fightersOf(M, [a]);
     if (att.total <= 0) return false;
     const unwalled = fortifications(M, sid).length === 0;
@@ -247,7 +247,7 @@ export class SiegeSystem {
   assault(rec: SiegeRec, a: Army): void {
     const M = this.M;
     const sid = rec.settlement;
-    const lordHouse = M.realm.lordHouse(sid);
+    const lordHouse = M.realm.holderOf(sid);
     const def = defendersOf(M, sid, lordHouse);
     // the defenders take the field as an army of their own for the day
     let dArmy = def.armies[0];
@@ -299,7 +299,7 @@ export class SiegeSystem {
   fall(rec: SiegeRec, a: Army, how: 'stormed' | 'surrender'): void {
     const M = this.M;
     const sid = rec.settlement;
-    const lordHouse = M.realm.lordHouse(sid);
+    const lordHouse = M.realm.holderOf(sid);
     const idx = M.data.sieges.indexOf(rec);
     if (idx >= 0) M.data.sieges.splice(idx, 1);
     // prisoners: the lord and the knights of the household who were inside
@@ -326,6 +326,8 @@ export class SiegeSystem {
       a.funds += wealth * 0.25;
     }
     const aid = a.id;
+    // the conqueror holds the place for a while (politics settles the titles at the peace)
+    M.data.occupied[sid] = { by: a.house, until: M.day + 28 };
     a.task = 'garrison';
     a.intent = 'none';
     a.target = undefined;
@@ -356,7 +358,7 @@ export class SiegeSystem {
       settlement: rec.settlement, name: M.placeName(rec.settlement), besieger: rec.house, army: rec.army, since: rec.since,
       foodDays: Math.round((rec.food / (pop * CFG.ration)) * 10) / 10,
       walls: Math.round(wallIntegrity(M, rec.settlement) * 100) / 100,
-      defenders: defendersOf(M, rec.settlement, M.realm.lordHouse(rec.settlement)).people.length,
+      defenders: defendersOf(M, rec.settlement, M.realm.holderOf(rec.settlement)).people.length,
       morale: Math.round(rec.morale * 100) / 100, rams: rec.rams, trebuchets: rec.trebuchets, mine: Math.min(1, rec.mine),
     };
   }
