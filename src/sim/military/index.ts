@@ -245,14 +245,16 @@ function hire(M: Mil, house: HouseId, count: number, kind: 'archer' | 'man_at_ar
   return n;
 }
 
-/** Buildings damaged by raids and sieges are repaired slowly by the settlement's carpenters and masons. */
+/** Buildings damaged by raids and sieges are repaired slowly by the settlement's carpenters and masons (a quarter of the places each day). */
 function repairDamage(M: Mil): void {
   const day = Math.floor(M.day);
-  if (day % 4 !== 0) return;
   const besieged = new Set(M.data.sieges.map((s) => s.settlement));
-  for (const b of M.state.buildings.values()) {
-    if (b.damage <= 0 || b.onFire || besieged.has(b.settlement)) continue;
-    b.damage = Math.max(0, Math.round((b.damage - 0.05) * 1000) / 1000);
-    M.state.touchBuilding(b);
+  for (const s of M.world.settlements) {
+    if ((s.id + day) % 4 !== 0 || besieged.has(s.id)) continue;
+    for (const b of M.state.buildingsAt.get(s.id) ?? []) {
+      if (b.damage <= 0 || b.onFire) continue;
+      b.damage = Math.max(0, Math.round((b.damage - 0.05) * 1000) / 1000);
+      M.state.touchBuilding(b);
+    }
   }
 }

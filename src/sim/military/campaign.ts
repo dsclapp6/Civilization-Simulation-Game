@@ -187,7 +187,7 @@ function think(M: Mil, a: Army): void {
   }
   if (a.intent === 'return' || a.intent === 'hold') return;
   // idle at a place: choose work
-  const foe = nearestFoe(M, a, 3200);
+  const foe = M.time('nearestFoe', () => nearestFoe(M, a, 3200));
   if (foe) {
     const ratio = armyPowerRough(a) / Math.max(1, armyPowerRough(foe));
     if (ratio >= 0.85) { giveOrder(M, a, { kind: 'march', x: foe.x, z: foe.z }); a.intent = 'attack'; return; }
@@ -195,9 +195,9 @@ function think(M: Mil, a: Army): void {
     const castle = nearestOwnCastle(M, a);
     if (castle !== undefined && castle !== nearestSettlementId(M, a.x, a.z)) { giveOrder(M, a, { kind: 'garrison', settlement: castle }); return; }
   }
-  const t = pickTarget(M, a);
+  const t = M.time('pickTarget', () => pickTarget(M, a));
   if (t) {
-    giveOrder(M, a, { kind: t.how, settlement: t.id });
+    M.time('giveOrder', () => giveOrder(M, a, { kind: t.how, settlement: t.id }));
     return;
   }
   // nothing to do: go home
@@ -226,12 +226,20 @@ function nearestOwnCastle(M: Mil, a: Army): number | undefined {
   return best;
 }
 
-/** Men of garrison households living at a settlement (a cheap measure of how well it is held). */
+/** Men of garrison households living at a settlement (a cheap measure of how well it is held); cached for the day. */
 function garrisonAt(M: Mil, sid: number): number {
-  let n = 0;
-  for (const hh of M.state.householdsIn(sid)) if (hh.kind === 'garrison') n += hh.members.length;
+  const day = Math.floor(M.day);
+  if (garrisonDay !== day) { garrisonCache.clear(); garrisonDay = day; }
+  let n = garrisonCache.get(sid);
+  if (n === undefined) {
+    n = 0;
+    for (const hh of M.state.householdsIn(sid)) if (hh.kind === 'garrison') n += hh.members.length;
+    garrisonCache.set(sid, n);
+  }
   return n;
 }
+const garrisonCache = new Map<number, number>();
+let garrisonDay = -1;
 
 /** The most rewarding enemy place we can take or ravage: value over distance, weaker and hungrier first. */
 function pickTarget(M: Mil, a: Army): { id: number; how: 'siege' | 'raid' } | null {
@@ -239,12 +247,16 @@ function pickTarget(M: Mil, a: Army): { id: number; how: 'siege' | 'raid' } | nu
   const power = armyPowerRough(a);
   const rng = M.rng('military.campaign');
   let best: { id: number; how: 'siege' | 'raid'; score: number } | null = null;
+  const hostileMemo = new Map<number, boolean>();
   const pol = M.politics;
   for (const s of M.world.settlements) {
-    const lord = M.realm.holderOf(s.id);
-    if (!lord || !M.realm.hostile(a.house, lord)) continue;
     const d = dist(a.x, a.z, s.x, s.z);
     if (d > 9000) continue;
+    const lord = M.realm.holderOf(s.id);
+    if (!lord) continue;
+    let hostile = hostileMemo.get(lord);
+    if (hostile === undefined) { hostile = M.realm.hostile(a.house, lord); hostileMemo.set(lord, hostile); }
+    if (!hostile) continue;
     const ss = M.state.settlementState(s.id);
     // places already besieged by someone else are left to them; our own siege is continued
     const sieged = M.data.sieges.find((x) => x.settlement === s.id);

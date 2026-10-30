@@ -372,7 +372,7 @@ export function marchHour(M: Mil, a: Army): boolean {
 // Daily upkeep
 // ---------------------------------------------------------------------------------------------
 
-const FOOD_SCAN_HOUSEHOLDS = 30;
+const FOOD_SCAN_HOUSEHOLDS = 18;
 
 /** Takes food from a settlement's households: returns man-days gathered. */
 function forage(M: Mil, sid: number, wanted: number, own: boolean): number {
