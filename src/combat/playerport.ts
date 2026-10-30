@@ -362,6 +362,9 @@ export class PlayerPort implements PlayerCombatPort {
       if (e) out.faceYaw = yawTo(pf.x, pf.z, e.x, e.z);
     }
     if (pf.unhorse) { out.unhorse = true; pf.unhorse = false; }
+    // breath spent this step: what the swing cost and what blows took from the guard
+    out.staminaCost = Math.max(0, fr.stamina - pf.stamina) + pf.staminaDebt;
+    pf.staminaDebt = 0;
   }
 
   private nearestHostile(pf: Fighter, within: number): Fighter | null {

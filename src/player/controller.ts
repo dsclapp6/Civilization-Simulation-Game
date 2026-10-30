@@ -347,7 +347,9 @@ export class PlayerController implements PlayerApi {
     h.carried = Math.round(this.traits.weight * 10) / 10;
     h.capacity = this.traits.capacity;
     h.mounted = b.mounted !== null;
-    h.prompt = this.journey?.encounter || !this.interaction.hasPrompt ? null : this.interaction.prompt;
+    // no "Talk" prompts in the middle of a fight
+    const brawling = this.combatPose !== null && this.combatPose.engaged && (this.combat() ? this.sim.services.combat?.fightOf?.(this.personId) : 0);
+    h.prompt = this.journey?.encounter || !this.interaction.hasPrompt || brawling ? null : this.interaction.prompt;
     const a = this.sim.actions.active(this.personId);
     if (a && a.option.seconds > 0) {
       const ha = this.hudAction;

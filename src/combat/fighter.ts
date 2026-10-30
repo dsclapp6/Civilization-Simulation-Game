@@ -109,6 +109,8 @@ export class Fighter {
   stamina = 100;
   staminaMax = 100;
   staminaIdle = 0;
+  /** Breath the player has lost to blows since the port last passed it to the controller. */
+  staminaDebt = 0;
 
   // ---- mind ----
   target: Fighter | null = null;

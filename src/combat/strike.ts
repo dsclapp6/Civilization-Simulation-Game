@@ -138,14 +138,15 @@ export function applyBlow(a: Arena, att: Fighter | null, v: Fighter, b: Blow): B
       if (v.guardT < 0.24 && b.melee) {
         // met at the moment of the blow: turned aside
         fx.add('sparks', hx, v.y + 1.2, hz, 0.8);
-        v.stamina = Math.max(0, v.stamina - 2);
+        spend(v, 2);
+        if (v.isPlayer) env.notify('info', 'You turn the blow aside!', v.personId);
         v.morale += 3;
         if (att) att.morale -= 2;
         return { outcome: 'parried', location: null, damage: 0, killed: false, stagger: true };
       }
       const cost = b.dmg * 0.34;
       const broke = v.stamina < cost;
-      v.stamina = Math.max(0, v.stamina - cost);
+      spend(v, cost);
       v.staminaIdle = 0;
       remaining = b.dmg * (1 - strength);
       fx.add(side ? 'chips' : 'sparks', hx, v.y + 1.2, hz, 0.7);
@@ -197,6 +198,7 @@ export function applyBlow(a: Arena, att: Fighter | null, v: Fighter, b: Blow): B
   }
   // ---- effects ----
   if (damage >= 1) fx.add(b.kind === 'blunt' ? 'impact' : 'blood', hx, y, hz, clamp(damage / 14, 0.4, 2.4));
+  if (v.isPlayer && damage >= 1) env.notify('danger', hurtLine(loc, b.kind, killed), v.personId);
   if (deflected) fx.add('sparks', hx, y, hz, 0.6);
   v.hitsTaken++;
   v.morale -= 2 + 62 * hpLost;
@@ -337,3 +339,18 @@ export function arrowStrike(a: Arena, s: Shot, shooter: Fighter | null, v: Fight
 }
 
 void ATTACK_KEYS;
+
+const KIND_WORDS: Record<WoundKind, string> = { cut: 'cuts', pierce: 'stabs', blunt: 'batters', arrow: 'pierces', burn: 'burns', bite: 'bites' };
+const LOC_WORDS: Record<HitLocation, string> = { head: 'head', torso: 'chest', arm_l: 'left arm', arm_r: 'right arm', leg_l: 'left leg', leg_r: 'right leg' };
+
+/** The feed line for a blow that lands on the player: where, and how. */
+function hurtLine(loc: HitLocation, kind: WoundKind, killed: boolean): string {
+  if (killed) return 'A killing blow!';
+  return kind === 'arrow' ? `An arrow strikes your ${LOC_WORDS[loc]}!` : `A blow ${KIND_WORDS[kind]} your ${LOC_WORDS[loc]}!`;
+}
+
+/** Breath lost to a blow. The player's real stamina lives in the controller: the port hands the debt over. */
+function spend(v: Fighter, amount: number): void {
+  v.stamina = Math.max(0, v.stamina - amount);
+  if (v.external) v.staminaDebt += amount;
+}
