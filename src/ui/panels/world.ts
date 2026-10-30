@@ -44,11 +44,27 @@ export function encounterPanel(ctx: PanelCtx): UiPanel {
     h('div.mu-row.mu-gap-12.mu-top', null,
       h('span.mu-enc-ico', { class: enc.hostile ? 'hostile' : '' }, icon(ENCOUNTER_ICON[enc.kind], 34)),
       h('div', null,
-        h('p.mu-prose.mu-dropcap', null, enc.hostile
+        h('p.mu-prose.mu-dropcap', null, enc.text ?? (enc.hostile
           ? `${enc.label}. They have seen you, and they do not look friendly. You may stand and deal with them on the road, or try to leave.`
-          : `${enc.label}. They have not noticed you yet, or do not care. You may speak with them, or go on.`),
+          : `${enc.label}. They have not noticed you yet, or do not care. You may speak with them, or go on.`)),
         h('div.mu-row.mu-gap-6', null, chip(enc.hostile ? 'Hostile' : 'Peaceful', enc.hostile ? 'vermilion' : 'green', enc.hostile ? 'swords' : 'heart'), chip(`${Math.round(t.progress * 100)}% of the way`, '', 'signpost')))),
     msg);
+  // The controller's own choices for this encounter (pay, run, talk…), when it offers them.
+  const choices = enc.choices ?? [];
+  if (choices.length) {
+    const list = h('div.mu-col.mu-gap-6');
+    for (const c of choices) {
+      list.append(button(c.label, {
+        variant: 'primary', icon: 'hand', tip: c.enabled ? (c.preview ?? '') : (c.reason ?? ''), disabled: !c.enabled,
+        onClick: () => {
+          const out = ctx.player.perform(c);
+          if (out.ok) ctx.close();
+          else { msg.textContent = out.message ?? 'That is not possible now.'; msg.classList.remove('mu-hide'); }
+        },
+      }));
+    }
+    win.body.append(list);
+  }
   win.showFoot(
     button('Face them', { variant: 'primary', icon: 'hand', tip: 'Deal with them at street level: hold E near them for your options', onClick: () => ctx.close() }),
     button(`Press on to ${ctx.placeName(t.to)}`, { icon: 'signpost', onClick: () => go(t.to, `You press on for ${ctx.placeName(t.to)}.`) }),
