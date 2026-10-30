@@ -153,6 +153,32 @@ describe('the player in a fight', () => {
     expect(bowShown).toBe(true);
   });
 
+  it('a bow picked up a moment before the guard is pressed is drawn, not held in melee Block', () => {
+    const r = combatRig({ seed: 'pl-bow-race', player: true });
+    const pid = r.sim.state.run.playerId;
+    const me = r.sim.state.persons.get(pid)!;
+    setStats(me, { str: 13, per: 12 });
+    const [foe] = adultMen(r.sim, 1);
+    r.combat.arena.setKitOverride(foe.id, { weapon: 'sword', armour: [] });
+    const body = r.player!.body()!;
+    r.combat.engage([{ faction: 'player', people: [pid] }, { faction: 'bandits', people: [foe.id] }], { at: { x: body.x, z: body.z } });
+    const ff = r.combat.arena.fighterOf(foe.id)!;
+    ff.x = body.x + Math.sin(body.yaw) * 22; ff.z = body.z + Math.cos(body.yaw) * 22;
+    freeze(ff);
+    // a few frames in melee: the port has just refreshed its gear
+    hold(r, 0.3, { cameraYaw: body.yaw });
+    const pf = r.combat.arena.fighterOf(pid)!;
+    expect(pf.gear.ranged).toBeNull();
+    // the bow and arrows come into the pack and into the hand, and the guard goes up at once
+    me.inventory['longbow#2'] = 1;
+    me.inventory['arrow#1'] = 24;
+    r.economy.equip(pid, 'main', 'longbow#2');
+    frame(r, { block: true, cameraYaw: body.yaw });
+    frame(r, { block: true, cameraYaw: body.yaw });
+    expect(pf.gear.ranged).not.toBeNull();
+    expect(pf.st === S.Draw || pf.st === S.Aim).toBe(true);
+  });
+
   it('a mounted charge with a couched lance hits harder the faster the horse', () => {
     const r = combatRig({ seed: 'pl-lance', player: true });
     const pid = r.sim.state.run.playerId;

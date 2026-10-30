@@ -5,6 +5,7 @@
 // ones everybody gets.
 import { clamp, yawTo } from '../core/math';
 import { SIM_DT } from '../core/time';
+import type { Person } from '../sim/state';
 import type { PlayerAim, PlayerCombatFrame, PlayerCombatPort, PlayerCombatPose } from '../sim/wave3';
 import { gap, type Arena } from './arena';
 import { S, normAngle, type Fighter } from './fighter';
@@ -15,6 +16,13 @@ import type { AttackKey } from './weapons';
 const HEAVY_HOLD = 0.26;
 const QUEUE_SECONDS = 0.4;
 const ENGAGED_LINGER = 5;
+
+/** A cheap fingerprint of what a person carries: it changes when goods come or go (the equipment slots are read on the next refresh). */
+function kitSignature(p: Person): string {
+  let n = 0, q = 0;
+  for (const k in p.inventory) { n++; q += p.inventory[k] ?? 0; }
+  return `${n}:${q}`;
+}
 
 export class PlayerPort implements PlayerCombatPort {
   private attackHeld = false;
@@ -29,6 +37,7 @@ export class PlayerPort implements PlayerCombatPort {
   private cameraYaw = 0;
   private engagedT = 0;
   private gearT = 99;
+  private kitSig = '';
   private personId = 0;
   private lowAmmoWarned = false;
   private aimingNow = false;
@@ -37,9 +46,10 @@ export class PlayerPort implements PlayerCombatPort {
   constructor(private readonly arena: Arena) {}
 
   input(attack: boolean, block: boolean, aim: PlayerAim | null, cameraYaw: number): void {
-    if (attack && !this.attackHeld) { this.attackPending = true; this.pendingFor = 0; this.holdT = 0; }
+    if (attack && !this.attackHeld) { this.attackPending = true; this.pendingFor = 0; this.holdT = 0; this.gearT = 99; }
     if (!attack && this.attackHeld) this.releaseEdge = true;
-    if (block && !this.blockHeld) this.blockEdge = true;
+    // pressing guard, aim or attack looks at the kit at once: a bow picked up a moment ago must not leave the port in melee Block
+    if (block && !this.blockHeld) { this.blockEdge = true; this.gearT = 99; }
     this.attackHeld = attack;
     this.blockHeld = block;
     this.cameraYaw = cameraYaw;
@@ -97,6 +107,9 @@ export class PlayerPort implements PlayerCombatPort {
     else if (!fr.mounted) pf.mountHp = 0;
     pf.moving = fr.speed > 0.3;
     this.gearT += fr.dt;
+    // the kit is re-read at once when the pack changes (a bow, arrows or armour picked up or put on), else every 1.2 s
+    const sig = kitSignature(p);
+    if (sig !== this.kitSig) { this.kitSig = sig; this.gearT = 99; }
     if (this.gearT > 1.2) this.refreshGear(pf);
     out.armour = armourLook(pf, 'armour'); out.helmet = armourLook(pf, 'helmet');
 
