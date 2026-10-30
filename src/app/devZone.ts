@@ -97,9 +97,11 @@ export function wrapWithDevZone(sim: Simulation, base: ZoneApi): ZoneApi {
   const chars: CharacterDrawItem[] = [];
   const beasts: ZoneAnimal[] = [];
   const beastDraws: AnimalDrawItem[] = [];
+  const extraBeasts: ZoneAnimal[] = [];
   const refreshBeasts = (): void => {
     beasts.length = 0; beastDraws.length = 0;
     if (!horseClaimed) { beasts.push(horse); beastDraws.push(horse.draw); }
+    for (const b of extraBeasts) { beasts.push(b); beastDraws.push(b.draw); }
   };
   refreshBeasts();
   sim.view.setSource('characters', () => {
@@ -182,6 +184,25 @@ export function wrapWithDevZone(sim: Simulation, base: ZoneApi): ZoneApi {
     say: () => {},
     attachPlayer: (person, draw) => { playerDraw = draw; base.attachPlayer(person, draw); },
     detachPlayer: () => { playerDraw = null; base.detachPlayer(); },
+    summon: (id, x, z, yaw = 0) => {
+      const p = st.persons.get(id);
+      if (!p || agents.some((a) => a.personId === id)) return;
+      const look = sim.view.appearance.get(st, p, sim.absDay);
+      const draw: CharacterDrawItem = {
+        id, x, y: base.nav.groundY(x, z), z, yaw, look: look.look, lookVersion: look.version,
+        mainHand: 'none', offHand: 'none', back: 'none', carry: 'none', anim: 'idle', animTime: 0, moveSpeed: 0, highlight: 0, label: p.first,
+      };
+      agents.push({ personId: id, x, y: draw.y, z, yaw, speed: 0, activity: 'idle', goal: null, control: 'script', visible: true, draw });
+    },
+    dismiss: (id) => { const i = agents.findIndex((a) => a.personId === id); if (i >= 0) agents.splice(i, 1); },
+    summonAnimal: (kind, x, z, hostile) => {
+      const id = 91000 + extraBeasts.length + Math.floor(Math.random() * 1000);
+      const draw: AnimalDrawItem = { id, kind, x, y: base.nav.groundY(x, z), z, yaw: 0, anim: 'idle', animTime: 0, moveSpeed: 0, scale: 1, coat: 0x6a6a66, highlight: 0 };
+      extraBeasts.push({ id, kind, x, z, owner: 0, wild: true, hostile, draw });
+      refreshBeasts();
+      return id;
+    },
+    dismissAnimal: (id) => { const i = extraBeasts.findIndex((b) => b.id === id); if (i >= 0) extraBeasts.splice(i, 1); refreshBeasts(); },
     claimAnimal: (id) => { if (id !== horse.id || horseClaimed) return false; horseClaimed = true; refreshBeasts(); return true; },
     releaseAnimal: (id, x, z, yaw) => {
       if (id !== horse.id) return;

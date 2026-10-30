@@ -520,6 +520,73 @@ describe('encounters', () => {
   });
 });
 
+describe('encounters in the 3D view', () => {
+  function road(kind: EncounterKind, seed = 'sum'): Rig {
+    const r = rig({ preset: 'small', seed, zone: (z) => z.enableSummons() });
+    expect(r.player.travelTo(farthestFrom(r, 2500, 9000)).ok).toBe(true);
+    for (let i = 0; i < 40; i++) { r.player.setInput(input()); r.sim.step(0.05); r.player.frame!(0.05); }
+    r.player.debug!.forceEncounter(kind);
+    return r;
+  }
+
+  it('shows real people from nearby settlements, facing the player, and dismisses them when it is settled', () => {
+    for (const kind of ['bandits', 'patrol', 'travellers', 'pilgrims', 'merchant', 'messenger'] as EncounterKind[]) {
+      const r = road(kind, `sum-${kind}`);
+      expect(r.zone.summoned.size, kind).toBeGreaterThan(0);
+      const me = r.player.body()!;
+      for (const [id, at] of r.zone.summoned) {
+        const person = r.sim.state.persons.get(id)!;
+        expect(person && !person.death, kind).toBe(true);
+        expect(id).not.toBe(r.pid);
+        expect(person.household).not.toBe(r.sim.state.persons.get(r.pid)!.household);
+        expect(Math.hypot(at.x - me.x, at.z - me.z)).toBeGreaterThan(5);
+        expect(Math.hypot(at.x - me.x, at.z - me.z)).toBeLessThan(20);
+      }
+      const opts = r.player.options().filter((o) => o.enabled);
+      r.player.perform(opts[0]);
+      expect(r.zone.summoned.size, kind).toBe(0);
+      expect(r.zone.dismissedPeople.length, kind).toBeGreaterThan(0);
+    }
+  });
+
+  it('bandits are poor young men, a patrol is soldiers or commoners', () => {
+    const r = road('bandits', 'sum-b');
+    for (const id of r.zone.summoned.keys()) {
+      const p = r.sim.state.persons.get(id)!;
+      expect(p.sex).toBe('m');
+      expect(p.rankTier).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it('wolves are summoned as hostile animals and dismissed', () => {
+    const r = road('wolves', 'sum-w');
+    expect(r.zone.summonedAnimals.size).toBeGreaterThanOrEqual(2);
+    for (const a of r.zone.summonedAnimals.values()) { expect(a.kind).toBe('wolf'); expect(a.hostile).toBe(true); }
+    expect(r.zone.summoned.size).toBe(0);
+    r.player.cancelTravel();
+    expect(r.zone.summonedAnimals.size).toBe(0);
+  });
+
+  it('dismisses everyone when the journey ends another way (turning back, death)', () => {
+    const r = road('patrol', 'sum-end');
+    r.sim.state.persons.get(r.pid)!.money = 0;
+    const turn = r.player.options().find((o) => o.id === 'encounter.turn');
+    if (turn) r.player.perform(turn); else r.player.cancelTravel();
+    expect(r.zone.summoned.size).toBe(0);
+    const d = road('bandits', 'sum-dead');
+    killPerson(d.sim, d.sim.state.persons.get(d.pid)!, 'accident', d.sim.absDay);
+    expect(d.zone.summoned.size).toBe(0);
+  });
+
+  it('works without the hooks: the choices alone carry the encounter', () => {
+    const r = rig({ preset: 'small', seed: 'nosum' });
+    r.player.travelTo(farthestFrom(r, 2500, 9000));
+    for (let i = 0; i < 40; i++) { r.player.setInput(input()); r.sim.step(0.05); }
+    r.player.debug!.forceEncounter('bandits');
+    expect(r.player.options().length).toBeGreaterThan(1);
+  });
+});
+
 describe('the view mode and the renderer\'s camera', () => {
   /** A stand-in for the renderer: it follows `view.mode()` only when that changes, like the real one. */
   function withCamera() {

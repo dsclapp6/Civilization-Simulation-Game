@@ -40,6 +40,21 @@ export class FakeZone implements ZoneApi {
   claimed: number[] = [];
   releasedAnimals: Array<{ id: number; x: number; z: number; yaw: number }> = [];
   supportsClaims = true;
+  summoned = new Map<PersonId, { x: number; z: number; yaw?: number }>();
+  summonedAnimals = new Map<number, { kind: string; hostile: boolean }>();
+  dismissedPeople: PersonId[] = [];
+  private animalSeq = 7000;
+  summon?: ZoneApi['summon'];
+  dismiss?: ZoneApi['dismiss'];
+  summonAnimal?: ZoneApi['summonAnimal'];
+  dismissAnimal?: ZoneApi['dismissAnimal'];
+  /** Gives the zone the optional encounter hooks. */
+  enableSummons(): void {
+    this.summon = (person, x, z, yaw) => { this.summoned.set(person, { x, z, yaw }); };
+    this.dismiss = (person) => { this.summoned.delete(person); this.dismissedPeople.push(person); };
+    this.summonAnimal = (kind, _x, _z, hostile) => { const id = this.animalSeq++; this.summonedAnimals.set(id, { kind, hostile }); return id; };
+    this.dismissAnimal = (id) => { this.summonedAnimals.delete(id); };
+  }
   whereaboutsFn: ((person: PersonId) => Whereabouts) | null = null;
   doors = new Map<number, { x: number; z: number; yaw: number }>();
 

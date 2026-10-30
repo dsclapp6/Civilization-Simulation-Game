@@ -21,7 +21,7 @@ import {
   DISMOUNT_SECONDS, MOUNT_SECONDS, createBody, placeBody, stepBody, type BodyEnv, type BodyState, type BodyTraits,
 } from './body';
 import {
-  buildChoices, encounterRate, escapeChoice, makeEncounter, pickEncounterKind, pressOnChoice, sampleDanger, type ChoiceDef, type DangerSample,
+  buildChoices, encounterRate, escapeChoice, makeEncounter, participantCount, pickEncounterKind, pickParticipants, pressOnChoice, sampleDanger, type ChoiceDef, type DangerSample,
   type EncounterData, type EncounterEnv,
 } from './encounters';
 import { Interaction, SCAN_INTERVAL } from './interaction';
@@ -115,6 +115,9 @@ export class PlayerController implements PlayerApi {
   private pendingAltitude: number | null = null;
   /** The view must read 'street' until the renderer's camera has left the map (see viewMode). */
   private streetPending = false;
+  /** People and animals the zone was asked to show for the open encounter (dismissed when it ends). */
+  private summonedPeople: PersonId[] = [];
+  private summonedAnimals: number[] = [];
 
   // ---- derived, refreshed at intervals ----
   private readonly traits: BodyTraits = { agility: 10, endurance: 10, age: 12, ridingLevel: 0, weight: 0, capacity: 30, hunger: 1, rest: 1 };
@@ -890,6 +893,7 @@ export class PlayerController implements PlayerApi {
     j.state.phase = 'encounter';
     this.streetPending = true;
     this.hostileEncounter = data.hostile;
+    this.summonParty(data, p);
     // a standoff runs in action time (the world slows to a crawl, speed drops to 1×)
     sim.dispatch({ type: 'setActionTime', on: true });
     this.refreshEncounter(j, data);
@@ -935,6 +939,7 @@ export class PlayerController implements PlayerApi {
     // the encounter is over; the road goes on (unless the party turned back)
     j.encounter = null;
     j.state.encounter = undefined;
+    this.dismissParty();
     this.encounterChoicesCache = [];
     this.hostileEncounter = false;
     this.interaction.invalidate();
@@ -998,6 +1003,7 @@ export class PlayerController implements PlayerApi {
     if (j.encounter) this.sim.dispatch({ type: 'setActionTime', on: false });
     this.journey = null;
     this.streetPending = true;
+    this.dismissParty();
     this.encounterChoicesCache = [];
     this.hostileEncounter = false;
     const b = this.avatar;
@@ -1009,6 +1015,43 @@ export class PlayerController implements PlayerApi {
     this.scanT = SCAN_INTERVAL;
     this.persistNow();
     this.sim.events.emit('travel', { phase, to: j.state.to });
+  }
+
+  /** Shows the encounter in the 3D view when the zone can summon people and animals (otherwise only the choices exist). */
+  private summonParty(data: EncounterData, p: Person): void {
+    const z = this.zone;
+    if (!z.summon && !z.summonAnimal) return;
+    const b = this.avatar;
+    const rng = this.sim.rng('travel');
+    // a loose arc 9-14 m ahead on the road, everyone turned towards the player
+    const place = (i: number, n: number): { x: number; z: number; yaw: number } => {
+      const spread = (i - (n - 1) / 2) * 0.55;
+      const r = 9 + (i % 2) * 3 + rng.next() * 2;
+      let x = b.x + Math.sin(b.yaw + spread) * r, zz = b.z + Math.cos(b.yaw + spread) * r;
+      if (!z.nav.walkable(x, zz) && z.nav.nearestWalkable(x, zz, 12, this.walkOut)) { x = this.walkOut.x; zz = this.walkOut.z; }
+      return { x, z: zz, yaw: yawTo(x, zz, b.x, b.z) };
+    };
+    if (data.kind === 'wolves' && z.summonAnimal) {
+      const n = Math.min(4, data.count);
+      for (let i = 0; i < n; i++) { const at = place(i, n); this.summonedAnimals.push(z.summonAnimal('wolf', at.x, at.z, true)); }
+      return;
+    }
+    if (!z.summon) return;
+    const env = { ctx: this.sim, person: p, rng };
+    const people = pickParticipants(data.kind, env, b.x, b.z, participantCount(data.kind, data.count));
+    people.forEach((id, i) => {
+      const at = place(i, people.length);
+      z.summon!(id, at.x, at.z, at.yaw);
+      this.summonedPeople.push(id);
+    });
+  }
+
+  private dismissParty(): void {
+    const z = this.zone;
+    for (const id of this.summonedPeople) z.dismiss?.(id);
+    for (const id of this.summonedAnimals) z.dismissAnimal?.(id);
+    this.summonedPeople = [];
+    this.summonedAnimals = [];
   }
 
   private forceEncounter(kind: EncounterKind): void {
@@ -1314,6 +1357,7 @@ export class PlayerController implements PlayerApi {
   }
 
   dispose(): void {
+    this.dismissParty();
     for (const off of this.offs) off();
     this.offs.length = 0;
     this.zone.detachPlayer();

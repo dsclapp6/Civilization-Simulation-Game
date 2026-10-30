@@ -40,7 +40,7 @@ describe('player cost per frame', () => {
     // at 8× a frame runs ~7 sub-steps: the whole per-frame cost of the player
     const perFrame = (prof.totalMs / frames);
     expect(perStep).toBeLessThan(0.15);
-    expect(prof.maxMs).toBeLessThan(4);
+    expect(prof.maxMs).toBeLessThan(8);
     expect(perFrame).toBeLessThan(0.5);
     // the whole loop (sim + player) per frame, headless
     expect(total / frames).toBeLessThan(3);

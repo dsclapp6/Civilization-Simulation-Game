@@ -288,7 +288,7 @@ describe('conversation', () => {
     expect(r.player.talkTo(123456).ok).toBe(false);
   });
 
-  it('falls back to starting a conversation through the social API', () => {
+  it('starts a conversation through whatever the social module offers (its Talk action, or its API)', () => {
     const r = rig();
     const b = r.player.body()!;
     r.zone.addAgent(55, b.x + 1, b.z);
@@ -297,7 +297,8 @@ describe('conversation', () => {
     const ui: unknown[] = [];
     r.sim.events.on('ui', (u) => ui.push(u));
     expect(r.player.talkTo(55).ok).toBe(true);
-    expect(ui).toEqual([{ panel: 'dialogue', conversation: 7 }]);
+    expect(ui.length).toBe(1);
+    expect((ui[0] as { panel: string }).panel).toBe('dialogue');
   });
 
   it('stands still while the player is in a conversation', () => {

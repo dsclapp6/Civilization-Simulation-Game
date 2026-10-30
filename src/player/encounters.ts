@@ -541,3 +541,65 @@ export function escapeChoice(kind: EncounterKind, choices: readonly ChoiceDef[])
     default: return firstEnabled(choices, ['go', 'pass']);
   }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Who is there: real people from the nearest settlements, for zones that can summon them
+// ---------------------------------------------------------------------------------------------
+
+const SOLDIERS: ReadonlySet<string> = new Set(['soldier', 'archer', 'man_at_arms', 'sergeant']);
+const WANDERERS: ReadonlySet<string> = new Set(['peddler', 'merchant', 'beggar', 'outlaw']);
+
+/** How many people an encounter puts in the 3D view (wolves are animals, see `wolfCount`). */
+export function participantCount(kind: EncounterKind, count: number): number {
+  switch (kind) {
+    case 'bandits': case 'patrol': return Math.min(5, count);
+    case 'travellers': return Math.min(3, Math.max(2, count));
+    case 'pilgrims': return Math.min(4, Math.max(2, count));
+    case 'merchant': case 'messenger': return 1;
+    default: return 0;
+  }
+}
+
+function fits(kind: EncounterKind, p: Person, age: number): boolean {
+  if (p.death || p.flags.player || p.flags.captive) return false;
+  switch (kind) {
+    case 'bandits': return p.sex === 'm' && age >= 16 && age <= 45 && p.rankTier <= 2 && p.estate !== 'clergy';
+    case 'patrol': return p.sex === 'm' && age >= 18 && age <= 50 && (SOLDIERS.has(p.career) || p.rankTier <= 2) && p.estate !== 'clergy';
+    case 'merchant': return age >= 18 && age <= 60 && (WANDERERS.has(p.career) || p.rankTier === 3);
+    case 'pilgrims': return age >= 16 && p.estate !== 'noble';
+    case 'messenger': return p.sex === 'm' && age >= 16 && age <= 45;
+    default: return age >= 14 && p.rankTier <= 3 && p.estate !== 'noble';
+  }
+}
+
+/**
+ * Picks `n` real people from the settlements nearest to (x, z) who fit the encounter (outlaws from poor
+ * young men, a patrol from soldiers, pilgrims…), never the player's own household. Deterministic given the rng.
+ */
+export function pickParticipants(kind: EncounterKind, env: Pick<EncounterEnv, 'ctx' | 'person' | 'rng'>, x: number, z: number, n: number): number[] {
+  if (n <= 0) return [];
+  const { ctx, person, rng } = env;
+  const world = ctx.world;
+  const near = [...world.settlements].sort((a, b) => (a.x - x) ** 2 + (a.z - z) ** 2 - ((b.x - x) ** 2 + (b.z - z) ** 2)).slice(0, 4);
+  const pool: number[] = [];
+  const fallback: number[] = [];
+  for (const s of near) {
+    for (const p of ctx.state.residentsOf(s.id)) {
+      if (p.household === person.household || p.id === person.id) continue;
+      const age = (ctx.absDay - p.birthDay) / 16;
+      if (fits(kind, p, age)) pool.push(p.id);
+      else if (!p.death && age >= 16 && age <= 50) fallback.push(p.id);
+      if (pool.length >= 60) break;
+    }
+    if (pool.length >= 60) break;
+  }
+  const from = pool.length >= n ? pool : [...pool, ...fallback.slice(0, 20)];
+  const out: number[] = [];
+  const pickFrom = from.slice();
+  while (out.length < n && pickFrom.length > 0) {
+    const i = Math.floor(rng.next() * pickFrom.length);
+    out.push(pickFrom[i]);
+    pickFrom.splice(i, 1);
+  }
+  return out;
+}
