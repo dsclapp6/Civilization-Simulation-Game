@@ -509,9 +509,8 @@ try {
         if (want('wounds-hud')) await shot('wounds-hud', { settle: false });
         if (want('down')) {
           await page.evaluate(async () => {
-            const { S } = await import('/src/combat/fighter.ts');
             const combat = window.__game.session.sim.services.combat; const pf = combat.arena.player;
-            if (pf) pf.set(S.Down, 'fall', 60);
+            if (pf) { combat.arena.fall(pf); pf.riseAt = 30; }
           });
           await advance(2.0, {});
           await pause(900);
