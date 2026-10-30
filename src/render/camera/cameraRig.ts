@@ -174,7 +174,8 @@ export class CameraRig {
    * Aiming a bow or crossbow: the follow camera eases in over the right shoulder, so the
    * character stands left of the screen centre (the reticle) and the target is in clear view.
    */
-  setAim(on: boolean): void { this.aimWant = on; }
+  setAim(on: boolean, heldSeconds = 0): void { this.aimWant = on; this.aimHeld = on ? heldSeconds : 0; }
+  private aimHeld = 0;
 
   /** Jump to the end of any running mode transition. */
   skipTransition(): void { this.transFrom = null; }
@@ -265,6 +266,9 @@ export class CameraRig {
     // over-the-shoulder aim: shift the boom origin (and the look point with it) to the right
     const aimT = this.aimWant ? 1 : 0;
     this.aimK += (aimT - this.aimK) * (dt > 0 ? 1 - Math.exp(-dt * 7) : 1);
+    // keyed to how long the aim has been held (simulation time), so it is in place even when
+    // frames are few (screenshots, slow machines)
+    if (this.aimWant) this.aimK = Math.max(this.aimK, Math.min(1, this.aimHeld * 3.5));
     if (this.aimK > 1e-3) {
       head.x += -Math.cos(this.yaw) * AIM_SHOULDER * this.aimK;
       head.z += Math.sin(this.yaw) * AIM_SHOULDER * this.aimK;

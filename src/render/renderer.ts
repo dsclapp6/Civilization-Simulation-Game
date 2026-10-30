@@ -210,11 +210,11 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     // aiming a bow or crossbow: over-the-shoulder camera (the reticle must not sit on the head)
     {
       const pl = view.player();
-      let aiming = false;
+      let aiming = false, held = 0;
       if (pl && pl.alive && vm === 'street') {
-        for (const c of view.characters()) if (c.id === pl.personId) { aiming = AIM_ANIMS.has(c.anim); break; }
+        for (const c of view.characters()) if (c.id === pl.personId) { aiming = AIM_ANIMS.has(c.anim); held = c.anim === 'draw_bow' ? c.animTime : 1; break; }
       }
-      rig.setAim(aiming);
+      rig.setAim(aiming, held);
     }
     rig.update(dt, focusFor(view));
     const mapBlend = rig.mapBlend();
