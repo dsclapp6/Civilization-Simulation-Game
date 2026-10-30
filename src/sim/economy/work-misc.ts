@@ -9,10 +9,9 @@ import { CAREERS } from '../careers';
 import { skillLevel } from '../people';
 import { trainStat } from '../skills';
 import { shiftFamilyRank } from '../succession';
-import { ageYears, type Household, type Person } from '../state';
+import { ageYears, type Person } from '../state';
 import type { Econ } from './core';
 import { CAREER_ECON, GOODS, GOOD_LIST, careerEcon, keyOf, pd } from './data';
-import { RATION } from './diet';
 import { bagAdd, bagEntries, bagGet, bagTake, countGood } from './items';
 import { employmentOf } from './jobs';
 import { buyFreedom, fleeToTown, manumissionPrice } from './obligations';
@@ -20,7 +19,7 @@ import { POTTAGE, consume, eatAtHome } from './needs';
 import { openChoices, perkSum } from './perks';
 import { giveOutput } from './work-craft';
 import {
-  BOUT_DAYS, boutDone, disabled, giveXp, holyDayBlock, incapable, option, payBout, round1, round2, secondsFor, speedOf, stoch, toolFor, wearOut,
+  BOUT_DAYS, boutDone, disabled, giveXp, holyDayBlock, incapable, option, payBout, round1, round2, secondsFor, speedOf, stoch, toolFor,
 } from './workkit';
 import { MARKET_BUILDINGS } from './market';
 import { parseItemKey, type ItemKey } from './types';

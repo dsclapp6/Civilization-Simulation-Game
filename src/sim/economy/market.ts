@@ -16,7 +16,7 @@ import type { TradePartnerRef } from '../actions';
 import { BUILDINGS } from '../../content/types';
 import type { Settlement } from '../../world/types';
 import type { Econ, MarketRec } from './core';
-import { GOODS, GOOD_LIST, MACRO_GOODS, MACRO_INDEX, basePriceOf, careerEcon, goodOf, keyOf, qualityOf, pd } from './data';
+import { GOODS, GOOD_LIST, MACRO_GOODS, MACRO_INDEX, basePriceOf, careerEcon, keyOf, qualityOf, pd } from './data';
 import { RATION, STAPLE_GRAINS, dailyUse, marketBuyShare, typicalTier } from './diet';
 import { bagAdd, bagGet } from './items';
 import { addOwned, canCarry, capacityOf, ownedQty, takeOwned, weightOf } from './own';

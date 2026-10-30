@@ -4,7 +4,8 @@ import type { Person, PersonId } from '../state';
 import { CAREERS } from '../careers';
 import type { Conversation, DialogueLine, DialogueOption, TopicProvider, TopicReply } from '../social/types';
 import type { Econ } from './core';
-import { careerEcon, pd } from './data';
+import { basePriceOf, careerEcon, pd } from './data';
+import { apiPrice } from './market';
 import { applyForJob, jobId, jobsAt, JOB_KINDS } from './jobs';
 import { hire, dismiss, standardWage } from './holdings';
 import { manumissionPrice, obligationsOf } from './obligations';
@@ -78,8 +79,10 @@ export function economyTopics(E: Econ): TopicProvider {
           return { lines, ui: { panel: 'jobs', settlement: b.settlement } };
         }
         case 'econ.wages': {
+          const mid = E.marketFor(b.settlement);
+          const price = (key: string): string => pd(mid >= 0 ? apiPrice(E, mid, key, 'buy') : basePriceOf(key));
           const lines = [
-            say(bid, `A farmhand earns 2d a day here, a boy half that. A journeyman might have 3d, a master 5d or more. Ale is ${pd(Math.round(E.dayOfYear * 0 + 1.2 * 10) / 10)} a gallon, and a good sickle a few days' wages.`, 'neutral'),
+            say(bid, `A farmhand earns ${pd(2)} a day here, a boy half that. A journeyman might have ${pd(3)}, a master ${pd(5)} or more. Wheat is ${price('wheat')} a gallon, ale ${price('ale')}, and a good sickle ${price('sickle#2')}: a few days' wages.`, 'neutral'),
           ];
           return { lines };
         }

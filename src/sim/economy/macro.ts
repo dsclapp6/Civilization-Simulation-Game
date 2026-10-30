@@ -15,7 +15,7 @@ import type { Econ } from './core';
 import { CAREER_ECON, GOODS, careerEcon, keyOf } from './data';
 import { GRAIN_PER_UNIT_DAY, RATION, STAPLE_GRAINS, dietOf, marketBuyShare } from './diet';
 import { daysToHarvest, farmDay, seedWanted } from './farm';
-import { bagAdd, bagGet } from './items';
+import { bagAdd } from './items';
 import { beginTick, endTick, marketBuy, marketDay, marketSell, postedPrice, tickPrice } from './market';
 import type { Quality } from './types';
 
@@ -84,7 +84,6 @@ function householdDay(
   if (head && head.death) head = undefined;
   let any: Person | undefined;
   let playerHere = false;
-  let playerUnit = 0;
   const now = E.day;
   for (const id of hh.members) {
     const p = state.persons.get(id);
@@ -92,7 +91,7 @@ function householdDay(
     any ??= p;
     const age = (now - p.birthDay) / 16;
     const u = age >= 14 ? 1 : age >= 8 ? 0.7 : age >= 3 ? 0.5 : 0.25;
-    if (E.isPlayer(id)) { playerHere = true; playerUnit = u; }
+    if (E.isPlayer(id)) playerHere = true;
     units += u;
   }
   if (!any) return;

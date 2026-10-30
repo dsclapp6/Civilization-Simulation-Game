@@ -15,7 +15,7 @@ import { APPRENTICE_TASKS, CAREER_ECON, GOODS, RECIPES, TOOL_SPEED, careerEcon, 
 import { bagAdd, bagGet } from './items';
 import { employmentOf } from './jobs';
 import { capacityOf, carriedWeight, weightOf } from './own';
-import { perkSum, perkTotal } from './perks';
+import { perkSum } from './perks';
 import { RENT_PER_STRIP } from './macro';
 import { addFine, creditWeekWork } from './obligations';
 import {

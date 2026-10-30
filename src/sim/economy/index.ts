@@ -5,7 +5,7 @@
 import type { Simulation } from '../sim';
 import type { PriceTip, SocialApi } from '../social/types';
 import { Econ } from './core';
-import { PERK_BY_ID, PERKS, GOODS, GOOD_LIST, ENTRY_TESTS, MACRO_INDEX, basePriceOf, describeItem } from './data';
+import { PERK_BY_ID, GOODS, GOOD_LIST, ENTRY_TESTS, MACRO_INDEX, basePriceOf, describeItem } from './data';
 import { holdingsDaily, holding, householdPlan, ledger, listingsAt, buyOrRent, setTask, hire, dismiss, stackList } from './holdings';
 import { applyForJob, careerPaths, employmentDaily, employmentOf, jobsAt, quitJob, workSpot } from './jobs';
 import { bagWeight, bagTake, bagAdd, bagGet } from './items';
@@ -211,7 +211,6 @@ export function installEconomy(sim: Simulation, deps: EconomyDeps): EconomyRunti
     perkChoices: (person) => { const p = E.person(person); return p ? openChoices(p) : []; },
     choosePerk: (person, perkId) => { const p = E.person(person); return p ? choosePerk(E, p, perkId) : noPerson; },
   };
-  void parseItemKey; void bagGet; void PERKS;
   // ---- links into the social system (docs/SOCIAL.md) ----
   deps.social.setHooks?.({
     giveHook: (from, to, key, qty) => api.give(from, to, key as ItemKey | 'money', qty),
