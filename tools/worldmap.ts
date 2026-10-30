@@ -1,7 +1,8 @@
 // World map tool: renders a generated continent to PNG (hillshade + biomes + rivers + roads + borders + settlements)
 // and zoomed top-down views of a village, a town, a city, a castle and an abbey (plots, strips, parcels, roads).
 //
-//   npx tsx tools/worldmap.ts --seed abc [--out tools/out] [--size 2048] [--zoom 600] [--only map|village|town|castle|abbey|city|hamlet]
+//   npx tsx tools/worldmap.ts --seed abc [--out tools/out] [--size 2048] [--zoom 600]
+//        [--only map|village|town|city|castle|abbey|hamlet|forest|marsh|moor|mountain|mouth]
 import { deflateSync } from 'node:zlib';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

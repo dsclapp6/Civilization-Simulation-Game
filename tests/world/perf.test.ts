@@ -8,6 +8,7 @@ import { buildWorld } from '../../src/world/generate';
  * CPU time (user + system, ms) consumed by the generating thread so far. Unlike wall time it is not inflated while the
  * process waits for a core, and (where `process.threadCpuUsage` exists) it leaves out V8's parallel GC and compiler threads.
  */
+const HAS_THREAD_CPU = typeof (process as unknown as { threadCpuUsage?: unknown }).threadCpuUsage === 'function';
 function cpuNow(): number {
   const p = process as unknown as { threadCpuUsage?: () => { user: number; system: number } };
   const u = p.threadCpuUsage ? p.threadCpuUsage() : process.cpuUsage();
@@ -44,7 +45,8 @@ function timedBuild(seed: string, sparse: boolean): Timed {
     const t0 = performance.now();
     const world = buildWorld(seed, { sparse });
     const wall = performance.now() - t0;
-    const cpu = cpuNow() - c0;
+    // without per-thread CPU time the process figure includes V8's parallel GC and compiler threads: take the smaller of the two
+    const cpu = HAS_THREAD_CPU ? cpuNow() - c0 : Math.min(cpuNow() - c0, wall);
     const slow = Math.max(before, slowdown());
     if (!best || cpu / slow < best.cpu / best.slow) best = { world, wall, cpu, slow };
     if (best.cpu / best.slow < 3300) break;
