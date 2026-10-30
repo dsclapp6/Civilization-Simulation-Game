@@ -567,9 +567,15 @@ export class PlayerController implements PlayerApi {
   private outOfReach(a: ActiveAction): boolean {
     const t = a.option.target;
     if (t.kind === 'self' || a.option.range >= 900) return false;
-    const pos = this.positionOf(t);
-    if (!pos) return false;
-    return dist(this.avatar.x, this.avatar.z, pos.x, pos.z) > a.option.range * 1.5 + 2;
+    // the scan keeps the distance to the current target fresh; anything else is looked up
+    const cur = this.interaction.target;
+    let d: number | null = null;
+    if (cur && sameTarget(cur.target, t)) d = cur.distance;
+    else {
+      const pos = this.positionOf(t);
+      if (pos) d = dist(this.avatar.x, this.avatar.z, pos.x, pos.z);
+    }
+    return d !== null && d > a.option.range * 1.5 + 2;
   }
 
   // ---------------------------------------------------------------------------------------------

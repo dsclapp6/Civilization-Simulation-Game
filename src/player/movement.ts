@@ -27,9 +27,9 @@ export const RIDE_RADIUS = 0.8;
 /** Agility ±10 % around 10 (SPEC §5). */
 export function agilityFactor(agility: number): number { return clamp(1 + 0.02 * (agility - 10), 0.85, 1.12); }
 
-/** Children are a little slower than grown people; the old slow down after ~45. */
+/** Small children have short legs and the old slow down after ~45 (youths are already slower through their trained stats). */
 export function ageFactor(age: number): number {
-  if (age < 16) return clamp(0.93 + 0.0175 * (age - 12), 0.85, 1);
+  if (age < 12) return clamp(0.8 + 0.0167 * age, 0.8, 1);
   if (age <= 45) return 1;
   return clamp(1 - 0.008 * (age - 45), 0.6, 1);
 }
