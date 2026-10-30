@@ -580,11 +580,14 @@ export class UiApp implements GameUIExt {
   }
 
   private togglePanelKey(key: PanelKey): void {
+    // C opens the command panel (military module) when there is one, else the household page of the ledger
+    const army = key === 'command' && !!this.bound?.game.sim.services.military;
     const req: PanelRequest =
+      army ? { panel: 'ext', name: 'army' } :
       key === 'command' ? { panel: 'ledger', tab: 'household' } :
       key === 'map' ? { panel: 'map' } :
       { panel: key } as PanelRequest;
-    const id = key === 'command' ? 'ledger' : key;
+    const id = army ? 'army' : key === 'command' ? 'ledger' : key;
     if (this.stack.has(id)) this.stack.close(id);
     else this.openPanel(req);
   }

@@ -111,6 +111,17 @@ export interface MilitaryApi {
   raise(house: HouseId, reason: string): number;
   /** Army the person serves in, if any (the player's place in the line). */
   armyOf(person: PersonId): number;
+  // ---- additive (military module); optional so fakes in other modules' tests need not implement them ----
+  /** Fighting weight of a House's retinue, garrison and levy (politics `strength`, AI decisions, the UI). */
+  strength?(house: HouseId): number;
+  /** A raiding party of `house` goes against a settlement (burn, steal herds, take captives). Returns the army id, 0 = none raised. */
+  raid?(house: HouseId, settlement: number, opts?: { size?: number }): number;
+  /** The two Houses (or their lieges) are at war or in a feud: their armies fight when they meet. */
+  hostile?(a: HouseId, b: HouseId): boolean;
+  /** Two Houses are enemies in the field for `days` without a war (a feud, a raid). */
+  declareFeud?(a: HouseId, b: HouseId, days?: number, cause?: string): void;
+  /** Men a House would raise by levy for a reason ('war' | 'defence' | 'raid'). */
+  levySize?(house: HouseId, reason: string): number;
 }
 
 // ---------------------------------------------------------------------------------------------

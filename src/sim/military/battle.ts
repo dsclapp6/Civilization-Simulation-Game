@@ -466,7 +466,6 @@ function beginDetail(M: Mil, rec: BattleRec, a: Army, d: Army, mine: Army): void
   ];
   rec.fight = combat.engage(sides, { at, yieldAllowed: true, reason: 'battle' });
   M.notify(`Battle is joined at ${M.placeName(rec.settlement)}! ${M.houseName(a.house)} against ${M.houseName(d.house)}.`, 'danger', pid);
-  M.sim.events.emit('ui', { panel: 'ext', name: 'army' });
   M.touch();
 }
 
