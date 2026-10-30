@@ -15,7 +15,7 @@ import { CROP_KINDS } from '../assets/crops';
 import { computeLighting, createStage } from './stage';
 import { checkbox, el, injectCss, LabelLayer, select, slider } from './ui';
 import {
-  CATEGORIES, SCATTER_KINDS, disposeView, sheetCrops, sheetCulture, sheetCultures, sheetLevels, sheetProps, sheetStates,
+  CATEGORIES, SCATTER_KINDS, decalSnow, disposeView, sheetCrops, sheetCulture, sheetCultures, sheetLevels, sheetProps, sheetStates,
   sheetVegetation, sheetVegLods, viewBuilding, viewCrop, viewFx, viewProp, viewVegetation, viewVillage, type ViewState,
 } from './views';
 
@@ -62,6 +62,7 @@ export function start(root: AppRoot): void {
   let view: ViewState | null = null;
   const win = window as unknown as { __galleryReady?: boolean; __galleryStats?: unknown };
   win.__galleryReady = false;
+  (window as unknown as { __galleryDebug?: unknown }).__galleryDebug = { stage, lib };
 
   const content = stage.content;
   const effSnow = () => (P.snow >= 0 ? P.snow : P.season === 3 ? 0.85 : 0);
@@ -117,6 +118,10 @@ export function start(root: AppRoot): void {
     const corners: THREE.Vector3[] = [];
     for (let i = 0; i < 8; i++) corners.push(new THREE.Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z));
     const cam = stage.camera;
+    // Wide frustum during the search so the predicate is monotonic in distance.
+    cam.near = 0.05;
+    cam.far = 1e7;
+    cam.updateProjectionMatrix();
     const fits = (d: number) => {
       cam.position.copy(centre).addScaledVector(dir, d);
       cam.lookAt(centre);
@@ -264,6 +269,7 @@ export function start(root: AppRoot): void {
       const snow = P.snow >= 0 ? P.snow : season === 3 ? 0.85 : 0;
       lib.setEnvironment({ time: t, season, seasonProgress: P.sp, snowCover: snow, windX: P.wind * 0.8, windZ: P.wind * 0.6, nightLight: l.night });
       stage.setGroundSnow(snow);
+      decalSnow.value = snow;
       for (const b of v.buildings) { b.update?.(t, i === 0 ? dt : 0); b.setLit?.(1); }
       if (i === 0) v.fx?.layer.update(dt, stage.camera);
       if (split) {

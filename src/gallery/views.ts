@@ -6,7 +6,7 @@ import type { Season } from '../core/time';
 import type { ScatterKind } from '../world/types';
 import type { FxEvent } from '../core/view';
 import type { FxLayer, PropKind } from '../assets/types';
-import type { MilleniaBuildingAsset, MillenniaAssetLibrary } from '../assets/library';
+import type { MillenniaBuildingAsset, MillenniaAssetLibrary } from '../assets/library';
 import { PROP_KINDS } from '../assets/props/props';
 import { CROP_KINDS } from '../assets/crops';
 import { PALETTE } from '../assets/palette';
@@ -24,7 +24,7 @@ export interface Label { text: string; pos: THREE.Vector3; sub?: string; }
 
 export interface ViewState {
   /** Building assets to update / light / dispose. */
-  buildings: MilleniaBuildingAsset[];
+  buildings: MillenniaBuildingAsset[];
   /** Other objects to dispose (instanced meshes etc.). */
   disposables: { dispose(): void }[];
   labels: Label[];
@@ -94,6 +94,14 @@ function yardDecalGeometry(w: number, d: number): THREE.BufferGeometry {
   return g;
 }
 const decalMat = new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+/** Snow amount for the gallery's ground decals (set each frame by the gallery). */
+export const decalSnow = { value: 0 };
+decalMat.onBeforeCompile = (sh) => {
+  sh.uniforms.uSnow = decalSnow;
+  sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vGXZ;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvGXZ = (modelMatrix * vec4(transformed, 1.0)).xz;');
+  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uSnow;\nvarying vec2 vGXZ;')
+    .replace('#include <color_fragment>', '#include <color_fragment>\n{ float n = sin(vGXZ.x * 0.37 + sin(vGXZ.y * 0.21) * 2.0) * 0.5 + 0.5; diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.92, 0.95), smoothstep(n * 0.3 + 0.1, n * 0.3 + 0.35, uSnow)); }');
+};
 const decalCache = new Map<string, THREE.BufferGeometry>();
 function yardDecal(w: number, d: number): THREE.Mesh {
   const key = `${w}x${d}`;
@@ -123,7 +131,7 @@ function dressGround(lib: MillenniaAssetLibrary, st: ViewState, root: THREE.Grou
   }
 }
 
-function placeBuilding(lib: MillenniaAssetLibrary, st: ViewState, root: THREE.Group, kind: BuildingKind, o: BuildingOpts, x: number, z: number, label?: string, sub?: string): MilleniaBuildingAsset {
+function placeBuilding(lib: MillenniaAssetLibrary, st: ViewState, root: THREE.Group, kind: BuildingKind, o: BuildingOpts, x: number, z: number, label?: string, sub?: string): MillenniaBuildingAsset {
   const a = lib.building({ kind, level: o.level, culture: o.culture, seed: o.seed, construction: o.construction, damage: o.damage, ownerColor: o.owner });
   a.object.position.set(x, 0, z);
   root.add(a.object);
@@ -280,16 +288,17 @@ export function sheetVegLods(lib: MillenniaAssetLibrary, root: THREE.Group): Vie
   const st = newState('Vegetation — LOD 0 / 1 / 2');
   ([0, 1, 2] as const).forEach((lod, i) => {
     const g = new THREE.Group();
-    g.position.z = (i - 1) * 26;
+    g.position.z = (i - 1) * 34;
     root.add(g);
     const sub = newState('');
     layoutVegetation(lib, sub, g, lod, 0, i === 0);
     st.disposables.push(...sub.disposables);
     st.labels.push(...sub.labels.map((l) => ({ ...l, pos: l.pos.clone().add(g.position) })));
+    st.labels.push({ text: `LOD ${lod}`, sub: lod === 0 ? '< 120 m' : lod === 1 ? '< 400 m' : 'far', pos: new THREE.Vector3(-50, 0, g.position.z - 4) });
     const b = sub.bounds.clone().translate(g.position);
     st.bounds.union(b);
   });
-  st.cam = { az: -30, el: 30, k: 0.72 };
+  st.cam = { az: -6, el: 30, fit: 0.95 };
   return st;
 }
 

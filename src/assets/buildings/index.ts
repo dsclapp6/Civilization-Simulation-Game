@@ -85,6 +85,8 @@ export function generateBuilding(n: NormalizedRequest): BuiltBuilding {
   let src = b;
   const seed = ctx.seed;
   const info = { w: def.w, d: def.d };
+  // Coarser LODs drop yard clutter (LOD1+) and small details except lit window panes (LOD2).
+  if (n.lod >= 1) src = src.filter((t) => src.tLayer[t] !== Layer.Decor && !(n.lod === 2 && src.tLayer[t] === Layer.Detail && src.tMat[t] !== Mat.Window));
   if (n.construction < 1) src = applyConstruction(src, n.construction, info, seed);
   if (n.damage > 0) src = applyDamage(src, n.damage, info, seed);
   else if (n.construction >= 1) src = src.filter((t) => src.tLayer[t] !== Layer.RoofFrame);

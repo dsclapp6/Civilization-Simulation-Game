@@ -126,7 +126,15 @@ export const PLANTS: Record<ScatterKind, PlantSpec> = {
       if (lod === 2) { spike(b, 9, 0.22, BIRCH); octa(b, [lean * 0.7, 9.0, 0], [2.1, 3.6, 2.1], true, 0); return; }
       const segs: [V3, V3, number][] = [[[0, -0.3, 0], [lean * 0.25, 3, 0], BIRCH], [[lean * 0.25, 3, 0], [lean * 0.5, 3.6, 0], BIRCH_MARK], [[lean * 0.5, 3.6, 0], [lean * 0.75, 7.5, 0], BIRCH], [[lean * 0.75, 7.5, 0], [lean * 0.85, 8.0, 0], BIRCH_MARK], [[lean * 0.85, 8.0, 0], [lean, 11.5, 0], BIRCH]];
       if (lod === 1) bark(b, [0, -0.3, 0], [lean, 10, 0], 0.22, 0.1, 4, BIRCH);
-      else segs.forEach(([a, c, col], i) => bark(b, a, c, 0.24 - i * 0.03, 0.21 - i * 0.03, 6, col));
+      else {
+        segs.forEach(([a, c, col], i) => bark(b, a, c, 0.24 - i * 0.03, 0.21 - i * 0.03, 6, col));
+        // Fine, slightly drooping twigs: the bare winter outline.
+        for (let i = 0; i < 6; i++) {
+          const a = i * 2.4 + 0.5, y = 5.6 + i * 1.0;
+          const s0: V3 = [lean * (y / 11.5), y, 0];
+          bark(b, s0, [s0[0] + Math.cos(a) * 1.5, y + 1.1, Math.sin(a) * 1.5], 0.06, 0.03, 3, 0x6a5a4a);
+        }
+      }
       const cl: { c: V3; r: V3 }[] = [
         { c: [lean * 0.9, 10.2, 0], r: [1.9, 2.6, 1.9] },
         { c: [lean * 0.6 + 1.2, 8.0, 0.5], r: [1.6, 2.0, 1.5] },

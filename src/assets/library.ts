@@ -3,6 +3,7 @@
 // asset and driven by one set of uniforms pushed in setEnvironment().
 import * as THREE from 'three';
 import type { CropKind } from '../core/domain';
+import type { FxEvent } from '../core/view';
 import type { ScatterKind } from '../world/types';
 import type {
   AnimalLayer, AssetEnvironment, AssetLibrary, BuildingAsset, BuildingRequest, CharacterLayer, FxLayer,
@@ -25,19 +26,8 @@ import { seasonalGrassTint } from './vegetation/phenology';
 import { createCharacterLayer } from './characters/layer';
 import { createAnimalLayer } from './animals/layer';
 
-/** Optional extras on BuildingAsset (additive to the contract). */
-export interface BuildingAssetExtras {
-  /** Chimney / smoke-hole tops in local space: emit 'hearth_smoke' here while occupied. */
-  smokePoints: THREE.Vector3[];
-  /** Other continuous FX anchors (forge sparks, mill splash) in local space. */
-  emitters: { kind: string; position: THREE.Vector3; rate: number }[];
-  /** Where to spawn 'fire' FX when the building burns (local space). */
-  firePoints: THREE.Vector3[];
-  /** Triangles in this asset (all meshes). */
-  triangles: number;
-}
-
-export type MilleniaBuildingAsset = BuildingAsset & BuildingAssetExtras;
+/** BuildingAsset with the optional extras always present. */
+export type MillenniaBuildingAsset = BuildingAsset & Required<Pick<BuildingAsset, 'smokePoints' | 'emitters' | 'firePoints' | 'triangles'>>;
 
 interface CacheEntry {
   built: BuiltBuilding;
@@ -51,7 +41,7 @@ const LIT_LEVELS = 5;
 const WINDOW_GLOW = 2.4;
 
 export interface MillenniaAssetLibrary extends AssetLibrary {
-  building(req: BuildingRequest & { lod?: 0 | 1 | 2 }): MilleniaBuildingAsset;
+  building(req: BuildingRequest): MillenniaBuildingAsset;
   /** Shared uniforms (for custom renderer materials that want to follow wind/snow). */
   readonly uniforms: SharedUniforms;
   /** Current environment (last setEnvironment call). */
@@ -126,7 +116,7 @@ export function createAssetLibrary(): MillenniaAssetLibrary {
     }
   }
 
-  function building(req: BuildingRequest & { lod?: 0 | 1 | 2 }): MilleniaBuildingAsset {
+  function building(req: BuildingRequest): MillenniaBuildingAsset {
     const n = normalizeRequest(req);
     const key = requestKey(n);
     const entry = getEntry(key, () => generateBuilding(n));
@@ -183,14 +173,14 @@ export function createAssetLibrary(): MillenniaAssetLibrary {
     const tmpQ = new THREE.Quaternion();
     const tmpV = new THREE.Vector3();
     let disposed = false;
-    const asset: MilleniaBuildingAsset = {
+    const asset: MillenniaBuildingAsset = {
       object: group,
       w: built.w,
       d: built.d,
       height: built.height,
       doors: built.doors.map((p) => ({ x: p.x, z: p.z })),
       smokePoints: built.smoke.map((p) => new THREE.Vector3(p[0], p[1], p[2])),
-      emitters: built.emitters.map((e) => ({ kind: e.kind, position: new THREE.Vector3(e.pos[0], e.pos[1], e.pos[2]), rate: e.rate })),
+      emitters: built.emitters.map((e) => ({ kind: e.kind as FxEvent['kind'], position: new THREE.Vector3(e.pos[0], e.pos[1], e.pos[2]), rate: e.rate })),
       firePoints: built.fire.map((p) => new THREE.Vector3(p[0], p[1], p[2])),
       triangles,
       update(t: number, dt: number): void {

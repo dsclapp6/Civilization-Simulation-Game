@@ -195,7 +195,7 @@ ${GLSL_CLOTH_VERTEX}`);
 
 /** Depth material matching the cloth wave so flags cast moving shadows. */
 export function createClothDepthMaterial(u: SharedUniforms): THREE.MeshDepthMaterial {
-  const m = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, side: THREE.DoubleSide });
+  const m = new THREE.MeshDepthMaterial({ side: THREE.DoubleSide });
   m.onBeforeCompile = (s) => {
     s.uniforms.uTime = u.uTime;
     s.uniforms.uWindAmp = u.uWindAmp;
@@ -309,7 +309,8 @@ const GLSL_VEG_VERTEX = /* glsl */ `
   } else if (aLeaf >= 0.0) {
     // Leaf fall / bud burst: faces shrink into their clump centre, highest aLeaf first.
     float lr = fract(aLeaf * 1.618 + vInst * 0.37);
-    float keep = smoothstep(lr * 0.8, lr * 0.8 + 0.2, uLeafiness);
+    // Surviving faces also shrink as the canopy thins, so winter leaves read as small tufts.
+    float keep = smoothstep(lr * 0.8, lr * 0.8 + 0.2, uLeafiness) * (0.3 + 0.7 * smoothstep(0.12, 0.65, uLeafiness));
     transformed = aCenter + (transformed - aCenter) * keep;
   }
   float ph = uTime * (1.15 + vInst * 0.5) + dot(wO.xz, vec2(0.21, 0.17));
@@ -410,7 +411,7 @@ diffuseColor.rgb = mix(diffuseColor.rgb, uSnowColor, mlSnowMask(normal, vWPos, u
 
 /** Depth material for vegetation shadows that follows sway and leaf fall. */
 export function createVegetationDepthMaterial(u: SharedUniforms, f: FoliageUniforms, doubleSided = false): THREE.MeshDepthMaterial {
-  const m = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, side: doubleSided ? THREE.DoubleSide : THREE.FrontSide });
+  const m = new THREE.MeshDepthMaterial({ side: doubleSided ? THREE.DoubleSide : THREE.FrontSide });
   m.onBeforeCompile = (s) => {
     bindVegUniforms(s, u, f);
     s.vertexShader = s.vertexShader

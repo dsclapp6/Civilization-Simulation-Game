@@ -93,8 +93,8 @@ function blossomAt(p: Phenology, y: number): number {
 function fruitAt(p: Phenology, y: number): number {
   const bump = (c: number, w: number) => Math.max(0, 1 - Math.abs(y - c) / w);
   switch (p) {
-    case 'apple': return Math.min(1, bump(0.58, 0.12) * 1.5) * 0.22;
-    case 'hawthorn': return Math.min(1, bump(0.66, 0.1) * 1.5) * 0.3;
+    case 'apple': return Math.min(1, bump(0.58, 0.12) * 1.5) * 0.12;
+    case 'hawthorn': return Math.min(1, bump(0.66, 0.1) * 1.5) * 0.18;
     case 'bramble': return Math.min(1, bump(0.52, 0.08) * 1.5) * 0.28;
     default: return 0;
   }
