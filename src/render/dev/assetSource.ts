@@ -1,8 +1,7 @@
-// The asset library the dev viewer uses. Integrator: switch this one import to the real library,
-// e.g. `export { createAssetLibrary as makeAssets } from '../../assets';`
+// The asset library the dev viewer uses: the real procedural library (src/assets/library.ts).
 import type { AssetLibrary } from '../../assets/types';
-import { createPlaceholderAssets } from './placeholderAssets';
+import { createAssetLibrary } from '../../assets/library';
 
 export function makeAssets(): AssetLibrary {
-  return createPlaceholderAssets();
+  return createAssetLibrary();
 }

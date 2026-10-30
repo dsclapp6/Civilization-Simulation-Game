@@ -1,0 +1,188 @@
+{
+  "_doc": "Courting and proposing. 'ask' lines are YOURS, the rest theirs. Vars: {money} (token), {who} (whose consent is missing). Tags on court.feelings.reply: feel_hostile/cold/neutral/warm/devoted, p_low/p_mid/p_high, needs_consent.",
+  "court": {
+    "compliment": {
+      "ask": [
+        "You're looking well today, {first}. Very well.",
+        "I've been wanting to tell you: your smile is the best sight in {place}.",
+        "Forgive me, {first}, but I can't stop noticing how fair you are.",
+        "It's a better {part} for having you in it.",
+        "If I'm staring, it's because you're worth staring at.",
+        {"t": "A rose has nothing on you, {first}. Not even in June.", "if": {"age": ["youth", "adult"], "sex": "m"}},
+        {"t": "You walk like a lady and laugh like a lark. How is it done?", "if": {"sex": "m"}},
+        {"t": "There's no sweeter voice in the choir, {first}. Or the field.", "if": {"sex": "f"}},
+        {"t": "Strong hands, kind eyes. A lucky woman will be the one who earns them.", "if": {"sex": "f", "trait": "brave"}},
+        "Your laugh carries across the whole green, {first}. I find myself listening for it.",
+        "It's a better day for seeing you.",
+        "I'd stand in the rain to talk with you, {first}."
+      ],
+      "yes": [
+        {"t": "Oh! You're too kind. My cheeks are hot.", "tone": "flirt"},
+        {"t": "Is that so? I'd not have guessed you noticed.", "tone": "flirt"},
+        {"t": "You have a way of saying things, {first}.", "tone": "warm"},
+        {"t": "Well. That's... pleasing to hear.", "tone": "flirt"},
+        {"t": "I think I shall remember that for a good while.", "tone": "flirt", "if": {"op": ["warm", "devoted"]}},
+        {"t": "Ha! Go on. I'll not stop you.", "tone": "flirt", "if": {"trait": "ambitious"}},
+        {"t": "You say the loveliest things.", "tone": "flirt"},
+        {"t": "I'll treasure that, {first}.", "tone": "warm"},
+        {"t": "Hush — someone will hear. Say it again.", "tone": "flirt"}
+      ],
+      "no": [
+        {"t": "I think you mistake me, {first}.", "tone": "wary"},
+        {"t": "You're kind, but I'd rather you spoke plainer.", "tone": "wary"},
+        {"t": "Please. People are looking.", "tone": "wary", "if": {"trait": "pious"}},
+        {"t": "Do that again and I'll tell my father.", "tone": "angry", "if": {"age": ["youth", "child"]}},
+        {"t": "I've work to do, {first}. Save your fancy words.", "tone": "cold"},
+        {"t": "You flatter me; and I'm unsure of you.", "tone": "wary"},
+        {"t": "Perhaps. But not just now.", "tone": "wary"},
+        {"t": "Someone's watching. Be careful.", "tone": "wary"}
+      ]
+    },
+    "walk": {
+      "ask": [
+        "Would you walk out with me, {first}? Only as far as the green.",
+        "It's a fine {part}. Would you take a turn with me?",
+        "Might I walk you home, {first}?",
+        "I'd like to walk with you a while, if you'll allow it.",
+        {"t": "Come, {first}, the evening is made for a stroll. Will you?", "if": {"part": ["evening", "dusk"]}},
+        {"t": "Walk with me to the church and back, after Mass?", "if": {"tag": "holy"}},
+        "Would you let me walk you to the well?",
+        "A turn about the green, {first}? Just you and I?",
+        "May I keep you company a little way?"
+      ],
+      "yes": [
+        {"t": "I'd like that. Give me a moment to fetch my shawl.", "tone": "flirt"},
+        {"t": "Gladly. Not too fast, though; I'd like to talk.", "tone": "warm"},
+        {"t": "Yes. Let's go the long way round.", "tone": "flirt"},
+        {"t": "Folk will talk, you know. I find I don't mind.", "tone": "flirt", "if": {"op": ["warm", "devoted"]}},
+        {"t": "You'll tell me of your day, and I'll tell you of mine.", "tone": "friendly"},
+        {"t": "I'd like that very much.", "tone": "flirt"},
+        {"t": "Come, then. Tell me about your day.", "tone": "warm"},
+        {"t": "Let's go. The long way, mind.", "tone": "flirt"}
+      ],
+      "no": [
+        {"t": "Not today, {first}. I'm needed at home.", "tone": "wary"},
+        {"t": "I'd rather not be seen with you just yet.", "tone": "wary"},
+        {"t": "Another time, perhaps. I've too much to do.", "tone": "neutral"},
+        {"t": "No. And stop asking.", "tone": "cold", "if": {"op": ["cold", "hostile"]}},
+        {"t": "My mother would not approve.", "tone": "wary"},
+        {"t": "I'm expected elsewhere, {first}.", "tone": "wary"},
+        {"t": "Not today. Don't be discouraged.", "tone": "friendly"}
+      ]
+    },
+    "token": {
+      "ask": [
+        "A ribbon for your hair, {first} — blue, to match your eyes. It cost me {money}, and was worth it.",
+        "I bought you this at the fair, {first}: a little brooch. {Money}, but it's yours.",
+        "I thought of you when I saw this. It was {money}; take it, {first}.",
+        "Take it, {first}, as a token of my regard. {Money} well spent.",
+        {"t": "A comb of horn, {first}. I carved the edge myself — well, I tried. Worth {money} to me.", "if": {"role": ["craft", "land"]}},
+        {"t": "A trinket, {addr}. It cost {money}. Don't tell my mother.", "if": {"age": ["youth", "adult"]}}
+      ],
+      "yes": [
+        {"t": "Oh, {first}. It's beautiful. I shall wear it to Mass.", "tone": "flirt"},
+        {"t": "You shouldn't have. I'm glad you did.", "tone": "warm"},
+        {"t": "I'll keep it close to my heart, I think.", "tone": "flirt"},
+        {"t": "Not a soul has given me anything like this before.", "tone": "warm"},
+        {"t": "Well! I'll put it by my bed. You've a good heart.", "tone": "warm", "if": {"trait": "content"}},
+        {"t": "It's lovely. Thank you.", "tone": "flirt"},
+        {"t": "I'll wear it Sunday... on the holy day.", "tone": "warm"},
+        {"t": "You are kind to think of me.", "tone": "warm"}
+      ],
+      "no": [
+        {"t": "It's very pretty, but I can't take it. People would talk.", "tone": "wary"},
+        {"t": "Keep it, {first}. I have no wish to be bought.", "tone": "cold"},
+        {"t": "You mistake my feeling for yours. I'm sorry.", "tone": "sad"},
+        {"t": "I couldn't. My father would have my hide.", "tone": "wary", "if": {"age": ["child", "youth"]}},
+        {"t": "I mustn't. Truly.", "tone": "wary"},
+        {"t": "It's lovely, but I can't.", "tone": "sad"},
+        {"t": "Give it to someone it will mean more to.", "tone": "cold"}
+      ]
+    },
+    "refuse": [
+      {"t": "I'm not free to hear such things, {first}.", "tone": "wary"},
+      {"t": "You must not say that to me.", "tone": "wary"},
+      {"t": "That would be improper, and we both know it.", "tone": "wary"},
+      {"t": "I think we should speak of something else.", "tone": "wary"}
+    ],
+    "feelings": {
+      "ask": [
+        "Tell me honestly, {first}: how do you think of me?",
+        "What do you feel, when we talk?",
+        "Do you ever think of me, {first}? Even a little?",
+        "I need to know, {first}. Where do I stand with you?"
+      ],
+      "reply": [
+        {"t": "I think I'd rather not say, {first}. And that tells you something.", "tone": "cold", "if": {"tag": "feel_hostile"}},
+        {"t": "Please. Don't ask me that.", "tone": "cold", "if": {"tag": "feel_cold"}},
+        {"t": "I like you well enough, {first}. Time will tell the rest.", "tone": "friendly", "if": {"tag": "feel_neutral"}},
+        {"t": "You are a friend, and a good one. Perhaps more, one day.", "tone": "warm", "if": {"tag": ["feel_warm", "p_low"]}},
+        {"t": "I look for you when I'm out. I did not expect that.", "tone": "flirt", "if": {"tag": ["feel_warm", "p_mid"]}},
+        {"t": "I think of you more than is wise, {first}.", "tone": "flirt", "if": {"tag": ["feel_warm", "p_high"]}},
+        {"t": "My heart is yours, {first}, if you want it. I'm nearly sure.", "tone": "flirt", "if": {"tag": ["feel_devoted", "p_high"]}},
+        {"t": "You know how I feel. I could not hide it if I tried.", "tone": "warm", "if": {"tag": "feel_devoted"}},
+        {"t": "But there are others to be asked before we say more: {who} must agree.", "tone": "wary", "if": {"tag": "needs_consent"}}
+      ],
+      "taste": [
+        {"t": "I'll be plain with you, {first}: I mean to marry well. Show me you can rise.", "tone": "wary", "if": {"tag": ["wants_rank", "taste_unmet"]}},
+        {"t": "Your standing is what a sensible person hopes for. That counts with me.", "tone": "warm", "if": {"tag": ["wants_rank", "taste_met"]}},
+        {"t": "I could not wed one who neglects the Church. Be seen at Mass, {first}.", "tone": "wary", "if": {"tag": ["wants_piety", "taste_unmet"]}},
+        {"t": "I have seen you at your prayers, and I thought well of it.", "tone": "warm", "if": {"tag": ["wants_piety", "taste_met"]}},
+        {"t": "A person's word is all they have. I'd see yours kept.", "tone": "wary", "if": {"tag": ["wants_honour", "taste_unmet"]}},
+        {"t": "You keep your word. That is rarer than gold.", "tone": "warm", "if": {"tag": ["wants_honour", "taste_met"]}},
+        {"t": "I cannot abide a hard hand. Be gentle, and be giving.", "tone": "wary", "if": {"tag": ["wants_kindness", "taste_unmet"]}},
+        {"t": "You are kind to folk. I notice that, {first}; I notice it very much.", "tone": "warm", "if": {"tag": ["wants_kindness", "taste_met"]}},
+        {"t": "A purse that's empty makes a cold hearth, {first}.", "tone": "wary", "if": {"tag": ["wants_wealth", "taste_unmet"]}},
+        {"t": "You've means, and the sense not to boast of them. Good.", "tone": "warm", "if": {"tag": ["wants_wealth", "taste_met"]}},
+        {"t": "I'd want a spirit that is not afraid. Show me.", "tone": "wary", "if": {"tag": ["wants_valour", "taste_unmet"]}},
+        {"t": "They say you do not flinch. I like that.", "tone": "warm", "if": {"tag": ["wants_valour", "taste_met"]}},
+        {"t": "I'd talk with someone who thinks, {first}. Sharpen your wits.", "tone": "wary", "if": {"tag": ["wants_wit", "taste_unmet"]}},
+        {"t": "You have a quick mind. It makes our talk worth having.", "tone": "warm", "if": {"tag": ["wants_wit", "taste_met"]}},
+        {"t": "I fear a hard temper. Show me you can be gentle.", "tone": "wary", "if": {"tag": "wants_gentleness"}}
+      ]
+    },
+    "propose": {
+      "ask": [
+        "{First}, will you marry me?",
+        "I'd like to ask you something that can't wait: will you be my {spouseword}?",
+        "I've thought on this long. Will you have me, {first}?",
+        "Let us not wait any longer, {first}. Marry me.",
+        {"t": "Before God and these walls: be my wife, {first}.", "if": {"sex": "m"}},
+        {"t": "Before God and these walls: be my husband, {first}.", "if": {"sex": "f"}}
+      ],
+      "yes": [
+        {"t": "Yes. Yes! A thousand times yes.", "tone": "warm"},
+        {"t": "I thought you'd never ask, {first}. Yes.", "tone": "warm"},
+        {"t": "Then let the banns be read. I'm yours.", "tone": "warm"},
+        {"t": "Yes, {first}. God and the priest willing, and every neighbour besides.", "tone": "pleased"},
+        {"t": "Yes. I could not have wished for another.", "tone": "warm", "if": {"op": "devoted"}},
+        {"t": "Then it's settled. God send us joy.", "tone": "warm"},
+        {"t": "Yes, my love. A hundred times.", "tone": "warm"}
+      ],
+      "no": [
+        {"t": "I'm sorry, {first}. I... I can't.", "tone": "sad"},
+        {"t": "It would not be right. I'm so sorry.", "tone": "sad"},
+        {"t": "No. And I'd thank you not to ask again.", "tone": "cold"},
+        {"t": "Ask me in a season, {first}. I'm not yet sure.", "tone": "wary"},
+        {"t": "Not yet. Not you. I'm sorry.", "tone": "sad"},
+        {"t": "I like you, but I can't.", "tone": "sad"}
+      ],
+      "consent": [
+        {"t": "I want it, {first}, but I cannot say yes until {who} agrees. Go and ask for it.", "tone": "wary"},
+        {"t": "My heart says yes. But it isn't mine alone to give: {who} must consent.", "tone": "wary"},
+        {"t": "Speak to {who}, {first}. I can't say yes without that blessing.", "tone": "wary"}
+      ],
+      "young": [
+        {"t": "We are both too young yet, {first}. Wait until we're grown.", "tone": "wary"},
+        {"t": "Ask me when I'm sixteen. Not before.", "tone": "wary"}
+      ],
+      "later": [
+        {"t": "Not yet, {first}. There is still too much we haven't said.", "tone": "wary"},
+        {"t": "I'm not ready. But I'm not saying no.", "tone": "wary"},
+        {"t": "Give it time. Court me a little longer.", "tone": "flirt"},
+        {"t": "Ask me again after the harvest.", "tone": "wary"},
+        {"t": "I'm fond of you. I need more time.", "tone": "wary"}
+      ]
+    }
+  }
+}
