@@ -194,7 +194,7 @@ try {
   await tick(0.2);
   await sim(() => window.__ui.showHint('interact'));
   await tick(0.2);
-  check('the guide shows a hint card', (await page.locator('.mu-guide:not(.mu-hide)').count()) === 1 && (await page.locator('.mu-guide-title').textContent()) === 'Lend a hand');
+  check('the guide shows a hint card', (await page.locator('.mu-guide:not(.mu-hide)').count()) === 1 && (await page.locator('.mu-guide-title').textContent()) === 'Point and click');
   await page.locator('.mu-guide-x').click();
   await tick(0.2);
   check('the hint can be dismissed', (await page.locator('.mu-guide:not(.mu-hide)').count()) === 0);
@@ -217,7 +217,7 @@ try {
       await tick(0.5);
       await page.evaluate(() => window.__game.settle());
       await page.evaluate(() => window.__game.draw());
-      const pt = await page.evaluate((id) => { const s = window.__game.session; const a = s.services.zone.agent(id); return a ? s.controls.project(a.x, a.y + 1.0, a.z) : null; }, target);
+      const pt = await page.evaluate((id) => { const s = window.__game.session; const a = s.services.zone.agent(id); return a ? s.controls.project(a.x, a.y + 0.65, a.z) : null; }, target);
       if (pt) {
         await page.mouse.move(pt.x - 12, pt.y - 12);
         await page.mouse.move(pt.x, pt.y, { steps: 3 });
@@ -266,6 +266,18 @@ try {
     await tick(0.2);
     check('G draws the weapon', (await sim(() => window.__game.session.services.player.drawn?.())) === true && (await sim(() => window.__game.session.services.player.hud().drawn)) === true);
     check('while drawn the hover card and click-to-act are off', (await sim(() => window.__game.session.services.player.hover?.())) === null);
+    // Esc leaves mouse-look first (it must not open the menu for that press); the weapon stays drawn; the next Esc is the menu's
+    await page.waitForTimeout(120);
+    await page.keyboard.press('Escape');
+    await tick(0.3);
+    s = await ui();
+    check('Esc with the mouse looking only gives the mouse back (no menu)', s.panels.length === 0 && (await page.evaluate(() => document.pointerLockElement === null)) && (await sim(() => window.__game.session.services.player.drawn?.())) === true, JSON.stringify(s));
+    await page.waitForTimeout(300);
+    await page.keyboard.press('Escape');
+    await tick(0.3);
+    check('the next Esc opens the menu as before', (await ui()).panels.join() === 'pause', JSON.stringify(await ui()));
+    await page.getByRole('button', { name: 'Resume' }).click();
+    await tick(0.3);
     await page.keyboard.press('KeyG');
     await tick(0.2);
     check('G again puts it away', (await sim(() => window.__game.session.services.player.drawn?.())) === false);

@@ -3,7 +3,7 @@
 // objective, already tracked, takes over.
 import { h } from '../core/dom';
 import { icon, type IconName } from '../core/icons';
-import { introModel, type TourSpot } from '../core/introModel';
+import { introModel, tourViewpoint, type TourSpot } from '../core/introModel';
 import { button } from '../components/widgets';
 import { createWindow } from '../components/window';
 import type { PanelCtx, UiPanel } from '../app/panel';
@@ -76,14 +76,13 @@ export function tourPanel(ctx: PanelCtx, only?: number): UiPanel {
   const aim = (s: TourSpot): void => {
     if (!renderer?.setCameraPose) return;
     const b = ctx.player.body();
-    let ux = b ? b.x - s.x : 1, uz = b ? b.z - s.z : 0;
-    let l = Math.hypot(ux, uz);
-    if (l < 8) { ux = Math.sin((b?.yaw ?? 0) + Math.PI); uz = Math.cos((b?.yaw ?? 0) + Math.PI); l = 1; }
-    ux /= l; uz /= l;
-    const r = s.kind === 'church' ? 30 : s.kind === 'strip' ? 24 : 19;
-    const px = s.x + ux * r, pz = s.z + uz * r;
+    // a bigger thing is seen from further off and higher up; the camera avoids standing against or behind a house
+    const r = s.kind === 'church' ? 32 : s.kind === 'strip' ? 30 : 20;
+    const up = s.kind === 'church' ? 10 : s.kind === 'strip' ? 14 : 8;
+    const lookUp = s.kind === 'church' ? 5 : s.kind === 'strip' ? 0.5 : 2.6;
+    const at = tourViewpoint(ctx.game, s, b ? { x: b.x, z: b.z } : null, r);
     const gy = world.heightAt(s.x, s.z);
-    renderer.setCameraPose({ x: px, y: world.heightAt(px, pz) + 7.5, z: pz }, { x: s.x, y: gy + 2.6, z: s.z }, FLY);
+    renderer.setCameraPose({ x: at.x, y: world.heightAt(at.x, at.z) + up, z: at.z }, { x: s.x, y: gy + lookUp, z: s.z }, FLY);
   };
   const next = (now: number): void => {
     i++;

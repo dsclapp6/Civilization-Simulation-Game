@@ -86,3 +86,47 @@ export function introModel(game: GameServices): IntroModel | null {
 
   return { title: `${SEASON_NAMES[d.season]}, the first day`, paragraphs, spots };
 }
+
+// ---------------------------------------------------------------------------------------------
+// Where the tour's camera stands
+// ---------------------------------------------------------------------------------------------
+
+/** Distance from a point to a segment, and where along the segment (0..1) the nearest point lies. */
+function nearOnSegment(ax: number, az: number, bx: number, bz: number, px: number, pz: number): { d: number; t: number } {
+  const dx = bx - ax, dz = bz - az;
+  const l2 = dx * dx + dz * dz;
+  const t = l2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / l2)) : 0;
+  return { d: Math.hypot(ax + dx * t - px, az + dz * t - pz), t };
+}
+
+/**
+ * Where to put the camera to look at a tour stop from about `radius` metres away: on the player's side of it, nudged
+ * round (and in or out a little) until no building is in the way — not one the camera would stand against, nor one
+ * between the camera and the thing shown. The stop's own building does not count against it.
+ */
+export function tourViewpoint(game: GameServices, spot: { x: number; z: number }, from: { x: number; z: number } | null, radius: number): { x: number; z: number } {
+  const st = game.sim.state;
+  const me = st.persons.get(st.run.playerId);
+  const list = me ? (st.buildingsAt.get(me.settlement) ?? []) : [];
+  const around = list.filter((b) => !BUILDINGS[b.kind]?.segment && Math.hypot(b.x - spot.x, b.z - spot.z) < radius * 2);
+  const base = from ? Math.atan2(from.x - spot.x, from.z - spot.z) : 0;
+  let best = { x: spot.x + Math.sin(base) * radius, z: spot.z + Math.cos(base) * radius };
+  let bestPenalty = Infinity;
+  for (const k of [1, 0.8, 1.25]) {
+    for (const turn of [0, 0.45, -0.45, 0.9, -0.9, 1.4, -1.4, 2.0, -2.0, Math.PI]) {
+      const ang = base + turn, r = radius * k;
+      const x = spot.x + Math.sin(ang) * r, z = spot.z + Math.cos(ang) * r;
+      let penalty = Math.abs(turn) * 0.8 + Math.abs(k - 1) * 4;
+      for (const b of around) {
+        const def = BUILDINGS[b.kind];
+        const rad = Math.hypot(def.w, def.d) / 2;
+        if (Math.hypot(b.x - spot.x, b.z - spot.z) < rad + 1.5) continue; // the thing shown
+        if (Math.hypot(b.x - x, b.z - z) < rad + 3) penalty += 40;
+        const n = nearOnSegment(x, z, spot.x, spot.z, b.x, b.z);
+        if (n.d < rad * 0.9 && n.t > 0.08 && n.t < 0.92) penalty += 12;
+      }
+      if (penalty < bestPenalty) { bestPenalty = penalty; best = { x, z }; }
+    }
+  }
+  return best;
+}

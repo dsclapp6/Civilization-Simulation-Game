@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { toDate } from '../../src/core/time';
 import { PERSON_GROUPS, peopleRows, placeRows, taskWords, todayModel } from '../../src/ui/core/journalModel';
-import { introModel } from '../../src/ui/core/introModel';
+import { introModel, tourViewpoint } from '../../src/ui/core/introModel';
 import { MockObjectives } from '../../src/ui/dev/mockObjectives';
 import type { GameServices } from '../../src/ui/types';
 import { rig, type FakeZone } from '../player/fakes';
@@ -122,6 +122,29 @@ describe('The intro card', () => {
     const g = game();
     const m = introModel(g)!;
     expect(m.paragraphs.join(' ')).toContain(g.objectives!.tracked()!.why);
+  });
+});
+
+describe('The tour camera', () => {
+  it('stands on the player\u2019s side at about the asked distance, and steps round a house that is in the way', () => {
+    const g = game();
+    const st = g.sim.state;
+    const me = st.persons.get(st.run.playerId)!;
+    const home = st.buildings.get(st.households.get(me.household)!.home)!;
+    const spot = { x: home.x, z: home.z };
+    const from = { x: home.x + 60, z: home.z };
+    const open = tourViewpoint(g, spot, from, 20);
+    // no buildings: straight out on the player's side
+    expect(Math.hypot(open.x - spot.x, open.z - spot.z)).toBeGreaterThan(15);
+    expect(Math.hypot(open.x - spot.x, open.z - spot.z)).toBeLessThan(26);
+    // wherever it stands, no building of the place is within a few metres of it (the home itself aside)
+    const list = st.buildingsAt.get(me.settlement) ?? [];
+    for (const b of list) {
+      if (Math.hypot(b.x - spot.x, b.z - spot.z) < 8) continue;
+      expect(Math.hypot(b.x - open.x, b.z - open.z)).toBeGreaterThan(2.5);
+    }
+    // with nobody to stand next to, it still chooses somewhere
+    expect(Number.isFinite(tourViewpoint(g, spot, null, 20).x)).toBe(true);
   });
 });
 

@@ -86,6 +86,8 @@ export interface UiHost {
    * press; with the mouse already free it returns false and the UI closes its top page or shows the menu.
    */
   releaseMouseLook?(): boolean;
+  /** Is the mouse looking (pointer locked) right now? The HUD tells a drawn weapon with a free cursor from one with the mouse taken. */
+  mouseLooking?(): boolean;
 }
 
 export type UiScreen = 'menu' | 'loading' | 'game';

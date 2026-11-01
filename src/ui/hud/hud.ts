@@ -71,6 +71,8 @@ export class Hud {
   private readonly dest = new Destination();
   private readonly dayTypeEl = h('div.mu-hud-daytype');
   private lastSettlementId = -2;
+  private lastBannerId = -1;
+  private lastBannerAt = -1000;
   private clockNow = 0;
   /** The first settlement of a new run is announced by the intro card, not the banner. */
   suppressBanner = false;
@@ -142,6 +144,9 @@ export class Hud {
   private readonly bloodNum = h('span.mu-hud-num');
   private readonly stRow = h('div.mu-hud-bar', { tip: 'Stamina' });
   private readonly combatChip = h('div.mu-hud-combat.mu-hide');
+  /** "Weapon drawn": what the mouse does now and how to put it away (clarity pass). */
+  private readonly drawnChip = h('div.mu-hud-drawn.mu-hide');
+  private lastDrawnKey = '';
   private lastHitSeq = -1;
   private lastCombatKey = '';
 
@@ -213,7 +218,7 @@ export class Hud {
     this.rightCol.append(this.clockPlate, this.minimap.el);
     this.el.append(
       this.leftCol, this.rightCol, this.compass.el, this.banner.el, this.dangerEl, this.deps.toasts.el, this.travelEl, this.edge.el, this.dest.el,
-      this.gainsEl, this.actionEl, this.promptEl, this.feedEl, this.dockEl, this.savedEl, this.reticle, this.hitFlash, this.downEl, this.combatChip,
+      this.gainsEl, this.actionEl, this.promptEl, this.feedEl, this.dockEl, this.savedEl, this.reticle, this.hitFlash, this.downEl, this.combatChip, this.drawnChip,
       this.hoverCard.el, this.sleepEl,
     );
     this.downEl.append(h('div.mu-hud-down-card', null, icon('skull', 30), h('div.mu-hud-down-title', null, 'You are down'), this.downText));
@@ -460,7 +465,7 @@ export class Hud {
   resized(): void { this.compass.resize(); }
 
   /** Shows the settlement banner for where the body stands (tools and tests). */
-  announce(): void { this.lastSettlementId = -2; this.suppressBanner = false; this.lastSlow = -10; }
+  announce(): void { this.lastSettlementId = -2; this.lastBannerId = -1; this.suppressBanner = false; this.lastSlow = -10; }
 
   private updateClock(clock: ReturnType<GameServices['sim']['view']['clock']>, _now: number): void {
     const minute = minuteOfDay(clock.dayFraction);
@@ -547,6 +552,19 @@ export class Hud {
     if (down) this.downText.textContent = bleeding > 0 || blood < 0.5 ? 'You are bleeding. You cannot act until you are on your feet again.' : 'Knocked flat. Catch your breath; you will be up in a moment.';
     // out of breath
     this.stRow.classList.toggle('winded', !!hud?.exhausted);
+    // the weapon is out: say what the mouse does now, and how to put it away
+    const drawnState = !hud?.drawn || state === 'down' ? '' : this.deps.host.mouseLooking?.() === false ? 'free' : 'look';
+    if (drawnState !== this.lastDrawnKey) {
+      this.lastDrawnKey = drawnState;
+      this.drawnChip.classList.toggle('mu-hide', !drawnState);
+      this.drawnChip.classList.toggle('free', drawnState === 'free');
+      if (drawnState) {
+        this.drawnChip.replaceChildren(
+          icon('swords', 15), h('b', null, 'Weapon drawn'),
+          h('span', null, drawnState === 'free' ? 'Click the view to take the mouse' : 'Left strikes, right guards'),
+          h('span.mu-dim', null, keycap('G', true), ' puts it away', drawnState === 'look' ? [' · ', keycap('Esc', true), ' frees the mouse'] : null));
+      }
+    }
     // stance chip
     const label = state === 'down' ? '' : stateLabel(state, !!hud?.exhausted);
     const key = `${c?.engaged ? 1 : 0}|${label}`;
@@ -715,7 +733,9 @@ export class Hud {
     if (nav.settlementId !== this.lastSettlementId) {
       const prev = this.lastSettlementId;
       this.lastSettlementId = nav.settlementId;
-      if (nav.settlementId >= 0 && !(this.suppressBanner && prev === -2)) {
+      if (nav.settlementId >= 0 && !(this.suppressBanner && prev === -2) && !(nav.settlementId === this.lastBannerId && this.clockNow - this.lastBannerAt < 120)) {
+        this.lastBannerId = nav.settlementId;
+        this.lastBannerAt = this.clockNow;
         const c = settlementCard(sim, nav.settlementId);
         const lord = c && c.lord ? sim.state.persons.get(c.lord) : undefined;
         if (c) this.banner.show({ name: c.name, kind: c.kind, county: c.county, kingdom: c.kingdom, lord: lord ? fullName(lord) : '' }, this.clockNow);

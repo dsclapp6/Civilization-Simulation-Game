@@ -33,7 +33,7 @@ function randomSeed(): string {
 export class AppHost implements UiHost {
   ui: GameUI | null = null;
   /** The input layer (set by game.ts): Esc asks it whether the mouse was looking. */
-  input: { releaseLook(): boolean } | null = null;
+  input: { releaseLook(): boolean; readonly pointerLocked: boolean } | null = null;
   session: Session | null = null;
   screen: UiScreen = 'menu';
   /** Notified whenever a session starts or ends. */
@@ -63,6 +63,8 @@ export class AppHost implements UiHost {
   renderer(): UiRendererControls | null { return this.session ? this.session.controls : null; }
 
   releaseMouseLook(): boolean { return this.input?.releaseLook() ?? false; }
+
+  mouseLooking(): boolean { return this.input?.pointerLocked ?? false; }
 
   settings(): Settings { return this.settingsObj; }
 

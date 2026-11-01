@@ -106,7 +106,7 @@ const findOnScreen = (kind) => page.evaluate((k) => {
   const ok = (pt) => pt && pt.x > 330 && pt.x < W - 330 && pt.y > 120 && pt.y < H - 140;
   if (k === 'person') {
     const list = [...z.agents()].filter((a) => a.visible && a.personId !== sim.state.run.playerId).sort((u, v) => Math.hypot(u.x - b.x, u.z - b.z) - Math.hypot(v.x - b.x, v.z - b.z));
-    for (const a of list) { const pt = project(a.x, a.y + 1.0, a.z); if (ok(pt) && Math.hypot(a.x - b.x, a.z - b.z) < 30) return { x: pt.x, y: pt.y }; }
+    for (const a of list) { const pt = project(a.x, a.y + 0.7, a.z); if (ok(pt) && Math.hypot(a.x - b.x, a.z - b.z) < 30) return { x: pt.x, y: pt.y }; }
   }
   if (k === 'building') {
     const near = sim.world.nearestSettlement(b.x, b.z);
@@ -166,6 +166,28 @@ try {
 
   if (want('hover')) {
     for (const kind of ['person', 'building', 'strip', 'tree', 'ground']) {
+      if (kind === 'strip') {
+        // walk out to the family's strip (or any strip of the village) and look at it
+        const spot = await page.evaluate(() => {
+          const s = window.__game.session; const sim = s.sim; const p = s.services.player;
+          const me = sim.state.persons.get(sim.state.run.playerId); const hh = me.household;
+          const mine = sim.world.strips.filter((q) => sim.state.strips.get(q.id)?.holder === hh);
+          const near = sim.world.nearestSettlement(p.body().x, p.body().z);
+          const st = mine[0] ?? sim.world.strips.find((q) => q.id === near.strips[Math.floor(near.strips.length / 2)]);
+          if (!st) return null;
+          const cx = st.poly.reduce((a, q) => a + q.x, 0) / 4, cz = st.poly.reduce((a, q) => a + q.z, 0) / 4;
+          const b = p.body();
+          const dx = b.x - cx, dz = b.z - cz; const d = Math.hypot(dx, dz) || 1;
+          const yaw = Math.atan2(-dx, -dz);
+          p.placeAt(cx + (dx / d) * 14, cz + (dz / d) * 14, yaw);
+          const r = s.renderer; r.orbit(Math.atan2(Math.sin(yaw - r.getCameraYaw()), Math.cos(yaw - r.getCameraYaw())), 0);
+          return { cx, cz, mine: mine.length > 0 };
+        });
+        console.log('strip spot:', JSON.stringify(spot));
+        await advance(0.4);
+        await page.evaluate(() => window.__game.settle());
+        await page.evaluate(() => window.__game.draw());
+      }
       const at = await findOnScreen(kind);
       if (!at) { console.log(`hover ${kind}: nothing on screen`); continue; }
       await hoverAt(at.x, at.y);
@@ -177,6 +199,15 @@ try {
       await page.mouse.move(W / 2, 60);
       await frames(3);
     }
+  }
+
+  if (want('drawn')) {
+    await page.keyboard.press('KeyG');
+    await frames(8);
+    await page.waitForTimeout(400);
+    await shot('clarity-drawn', { settle: false });
+    await page.keyboard.press('KeyG');
+    await frames(4);
   }
 
   if (want('edge')) {

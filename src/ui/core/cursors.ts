@@ -13,7 +13,7 @@ const BADGES: Record<Exclude<CursorKind, 'default'>, Badge> = {
   talk: { fill: '#1d418f', glyph: `<path d='M18.2 19.4h9.6v6.2h-5.2l-2.6 2.4v-2.4h-1.8z' fill='${CREAM}'/>` },
   work: {
     fill: '#946a0b',
-    glyph: `<path d='M19 28.2 26.2 20.4' stroke='${CREAM}' stroke-width='2' stroke-linecap='round'/><path d='M23.6 18.6l4.4 1.4-1.2 4.2z' fill='${CREAM}'/>`,
+    glyph: `<path d='M19.2 27.4 24.6 21.6' stroke='${CREAM}' stroke-width='2.2' stroke-linecap='round'/><path d='M22.2 18.4 27.6 23.4' stroke='${CREAM}' stroke-width='4' stroke-linecap='butt'/>`,
   },
   trade: {
     fill: '#386a37',
@@ -41,7 +41,7 @@ function svgFor(kind: Exclude<CursorKind, 'default'>): string {
   const b = BADGES[kind];
   return `<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'>`
     + `<path d='M3 2.2v17.6l4.6-4.2 3.2 7 3.2-1.4-3.2-6.8h6.4z' fill='${CREAM}' stroke='${INK}' stroke-width='1.5' stroke-linejoin='round'/>`
-    + `<circle cx='23' cy='23' r='8.6' fill='${b.fill}' stroke='${INK}' stroke-width='1.5'/>`
+    + `<circle cx='22.8' cy='22.8' r='8.2' fill='${b.fill}' stroke='${INK}' stroke-width='1.5'/>`
     + b.glyph
     + `</svg>`;
 }
