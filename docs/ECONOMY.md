@@ -154,7 +154,8 @@ summed by `perkSum`/`perkTotal`.
   its settlement's day is run (`farm.ts macroPlan`, the pure part of `macroStrip`), so the strips it is about to work show the
   work through the working day before, each starting a little later than the last.
 * `worldProps` / `worldPropsVersion` (`propfeed.ts`): stooks (bound sheaves waiting to be carried) and lying sheaves along the
-  reaped part of a strip, hay cocks for two days after a meadow is mown, a woodpile (`count` 1..8 from firewood) and a heap of
+  reaped part of a strip (the strip's *start* is the middle of the short end that holds `poly[0]`, its direction the long axis:
+  `stripFrame`; `StripView.work` is meant to be drawn from the same end, so the sheaves lie inside the cut band), hay cocks for two days after a meadow is mown, a woodpile (`count` 1..8 from firewood) and a heap of
   grain sacks (from grain and flour) at each home or barn, stone at quarries, a stump where a tree was felled (permanent) and its
   logs (until the woodcutter has walked off). Households the economy keeps by the day hold no stores, so they show a seasonal
   baseline; the player's household shows exactly what it keeps. A strip the household farm harvests while it is being watched
