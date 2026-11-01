@@ -2,7 +2,7 @@
 // week-work for the lord. Wages come from the economy bout by bout; the objective says where and what, and counts.
 import { describe, expect, it } from 'vitest';
 import { adopt, makeApprentice } from '../economy/helpers';
-import { active, install, objSim, playObjectives, playerOf, recOf, runTo, skipTutorial, type ObjSim } from './helpers';
+import { active, goHome, install, objSim, playObjectives, playerOf, recOf, runTo, skipTutorial, type ObjSim } from './helpers';
 
 /** An apprentice smith at the bench of a master, ready for the first dawn. */
 function apprentice(): { o: ObjSim; masterId: number } {
@@ -11,6 +11,7 @@ function apprentice(): { o: ObjSim; masterId: number } {
   const { player, job } = makeApprentice(o.sim, { age: 14, title: 'Apprentice smith', purse: 900 });
   const r = o.economy.applyForJob(player.id, job.id);
   expect(r.ok, r.reason).toBe(true);
+  goHome(o);
   install(o);
   skipTutorial(o);
   return { o, masterId: job.employer };

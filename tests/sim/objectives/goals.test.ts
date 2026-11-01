@@ -2,7 +2,7 @@
 // saving for a better tool, courting. Progress is simply what the player has become.
 import { describe, expect, it } from 'vitest';
 import { adopt, makeApprentice } from '../economy/helpers';
-import { active, doAction, install, objSim, playerOf, recOf, skipTutorial, talkTo, type ObjSim } from './helpers';
+import { active, doAction, goHome, install, objSim, playerOf, recOf, skipTutorial, talkTo, type ObjSim } from './helpers';
 
 function ageTo(o: ObjSim, years: number): void {
   const me = playerOf(o.sim);
@@ -131,6 +131,7 @@ describe('goals', () => {
     adopt(o.sim, o.economy);
     const { player } = makeApprentice(o.sim, { age: 14, title: 'Apprentice smith', purse: 5 });
     player.money = 0;
+    goHome(o);
     install(o);
     skipTutorial(o);
     const g = goal(o, /^Win an apprenticeship/)!;

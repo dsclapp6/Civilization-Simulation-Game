@@ -106,6 +106,13 @@ export function walkTo(o: ObjSim, x: number, z: number): void {
 
 export function walkToTarget(o: ObjSim, t: ObjectiveTarget): void { walkTo(o, t.x, t.z); }
 
+/** Puts the pretend body at the player's home door (after a test moved the household). */
+export function goHome(o: ObjSim): void {
+  const hh = o.sim.state.households.get(playerOf(o.sim).household) as Household;
+  const home = o.sim.state.buildings.get(hh.home);
+  if (home) { o.at.x = home.x; o.at.z = home.z; }
+}
+
 /** Steps the simulation in real-time frames (20 a second of play). */
 export function play(o: ObjSim, seconds: number): void {
   for (let i = 0; i < seconds * 20; i++) o.sim.step(1 / 20);
