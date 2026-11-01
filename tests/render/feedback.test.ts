@@ -65,11 +65,11 @@ describe('strip work on the field surface', () => {
     expect(fs.workingStrips).toBe(1);
 
     // plants behind the boundary are gone, those ahead still stand
-    const cut = (fs as unknown as { strips: Map<number, { cut: { along: number; hidden: boolean }[] | null }> }).strips.get(ripe.id)!.cut!;
-    expect(cut.length).toBeGreaterThan(20);
-    for (const ci of cut) expect(ci.hidden).toBe(ci.along < len * 0.5);
-    expect(cut.some((ci) => ci.hidden)).toBe(true);
-    expect(cut.some((ci) => !ci.hidden)).toBe(true);
+    const cut = (fs as unknown as { strips: Map<number, { cut: { along: Float32Array; hidden: Uint8Array } | null }> }).strips.get(ripe.id)!.cut!;
+    expect(cut.along.length).toBeGreaterThan(20);
+    for (let i = 0; i < cut.along.length; i++) expect(cut.hidden[i] === 1).toBe(cut.along[i] < len * 0.5);
+    expect(cut.hidden.some((h) => h === 1)).toBe(true);
+    expect(cut.hidden.some((h) => h === 0)).toBe(true);
 
     // the reaping is finished: the strip turns 'harvested' and no plants remain on it
     view.setStrip(ripe.id, { state: 'harvested', task: undefined, work: 0 });

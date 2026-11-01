@@ -64,12 +64,42 @@ interface StripGeom {
   /** Harrowing finished on this ploughed strip (the sim does not show it; kept until the state changes). */
   harrowed: boolean;
   /** Crop instances of this strip that can be cut (ripe or being reaped/mown), in the current crop meshes. */
-  cut: CutInstance[] | null;
+  cut: CutList | null;
   /** Metres along up to which `cut` is hidden. */
   cutAt: number;
 }
 
-interface CutInstance { mesh: THREE.InstancedMesh; index: number; along: number; m: Float32Array; hidden: boolean }
+/** A strip's cuttable crop instances, packed: which mesh (index into `meshes`), slot, metres along, matrix, hidden. */
+interface CutList {
+  meshes: THREE.InstancedMesh[];
+  mesh: Uint8Array;
+  index: Uint32Array;
+  along: Float32Array;
+  m: Float32Array;
+  hidden: Uint8Array;
+}
+
+/** Collects a CutList while the crop meshes are written. */
+class CutBuilder {
+  meshes: THREE.InstancedMesh[] = [];
+  mesh: number[] = [];
+  index: number[] = [];
+  along: number[] = [];
+  m: number[] = [];
+  hidden: number[] = [];
+  push(mesh: THREE.InstancedMesh, index: number, along: number, el: ArrayLike<number>, hidden: boolean): void {
+    let k = this.meshes.indexOf(mesh);
+    if (k < 0) { k = this.meshes.length; this.meshes.push(mesh); }
+    this.mesh.push(k); this.index.push(index); this.along.push(along); this.hidden.push(hidden ? 1 : 0);
+    for (let i = 0; i < 16; i++) this.m.push(el[i]);
+  }
+  build(): CutList {
+    return {
+      meshes: this.meshes, mesh: Uint8Array.from(this.mesh), index: Uint32Array.from(this.index), along: Float32Array.from(this.along),
+      m: Float32Array.from(this.m), hidden: Uint8Array.from(this.hidden),
+    };
+  }
+}
 
 interface Tile {
   key: number;
@@ -524,21 +554,25 @@ float mlAA = 0.0;
     const at = g.shown * g.length;
     if (Math.abs(at - g.cutAt) < 1e-3) return;
     g.cutAt = at;
-    const touched = new Map<THREE.InstancedMesh, [number, number]>();
-    for (const ci of g.cut) {
-      const hide = ci.along < at;
-      if (hide === ci.hidden) continue;
-      ci.hidden = hide;
-      if (hide) ci.mesh.setMatrixAt(ci.index, this.zeroMatrix);
-      else ci.mesh.setMatrixAt(ci.index, this.tmpM.fromArray(ci.m));
-      const r = touched.get(ci.mesh);
-      if (r) { r[0] = Math.min(r[0], ci.index); r[1] = Math.max(r[1], ci.index); } else touched.set(ci.mesh, [ci.index, ci.index]);
+    const c = g.cut;
+    const lo = [Infinity, Infinity], hi = [-1, -1];
+    for (let i = 0; i < c.index.length; i++) {
+      const hide = c.along[i] < at ? 1 : 0;
+      if (hide === c.hidden[i]) continue;
+      c.hidden[i] = hide;
+      const k = c.mesh[i], slot = c.index[i];
+      const mesh = c.meshes[k];
+      if (hide) mesh.setMatrixAt(slot, this.zeroMatrix);
+      else mesh.setMatrixAt(slot, this.tmpM.fromArray(c.m, i * 16));
+      if (slot < lo[k]) lo[k] = slot;
+      if (slot > hi[k]) hi[k] = slot;
     }
-    for (const [mesh, [a, b]] of touched) {
+    c.meshes.forEach((mesh, k) => {
+      if (hi[k] < 0) return;
       // a whole-buffer upload still pending (new instances not yet drawn) must not shrink to a range
-      if (!this.fullPending.has(mesh)) mesh.instanceMatrix.addUpdateRange(a * 16, (b - a + 1) * 16);
+      if (!this.fullPending.has(mesh)) mesh.instanceMatrix.addUpdateRange(lo[k] * 16, (hi[k] - lo[k] + 1) * 16);
       mesh.instanceMatrix.needsUpdate = true;
-    }
+    });
   }
 
   update(list: readonly StripView[], version: number, camera: THREE.Camera, budgetMs: number, dt = 0): number {
@@ -657,8 +691,8 @@ float mlAA = 0.0;
     for (const [key, mesh] of this.cropShadowMeshes) if (!job.buf.has(key)) mesh.count = 0;
     // strips whose plants can be cut (ripe, or a reap/mow under way) keep a list of their instances
     for (const g of this.strips.values()) { g.cut = null; g.cutAt = 0; }
-    const cutLists = new Map<number, CutInstance[]>();
-    for (const g of job.order) if (g.state === 'ripe' || (g.task && CUTTING.has(g.task))) cutLists.set(g.id, []);
+    const cutLists = new Map<number, CutBuilder>();
+    for (const g of job.order) if (g.state === 'ripe' || (g.task && CUTTING.has(g.task))) cutLists.set(g.id, new CutBuilder());
     // keep within the triangle budget: instances were gathered nearest strip first, so trimming
     // each list's tail drops the farthest plants
     let tris = 0;
@@ -712,7 +746,7 @@ float mlAA = 0.0;
         const list = cutLists.get(arr[o + 5]);
         const hidden = !!list && arr[o + 6] < (cutAt.get(arr[o + 5]) ?? 0);
         mesh.setMatrixAt(index, hidden ? this.zeroMatrix : m);
-        if (list) list.push({ mesh, index, along: arr[o + 6], m: new Float32Array(m.elements), hidden });
+        if (list) list.push(mesh, index, arr[o + 6], m.elements, hidden);
       }
       far.count = iFar;
       far.instanceMatrix.clearUpdateRanges();
@@ -728,8 +762,8 @@ float mlAA = 0.0;
     }
     for (const [id, list] of cutLists) {
       const g = this.strips.get(id);
-      if (!g || !list.length) continue;
-      g.cut = list;
+      if (!g || !list.index.length) continue;
+      g.cut = list.build();
       g.cutAt = cutAt.get(id) ?? 0;
     }
     this.cropInstances = total;
