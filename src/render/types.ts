@@ -50,9 +50,31 @@ export interface RenderStats {
   cropInstances: number;
   cameraMode: CameraMode;
   quality: QualityLevel;
+  // ---- clarity pass (optional) ----
+  /** World props drawn (stooks, woodpiles, stumps…), beacons, floating texts and nameplates on screen. */
+  worldProps?: number;
+  beacons?: number;
+  floaters?: number;
+  nameplates?: number;
+  /** Strips with a task under way. */
+  workingStrips?: number;
+  /** CPU ms this frame for props + beacons + floaters + nameplates + hover, and for the floaters alone. */
+  feedbackMs?: number;
+  floaterMs?: number;
 }
 
 export interface GroundPoint { x: number; y: number; z: number }
+
+/**
+ * Something the UI marks under the cursor or about to be acted on (clarity pass, docs/CLARITY.md §5). The kinds
+ * mirror the sim's TargetRef (sim/actions.ts), so a TargetRef can be passed as it is: 'building' and 'strip'
+ * ids are BuildingView/StripView ids, 'scatter' a world scatter id (tree, rock), 'item' a WorldPropView id,
+ * 'person'/'animal' draw-item ids. Other kinds ('self', 'ground', 'parcel', …) are ignored.
+ */
+export interface HoverTarget {
+  kind: 'building' | 'strip' | 'scatter' | 'item' | 'person' | 'animal' | (string & {});
+  id?: number;
+}
 
 export interface GameRenderer {
   readonly domElement: HTMLCanvasElement;
@@ -83,6 +105,14 @@ export interface GameRenderer {
   // ---- queries ----
   screenToGround(x: number, y: number): GroundPoint | null;
   pick(x: number, y: number): PickResult;
+
+  // ---- clarity pass (optional) ----
+  /**
+   * Outline what the cursor is on: a glowing frame round a building's footprint, a strip's border, a ring
+   * round a tree/rock/pile; a person gets the selection ring and an always-on nameplate. null clears it.
+   * Cheap to call every frame (rebuilds only when the target changes).
+   */
+  setHover?(target: HoverTarget | null): void;
 
   // ---- lifecycle ----
   setQuality(q: QualityLevel): void;

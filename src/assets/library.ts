@@ -17,7 +17,7 @@ import {
 } from './core/materials';
 import { generateBuilding, normalizeRequest, requestKey, type BuiltAnim, type BuiltBuilding } from './buildings/index';
 import { buildFlagGeometry } from './buildings/flags';
-import { buildProp } from './props/props';
+import { PILE_KINDS, buildProp } from './props/props';
 import { createVegetationKits, type VegetationKits } from './vegetation/index';
 import { createCropKits, type CropKits } from './crops';
 import { createProjectileLayer } from './layers/projectiles';
@@ -224,17 +224,50 @@ export function createAssetLibrary(): MillenniaAssetLibrary {
     return asset;
   }
 
-  function prop(kind: PropKind, seed = 0): THREE.Object3D {
+  function propEntry(kind: PropKind, seed: number, size: number) {
     const bucket = ((seed | 0) % 4 + 4) % 4;
-    const key = `${kind}|${bucket}`;
+    const s = PILE_KINDS.has(kind) ? Math.max(0, Math.min(8, Math.round(size))) : 0;
+    const key = `${kind}|${bucket}|${s}`;
     let p = propCache.get(key);
     if (!p) {
-      const { b, meta } = buildProp(kind, bucket + 1);
+      const { b, meta } = buildProp(kind, bucket + 1, 0, s);
       const geos: (THREE.BufferGeometry | null)[] = [];
       for (let m = 0; m < 5; m++) geos.push(b.toGeometry({ mat: m as 0, surf: true, sway: m === Mat.Cloth, aoHeight: 0.35, aoStrength: 0.2 }));
       p = { geos, emitters: meta.emitters };
       propCache.set(key, p);
     }
+    return p;
+  }
+
+  const propKitCache = new Map<string, InstancedKit[]>();
+  function propKits(kind: PropKind, seed = 0, size = 0): readonly InstancedKit[] {
+    const bucket = ((seed | 0) % 4 + 4) % 4;
+    const s = PILE_KINDS.has(kind) ? Math.max(0, Math.min(8, Math.round(size))) : 0;
+    const key = `${kind}|${bucket}|${s}`;
+    let kits = propKitCache.get(key);
+    if (!kits) {
+      const p = propEntry(kind, seed, s);
+      kits = [];
+      p.geos.forEach((g, ch) => {
+        if (!g) return;
+        if (!g.boundingSphere) g.computeBoundingSphere();
+        if (!g.boundingBox) g.computeBoundingBox();
+        kits!.push({
+          geometry: g,
+          material: ch === Mat.Opaque ? mats.opaque : materialFor(ch, false),
+          depthMaterial: ch === Mat.Cloth ? mats.clothDepth : undefined,
+          radius: g.boundingSphere!.radius + g.boundingSphere!.center.length(),
+          triangles: g.getAttribute('position').count / 3,
+          height: g.boundingBox!.max.y,
+        });
+      });
+      propKitCache.set(key, kits);
+    }
+    return kits;
+  }
+
+  function prop(kind: PropKind, seed = 0, size = 0): THREE.Object3D {
+    const p = propEntry(kind, seed, size);
     const group = new THREE.Group();
     group.name = `prop:${kind}`;
     p.geos.forEach((g, ch) => {
@@ -276,6 +309,7 @@ export function createAssetLibrary(): MillenniaAssetLibrary {
       return cropKits.get(kind, stage);
     },
     prop,
+    propKits,
     createCharacterLayer(): CharacterLayer { return createCharacterLayer(palette); },
     createAnimalLayer(): AnimalLayer { return createAnimalLayer(palette); },
     createProjectileLayer(): ProjectileLayer { return createProjectileLayer(mats.opaque); },
@@ -292,6 +326,7 @@ export function createAssetLibrary(): MillenniaAssetLibrary {
       flagGeoCache.clear();
       for (const p of propCache.values()) for (const g of p.geos) g?.dispose();
       propCache.clear();
+      propKitCache.clear();
       vegKits?.dispose();
       cropKits?.dispose();
       mats.opaque.dispose(); mats.opaqueDS.dispose(); mats.glow.dispose(); mats.cloth.dispose();
