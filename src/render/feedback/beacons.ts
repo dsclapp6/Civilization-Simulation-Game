@@ -10,7 +10,7 @@ import type { WorldMarker } from '../../core/view';
 
 const MAX = 12;
 /** Pillar height (m) and width at the base for the primary and the secondary markers; least width on screen (px). */
-const PRIMARY_H = 46, PRIMARY_W = 2.6, PRIMARY_PX = 16;
+const PRIMARY_H = 46, PRIMARY_W = 2.6, PRIMARY_PX = 12;
 const SECONDARY_H = 9, SECONDARY_W = 0.9, SECONDARY_PX = 5;
 /** The beacon is gone when the player stands within ARRIVE m, and back by ARRIVE_FULL m. */
 const ARRIVE = 2.5, ARRIVE_FULL = 7;
@@ -226,7 +226,7 @@ export class BeaconLayer {
         this.c.setHex(mk.color);
         // shaft
         this.sBase.setXYZ(n, mk.x, ground + (isP ? 0 : lift), mk.z);
-        this.sShape.setXYZW(n, isP ? PRIMARY_H + Math.min(40, camD * 0.06) : SECONDARY_H, isP ? PRIMARY_W : SECONDARY_W, alpha, isP ? PRIMARY_PX : SECONDARY_PX);
+        this.sShape.setXYZW(n, isP ? PRIMARY_H + Math.min(160, camD * 0.08) : SECONDARY_H, isP ? PRIMARY_W : SECONDARY_W, alpha, isP ? PRIMARY_PX : SECONDARY_PX);
         this.sColor.setXYZ(n, this.c.r, this.c.g, this.c.b);
         // ground ring (people markers float over the head: no ring)
         const ringR = isP ? 2.4 + 0.15 * Math.sin(this.time * 2.2) : 1.1;

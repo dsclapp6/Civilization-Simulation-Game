@@ -519,8 +519,9 @@ float mlAA = 0.0;
 
   /** Hide (or restore) a strip's cuttable plants behind the drawn boundary. */
   private applyCut(g: StripGeom): void {
-    if (!g.cut) return;
-    const at = g.task && CUTTING.has(g.task) ? g.shown * g.length : 0;
+    // outside a reap/mow the crop rebuild decides what stands (a finished harvest must not grow back)
+    if (!g.cut || !g.task || !CUTTING.has(g.task)) return;
+    const at = g.shown * g.length;
     if (Math.abs(at - g.cutAt) < 1e-3) return;
     g.cutAt = at;
     const touched = new Map<THREE.InstancedMesh, [number, number]>();

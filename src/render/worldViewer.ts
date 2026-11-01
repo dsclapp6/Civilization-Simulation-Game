@@ -333,6 +333,27 @@ const CLARITY_PRESETS: Record<string, PresetDef> = {
     season: 1, day: 9, time: 0.62, weather: 'clear',
     camera: (c) => { const s = workScene(c); return stripView(c, s.a, s.front, 36, 15, 24, 0, 4); },
   },
+  /** Mowing a grass strip: the mown part pale with the hay raked into windrows, hay cocks set up behind the mower. */
+  mow: {
+    season: 1, day: 4, time: 0.6, weather: 'clear',
+    camera: (c) => {
+      const { a, b } = workStrips(c);
+      const wA = 0.52;
+      c.v.setStrip(a.id, { state: 'fallow', crop: 'fallow', growth: 0, task: 'mow', work: wA });
+      if (b) c.v.setStrip(b.id, { state: 'fallow', crop: 'fallow', growth: 0 });
+      const yaw = Math.atan2(a.ax, a.az);
+      // hay cocks set up behind the mower, the nearest a few metres back
+      for (let s = wA * a.length - 7, k = 0; s > 4; s -= 9, k++) {
+        const p = a.at(k % 2 ? 0.32 : 0.68, s / a.length);
+        c.v.addProp({ kind: 'hay_cock', x: p.x, z: p.z, rot: s, scale: 0.9 + (k % 3) * 0.06 });
+      }
+      const front = a.at(0.5, wA);
+      c.v.teleportAvatar(front.x - a.ax * 0.8 + a.bx * 1.5, front.z - a.az * 0.8 + a.bz * 1.5, yaw);
+      c.v.holdAnim = 'work_scythe';
+      c.v.avatar.mainHand = 'scythe';
+      return stripView(c, a, front, 15, 4.5, 11, 0.6, -5);
+    },
+  },
   /** A felled tree: the stump with fresh chips and the trunk sawn into logs; a level-up rises. */
   felled: {
     season: 2, day: 2, time: 0.45, weather: 'clear',

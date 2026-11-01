@@ -92,13 +92,13 @@ export function isSpeech(label: string): boolean {
 interface Cand { it: CharacterDrawItem; d: number; pri: number; text: boolean; sub: boolean; focus: boolean; speech: boolean; sx: number; sy: number }
 
 /** One plate to show: whose, which form, and a lift in px (a spoken line clearing a plate in front). */
-export interface PlateLayout { it: CharacterDrawItem; mode: 'full' | 'name' | 'mark'; focus: boolean; speech: boolean; d: number; dy: number }
+export interface PlateLayout { it: CharacterDrawItem; mode: 'full' | 'name' | 'mark'; focus: boolean; speech: boolean; d: number; dy: number; dx: number }
 
 /** Plate choice for one frame (pure; exported for tests). `project` returns CSS px or null when off screen. */
 export function layoutPlates(
   chars: readonly CharacterDrawItem[], cam: { x: number; y: number; z: number }, focusId: number,
   project: (x: number, y: number, z: number) => { x: number; y: number } | null,
-  occluded: ((it: CharacterDrawItem, h: number) => boolean) | null, max = MAX_PLATES,
+  occluded: ((it: CharacterDrawItem, h: number) => boolean) | null, max = MAX_PLATES, screenW = Infinity,
 ): PlateLayout[] {
   const cands: Cand[] = [];
   for (const it of chars) {
@@ -149,7 +149,9 @@ export function layoutPlates(
       for (const mode of tries) {
         const w = mode === 'mark' ? 18 * k : Math.max(nameW, mode === 'full' ? subW : 0);
         const hh = mode === 'mark' ? markH : markH + (15 * lines + (mode === 'full' ? 13 : 0)) * k + 4;
-        const x0 = c.sx - w / 2, x1 = c.sx + w / 2;
+        // keep the plate on screen (someone at the edge of the view keeps a whole plate)
+        const dx = c.sx - w / 2 < 4 ? 4 - (c.sx - w / 2) : c.sx + w / 2 > screenW - 4 ? screenW - 4 - (c.sx + w / 2) : 0;
+        const x0 = c.sx + dx - w / 2, x1 = c.sx + dx + w / 2;
         let y1 = c.sy, dy = 0;
         if (!c.focus && hit(x0, y1 - hh, x1, y1)) {
           // a spoken line steps up over what is in the way (twice at most); names give way instead
@@ -159,7 +161,7 @@ export function layoutPlates(
           dy = y1 - c.sy;
         }
         boxes.push({ x0, y0: y1 - hh, x1, y1 });
-        out.push({ it, mode, focus: c.focus, speech: c.speech, d: c.d, dy });
+        out.push({ it, mode, focus: c.focus, speech: c.speech, d: c.d, dy, dx });
         placed = true;
         break;
       }
@@ -235,7 +237,7 @@ export class Nameplates {
       this.v.set(x, y, z).project(camera);
       if (this.v.z > 1 || this.v.z < -1 || Math.abs(this.v.x) > 1.1 || Math.abs(this.v.y) > 1.1) return null;
       return { x: (this.v.x * 0.5 + 0.5) * width, y: (-this.v.y * 0.5 + 0.5) * height };
-    }, occ ? cached : null) : [];
+    }, occ ? cached : null, MAX_PLATES, width) : [];
     this.shown = layout.length;
     for (let i = 0; i < this.plates.length; i++) {
       const p = this.plates[i];
@@ -259,7 +261,7 @@ export class Nameplates {
       const tone = TONE_COLORS[it.labelTone ?? 'stranger'] ?? TONE_COLORS.stranger;
       if (p.tone !== tone) { p.obj.element.style.setProperty('--tone', tone); p.tone = tone; }
       const k = plateScale(l.d, l.focus).toFixed(2);
-      const tf = l.dy ? `translateY(${Math.round(l.dy)}px) scale(${k})` : `scale(${k})`;
+      const tf = l.dy || l.dx ? `translate(${Math.round(l.dx)}px, ${Math.round(l.dy)}px) scale(${k})` : `scale(${k})`;
       if (p.scale !== tf) { p.inner.style.transform = tf; p.scale = tf; }
       // fade in over the last few metres of the range
       const range = l.focus ? FOCUS_RANGE : l.mode === 'mark' ? MARK_RANGE : Math.max(it.labelRange ?? DEFAULT_LABEL_RANGE, l.speech ? SPEECH_RANGE : 0);
