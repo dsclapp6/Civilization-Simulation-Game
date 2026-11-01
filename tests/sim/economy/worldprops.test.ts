@@ -15,6 +15,11 @@ function plantTree(sim: ReturnType<typeof econSim>['sim'], x: number, z: number)
   return tree;
 }
 
+/** A long wait is not cut short by the player's death: the run goes on with the next of kin. */
+function carryOn(sim: ReturnType<typeof econSim>['sim']): void {
+  sim.events.on('playerDied', (e) => { if (e.eligible.length) sim.switchTo(e.eligible[0]); });
+}
+
 describe('world props', () => {
   it('sizes a woodpile and a grain sack pile by what the household stores, near the focus only', () => {
     const { sim } = econSim({ seed: 'props' });
@@ -133,4 +138,82 @@ describe('world props', () => {
     expect(logs()).toBe(0);
     expect(stumps()).toBe(1);
   });
+
+  it('cocks the hay on a meadow as it is mown, for a day or two, and then the meadow is bare again', () => {
+    const { sim } = econSim({ seed: 'hay' });
+    carryOn(sim);
+    // high summer: the hay is cut (the mock world has pastures only: one becomes a meadow)
+    const yr = Math.floor(sim.absDay / 16);
+    const summer = (sim.absDay < yr * 16 + 5.3 ? yr : yr + 1) * 16 + 5.3;
+    sim.state.clock.absDay = summer;
+    sim.state.clock.firedHour = Math.floor(summer * 24);
+    const { player } = makeFarmer(sim, { age: 16, strips: 1, role: 1, strength: 12 });
+    const parcel = sim.world.parcels.find((q) => q.use === 'pasture')!;
+    parcel.use = 'meadow';
+    let cx = 0, cz = 0;
+    for (const p of parcel.poly) { cx += p.x / parcel.poly.length; cz += p.z / parcel.poly.length; }
+    sim.view.setSource('focus', () => ({ x: cx, z: cz }));
+    bagAdd(player.inventory, 'scythe#1', 1);
+    const cocks = (): { x: number; z: number }[] => sim.view.worldProps!().filter((p) => p.kind === 'hay_cock' && p.id >= 2e9 && p.id < 3e9);
+    expect(cocks().length).toBe(0);
+    const v0 = sim.view.worldPropsVersion!();
+    const o = find(optionsFor(sim, { kind: 'parcel', id: parcel.id }), 'farm.mow')!;
+    expect(o?.enabled, o?.reason).toBe(true);
+    expect(perform(sim, o).ok).toBe(true);
+    // the bout is seen at once, not at the next hour
+    expect(sim.view.worldPropsVersion!()).toBeGreaterThan(v0);
+    const first = cocks();
+    expect(first.length).toBeGreaterThan(0);
+    const xs = parcel.poly.map((q) => q.x), zs = parcel.poly.map((q) => q.z);
+    for (const c of first) {
+      expect(c.x).toBeGreaterThanOrEqual(Math.min(...xs) - 0.01);
+      expect(c.x).toBeLessThanOrEqual(Math.max(...xs) + 0.01);
+      expect(c.z).toBeGreaterThanOrEqual(Math.min(...zs) - 0.01);
+      expect(c.z).toBeLessThanOrEqual(Math.max(...zs) + 0.01);
+    }
+    // more mowing, more cocks (never more than a meadow can hold)
+    const o2 = find(optionsFor(sim, { kind: 'parcel', id: parcel.id }), 'farm.mow')!;
+    perform(sim, o2, 3);
+    expect(cocks().length).toBeGreaterThanOrEqual(first.length);
+    expect(cocks().length).toBeLessThanOrEqual(14);
+    // the first ones keep their places as more are added
+    for (const c of first) expect(cocks().some((d) => Math.abs(d.x - c.x) < 1e-9 && Math.abs(d.z - c.z) < 1e-9)).toBe(true);
+    sim.advanceHours(24 * 3);
+    expect(cocks().length).toBe(0);
+  });
+
+  it('leaves stooks for about a day on a strip the village harvested while it was watched, then carries them in', () => {
+    const { sim } = econSim({ seed: 'harvest' });
+    carryOn(sim);
+    const { player } = makeFarmer(sim, { age: 15, strips: 2, role: 1, strength: 12 });
+    const village = sim.world.settlements.find((s) => s.id === player.settlement)!;
+    sim.view.setSource('focus', () => ({ x: village.x, z: village.z }));
+    const own = new Set(village.strips.filter((id) => sim.state.strips.get(id)!.holder === player.household));
+    const stooks = (): Map<number, number> => {
+      const m = new Map<number, number>();
+      for (const p of sim.view.worldProps!()) if (p.kind === 'stook' && p.id >= 1e9 && p.id < 2e9) { const id = Math.floor((p.id - 1e9) / 64); m.set(id, (m.get(id) ?? 0) + 1); }
+      return m;
+    };
+    const appeared = new Map<number, number>();
+    const vanished = new Map<number, number>();
+    const start = Math.ceil(sim.absDay / 16) * 16;
+    sim.advanceHours(Math.round((start - sim.absDay) * 24));
+    for (let h = 0; h < 24 * 16; h++) {
+      sim.advanceHours(1);
+      const now = stooks();
+      for (const id of now.keys()) { if (!appeared.has(id)) appeared.set(id, sim.absDay); vanished.delete(id); }
+      for (const id of appeared.keys()) if (!now.has(id) && !vanished.has(id)) vanished.set(id, sim.absDay);
+    }
+    const theirs = [...appeared.keys()].filter((id) => !own.has(id));
+    expect(theirs.length, 'stooks were seen on strips the village harvested').toBeGreaterThan(0);
+    let gone = 0;
+    for (const id of theirs) {
+      const t0 = appeared.get(id)!, t1 = vanished.get(id);
+      if (t1 === undefined) continue; // still standing when the year ended: the harvest was late
+      gone++;
+      expect(t1 - t0).toBeGreaterThan(0.5); // about three-quarters of a day
+      expect(t1 - t0).toBeLessThan(1);
+    }
+    expect(gone).toBeGreaterThan(0);
+  }, 90000);
 });

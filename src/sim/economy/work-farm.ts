@@ -662,6 +662,7 @@ function mowBout(E: Econ, p: Person, d: MowData, f: number): ActionOutcome {
   const cut = rec && rec[0] === E.yearIndex ? rec[1] : 0;
   E.save.ww[key] = [E.yearIndex, round2(cut + n)];
   E.notes.mown.set(d.parcel, { bales: round2(cut + n), day: E.day });
+  E.notes.rev++;
   E.touchSave();
   boutDone(E, p, { skill: 'farming', xp: 7, heavy: 0.9, bouts: f });
   wearOut(E, p, scythe, 0.015 * f, 'farming');

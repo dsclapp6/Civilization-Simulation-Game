@@ -15,6 +15,8 @@ export interface FelledNote {
 }
 
 export interface FeedNotes {
+  /** Counts the notes written, so the prop feed notices a new one inside the hour it last looked. */
+  rev: number;
   felled: FelledNote[];
   /** Meadow parcel → bales cut this year and the day of the last cutting. */
   mown: Map<number, { bales: number; day: number }>;
@@ -23,5 +25,5 @@ export interface FeedNotes {
 }
 
 export function newFeedNotes(): FeedNotes {
-  return { felled: [], mown: new Map(), dug: new Map() };
+  return { rev: 0, felled: [], mown: new Map(), dug: new Map() };
 }

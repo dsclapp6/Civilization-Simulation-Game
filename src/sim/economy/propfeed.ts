@@ -94,7 +94,7 @@ export class PropFeed {
     const now = E.sim.absDay;
     const key = [
       Math.floor(now * 24), E.farmRev, st.stripRevision, st.householdRevision, st.buildingRevision, E.sim.view.felledVersion(),
-      Math.round(focus.x / 40), Math.round(focus.z / 40), E.notes.felled.length,
+      Math.round(focus.x / 40), Math.round(focus.z / 40), E.notes.rev, E.notes.felled.length,
     ].join(':');
     if (key === this.lastKey) return;
     this.lastKey = key;

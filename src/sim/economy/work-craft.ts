@@ -486,7 +486,7 @@ function woodWork(E: Econ, p: Person, d: WoodData): ActionOutcome {
     gains.push({ label: 'Timber', amount: timber, ref: 'timber' }, { label: 'Firewood', amount: wood, ref: 'firewood' });
     if (d.kind === 'apple') { const fruit = Math.max(2, stoch(E, 8 * d.scale)); giveOutput(E, p, 'vegetables', fruit); gains.push({ label: 'Apples', amount: fruit, ref: 'vegetables' }); }
     E.sim.view.markFelled(d.scatter);
-    if (it) E.notes.felled.push({ id: d.scatter, x: it.x, z: it.z, scale: it.scale, logs: timber, day: E.day });
+    if (it) { E.notes.felled.push({ id: d.scatter, x: it.x, z: it.z, scale: it.scale, logs: timber, day: E.day }); E.notes.rev++; }
     boutDone(E, p, { skill: 'woodcutting', xp: 9, heavy: 1, bouts: 3 });
     wearOut(E, p, axe, 0.02 * 3, 'woodcutting');
     if (illegal && E.rng('woodward').next() < Math.max(0.1, 0.4 - perkSum(p, 'woodcutting', 'fine') * 0.4)) {
@@ -534,7 +534,7 @@ function digBout(E: Econ, p: Person, d: DigData): ActionOutcome {
     if (pay > 0) gains.push({ label: 'Wages', amount: round2(pay), ref: 'money' });
   }
   giveOutput(E, p, d.what === 'stone' ? 'stone' : 'iron_ore', n);
-  if (d.what === 'stone') { const was = E.notes.dug.get(b.id); E.notes.dug.set(b.id, { blocks: (was && E.day - was.day < 2 ? was.blocks : 0) + n, day: E.day }); }
+  if (d.what === 'stone') { const was = E.notes.dug.get(b.id); E.notes.dug.set(b.id, { blocks: (was && E.day - was.day < 2 ? was.blocks : 0) + n, day: E.day }); E.notes.rev++; }
   boutDone(E, p, { skill: d.what === 'stone' ? 'mining' : 'mining', xp: 8, heavy: 1, bouts: 1 });
   if (d.what === 'stone') giveXpSkill(E, p, 'masonry', 3);
   wearOut(E, p, pick, 0.025, 'mining');
