@@ -82,4 +82,16 @@ export interface ObjectivesApi {
   daySummary(day?: number): DaySummary | null;
   /** Put a marker on a person (the people list's "Find"), or clear it with 0. */
   trackPerson(person: PersonId): void;
+
+  // ---- additive (objectives module): optional, so UI fakes need not implement them ----
+  /** Put a marker on a place (the journal's Places "Find"), or clear it with null. */
+  trackPlace?(target: ObjectiveTarget | null): void;
+  /** The person or place currently marked by "Find", if any. */
+  found?(): { person: PersonId; place: ObjectiveTarget | null };
+  /** Places worth knowing, nearest first: home, the family's strips, the church, the market, the smithy, the workplace… */
+  places?(): ObjectiveTarget[];
+  /** A number that changes whenever the objectives (or their progress) change: cheap change detection for the HUD and the journal. */
+  version?(): number;
+  /** The scene-setting line for the first minutes: "Spring. You wake in your father's cottage in Dromore; the barley must go in." */
+  intro?(): string;
 }
