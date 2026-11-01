@@ -10,9 +10,12 @@ import type { ObjectiveTarget } from './types';
 const COLORS = { objective: 0xffd24a, home: 0x6fbf73, work: 0x6fa8dc, person: 0xe08cff, place: 0xf2f2f2 } as const;
 const ID = { objective: 9001, home: 9002, work: 9003, person: 9004, place: 9005 } as const;
 
-/** Anything the zone offers to mark people (Builder 1's hook, see the README: absent in headless runs). */
+/** What the zone offers to mark people (Builder 1's hooks, see the README: both absent in headless runs). */
 interface MarkingZone {
-  setQuestGivers?(ids: readonly PersonId[], tracked?: PersonId): void;
+  /** The people who have something for the player: their nameplate carries the quest mark. */
+  setQuestGivers?(ids: readonly PersonId[]): void;
+  /** The person the player asked to find (journal "Find"): their nameplate carries the track mark. 0 clears. */
+  setTrackedPerson?(id: PersonId): void;
 }
 
 export interface MarkerHost {
@@ -49,8 +52,9 @@ export function installMarkers(O: Obj): MarkerHost {
   let workAt: { x: number; z: number; label: string } | null = null;
   let workKey = '';
   let givers = '';
+  let sentTracked = 0;
 
-  const place = (m: WorldMarker, x: number, z: number, label: string, y?: number): void => {
+  const place =(m: WorldMarker, x: number, z: number, label: string, y?: number): void => {
     m.x = x; m.z = z; m.label = label;
     if (y !== undefined) m.y = y; else delete m.y;
   };
@@ -108,10 +112,18 @@ export function installMarkers(O: Obj): MarkerHost {
         if (cur?.target?.kind === 'person' && (cur.m.k === 'act' || cur.m.k === 'talk')) ids.add(cur.target.id);
       }
       const list = [...ids].sort((a, b) => a - b);
-      const key = `${list.join(',')}|${O.save.foundPerson}`;
+      const key = list.join(',');
       if (key !== givers) {
         givers = key;
-        zone.setQuestGivers(list, O.save.foundPerson || undefined);
+        zone.setQuestGivers(list);
+      }
+    }
+    // the person asked for with "Find" (the zone gives them the track mark)
+    if (zone?.setTrackedPerson) {
+      const fp = O.save.foundPerson;
+      if (fp !== sentTracked) {
+        sentTracked = fp;
+        zone.setTrackedPerson(fp);
       }
     }
     // a person target walks about: keep the saved copy of its position near the truth
@@ -126,7 +138,7 @@ export function installMarkers(O: Obj): MarkerHost {
     }
   };
 
-  return { source, refresh, invalidate: () => { homeKey = ''; workKey = ''; givers = ''; } };
+  return { source, refresh, invalidate: () => { homeKey = ''; workKey = ''; givers = ''; sentTracked = -1; } };
 }
 
 export { personTarget };

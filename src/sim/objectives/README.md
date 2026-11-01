@@ -19,7 +19,7 @@ npx vitest run tests/sim/objectives         # the module's tests (about 80)
 | `job` | `work.ts` | dawn, workdays: the duty of a post (`economy.employment`): bench for apprentices and journeymen, the demesne for day labour, the flock for herd/shepherd, the butts for archers, else report to the employer; a serf's week-work (`obligations`) | go there, then N bouts counted at the place |
 | `goal` | `goals.ts` | always a few (≤ 3): choose a path (at 14: age countdown, then `manage.career`), join the archers (`entryTests`: STR, Archery, a bow, the oath), win an apprenticeship (`jobs`: premium, master, indenture), save for a good tool (price from `economy.price`), find someone to love (`matchCandidates`, `courtship`) | state-based: a stat, a skill, a purse, a courtship, a career change |
 | `request` | `requests.ts` | every `request` of the happenings; mirrors the record (hear → accept → the type's work → hand over) and rebuilds its steps from it | |
-| `story` | `story.ts` | a dear one gravely ill (visit, pray), the wedding feast (church, the morning after, a window), a child born (home), the lord's levy call (`military.service().call`) | |
+| `story` | `story.ts` | a dear one gravely ill (spouse, parent, child or the head of the house, once a fatal sickness has taken a quarter of their strength: visit and pray; a baby is seen at home), the wedding feast (church, the morning after, a window), a child born (home), the lord's levy call (`military.service().call`) | |
 
 Auto-tracking (`core.retrack`): the player's pick (`track(id)`) while it lives, else story > tutorial > job >
 chore > request > career > goal, then earliest due. `suggestions()` (`suggest.ts`): the tracked step, then hunger /
@@ -47,13 +47,14 @@ passes, and `dayEnd { day }` is emitted (only for a day with something in it, on
 * `sim.view.setSource('worldMarkers')`: the tracked step's target (primary, `kind: 'objective'`, people live via
   `zone.agent` else `zone.whereabouts`), home, work (the employment's building), a person asked for with
   `trackPerson`, a place with `trackPlace`. Ids 9001–9005; the array is reused between frames.
-* Quest marks (Builder 1's hook, guarded): `zone.setQuestGivers?.(ids, trackedPerson?)` is called whenever the set of
-  people with business for the player changes (request askers, the person a talk step needs, active `giver`s of a
-  talk step) — `ids` sorted, `trackedPerson` the person marked with "Find" (0/undefined: none).
+* Nameplate marks (the zone's hooks, both optional and guarded): `zone.setQuestGivers?.(ids)` is called whenever the
+  set of people with business for the player changes (request askers, the person a talk step needs, the target of an
+  act step), `ids` sorted; `zone.setTrackedPerson?.(id)` whenever the person asked for with "Find" changes (0 clears).
 * Additive API (`types.ts`, all optional): `trackPlace`, `found`, `places` (home, strips, church, market, smithy,
   alehouse, mill, butts, well, workplace…), `version` (changes whenever the list changes: cheap HUD refresh).
 * Events: `objective { phase: added|progress|done|failed|expired, id, title }`, `dayEnd { day }`. Notices
-  (`notify`): the head's call at dawn (`quest`), the head's reaction when a chore is done (`social`), a fine (`loss`).
+  (`notify`): the head's call at dawn (`quest`), the head's reaction when a chore is done (`social`), the coin they pay
+  for it (`gain`), a fine (`loss`).
 
 ## Saved state and determinism
 

@@ -184,20 +184,24 @@ export interface FakeZone {
   /** Where the agents stand (people not listed are not in the zone). */
   agents: Map<number, { x: number; z: number }>;
   /** What the objectives told the zone about quest givers, each call. */
-  givers: Array<{ ids: number[]; tracked: number | undefined }>;
+  givers: Array<{ ids: number[] }>;
+  /** Whom the objectives asked the zone to mark as the person being looked for, each call (0 clears). */
+  tracked: number[];
 }
 
 /** Just enough of the detail zone for the objectives: agents, whereabouts, doors and the quest-giver hook. */
 export function fakeZone(): FakeZone {
   const agents = new Map<number, { x: number; z: number }>();
   const givers: FakeZone['givers'] = [];
+  const tracked: number[] = [];
   const zone = {
     agent: (id: number) => { const a = agents.get(id); return a ? { personId: id, x: a.x, y: 0, z: a.z, yaw: 0 } : null; },
     whereabouts: () => ({ activity: 'home', settlement: 0, building: -1, indoors: false, x: 123, z: 456, label: '' }),
     nav: { doorOf: () => null },
-    setQuestGivers: (ids: readonly number[], tracked?: number) => { givers.push({ ids: [...ids], tracked }); },
+    setQuestGivers: (ids: readonly number[]) => { givers.push({ ids: [...ids] }); },
+    setTrackedPerson: (id: number) => { tracked.push(id); },
   } as unknown as Wave3Deps['zone'];
-  return { zone, agents, givers };
+  return { zone, agents, givers, tracked };
 }
 
 /** Runs the calendar to a given hour of a day (hooks fire as in play). */

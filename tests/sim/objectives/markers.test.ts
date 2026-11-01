@@ -109,16 +109,34 @@ describe('quest givers', () => {
     o.obj.poll(true);
     const now = z.givers[z.givers.length - 1];
     expect(now.ids).toContain(req.from);
-    // and the tracked person is passed along
-    o.obj.trackPerson(req.from);
-    expect(z.givers[z.givers.length - 1].tracked).toBe(req.from);
+    // the zone is told again only when the set changes
+    const calls = z.givers.length;
+    o.obj.poll(true);
+    o.obj.poll(true);
+    expect(z.givers.length).toBe(calls);
     void recOf;
   });
 
-  it('are quietly skipped when the zone has no such hook', () => {
+  it('"Find" is passed to the zone as the tracked person, once per change, and cleared with 0', () => {
+    const z = fakeZone();
+    const o = objSim({ seed: 's1', zone: z.zone });
+    const me = playerOf(o.sim);
+    const friend = o.sim.state.residentsOf(me.settlement).find((p) => p.id !== me.id && !p.death)!;
+    o.obj.trackPerson(friend.id);
+    expect(z.tracked[z.tracked.length - 1]).toBe(friend.id);
+    const n = z.tracked.length;
+    o.obj.poll(true);
+    o.obj.poll(true);
+    expect(z.tracked.length).toBe(n);
+    o.obj.trackPerson(0);
+    expect(z.tracked[z.tracked.length - 1]).toBe(0);
+  });
+
+  it('are quietly skipped when the zone has no such hooks', () => {
     const z = fakeZone();
     delete (z.zone as unknown as { setQuestGivers?: unknown }).setQuestGivers;
+    delete (z.zone as unknown as { setTrackedPerson?: unknown }).setTrackedPerson;
     const o = objSim({ seed: 's1', zone: z.zone });
-    expect(() => { o.obj.poll(true); playObjectives(o, ['tutorial'], 2); }).not.toThrow();
+    expect(() => { o.obj.poll(true); o.obj.trackPerson(1); playObjectives(o, ['tutorial'], 2); }).not.toThrow();
   });
 });
