@@ -18,7 +18,7 @@ import type { JournalTab } from '../core/requests';
 import { tabKeys } from '../core/tabkeys';
 import { bar, button, empty, tabs } from '../components/widgets';
 import { createWindow } from '../components/window';
-import type { Objective } from '../../sim/objectives/types';
+import type { Objective, ObjectiveTarget } from '../../sim/objectives/types';
 import type { PanelCtx, UiPanel } from '../app/panel';
 import { panelOf } from './base';
 
@@ -83,7 +83,7 @@ export function journalPanel(ctx: PanelCtx, start: JournalTab | undefined): UiPa
           state === 'now' && s.hint ? h('div.mu-jstep-hint', null, s.hint) : null,
           state === 'now' && frac !== null ? bar('gold', frac, { thin: true }).el : null,
           state !== 'done' && s.target ? h('div.mu-jstep-where', null, icon('pin', 12), `${s.target.label}, ${dist(s.target.x, s.target.z)}`,
-            h('button.mu-link', { type: 'button', onclick: () => find({ ...s.target! }) }, 'Show me')) : null));
+            h('button.mu-link', { type: 'button', onclick: () => showStep(o, state === 'now', s.target!) }, 'Show me')) : null));
     });
     const due = dueLine(o, ctx.sim.absDay);
     return h('div.mu-jdetail', null,
@@ -137,6 +137,21 @@ export function journalPanel(ctx: PanelCtx, start: JournalTab | undefined): UiPa
   };
 
   const stop = (): void => { stopFinding(game, ctx.pins); render(); };
+
+  /**
+   * "Show me" on a step of a task. The step a task is on is what its marker already points at once it is tracked, so for
+   * that one the task is tracked (or, if it already is, the player is told where the marker is); a later step is marked
+   * as a place.
+   */
+  const showStep = (o: Objective, current: boolean, t: ObjectiveTarget): void => {
+    if (current && o.state === 'active') {
+      if (!o.tracked) { api?.track(o.id); ctx.say('quest', `Now tracking: ${o.title}.`); }
+      else ctx.say('info', `${t.label}: ${dist(t.x, t.z)}. Look for the gold marker on the compass and the minimap.`);
+      render();
+      return;
+    }
+    find({ ...t });
+  };
 
   const findPerson = (r: PersonRow): void => {
     if (game.objectives) {

@@ -237,7 +237,7 @@ try {
       for (const id of await ui(() => window.__ui.openPanels())) await ui((x) => window.__ui.closePanel(x), id);
       await page.waitForTimeout(300);
     } else console.log('click: nobody to click on screen');
-    await page.mouse.move(W / 2, 60);
+    await page.mouse.move(150, 300);
     await page.evaluate((i) => {
       const s = window.__game.session; const p = s.services.player; p.cancelGoTo?.(); p.placeAt(i.x, i.z, i.yaw);
       const r = s.renderer; r.orbit(Math.atan2(Math.sin(i.yaw - r.getCameraYaw()), Math.cos(i.yaw - r.getCameraYaw())), 0);
@@ -321,7 +321,7 @@ try {
       const cur = await page.evaluate(() => document.getElementById('viewport').style.cursor);
       console.log(`   cursor: ${cur ? cur.slice(0, 40) + '…' : '(arrow)'}`);
       await shot(`clarity-hover-${kind}`, { settle: false });
-      await page.mouse.move(W / 2, 60);
+      await page.mouse.move(150, 300);
       await frames(3);
       if (kind === 'person') {
         // back to where the other shots were framed
