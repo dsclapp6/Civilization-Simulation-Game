@@ -4,7 +4,7 @@
 import { dayPart, isHolyDay } from '../calendar';
 import type { ActionGain, ActionOption, ActionOutcome, ActionProvider, TargetRef } from '../actions';
 import type { SimContext } from '../context';
-import { gainSkill, skillOf, trainStat } from '../skills';
+import { TRAIN_SCALE, gainSkill, skillOf, trainStat } from '../skills';
 import type { Person, PersonId } from '../state';
 import type { Conversations } from './conversation';
 import type { SocialCore } from './core';
@@ -177,8 +177,8 @@ function wrestle(core: SocialCore, ctx: SimContext, actor: Person, option: Actio
   const pWin = clamp(0.5 + 0.035 * (actor.trained.str - other.trained.str) + 0.02 * (actor.trained.agi - other.trained.agi) + 0.01 * (skillOf(actor, 'melee') - skillOf(other, 'melee')), 0.1, 0.9);
   const win = core.rng().next() < pWin;
   const str0 = actor.trained.str, agi0 = actor.trained.agi;
-  trainStat(ctx, actor, 'str', win ? 0.07 : 0.05);
-  trainStat(ctx, actor, 'agi', 0.03);
+  trainStat(ctx, actor, 'str', (win ? 0.07 : 0.05) * TRAIN_SCALE);
+  trainStat(ctx, actor, 'agi', 0.03 * TRAIN_SCALE);
   const closeMatch = Math.abs(pWin - 0.5) < 0.15;
   core.opinion.adjust(other.id, actor.id, closeMatch ? 3 : 2, 'wrestled');
   const rec = core.store.talkRec(actor.id, other.id, core.day, true);
@@ -196,8 +196,8 @@ function play(core: SocialCore, ctx: SimContext, actor: Person, option: ActionOp
   const other = core.living(option.target.id);
   if (!other) return { ok: false };
   const agi0 = actor.trained.agi;
-  trainStat(ctx, actor, 'agi', 0.03);
-  trainStat(ctx, actor, 'end', 0.02);
+  trainStat(ctx, actor, 'agi', 0.03 * TRAIN_SCALE);
+  trainStat(ctx, actor, 'end', 0.02 * TRAIN_SCALE);
   for (const p of [actor, other]) {
     p.needs.mood = Math.round(Math.min(1, p.needs.mood + 0.05) * 100) / 100;
     core.state.touch(p);

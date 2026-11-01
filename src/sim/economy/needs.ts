@@ -27,10 +27,14 @@ export function needsFactor(p: Person): number {
   return f;
 }
 
-/** The cost of a work bout in food and strength; `heavy` is 0 (light) to 1 (ploughing, mining, felling). */
+/**
+ * The cost of a work bout in food and strength; `heavy` is 0 (light) to 1 (ploughing, mining, felling). A bout is half a
+ * game hour: on top of the hour's ordinary 0.026 hunger and 0.036 rest, heavy work costs about as much again (a hard day of
+ * twenty bouts leaves a well-fed player tired by evening, not collapsed).
+ */
 export function drainWork(E: Econ, p: Person, heavy: number): void {
-  p.needs.hunger = r2(clamp01(p.needs.hunger - 0.004 - 0.012 * heavy));
-  p.needs.rest = r2(clamp01(p.needs.rest - 0.006 - 0.02 * heavy));
+  p.needs.hunger = r2(clamp01(p.needs.hunger - 0.002 - 0.0055 * heavy));
+  p.needs.rest = r2(clamp01(p.needs.rest - 0.0025 - 0.009 * heavy));
   E.state.touch(p);
 }
 

@@ -6,7 +6,7 @@ import type { HeldItem } from '../core/view';
 import type { ActionOption, ActionOutcome, ActionProvider, TargetRef } from '../sim/actions';
 import type { SimContext } from '../sim/context';
 import type { Simulation } from '../sim/sim';
-import { gainSkill, skillOf, trainStat } from '../sim/skills';
+import { TRAIN_SCALE, XP_SCALE, gainSkill, skillOf, trainStat } from '../sim/skills';
 import { ageYears, fullName, type Person, type PersonId } from '../sim/state';
 import { weaponOfKey, rangedOfKey } from './weapons';
 import type { Services } from './services';
@@ -165,16 +165,16 @@ export function createCombatProvider(sv: Services): ActionProvider {
           return sv.assault(actor, option.target.id);
         }
         case 'pell': {
-          gainSkill(sim, me, 'melee', 9);
-          trainStat(sim, me, 'str', 0.011);
-          trainStat(sim, me, 'end', 0.007);
-          trainStat(sim, me, 'agi', 0.004);
+          gainSkill(sim, me, 'melee', 9 * XP_SCALE);
+          trainStat(sim, me, 'str', 0.011 * TRAIN_SCALE);
+          trainStat(sim, me, 'end', 0.007 * TRAIN_SCALE);
+          trainStat(sim, me, 'agi', 0.004 * TRAIN_SCALE);
           return { ok: true, message: 'You hammer the post until your arms burn.', gains: [{ label: 'Melee', ref: 'melee' }, { label: 'Strength', ref: 'str' }] };
         }
         case 'target': {
-          gainSkill(sim, me, 'archery', 10);
-          trainStat(sim, me, 'str', 0.009);
-          trainStat(sim, me, 'per', 0.007);
+          gainSkill(sim, me, 'archery', 10 * XP_SCALE);
+          trainStat(sim, me, 'str', 0.009 * TRAIN_SCALE);
+          trainStat(sim, me, 'per', 0.007 * TRAIN_SCALE);
           const inv = me.inventory;
           for (const k of Object.keys(inv)) if (k.startsWith('arrow') && inv[k] > 0 && sim.rng('combat').next() < 0.16) { inv[k] -= 1; if (inv[k] <= 0) delete inv[k]; break; }
           st.touch(me);
@@ -200,13 +200,13 @@ function spar(sv: Services, me: Person, q: Person): ActionOutcome {
   const power = (p: Person): number => p.trained.str * 0.35 + p.trained.agi * 0.45 + p.trained.end * 0.2 + skillOf(p, 'melee') * 1.1 + rng.range(-2.5, 2.5);
   const mine = power(me), theirs = power(q);
   const won = mine >= theirs;
-  gainSkill(sim, me, 'melee', won ? 7 : 8);
-  gainSkill(sim, q, 'melee', won ? 6 : 5);
-  trainStat(sim, me, 'agi', 0.007);
-  trainStat(sim, me, 'str', 0.006);
-  trainStat(sim, me, 'end', 0.006);
-  trainStat(sim, q, 'agi', 0.004);
-  trainStat(sim, q, 'str', 0.004);
+  gainSkill(sim, me, 'melee', (won ? 7 : 8) * XP_SCALE);
+  gainSkill(sim, q, 'melee', (won ? 6 : 5) * XP_SCALE);
+  trainStat(sim, me, 'agi', 0.007 * TRAIN_SCALE);
+  trainStat(sim, me, 'str', 0.006 * TRAIN_SCALE);
+  trainStat(sim, me, 'end', 0.006 * TRAIN_SCALE);
+  trainStat(sim, q, 'agi', 0.004 * TRAIN_SCALE);
+  trainStat(sim, q, 'str', 0.004 * TRAIN_SCALE);
   sv.social?.adjustOpinion(q.id, me.id, 1, 'sparred');
   const loser = won ? q : me;
   if (rng.next() < 0.22) {

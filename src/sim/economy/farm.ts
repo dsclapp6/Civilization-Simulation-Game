@@ -24,8 +24,11 @@ import { GOODS } from './data';
 import { addStock, marketBuy, postedPrice } from './market';
 
 export const TITHE = 0.1;
-/** Work units (bouts at speed 1) each strip task takes for a player; see work.ts. */
-export const TASK_BOUTS = { plough: 4, harrow: 2, sow: 2, weed: 3, reap: 4, bind: 3, carry: 2, thresh: 3, winnow: 2 } as const;
+/**
+ * Work units (bouts at speed 1, 12 s each) each strip task takes for a player; see work-farm.ts. A bout is about an hour of
+ * a labourer's work: reaping an ordinary strip is seven bouts (a minute and a half), ploughing it with a team about the same.
+ */
+export const TASK_BOUTS = { plough: 7, harrow: 3, sow: 4, weed: 5, reap: 7, bind: 5, carry: 3, thresh: 5, winnow: 3 } as const;
 export type StripTask = 'plough' | 'harrow' | 'sow' | 'weed' | 'reap' | 'bind' | 'carry';
 
 // ---------------------------------------------------------------------------------------------

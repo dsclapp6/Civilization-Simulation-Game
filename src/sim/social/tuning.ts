@@ -1,4 +1,5 @@
 // Every tunable number of the social system in one place (documented in docs/SOCIAL.md).
+import { DAY_SECONDS } from '../../core/time';
 
 /** Opinion scale (−100..100) and the thresholds other code reads. */
 export const OPINION = {
@@ -66,10 +67,10 @@ export const COURT = {
 };
 
 export const BARK = {
-  /** Minimum days between two barks of the same speaker (≈ 9 s at 1×). */
-  cooldownDays: 0.15,
-  /** Most barks allowed in one `windowDays` across everyone (≈ 3 s at 1×). */
-  windowDays: 0.05,
+  /** Minimum days between two barks of the same speaker (9 s at 1×). */
+  cooldownDays: 9 / DAY_SECONDS,
+  /** Most barks allowed in one `windowDays` across everyone (3 s at 1×). */
+  windowDays: 3 / DAY_SECONDS,
   windowMax: 3,
 };
 
