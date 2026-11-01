@@ -15,6 +15,7 @@ import { attachObligationEvents, obligationsDaily, obligationsOf } from './oblig
 import { addOwned, capacityOf, ownedQty, takeOwned, weightOf, canCarry } from './own';
 import { announcePerkChoices, choosePerk, openChoices } from './perks';
 import { initFresh, registerSystems } from './systems';
+import { PropFeed } from './propfeed';
 import { StripFeed } from './stripfeed';
 import { economyTopics } from './topics';
 import { craftProvider } from './work-craft';
@@ -65,6 +66,11 @@ export function installEconomy(sim: Simulation, deps: EconomyDeps): EconomyRunti
   sim.view.setSource('stripWork', () => stripFeed.list());
   sim.view.setSource('stripWorkVersion', () => stripFeed.version());
   offs.push(() => { sim.view.setSource('stripWork', undefined); sim.view.setSource('stripWorkVersion', undefined); });
+  // and its world props: stooks, hay cocks, woodpiles, sacks, stone, stumps and logs
+  const propFeed = new PropFeed(E);
+  sim.view.setSource('worldProps', () => propFeed.list());
+  sim.view.setSource('worldPropsVersion', () => propFeed.version());
+  offs.push(() => { sim.view.setSource('worldProps', undefined); sim.view.setSource('worldPropsVersion', undefined); });
 
   const noPerson: Result = { ok: false, reason: 'Nobody there' };
 

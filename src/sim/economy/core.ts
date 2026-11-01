@@ -2,6 +2,7 @@
 // static caches rebuilt from the world on install, and the small helpers every part uses (money,
 // ledger, notifications, deeds). Nothing here is hidden state: whatever influences the simulation
 // is either in the saved sections or a pure function of the world and the saved state.
+import { newFeedNotes, type FeedNotes } from './feednotes';
 import { DAYS_PER_YEAR } from '../../core/time';
 import { dist2 } from '../../core/math';
 import type { Rng } from '../../core/rng';
@@ -128,6 +129,8 @@ export interface TickPrices {
 }
 
 export class Econ {
+  /** What the player's work leaves lying about, drawn for a while and never saved (feednotes.ts). */
+  readonly notes: FeedNotes = newFeedNotes();
   readonly sim: Simulation;
   readonly state: GameState;
   readonly world: WorldModel;
