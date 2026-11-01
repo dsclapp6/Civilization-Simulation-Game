@@ -68,6 +68,8 @@ const WATER_KINDS = new Set<BuildingKind>(['watermill', 'fulling_mill', 'tannery
 const LOD_NEAR = 120;
 const LOD_MID = 400;
 const LOD_HYST = 1.15;
+/** Radius of the near list used by short raycasts (labels, camera boom). */
+const NEAR_R = 420;
 
 /** Rough proxy shape per kind: wall height, roof height factor, tower height (0 = none). */
 function proxyShape(kind: BuildingKind, level: number): { wall: number; roof: number; tower: number; stone: boolean } {
@@ -178,6 +180,9 @@ export class BuildingSystem {
   private readonly wantDetail = new Set<Entry>();
   private pending: ({ e: Entry; lod: 0 | 1 | 2 } | null)[] = [];
   private readonly detailedList: Entry[] = [];
+  /** Buildings within NEAR_R of the camera at the last evaluation (short rays: labels, camera boom, picks nearby). */
+  private readonly nearList: Entry[] = [];
+  private nearValid = false;
   private readonly evalPos = new THREE.Vector3(Infinity, 0, 0);
   private evalFrame = -100;
   private readonly batchRoot = new THREE.Group();
@@ -345,6 +350,7 @@ export class BuildingSystem {
       if (!seen.has(e.id)) { this.dropAsset(e); this.entries.delete(e.id); }
     }
     this.ordered = [...this.entries.values()];
+    this.nearValid = false;
     this.proxyDirty = true;
     this.proxyLaidOut = false;
   }
@@ -603,10 +609,13 @@ export class BuildingSystem {
     this.evalPos.copy(cp);
     this.evalFrame = this.frame;
     const cands: Entry[] = [];
+    this.nearList.length = 0;
     for (const e of this.ordered) {
       e.dist = Math.hypot(e.x - cp.x, e.y - cp.y, e.z - cp.z);
+      if (e.dist < NEAR_R) this.nearList.push(e);
       if (e.dist < s.detailDistance * (e.detailed ? 1.08 : 1)) cands.push(e);
     }
+    this.nearValid = true;
     cands.sort((a, b) => a.dist - b.dist);
     let used = 0;
     const wantDetail = this.wantDetail;
@@ -829,6 +838,40 @@ export class BuildingSystem {
     for (const e of this.ordered) this.showProxy(e, !(e.detailed && e.asset));
   }
 
+  /** The detailed model drawn for a building (placed in world space; hidden while batched), or null. */
+  assetObject(id: number): THREE.Object3D | null {
+    const e = this.entries.get(id);
+    return e?.asset ? e.asset.object : null;
+  }
+
+  /**
+   * Does a building stand between two points (labels over people)? Footprint boxes slightly shrunk (yards and
+   * eaves are not walls); a box holding either end is ignored — someone in a churchyard or a market stall is
+   * not hidden by the plot they stand in.
+   */
+  occludes(from: THREE.Vector3, to: THREE.Vector3): boolean {
+    const d = from.distanceTo(to);
+    if (d < 1e-3) return false;
+    const inv = this.rcInv, local = this.rcRay, box = this.rcBox, hit = this.rcHit, end = this.ocEnd;
+    const ray = this.ocRay.set(from, this.ocDir.subVectors(to, from).multiplyScalar(1 / d));
+    const near = this.nearValid && d + 60 + from.distanceTo(this.evalPos) < NEAR_R;
+    for (const e of near ? this.nearList : this.ordered) {
+      if (e.dist > d + 60) continue;
+      const def = BUILDINGS[e.kind];
+      const h = e.asset ? e.asset.height : proxyShape(e.kind, e.view.level).wall + 3;
+      inv.makeRotationY(e.rot).setPosition(e.x, e.y, e.z).invert();
+      local.copy(ray).applyMatrix4(inv);
+      box.min.set(-def.w * 0.42, 0, -def.d * 0.42);
+      box.max.set(def.w * 0.42, Math.max(1, h * 0.9), def.d * 0.42);
+      if (box.containsPoint(local.origin) || box.containsPoint(end.copy(to).applyMatrix4(inv))) continue;
+      if (local.intersectBox(box, hit) && hit.distanceTo(local.origin) < d - 0.4) return true;
+    }
+    return false;
+  }
+  private readonly ocRay = new THREE.Ray();
+  private readonly ocDir = new THREE.Vector3();
+  private readonly ocEnd = new THREE.Vector3();
+
   /** Ray vs building footprint boxes (cheap pick / camera collision). Returns nearest hit. */
   private readonly rcInv = new THREE.Matrix4();
   private readonly rcRay = new THREE.Ray();
@@ -839,7 +882,9 @@ export class BuildingSystem {
   raycast(ray: THREE.Ray, maxDist: number, pad = 0): { id: number; distance: number } | null {
     let best: { id: number; distance: number } | null = null;
     const inv = this.rcInv, local = this.rcRay, box = this.rcBox, hit = this.rcHit;
-    for (const e of this.ordered) {
+    // short rays from near the last evaluation point only need the buildings close by
+    const near = this.nearValid && maxDist + 60 + ray.origin.distanceTo(this.evalPos) < NEAR_R;
+    for (const e of near ? this.nearList : this.ordered) {
       if (e.dist > maxDist + 60) continue;
       const def = BUILDINGS[e.kind];
       const h = e.asset ? e.asset.height : proxyShape(e.kind, e.view.level).wall + 3;

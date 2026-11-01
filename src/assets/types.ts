@@ -142,6 +142,12 @@ export interface AssetLibrary {
   /** stage 0 sprout … 3 ripe. One instance = one plant clump (~0.5 m). */
   crop(kind: CropKind, stage: 0 | 1 | 2 | 3): InstancedKit;
   prop(kind: PropKind, seed?: number): THREE.Object3D;
+  /**
+   * Instancing kits for a prop, one per material channel it uses (opaque, cloth, glow…), shared and cached.
+   * `size` (1..8) grows piles — woodpile, sack_pile, stone_pile, logs, plank_pile; 0/omitted = the ordinary
+   * look. Used by the renderer's world-props layer (SimView.worldProps). Optional (clarity pass).
+   */
+  propKits?(kind: PropKind, seed?: number, size?: number): readonly InstancedKit[];
   createCharacterLayer(): CharacterLayer;
   createAnimalLayer(): AnimalLayer;
   createProjectileLayer(): ProjectileLayer;

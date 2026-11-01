@@ -11,14 +11,19 @@ export const PROP_KINDS: PropKind[] = [
   'market_goods', 'banner_pole', 'wayside_cross', 'gravestone', 'scarecrow', 'beehive', 'archery_target',
   'pell', 'campfire', 'cauldron', 'plough', 'harrow', 'boat', 'signpost', 'washing_line', 'dung_heap',
   'well_bucket', 'lantern_post',
+  'stook', 'sheaf', 'hay_cock', 'stump', 'logs',
 ];
+
+/** Kinds whose model grows with a pile size (WorldPropView.count, 1 = small … 8 = full). */
+export const PILE_KINDS: ReadonlySet<PropKind> = new Set<PropKind>(['woodpile', 'sack_pile', 'stone_pile', 'logs', 'plank_pile']);
 
 export interface PropMeta {
   /** Local-space emitter points for continuous FX (campfire smoke, etc.). */
   emitters: { kind: 'smoke' | 'fire' | 'sparks' | 'hearth_smoke'; pos: V3; rate: number }[];
 }
 
-type PropFn = (b: MeshBuilder, r: () => number, lod: 0 | 1 | 2, meta: PropMeta) => void;
+/** `size` is the pile size for PILE_KINDS (1..8), 0 = the kind's ordinary look. */
+type PropFn = (b: MeshBuilder, r: () => number, lod: 0 | 1 | 2, meta: PropMeta, size: number) => void;
 
 const WOOD = 0x7a5a3a, WOOD_D = 0x5a412b, WOOD_L = 0x9a7a52;
 
@@ -90,8 +95,126 @@ function post(b: MeshBuilder, x: number, z: number, h: number, w = 0.12, col = W
   b.box(x - w / 2, -0.4, z - w / 2, x + w / 2, h, z + w / 2, { side: col, top: shade(col, 1.1) });
 }
 
-// Stand-ins for the clarity-pass prop kinds until they get their own models (results of work).
-const STAND_IN: Partial<Record<PropKind, PropKind>> = { stook: 'haystack', sheaf: 'haystack', hay_cock: 'haystack', stump: 'woodpile', logs: 'woodpile' };
+// ---- results of work (clarity pass): sheaves, stooks, hay cocks, stumps, logs and growing piles ----
+const STRAW = 0xe2c87c, STRAW_BUTT = 0xd2ba84, EARS = 0xd0a95c, EARS_D = 0xb98f4c, BAND = 0x8f6e3e;
+const HAY = 0xbcae62, HAY_L = 0xcabc72, HAY_D = 0x9f9452;
+const FRESH = 0xdcc294, HEART = 0xc19a66, CUT_END = 0xd2b282, BARK_L = 0x6e5840;
+const SACKCLOTH = 0xd3bf90, SACK_TIE = 0x8a6a3c;
+
+/** One sheaf standing on its butt (axis +y, `h` tall): flared butt, a twisted straw band at the waist, a full head of ears. */
+function sheafUp(b: MeshBuilder, h: number, sides: number, butt = false): void {
+  const k = h / 1.1;
+  const prof: V2[] = [[0.17, 0], [0.092, 0.4 * k], [0.092, 0.47 * k], [0.19, 0.74 * k], [0.135, 0.94 * k], [0.045, h]];
+  if (butt) prof.unshift([0, 0]);
+  const cols = [STRAW, BAND, STRAW, EARS, EARS_D, EARS];
+  b.lathe(prof, sides, butt ? [STRAW_BUTT, ...cols] : cols, { capTop: true, rot: 0.3 });
+}
+
+/** A sack lying on its side (length along local x), the neck tied off at +x. */
+function sackLying(b: MeshBuilder, x: number, y: number, z: number, s: number, rot: number, salt: number): void {
+  b.push();
+  b.translate(x, y, z);
+  b.rotY(rot);
+  b.blob(0, 0.2 * s, 0, 0.4 * s, 0.21 * s, 0.26 * s, shade(SACKCLOTH, 0.94 + (salt % 3) * 0.04), 0.07, 1, salt);
+  b.tube([0.34 * s, 0.21 * s, 0], [0.5 * s, 0.23 * s, 0], 0.07 * s, 0.035 * s, 5, SACK_TIE);
+  b.blob(0.54 * s, 0.24 * s, 0, 0.06 * s, 0.07 * s, 0.07 * s, SACKCLOTH, 0.2, 0, salt + 3);
+  b.pop();
+}
+
+/** A sack standing up, its neck tied with a cord and a tuft of cloth above. */
+function sackUp(b: MeshBuilder, x: number, z: number, s: number, rot: number): void {
+  b.push();
+  b.translate(x, 0, z);
+  b.rotY(rot);
+  b.lathe([[0.2 * s, 0], [0.27 * s, 0.1 * s], [0.28 * s, 0.34 * s], [0.24 * s, 0.52 * s], [0.12 * s, 0.6 * s], [0.07 * s, 0.63 * s]], 7,
+    [SACKCLOTH, shade(SACKCLOTH, 1.04), SACKCLOTH, shade(SACKCLOTH, 0.96), SACK_TIE], { capTop: false });
+  b.lathe([[0.07 * s, 0.63 * s], [0.11 * s, 0.7 * s], [0.06 * s, 0.75 * s], [0, 0.76 * s]], 6, SACKCLOTH);
+  b.pop();
+}
+
+/** One log lying along x from x0 to x1 at height y (its centre line), pale cut ends. */
+function logX(b: MeshBuilder, x0: number, x1: number, y: number, z: number, r: number, sides: number, dz = 0, bark: number = COL.bark): void {
+  b.tube([x0, y, z], [x1, y, z + dz], r, r * 0.93, sides, { side: bark, top: CUT_END, bottom: CUT_END });
+}
+
+/** A stack of split logs between end stakes on two bearers; grows with `size` (1..8). Log ends face ±z. */
+function woodStack(b: MeshBuilder, r: () => number, lod: 0 | 1 | 2, size: number): void {
+  const c = Math.max(1, Math.min(8, Math.round(size)));
+  const per = 2 + c, rows = c <= 1 ? 2 : c <= 3 ? 3 : 4;
+  const rr = 0.115, gap = 0.25, depth = 0.85, L = per * gap;
+  const sides = lod === 0 ? 5 : 4;
+  for (const z of [-depth / 2 + 0.14, depth / 2 - 0.14]) b.box(-L / 2 - 0.08, 0, z - 0.05, L / 2 + 0.08, 0.08, z + 0.05, WOOD_D);
+  for (let row = 0; row < rows; row++) {
+    const top = row === rows - 1;
+    const trim = top ? Math.floor(per / 3) : 0;
+    const n = per - (row % 2) - trim;
+    const off = (row % 2) * 0.5 + trim * 0.5;
+    for (let i = 0; i < n; i++) {
+      const x = -L / 2 + gap * (i + 0.5 + off);
+      const y = 0.08 + rr + row * rr * 1.78;
+      const rad = rr * (0.86 + r() * 0.24);
+      const a: V3 = [x + (r() - 0.5) * 0.04, y, -depth / 2 + (r() - 0.5) * 0.06];
+      const e: V3 = [x + (r() - 0.5) * 0.04, y, depth / 2 + (r() - 0.5) * 0.06];
+      const end = shade(CUT_END, 0.92 + r() * 0.16);
+      b.tube(a, e, rad, rad * 0.95, sides, { side: COL.bark, top: end, bottom: end }, { rot: r() * 2 });
+    }
+  }
+  if (c >= 3) {
+    const h = 0.08 + rows * rr * 1.78 + 0.12;
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) post(b, sx * (L / 2 + 0.11), sz * (depth / 2 - 0.12), h, 0.08, WOOD_D);
+  }
+  if (c >= 2 && lod === 0) {
+    // chopping block with the axe left in it, a few split pieces about
+    const bx = L / 2 + 0.75;
+    b.cyl(bx, 0.35, 0, 0.42, 0.24, 0.22, 7, { side: COL.bark, top: FRESH });
+    b.beam([bx - 0.05, 0.42, 0.33], [bx + 0.32, 0.72, 0.52], 0.04, 0.04, WOOD_L);
+    b.box(bx - 0.07, 0.38, 0.27, bx + 0.02, 0.5, 0.37, COL.iron);
+    for (let i = 0; i < 3; i++) b.beam([bx - 0.35 + i * 0.2, 0.05, 0.75 + r() * 0.2], [bx - 0.1 + i * 0.22, 0.05, 0.95 + r() * 0.2], 0.09, 0.08, i % 2 ? FRESH : COL.bark);
+  }
+}
+
+/** Sacks of grain or flour: `size` sacks (1..8): one or two stand at the door; more lie stacked 4, 3 and 1. */
+function sackStack(b: MeshBuilder, r: () => number, size: number): void {
+  const c = Math.max(1, Math.min(8, Math.round(size)));
+  if (c <= 2) {
+    for (let i = 0; i < c; i++) sackUp(b, (i - (c - 1) / 2) * 0.58, (r() - 0.5) * 0.1, 0.95 + r() * 0.1, r() * 6);
+    return;
+  }
+  const rows = [Math.min(c, 4), Math.min(Math.max(c - 4, 0), 3), Math.max(c - 7, 0)];
+  rows.forEach((n, row) => {
+    for (let i = 0; i < n; i++) {
+      const z = (i - (n - 1) / 2) * 0.5, x = (r() - 0.5) * 0.12;
+      sackLying(b, x, row * 0.33, z, 1.0 + r() * 0.08, (r() - 0.5) * 0.25 + (row % 2) * Math.PI, i + row * 5 + 7);
+    }
+  });
+}
+
+/** Rough-dressed quarry blocks: 2 × `size` blocks (1..8) in courses of up to 3 × 2, each course set back a little. */
+function stoneBlocks(b: MeshBuilder, r: () => number, size: number): void {
+  const c = Math.max(1, Math.min(8, Math.round(size)));
+  const total = c * 2;
+  let k = 0;
+  for (let course = 0; k < total; course++) {
+    const n = Math.min(course < 2 ? 6 : course === 2 ? 4 : 2, total - k);
+    const cols = Math.min(3, Math.ceil(n / 2)), deep = n > cols ? 2 : 1;
+    for (let i = 0; i < n; i++, k++) {
+      const w = 0.62 + r() * 0.16, h = 0.34 + r() * 0.06, d = 0.42 + r() * 0.08;
+      const x = ((i % cols) - (cols - 1) / 2) * 0.72 + (r() - 0.5) * 0.06;
+      const z = (Math.floor(i / cols) - (deep - 1) / 2) * 0.5;
+      b.push();
+      b.translate(x, course * 0.36, z);
+      b.rotY((r() - 0.5) * 0.12);
+      const col = r() < 0.5 ? COL.stone : COL.stoneHoney;
+      b.box(-w / 2, 0, -d / 2, w / 2, h, d / 2, { side: shade(col, 0.95), top: shade(col, 1.05) });
+      b.pop();
+    }
+  }
+  // chips and spalls at the foot
+  for (let i = 0; i < 5; i++) {
+    const a = r() * Math.PI * 2, d = 0.8 + r() * 0.5;
+    b.blob(Math.cos(a) * d, 0.04, Math.sin(a) * d, 0.12, 0.06, 0.1, COL.stonePale, 0.3, 0, i);
+  }
+}
 
 const P: Record<PropKind, PropFn> = {
   cart(b, r, lod) {
@@ -138,7 +261,8 @@ const P: Record<PropKind, PropFn> = {
     if (r() < 0.5) crate(b, 0.1, 0.05, 0.55, lod, 0.7, 0.4 + r() * 0.3, 0xa9895e);
     if (r() < 0.5) crate(b, 0.75, 0.1, 0.6, lod, 0, -0.2);
   },
-  sack_pile(b, r) {
+  sack_pile(b, r, _lod, _meta, size) {
+    if (size > 0) { sackStack(b, r, size); return; }
     const n = 4 + Math.floor(r() * 3);
     for (let i = 0; i < n; i++) {
       const row = i < 3 ? 0 : 1;
@@ -154,7 +278,8 @@ const P: Record<PropKind, PropFn> = {
       if (lod === 0) b.cyl(0, 0, 3.2, 3.6, 0.08, 0.04, 4, WOOD_D);
     });
   },
-  woodpile(b, r, lod) {
+  woodpile(b, r, lod, _meta, size) {
+    if (size > 0) { woodStack(b, r, lod, size); return; }
     const rows = 3, per = lod === 0 ? 6 : 3;
     for (let row = 0; row < rows; row++) {
       for (let i = 0; i < per - row; i++) {
@@ -168,7 +293,8 @@ const P: Record<PropKind, PropFn> = {
       b.beam([0.05, 0.38, 0.9], [0.4, 0.62, 0.95], 0.04, 0.04, WOOD_D);
     }
   },
-  stone_pile(b, r) {
+  stone_pile(b, r, _lod, _meta, size) {
+    if (size > 0) { stoneBlocks(b, r, size); return; }
     const n = 7 + Math.floor(r() * 4);
     for (let i = 0; i < n; i++) {
       const a = r() * Math.PI * 2, d = r() * 0.6;
@@ -176,10 +302,11 @@ const P: Record<PropKind, PropFn> = {
       b.blob(Math.cos(a) * d, s * 0.5 + (d < 0.3 ? 0.2 : 0), Math.sin(a) * d, s, s * 0.7, s * 0.85, r() < 0.5 ? COL.stoneGrey : COL.stone, 0.25, 0, i);
     }
   },
-  plank_pile(b, r) {
+  plank_pile(b, r, _lod, _meta, size) {
     b.box(-1.3, 0, -0.5, -1.15, 0.12, 0.5, WOOD_D);
     b.box(1.15, 0, -0.5, 1.3, 0.12, 0.5, WOOD_D);
-    for (let i = 0; i < 6; i++) {
+    const planks = size > 0 ? 2 + Math.max(1, Math.min(8, Math.round(size))) * 2 : 6;
+    for (let i = 0; i < planks; i++) {
       const y = 0.12 + Math.floor(i / 2) * 0.05;
       const z = (i % 2) * 0.42 - 0.21;
       b.box(-1.5 + r() * 0.1, y, z - 0.18, 1.5 - r() * 0.1, y + 0.05, z + 0.18, i % 3 ? 0xb08e62 : 0xa38358);
@@ -546,11 +673,103 @@ const P: Record<PropKind, PropFn> = {
     b.cyl(0, 0.55, 2.3, 2.46, 0.16, 0.02, 4, COL.iron, { rot: Math.PI / 4 });
     void r; void lod;
   },
-  stook(b, r, lod, ...rest) { P[STAND_IN.stook as PropKind](b, r, lod, ...rest); },
-  sheaf(b, r, lod, ...rest) { P[STAND_IN.sheaf as PropKind](b, r, lod, ...rest); },
-  hay_cock(b, r, lod, ...rest) { P[STAND_IN.hay_cock as PropKind](b, r, lod, ...rest); },
-  stump(b, r, lod, ...rest) { P[STAND_IN.stump as PropKind](b, r, lod, ...rest); },
-  logs(b, r, lod, ...rest) { P[STAND_IN.logs as PropKind](b, r, lod, ...rest); },
+  stook(b, r, lod) {
+    // Sheaves stood up in two leaning rows, heads together along a ridge (local x), an end sheaf at each end.
+    const sides = lod === 0 ? 5 : 4;
+    const pairs = lod === 0 ? 3 + (r() < 0.5 ? 1 : 0) : 3;
+    const lean = 0.3 + r() * 0.05, spacing = 0.3;
+    for (let i = 0; i < pairs; i++) {
+      const x = (i - (pairs - 1) / 2) * spacing + (r() - 0.5) * 0.05;
+      for (const side of [-1, 1]) {
+        b.push();
+        b.translate(x, -0.04, side * (0.3 + r() * 0.04));
+        b.rotX(-side * (lean + (r() - 0.5) * 0.08));
+        b.rotZ((r() - 0.5) * 0.14);
+        b.rotY(r() * 1.2);
+        sheafUp(b, 1.06 + r() * 0.12, sides);
+        b.pop();
+      }
+    }
+    if (lod === 0) {
+      for (const end of [-1, 1]) {
+        b.push();
+        b.translate(end * ((pairs - 1) / 2 * spacing + 0.3), -0.04, (r() - 0.5) * 0.06);
+        b.rotZ(end * lean);
+        b.rotY(r() * 1.2);
+        sheafUp(b, 1.0 + r() * 0.08, sides);
+        b.pop();
+      }
+    }
+  },
+  sheaf(b, r, lod) {
+    // A bound sheaf lying on its side, butt to -x, ears to +x.
+    b.push();
+    b.translate(-0.5, 0.125, 0);
+    b.rotY((r() - 0.5) * 0.3);
+    b.rotZ(-Math.PI / 2);
+    sheafUp(b, 1.0, lod === 0 ? 6 : 4, true);
+    b.pop();
+  },
+  hay_cock(b, r, lod) {
+    // A small hay cock: a bulging cone of fresh, greenish hay with loose wisps at the foot.
+    const n = lod === 0 ? 9 : 6;
+    const R = 0.82 + r() * 0.16, H = 1.32 + r() * 0.26;
+    b.state({ flags: F.Snow }, () => {
+      b.lathe([[R * 0.96, -0.15], [R, 0.12 * H], [R * 0.86, 0.42 * H], [R * 0.6, 0.7 * H], [R * 0.28, 0.9 * H], [0.07, H], [0, H + 0.03]], n,
+        [shade(HAY, 0.9), HAY, shade(HAY, 1.05), HAY_L, HAY_L, HAY_L], { rot: r() * 3 });
+      if (lod === 0) {
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2 + r() * 0.5;
+          b.blob(Math.cos(a) * R * 0.98, 0.04, Math.sin(a) * R * 0.98, 0.26, 0.07, 0.16, i % 2 ? HAY_D : HAY, 0.3, 0, i);
+        }
+      }
+    });
+  },
+  stump(b, r, lod) {
+    // A felled tree's stump: root flare, bark sides, a fresh pale cut with the heartwood and the hinge
+    // fibres where the trunk broke away, axe chips on the ground.
+    const R = 0.3 + r() * 0.06, h = 0.42 + r() * 0.14, sides = lod === 0 ? 8 : 6;
+    b.lathe([[R * 1.3, -0.2], [R * 1.12, 0.1], [R, 0.28], [R * 0.96, h], [0, h]], sides,
+      [shade(BARK_L, 0.9), BARK_L, BARK_L, FRESH], { rot: r() * 3 });
+    b.cyl(0, 0, h, h + 0.012, R * 0.42, R * 0.4, sides, { side: HEART, top: HEART });
+    b.box(-R * 0.55, h, -R * 0.82, R * 0.5, h + 0.1, -R * 0.6, { side: shade(FRESH, 0.9), top: FRESH });
+    for (let i = 0; i < 4; i++) {
+      // root buttresses running out into the ground
+      b.push();
+      b.rotY((i / 4) * Math.PI * 2 + 0.4 + r() * 0.5);
+      b.blob(R * 1.15, 0.02, 0, R * 0.95, 0.15, 0.14, shade(BARK_L, 0.92), 0.15, 0, i);
+      b.pop();
+    }
+    if (lod === 0) {
+      for (let i = 0; i < 7; i++) {
+        const a = r() * Math.PI * 2, d = R * 1.8 + r() * 0.9, s = 0.05 + r() * 0.05, t = r() * 3;
+        const cx = Math.cos(a) * d, cz = Math.sin(a) * d, ct = Math.cos(t) * s, st = Math.sin(t) * s;
+        b.quad([cx - ct, 0.02, cz - st * 0.5], [cx - st * 0.5, 0.02, cz + ct], [cx + ct, 0.02, cz + st * 0.5], [cx + st * 0.5, 0.02, cz - ct], i % 3 ? FRESH : shade(FRESH, 0.85));
+      }
+    }
+  },
+  logs(b, r, lod, _meta, size) {
+    // A felled trunk sawn into logs lying side by side (4, then 3, then 1 on top); `size` = how many are left.
+    const n = size > 0 ? Math.max(1, Math.min(8, Math.round(size))) : 4;
+    const sides = lod === 0 ? 7 : 5, L = 2.5 + r() * 0.5;
+    const rows = [Math.min(n, 4), Math.min(Math.max(n - 4, 0), 3), Math.max(n - 7, 0)];
+    rows.forEach((cnt, row) => {
+      const rad = 0.2 - row * 0.02;
+      for (let i = 0; i < cnt; i++) {
+        const z = (i - (cnt - 1) / 2) * 0.41;
+        const y = 0.19 + row * 0.33;
+        const x0 = -L / 2 + (r() - 0.5) * 0.3 + row * 0.15, x1 = L / 2 + (r() - 0.5) * 0.3 - row * 0.1;
+        logX(b, x0, x1, y, z, rad * (0.9 + r() * 0.2), sides, (r() - 0.5) * 0.12, r() < 0.5 ? BARK_L : shade(BARK_L, 0.88));
+      }
+    });
+    if (lod === 0 && n >= 3) {
+      // trimmed branches in a loose heap at the crown end
+      for (let i = 0; i < 4; i++) {
+        const z = (r() - 0.5) * 1.6, y = 0.08 + r() * 0.12;
+        b.beam([L / 2 + 0.3, y, z], [L / 2 + 1.3 + r() * 0.6, y + 0.1, z + (r() - 0.5) * 1.2], 0.07, 0.06, COL.bark);
+      }
+    }
+  },
 };
 
 function pick<T>(r: () => number, arr: readonly T[]): T { return arr[Math.floor(r() * arr.length) % arr.length]; }
@@ -571,20 +790,21 @@ export function clothQuad(b: MeshBuilder, x0: number, y0: number, x1: number, y1
   b.swayFn = old;
 }
 
-/** Write a prop into a builder at its current transform (Decor layer unless overridden). */
-export function propInto(b: MeshBuilder, kind: PropKind, seed: number, lod: 0 | 1 | 2 = 0, meta?: PropMeta): PropMeta {
+/** Write a prop into a builder at its current transform (Decor layer unless overridden). `size` grows piles (PILE_KINDS, 1..8). */
+export function propInto(b: MeshBuilder, kind: PropKind, seed: number, lod: 0 | 1 | 2 = 0, meta?: PropMeta, size = 0): PropMeta {
   const m = meta ?? { emitters: [] };
   const r = prng(seed * 31 + kind.length * 7);
-  b.state({ jitter: 0.04, flags: b.flags | F.Snow }, () => P[kind](b, r, lod, m));
+  const s = PILE_KINDS.has(kind) ? size : 0;
+  b.state({ jitter: 0.04, flags: b.flags | F.Snow }, () => P[kind](b, r, lod, m, s));
   return m;
 }
 
 /** Build a standalone prop builder. */
-export function buildProp(kind: PropKind, seed: number, lod: 0 | 1 | 2 = 0): { b: MeshBuilder; meta: PropMeta } {
+export function buildProp(kind: PropKind, seed: number, lod: 0 | 1 | 2 = 0, size = 0): { b: MeshBuilder; meta: PropMeta } {
   const b = new MeshBuilder(seed + 101);
   b.layer = Layer.Decor;
   b.flags = F.Snow;
-  const meta = propInto(b, kind, seed, lod);
+  const meta = propInto(b, kind, seed, lod, undefined, size);
   return { b, meta };
 }
 
