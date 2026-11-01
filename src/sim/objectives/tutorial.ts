@@ -279,10 +279,15 @@ export function advanceTutorial(O: Obj): void {
   const t = O.save.tut;
   const me = O.me;
   if (t.done || !me) return;
+  // the lessons last three days, then it is the household's chores and the player's own goals
+  if (O.dayNo - t.since > 3) {
+    t.done = true;
+    for (const o of O.active()) if (o.source === 'tutorial') O.finish(o, 'expired');
+    O.touch();
+    return;
+  }
   if (O.save.list.some((o) => o.source === 'tutorial' && o.state === 'active')) return;
   const chain = CHAINS[t.cls] ?? CHAINS.farm;
-  // the lessons last three days, then it is the household's chores and the player's own goals
-  if (O.dayNo - t.since > 3) { t.done = true; O.touch(); return; }
   while (t.stage < chain.length) {
     const id = chain[t.stage];
     const build = STAGES[id];

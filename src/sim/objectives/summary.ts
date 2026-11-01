@@ -115,7 +115,7 @@ function workLines(log: DayLog): string[] {
     const finished = w.fin > 0;
     const verb = verbOf(w.verb, !finished && w.verb.startsWith('farm.'));
     const bouts = w.n === 1 ? T('text', 'bouts.one', { n: 1 }) : T('text', 'bouts.many', { n: w.n });
-    lines.push(finished ? `${verb} ${w.at}` : `${verb} ${w.at} (${bouts})`);
+    lines.push(finished || w.n === 1 ? `${verb} ${w.at}` : `${verb} ${w.at} (${bouts})`);
   }
   return lines;
 }
@@ -159,13 +159,13 @@ function householdLines(O: Obj, me: Person): string[] {
   return out;
 }
 
-function tomorrowLines(O: Obj, me: Person): string[] {
+function tomorrowLines(O: Obj, me: Person, logDay: number): string[] {
   const out: string[] = [];
-  const tomorrow = O.dayNo + 1;
+  const tomorrow = logDay + 1;
   if (isHolyDay(tomorrow)) out.push(T('text', 'sum.tomorrow.holy'));
   const town = marketTownOf(O, me.settlement);
   if (town && isMarketDay(tomorrow, town.id)) out.push(T('text', 'sum.tomorrow.market', { town: town.name }));
-  const today = toDate(O.dayNo), next = toDate(tomorrow);
+  const today = toDate(logDay), next = toDate(tomorrow);
   if (next.season !== today.season) out.push(T('text', 'sum.tomorrow.season', { season: SEASON_NAMES[next.season] }));
   for (const o of O.active().slice(0, 12)) {
     if (o.source === 'request') {
@@ -211,7 +211,7 @@ export function buildSummary(O: Obj): DaySummary | null {
   const goods = Object.entries(log.goods).map(([label, amount]) => ({ label, amount: Math.round(amount * 10) / 10 })).sort((a, b) => b.amount - a.amount).slice(0, 6);
   return {
     day: log.day, work: workLines(log), earned: Math.round(earned * 100) / 100, spent: Math.round(spent * 100) / 100, goods, skills, stats,
-    objectivesDone: log.done.slice(0, 8), household: householdLines(O, me), tomorrow: tomorrowLines(O, me),
+    objectivesDone: log.done.slice(0, 8), household: householdLines(O, me), tomorrow: tomorrowLines(O, me, log.day),
   };
 }
 

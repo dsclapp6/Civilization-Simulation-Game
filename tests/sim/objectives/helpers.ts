@@ -141,6 +141,38 @@ export function setTime(sim: Simulation, fraction: number, day = Math.floor(sim.
 
 export function ageNow(sim: Simulation, p: Person): number { return ageYears(p, sim.absDay); }
 
+/** Puts fallen trees at the given offsets from the player's home (the mock world has no vegetation). Returns their ids. */
+export function addDeadwood(o: ObjSim, offsets: Array<[number, number]> = [[30, 0], [55, 10], [80, -10]]): number[] {
+  const hh = o.sim.state.households.get(playerOf(o.sim).household) as Household;
+  const home = o.sim.state.buildings.get(hh.home)!;
+  const byChunk = new Map<string, Array<{ id: number; kind: 'deadtree'; x: number; z: number; scale: number; rot: number; variant: number }>>();
+  const ids: number[] = [];
+  offsets.forEach(([dx, dz], i) => {
+    const x = home.x + dx, z = home.z + dz;
+    const cx = Math.floor(x / 64), cz = Math.floor(z / 64);
+    const id = (cz * 250 + cx) * 4096 + 100 + i;
+    const key = `${cx}:${cz}`;
+    const list = byChunk.get(key) ?? [];
+    list.push({ id, kind: 'deadtree', x, z, scale: 1, rot: 0, variant: 0 });
+    byChunk.set(key, list);
+    ids.push(id);
+  });
+  (o.sim.world as { scatterInChunk: (cx: number, cz: number) => unknown }).scatterInChunk = (cx: number, cz: number) => byChunk.get(`${cx}:${cz}`) ?? [];
+  return ids;
+}
+
+/** Runs the calendar to a given hour of a day (hooks fire as in play). */
+export function runTo(o: ObjSim, day: number, hour: number): void {
+  const target = day + hour / 24;
+  // a sleep or wait that is still pending would hold the calendar: let it finish
+  for (let g = 0; o.sim.clock.skip && g < 4000; g++) o.sim.step(0.25);
+  for (let i = 0; o.sim.absDay + 1e-9 < target; i++) {
+    const before = o.sim.absDay;
+    o.sim.advanceHours(1);
+    if (i > 800 || o.sim.absDay <= before) throw new Error(`the calendar is stuck at ${before} (wanted ${target})`);
+  }
+}
+
 export type { ObjRec };
 
 // ---------------------------------------------------------------------------------------------
@@ -171,6 +203,39 @@ export function tradeSomething(o: ObjSim, partner: Parameters<EconomyRuntime['pa
     if (r.ok) return true;
   }
   return false;
+}
+
+export interface Played { titles: string[]; trace: string[]; stuck: string | null }
+
+/**
+ * Plays objectives of the given sources one after another until none is left (or one cannot be done).
+ * The evening stage of the tutorial waits for the evening: the clock is moved there when nothing else is open.
+ */
+export function playObjectives(o: ObjSim, sources: ReadonlyArray<Objective['source']> = ['tutorial'], maxObjectives = 20): Played {
+  const out: Played = { titles: [], trace: [], stuck: null };
+  for (let guard = 0; guard < maxObjectives; guard++) {
+    const todo = active(o).filter((x) => sources.includes(x.source));
+    if (todo.length === 0) {
+      const t = o.obj.obj.save.tut;
+      if (sources.includes('tutorial') && !t.done && o.sim.absDay % 1 < 0.7) {
+        setTime(o.sim, 0.8, Math.floor(o.sim.absDay));
+        o.sim.advanceHours(1);
+        if (active(o).some((x) => sources.includes(x.source))) continue;
+      }
+      break;
+    }
+    const ob = todo[0];
+    const rec = recOf(o, ob.id);
+    out.titles.push(ob.title);
+    for (let i = 0; i < 14 && rec.state === 'active'; i++) {
+      const step = o.obj.obj.current(rec);
+      const did = playStep(o, rec);
+      out.trace.push(`${ob.title} / ${step?.text}: ${did || 'COULD NOT'}`);
+      if (!did) break;
+    }
+    if (rec.state === 'active') { out.stuck = `${ob.title}: ${o.obj.obj.current(rec)?.text}`; break; }
+  }
+  return out;
 }
 
 /**
@@ -220,7 +285,12 @@ export function playStep(o: ObjSim, rec: ObjRec): string {
       o.obj.poll(true);
       return 'have';
     }
-    case 'sleep': o.sim.dispatch({ type: 'sleep' }); return 'sleep';
+    case 'sleep': {
+      o.sim.dispatch({ type: 'sleep' });
+      // sleep through to the dawn
+      for (let g = 0; o.sim.clock.skip && g < 4000; g++) o.sim.step(0.25);
+      return 'sleep';
+    }
     case 'skill': p.skills[m.skill] = Math.max(p.skills[m.skill], m.level * m.level * 40 + 1); o.sim.state.touch(p); o.obj.poll(true); return 'skill';
     case 'stat': p.trained[m.stat] = m.value + 0.1; o.sim.state.touch(p); o.obj.poll(true); return 'stat';
     case 'money': p.money = Math.max(p.money, m.pence + 1); o.sim.state.touch(p); o.obj.poll(true); return 'money';

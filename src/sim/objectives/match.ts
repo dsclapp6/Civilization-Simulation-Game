@@ -7,7 +7,7 @@ import { dist } from '../../core/math';
 import { skillLevel } from '../people';
 import type { Person, PersonId } from '../state';
 import type { Match, Obj, ObjRec, StepRec } from './core';
-import { onStrip, playerXZ } from './places';
+import { deadwoodNear, homeOf, onStrip, playerXZ } from './places';
 import { bagQty, requestById, round1 } from './sources';
 
 /** What just happened (null = a periodic look at the state). */
@@ -165,6 +165,18 @@ function checkStrip(O: Obj, me: Person, step: StepRec, m: Extract<Match, { k: 's
   setProgress(step, Math.min(m.need - 1, Math.floor(s.work * m.need + 1e-6)), m.need);
 }
 
+/** A gathering step points at the nearest dead wood still standing, which changes as loads are taken. */
+function retarget(O: Obj, o: ObjRec): void {
+  const cur = O.current(o);
+  if (!cur || cur.m.k !== 'act' || cur.m.re !== 'deadwood') return;
+  const me = O.me;
+  if (!me) return;
+  const pos = playerXZ(O) ?? homeOf(O, me);
+  if (!pos) return;
+  const t = deadwoodNear(O, pos.x, pos.z, 200);
+  if (t) cur.target = t;
+}
+
 /**
  * Looks at the current step of every live objective; steps that complete let the next one be looked at in the
  * same round (a step already satisfied by the state is skipped at once). Finished objectives are closed.
@@ -175,6 +187,14 @@ export function round(O: Obj, ev: Ev | null): void {
     if (o.state !== 'active') continue;
     let moved = false;
     let seen = ev;
+    // a strip task the household has already finished ends the walk to the strip as well
+    if (!(ev?.t === 'poll' && !ev.slow)) {
+      const at = o.steps.findIndex((s) => s.m.k === 'strip' && !s.done);
+      if (at > 0 && o.steps.slice(0, at).some((s) => !s.done) && evalStep(O, o, o.steps[at], null) && o.steps[at].done) {
+        for (let i = 0; i < at; i++) o.steps[i].done = true;
+        moved = true;
+      }
+    }
     for (let guard = 0; guard < 16; guard++) {
       const cur = O.current(o);
       if (!cur) break;
@@ -185,6 +205,7 @@ export function round(O: Obj, ev: Ev | null): void {
     }
     if (!moved) continue;
     any = true;
+    retarget(O, o);
     if (!O.current(o)) O.finish(o, 'done');
     else O.progressed(o);
   }

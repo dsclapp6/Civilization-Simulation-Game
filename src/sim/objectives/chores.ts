@@ -204,6 +204,9 @@ export function makeChores(O: Obj): number {
     let strips = 0;
     const kinds = new Set<string>();
     let order = 0;
+    // the head's own plan for the day leads: firewood, or lessons with the priest
+    if (plan === 'wood') add(woodChore(O, me, giver, day, woodLow(O, me)), order++);
+    else if (plan === 'school') add(schoolChore(O, me, giver, day), order++);
     for (const w of ordered) {
       if (picks.length >= cap0) break;
       if (w.kind === 'strip') { if (strips >= 2) continue; strips++; }
