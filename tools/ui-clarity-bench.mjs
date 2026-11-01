@@ -2,7 +2,7 @@
 // minimap, edge arrows and the cursor tooltip running in a real village, and what finding the thing under the mouse costs.
 // Headless Chromium with software GL, so the numbers are the UI's CPU time only (the 3D drawing is not in them).
 //
-//   node tools/ui-clarity-bench.mjs [--seed=eta]
+//   node tools/ui-clarity-bench.mjs [--seed=eta] [--fake]     (--fake: the UI's stand-in objectives instead of the module)
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
@@ -26,7 +26,7 @@ const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 page.setDefaultTimeout(0);
 try {
-  await page.goto(`http://localhost:${PORT}/?seed=${seed}&quality=low&shots=1&autostart=1&fakeobjectives=1&time=0.4`, { timeout: 120000 });
+  await page.goto(`http://localhost:${PORT}/?seed=${seed}&quality=low&shots=1&autostart=1${args.includes('--fake') ? '&fakeobjectives=1' : ''}&time=0.4`, { timeout: 120000 });
   await page.waitForFunction(() => window.__game !== undefined, null, { timeout: 300000, polling: 250 });
   await page.evaluate(() => window.__game.ready());
   await page.evaluate(() => window.__game.freeze(true));

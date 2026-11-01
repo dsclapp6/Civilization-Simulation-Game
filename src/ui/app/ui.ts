@@ -387,7 +387,7 @@ export class UiApp implements GameUIExt {
       on('happening', (e) => this.notice(noticeForHappening(e, this.noticeCtx()))),
       on('objective', (e) => this.onObjective(e)),
       on('dayEnd', (e) => this.onDayEnd(e)),
-      on('skip', (e) => { if (e.phase !== 'start' && this.summaryDay !== null) this.showSummarySoon(); }),
+      on('skip', (e) => { if (e.phase !== 'start' && this.summaryDay !== null) this.showSummarySoon(true); }),
     );
     this.sound.bind(game);
     this.seenChronicle.clear();
@@ -534,17 +534,18 @@ export class UiApp implements GameUIExt {
   private onDayEnd(e: SimEvents['dayEnd']): void {
     this.summaryDay = e.day;
     const g = this.bound?.game;
-    if (g && !g.sim.view.clock().skipping) this.showSummarySoon();
+    // asleep (a skip of time is on): the card waits for the waking. Up at midnight: a note you may open, never a page that
+    // stops the world in the middle of whatever you are doing.
+    if (g && !g.sim.view.clock().skipping) this.showSummarySoon(false);
   }
 
-  private showSummarySoon(): void {
+  private showSummarySoon(asWoken: boolean): void {
     const day = this.summaryDay;
     if (day === null || !this.bound) return;
     this.summaryDay = null;
     const g = this.bound.game;
     if (!g.objectives?.daySummary(day)) return;
-    // asleep: the card is the first thing you see on waking; up at midnight: a note you may open
-    if (this.screen === 'game' && !this.stack.top()) this.openPanel({ panel: 'daysummary', day });
+    if (asWoken && this.screen === 'game' && !this.stack.top()) this.openPanel({ panel: 'daysummary', day });
     else this.toasts.push({ tone: 'gold', icon: 'sunrise', title: 'A day is done', text: 'See what it brought.', ttl: 12, key: 'daysummary', action: { label: 'Read it', request: { panel: 'daysummary', day } } }, this.clock);
   }
 

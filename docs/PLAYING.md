@@ -216,7 +216,7 @@ All optional, on the URL of the game page (`?mode=world|gallery|chars|village|ui
 | `debug=1` | overlay with frame timings, renderer and simulation statistics (and, with `profile=1`, the cost of the busiest systems) |
 | `hud=1` | a plain-text stand-in for the HUD (prompt, action, journey, encounter choices, successor buttons) for builds without the real UI |
 | `devzone=1` | stand-in villagers and a horse around your home, buildings that block you (for builds without the real agents module) |
-| `fakeobjectives=1` | the UI's stand-in objectives (a first-day chain with real places, chores, goals, suggestions, a day summary): for looking at the tracker, the journal and the day card before the real objectives module is in the build |
+| `fakeobjectives=1` | the UI's stand-in objectives (`src/ui/dev/mockObjectives.ts`: a first-day chain with real places, chores, goals, suggestions, a day summary) instead of the objectives module: for the UI gallery, the tests and looking at the tracker without playing a day |
 | `shots=1` | keep the drawing buffer and expose `window.__game` / `window.__ui` for tools: `session`, `ready()`, `advance(seconds, input)` (the world moves by simulated seconds with the given input), `tick(seconds)` (whole frames with the real held keys, no drawing), `draw()`, `settle()`, `freeze(on)`, `frames(n)`, `killPlayer()` |
 
 Tools (headless Chromium, software GL, so they are slow): `node tools/game-shots.mjs` plays through the
@@ -240,14 +240,19 @@ start, hotkeys, pause, the action wheel, the map, a journey with encounters, dea
   cursor kind, distance). `goTo({ target, x, z, label })` walks the body along `zone.nav.findPath` and performs the default
   option on arrival (`goStop` says how close); movement keys, E, Q, dodge, a conversation or a drawn weapon cancel it.
   `setDrawn` / `drawn` / `PlayerHud.drawn` are the weapon state; `fightOf(player) > 0` draws it by itself.
-- **Hover outlines.** People and animals get `draw.highlight = 1` while hovered; buildings, strips, commons and trees go
-  through `PickPort.setHover({ kind, id, x?, z? })`, which `src/app/session.ts` forwards to the renderer's optional
-  `setHover(target | null)` when it has one.
+- **Hover outlines.** What the cursor is on is handed to the renderer's `GameRenderer.setHover(target | null)` (a
+  `HoverMark`, which is a `TargetRef`: `building`, `strip`, `scatter`, `item`, `person`, `animal`; `parcel` is ignored) through
+  `PickPort.setHover`, built in `src/app/session.ts`. The renderer outlines buildings, strips, trees and piles, rings people
+  and animals and keeps their nameplate up. People and animals also get `draw.highlight = 1` (the contract's own signal).
 - **Objectives** reach the UI as `GameServices.objectives` (`src/sim/objectives/types.ts`): the tracker, the "What now?" card,
-  the journal and the day summary read `tracked()`, `list()`, `suggestions()`, `daySummary()` and call `track(id)` and
-  `trackPerson(id)`. The HUD reads the markers from `SimView.worldMarkers()` (compass, minimap, edge arrows) and listens to
-  the `objective` and `dayEnd` events. A place the player asked to be shown (Find) is a UI-side pin
-  (`src/ui/core/pins.ts`).
+  the journal and the day summary read `tracked()`, `list()`, `suggestions()`, `daySummary()` and call `track(id)`,
+  `trackPerson(id)` and `trackPlace(target)`. The optional members are used when the module has them: `places()` (the
+  journal's Places page, with the module's names), `found()` (which row "Find" is on, and the "Stop" button), `version()`
+  (the tracker and the journal read the tasks only when it changes) and `intro()` (the first line of the intro card).
+  Without them (an older module, a test double) the UI keeps a pin of its own (`src/ui/core/pins.ts`) and builds the lists
+  itself (`src/ui/core/finder.ts` is the one place that decides). The HUD reads the markers from `SimView.worldMarkers()`
+  (compass, minimap, edge arrows) and listens to the `objective` and `dayEnd` events; a spot marked twice is drawn once.
+  When the body reaches what "Find" pointed at, the marker is cleared (`arrivedAt`).
 - **Verbs.** The player module registers its own `ActionProvider` (`player`): *Mount*, *Dismount*, *Sit
   down* / *Stand up*, *Follow*, *Rest or wait…*, *Sleep until dawn*, and the encounter choices. Everything
   else (work, trade, talk) comes from the other providers on `sim.actions`; the player controller lists

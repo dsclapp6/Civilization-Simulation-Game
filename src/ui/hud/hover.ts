@@ -65,7 +65,8 @@ export class HoverCard {
     this.ico.replaceChildren(icon(ic, 17));
     this.el.className = `mu-hover ${info.enabled ? '' : 'off'} ${bare ? 'bare' : ''} ${(info.tone && TONE_CLASS[info.tone]) ?? ''}`.replace(/\s+/g, ' ').trim();
     this.name.textContent = bare ? 'Open ground' : info.label;
-    this.sub.textContent = info.sublabel;
+    // "your sister · servant" is set with commas here: a middle dot sits badly in the italic face
+    this.sub.textContent = info.sublabel.replace(/ · /g, ', ');
     this.sub.classList.toggle('mu-hide', !info.sublabel);
     this.dist.textContent = info.distance >= 4 ? distanceText(info.distance) : '';
     if (bare) {

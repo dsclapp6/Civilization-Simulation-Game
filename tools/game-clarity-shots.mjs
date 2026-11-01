@@ -1,11 +1,12 @@
 // Screenshots of the clarity pass (CLARITY §2, §3, §5, §6): the objective tracker, the compass ribbon, the minimap,
 // "What now?", the settlement banner, the tooltip that follows the free cursor, the journal, the day summary and the
-// intro. Starts Vite on :5181, plays a real run in headless Chromium (software GL: slow but correct) with the UI's
-// stand-in objectives (`?fakeobjectives=1`, used until the objectives module is in the build) and saves docs/game/*.png.
+// intro. Starts Vite on :5181, plays a real run in headless Chromium (software GL: slow but correct) with the real
+// objectives module and saves docs/game/*.png (`-1920` etc. is added to the name for other sizes).
 //
 //   node tools/game-clarity-shots.mjs                      # everything, at 1280x720
 //   node tools/game-clarity-shots.mjs hud hover            # selected shots
-//   node tools/game-clarity-shots.mjs --size=1920x1080 --seed=abc --real   # --real: the real objectives module
+//   node tools/game-clarity-shots.mjs --size=1920x1080 --seed=abc
+//   node tools/game-clarity-shots.mjs --fake               # the UI's stand-in objectives (`?fakeobjectives=1`) instead of the module
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { mkdirSync, statSync } from 'node:fs';
@@ -24,7 +25,7 @@ const seed = opt('seed', 'millennia');
 const quality = opt('quality', 'medium');
 const [W, H] = opt('size', '1280x720').split('x').map(Number);
 const suffix = opt('suffix', W === 1280 ? '' : `-${W}`);
-const real = args.includes('--real');
+const real = !args.includes('--fake');
 const wanted = args.filter((a) => !a.startsWith('--'));
 const want = (...names) => wanted.length === 0 || names.some((n) => wanted.includes(n));
 
@@ -239,6 +240,53 @@ try {
     }
   }
 
+  if (want('click')) {
+    // click-to-act on the family's strip: the real mouse clicks it, the body walks there along the paths (the ring marks
+    // where), and on arrival does what a click on it promises
+    const spot = await page.evaluate(() => {
+      const s = window.__game.session; const sim = s.sim; const p = s.services.player;
+      const me = sim.state.persons.get(sim.state.run.playerId); const hh = me.household;
+      const st = sim.world.strips.find((q) => sim.state.strips.get(q.id)?.holder === hh);
+      if (!st) return null;
+      const cx = st.poly.reduce((a, q) => a + q.x, 0) / 4, cz = st.poly.reduce((a, q) => a + q.z, 0) / 4;
+      const b = p.body();
+      const dx = b.x - cx, dz = b.z - cz; const d = Math.hypot(dx, dz) || 1;
+      const yaw = Math.atan2(-dx, -dz);
+      p.placeAt(cx + (dx / d) * 22, cz + (dz / d) * 22, yaw);
+      const r = s.renderer; r.orbit(Math.atan2(Math.sin(yaw - r.getCameraYaw()), Math.cos(yaw - r.getCameraYaw())), 0);
+      return { id: st.id };
+    });
+    console.log('click spot:', JSON.stringify(spot));
+    if (spot) {
+      await advance(0.4);
+      await page.evaluate(() => window.__game.settle());
+      await page.evaluate(() => window.__game.draw());
+      const at = await findOnScreen('strip');
+      if (at) {
+        await page.mouse.move(at.x - 6, at.y - 6);
+        await page.mouse.move(at.x, at.y, { steps: 3 });
+        await page.waitForTimeout(500);
+        await frames(4);
+        await page.mouse.click(at.x, at.y);
+        await advance(2.5);
+        await frames(6);
+        const going = await page.evaluate(() => window.__game.session.services.player.hud()?.going ?? null);
+        console.log('click: going', JSON.stringify(going));
+        await shot('clarity-click-walk', { settle: false });
+        await advance(14);
+        await frames(6);
+        console.log('click: arrived, hud', JSON.stringify(await page.evaluate(() => { const h = window.__game.session.services.player.hud(); return h ? { going: h.going ?? null, action: h.action ?? null } : null; })));
+        await shot('clarity-click-act', { settle: false });
+      } else console.log('click: the strip is not on screen');
+      await page.mouse.move(W / 2, 60);
+      await page.evaluate((i) => {
+        const s = window.__game.session; const p = s.services.player; p.cancelGoTo?.(); p.placeAt(i.x, i.z, i.yaw);
+        const r = s.renderer; r.orbit(Math.atan2(Math.sin(i.yaw - r.getCameraYaw()), Math.cos(i.yaw - r.getCameraYaw())), 0);
+      }, info);
+      await advance(0.3);
+    }
+  }
+
   if (want('drawn')) {
     await page.keyboard.press('KeyG');
     await frames(8);
@@ -269,16 +317,6 @@ try {
     }
   }
 
-  if (want('daysummary')) {
-    await ui(() => { const o = window.__game.session.services.objectives; o.advance?.(); o.advance?.(); o.endDay?.(); });
-    await page.waitForTimeout(700);
-    await frames(4);
-    console.log('open panels:', JSON.stringify(await ui(() => window.__ui.openPanels())));
-    await shot('clarity-daysummary', { settle: false });
-    await ui(() => window.__ui.closePanel('daysummary'));
-    await page.waitForTimeout(250);
-  }
-
   if (want('intro')) {
     await ui(() => window.__ui.openPanel({ panel: 'intro' }));
     await page.waitForTimeout(600);
@@ -299,6 +337,29 @@ try {
       await ui(() => window.__ui.closePanel('tour'));
       await page.waitForTimeout(400);
     }
+  }
+  if (want('daysummary')) {
+    // the stand-in closes its day on request; the real module closes it when midnight passes (or the player sleeps) on a day
+    // with something in it, so give the day something (a purse that grew, a skill that rose) and let midnight come. Last,
+    // because it leaves the world at night.
+    const stand = await ui(() => !!window.__game.session.services.objectives.endDay);
+    if (stand) await ui(() => { const o = window.__game.session.services.objectives; o.advance?.(); o.advance?.(); o.endDay?.(); });
+    else {
+      await ui(() => {
+        const sim = window.__game.session.sim; const me = sim.state.persons.get(sim.state.run.playerId);
+        me.money += 6; me.skills.farming = (me.skills.farming ?? 0) + 45;
+        sim.state.clock.absDay = Math.floor(sim.state.clock.absDay) + 0.9995;
+      });
+      await advance(3);
+      // up at midnight the card is only offered (a toast); open it as the button would
+      await ui(() => window.__ui.openPanel({ panel: 'daysummary' }));
+    }
+    await page.waitForTimeout(700);
+    await frames(4);
+    console.log('open panels:', JSON.stringify(await ui(() => window.__ui.openPanels())));
+    await shot('clarity-daysummary', { settle: false });
+    await ui(() => window.__ui.closePanel('daysummary'));
+    await page.waitForTimeout(250);
   }
 } catch (e) {
   console.log('SHOT ERROR', e.message);
