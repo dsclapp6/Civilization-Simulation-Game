@@ -129,8 +129,6 @@ interface Spec {
 // the system
 // ---------------------------------------------------------------------------------------------
 
-const DAY_SECONDS_PER_DAY = 60;
-
 export class AnimalSystem {
   private readonly items: Animal[] = [];
   private readonly byId = new Map<number, Animal>();
@@ -797,4 +795,4 @@ function turn(cur: number, target: number, maxStep: number): number {
   return cur + (d > 0 ? maxStep : -maxStep);
 }
 
-void clamp; void smoothstep; void St; void DAY_SECONDS_PER_DAY;
+void clamp; void smoothstep; void St;

@@ -1,11 +1,12 @@
 // Headless pacing check (SPEC §21): runs a player-free continent (the character just lives in the village)
-// and reports how often something turns up for the player, so the targets can be tuned:
-//   - something to deal with (an NPC request, a disaster or a feast near by, a notice) every 2-3 minutes
-//   - something to improve (a technique within reach) every 5-15 minutes early on
-// One game day is one minute of play at 1x, one year is 16 minutes.
+// and reports how often something turns up for the player, so the targets can be tuned. Times are minutes of play at 1x:
+// a game day is DAY_SECONDS / 60 = ten of them, a year 2 h 40 min. Objectives (tutorial, chores, a job, goals: sim/objectives)
+// fill the gaps between what happenings bring, so this tool measures only the happenings:
+//   - a request from a neighbour about every 5-10 minutes; a disaster, feast or notice near by about every 10-15 (SPEC §21)
+//   - something to improve (a technique within reach) every 15-45 minutes early on
 //   npx tsx tools/pacing.ts [--years 10] [--preset tiny|small|large] [--seed x] [--difficulty knight] [--answer]
 // `--answer` makes the character say yes to every request (a polite player), to see how the journal fills.
-import { DAYS_PER_YEAR } from '../src/core/time';
+import { DAYS_PER_YEAR, DAY_SECONDS } from '../src/core/time';
 import type { Difficulty } from '../src/core/domain';
 import { installAdvancement } from '../src/sim/advancement';
 import { installEconomy } from '../src/sim/economy';
@@ -20,6 +21,8 @@ function arg(name: string, fallback: string): string {
   return i >= 0 && process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[i + 1] : fallback;
 }
 const flag = (name: string): boolean => process.argv.includes(`--${name}`);
+/** Minutes of play at 1x in one game day. */
+const MIN_PER_DAY = DAY_SECONDS / 60;
 
 const seed = arg('seed', 'pacing');
 const years = Number(arg('years', '10'));
@@ -73,15 +76,15 @@ const secs = (performance.now() - t0) / 1000;
 const kinds = new Set<string>();
 for (const y of perYear) for (const k of Object.keys(y.events)) kinds.add(k);
 const cols = [...kinds].sort();
-console.log(`pacing: ${preset} world, seed ${seed}, ${difficulty}, ${perYear.length} years (${perYear.length * 16} minutes of play at 1x)`);
+console.log(`pacing: ${preset} world, seed ${seed}, ${difficulty}, ${perYear.length} years (${perYear.length * DAYS_PER_YEAR * MIN_PER_DAY} minutes of play at 1x)`);
 console.log(['year', 'requests', 'near', ...cols, 'techs', 'deaths'].map((h) => h.padStart(11)).join(''));
 perYear.forEach((y, i) => {
   console.log([String(i + 1), String(y.requests), String(y.notices), ...cols.map((k) => String(y.events[k] ?? 0)), String(y.techs), String(y.deaths)].map((c) => c.padStart(11)).join(''));
 });
 
-// the gaps between things that turn up for the player, in minutes of play at 1x (one day = one minute)
+// the gaps between things that turn up for the player, in minutes of play at 1x
 items.sort((a, b) => a.day - b.day);
-const total = perYear.length * DAYS_PER_YEAR;
+const total = perYear.length * DAYS_PER_YEAR * MIN_PER_DAY;
 const count = (c: string): number => items.filter((i) => category(i.kind) === c).length;
 const every = (n: number): string => (n ? `one every ${(total / n).toFixed(1)} minutes` : 'none');
 console.log('');
@@ -89,10 +92,10 @@ console.log(`in ${total} minutes of play at 1x, near the player (3.5 km):`);
 console.log(`  requests ${count('request')} (${every(count('request'))}), trouble ${count('trouble')} (${every(count('trouble'))}), occasions ${count('occasion')} (${every(count('occasion'))}), gatherings ${count('gathering')} (colour: ${every(count('gathering'))})`);
 const dealt = items.filter((i) => category(i.kind) !== 'gathering');
 const dgaps: number[] = [];
-for (let i = 1; i < dealt.length; i++) dgaps.push(dealt[i].day - dealt[i - 1].day);
+for (let i = 1; i < dealt.length; i++) dgaps.push((dealt[i].day - dealt[i - 1].day) * MIN_PER_DAY);
 dgaps.sort((a, b) => a - b);
 const dpct = (q: number): number => (dgaps.length ? dgaps[Math.min(dgaps.length - 1, Math.floor(dgaps.length * q))] : 0);
-console.log(`something to deal with (request, trouble or occasion): ${dealt.length}, ${every(dealt.length)}; gaps (min) median ${dpct(0.5).toFixed(1)}, 90% ${dpct(0.9).toFixed(1)}, longest ${(dgaps[dgaps.length - 1] ?? 0).toFixed(1)}; ${dgaps.length ? Math.round((dgaps.filter((g) => g > 3).length / dgaps.length) * 100) : 0}% of gaps longer than 3 minutes (SPEC §21 target: every 2-3 minutes; encounters on the road come on top)`);
+console.log(`something to deal with (request, trouble or occasion): ${dealt.length}, ${every(dealt.length)}; gaps (min) median ${dpct(0.5).toFixed(1)}, 90% ${dpct(0.9).toFixed(1)}, longest ${(dgaps[dgaps.length - 1] ?? 0).toFixed(1)}; ${dgaps.length ? Math.round((dgaps.filter((g) => g > 8).length / dgaps.length) * 100) : 0}% of gaps longer than 8 minutes (happenings alone: about one every 5-8 minutes; the objectives, the road's encounters and your own errands come on top, SPEC §21 wants something every 2-3 minutes)`);
 const nearBy: Record<string, number> = {};
 for (const i of items) nearBy[i.kind] = (nearBy[i.kind] ?? 0) + 1;
 console.log(`near the player by kind: ${JSON.stringify(nearBy)}`);
