@@ -90,6 +90,8 @@ export interface ObjectivesApi {
   found?(): { person: PersonId; place: ObjectiveTarget | null };
   /** Places worth knowing, nearest first: home, the family's strips, the church, the market, the smithy, the workplace… */
   places?(): ObjectiveTarget[];
-  /** Objectives that were added, finished or changed since the last call has changed this number (cheap change detection for the HUD). */
+  /** A number that changes whenever the objectives (or their progress) change: cheap change detection for the HUD and the journal. */
   version?(): number;
+  /** The scene-setting line for the first minutes: "Spring. You wake in your father's cottage in Dromore; the barley must go in." */
+  intro?(): string;
 }

@@ -13,7 +13,7 @@ import { T, cap, type Vars } from './data';
 import {
   awayFromHome, buildingPhrase, buildingTarget, churchOf, deadwoodNear, describePerson, homeOf, personTarget, stripPhrase, stripSide,
 } from './places';
-import { enabledOption, headOf, neighbourFor, priestOf } from './roles';
+import { boardFor, enabledOption, headOf, neighbourFor, priestOf } from './roles';
 import { bagQty } from './sources';
 import { findNear } from './places';
 
@@ -95,6 +95,22 @@ function errandChore(O: Obj, me: Person, head: Person | undefined, day: number):
     steps: [{
       text: T('chores', 'errand.step', vars), hint: T('chores', 'errand.hint', vars), target: personTarget(O, nb, describePerson(O, nb)),
       m: { k: 'act', ids: ['errand.run'], at: { kind: 'person', id: nb.id }, need: 1 },
+    }],
+  };
+}
+
+/** Nothing to do at home: the board where work is asked about. */
+function jobsChore(O: Obj, me: Person, head: Person | undefined, day: number): NewObjective | null {
+  if (O.deps.economy.employment(me.id) || O.age(me) < 12) return null;
+  const board = boardFor(O, me);
+  if (!board) return null;
+  const vars: Vars = { ...headVars(O, me, head), place: board.phrase };
+  return {
+    ...choreBase(O, me, head, `chore:${day}:jobs`, T('chores', 'jobs.title', vars), T('chores', 'jobs.why', vars), 0),
+    reward: 'A post to take, when you are ready',
+    steps: [{
+      text: T('chores', 'jobs.step', vars), hint: T('chores', 'jobs.hint', vars), target: board.at,
+      m: { k: 'act', ids: ['manage.jobs'], at: { kind: board.target.kind, id: 'id' in board.target ? board.target.id : -1 }, need: 1 },
     }],
   };
 }
@@ -215,7 +231,9 @@ export function makeChores(O: Obj): number {
     if (picks.length < cap0 && (plan === 'wood' || low || hash01(me.id, day, 11) < 0.3)) add(woodChore(O, me, giver, day, low), order++);
     if (picks.length < cap0 && (plan === 'school' || (O.age(me) < 13 && hash01(me.id, day, 13) < 0.25))) add(schoolChore(O, me, giver, day), order++);
     if (picks.length < cap0 && picks.length < 2 && hash01(me.id, day, 17) < (O.age(me) < 16 ? 0.5 : 0.25)) add(errandChore(O, me, giver, day), order++);
-    // nothing doable at home: the board where work is asked about is the next best thing, which the goals offer
+    // nothing doable at home: an errand for a neighbour, or the board where work is asked about
+    if (picks.length === 0) add(errandChore(O, me, giver, day), order++);
+    if (picks.length === 0) add(jobsChore(O, me, giver, day), order++);
   }
 
   const made: NewObjective[] = picks.sort((a, b) => a.order - b.order).slice(0, cap0).map((p) => p.spec);

@@ -158,6 +158,24 @@ describe('dawn chores', () => {
 });
 
 
+describe('a household with nothing to do at home', () => {
+  for (const seed of ['s15', 's18', 's33']) {
+    it(`a town child (${seed}) is not left without direction: an errand, or the board where work is asked about`, () => {
+      const o = objSim({ seed });
+      playObjectives(o, ['tutorial']);
+      runTo(o, 1, 6);
+      const chores = active(o, 'chore');
+      expect(chores.length, `chores of ${seed}`).toBeGreaterThan(0);
+      for (const c of chores) {
+        expect(c.steps[0].target, c.title).toBeTruthy();
+        expect(c.why.length).toBeGreaterThan(15);
+      }
+      const played = playObjectives(o, ['chore']);
+      expect(played.stuck, played.trace.join('\n')).toBeNull();
+    });
+  }
+});
+
 describe('who the chores are for', () => {
   it('a household head sets his own work: no giver, no fine', () => {
     const o = objSim({ seed: 's1', install: false });

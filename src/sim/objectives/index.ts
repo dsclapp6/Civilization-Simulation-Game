@@ -19,6 +19,7 @@ import { Obj, type ObjRec } from './core';
 import { isStrict } from './data';
 import { notablePlaces } from './directory';
 import { refreshGoals, retireGoals } from './goals';
+import { introText } from './intro';
 import { installMarkers } from './markers';
 import { round, type Ev } from './match';
 import { syncRequests } from './requests';
@@ -216,6 +217,7 @@ export function installObjectives(sim: Simulation, deps: Wave3Deps): ObjectivesR
     found: () => ({ person: O.save.foundPerson, place: O.save.foundPlace }),
     places: () => { const me = O.me; return me ? notablePlaces(O, me) : []; },
     version: () => O.version,
+    intro: () => introText(O),
     dispose() {
       for (const off of offs.splice(0)) off();
       sim.view.setSource('worldMarkers', undefined);

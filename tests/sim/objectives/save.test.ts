@@ -90,23 +90,30 @@ describe('saving and loading', () => {
     expect(y.titles).toEqual(x.titles);
   });
 
-  it('a character switch starts afresh: no tutorial, new goals, the old chores gone', () => {
+  it('a character switch starts afresh: no tutorial, goals and chores for the new person, none of the old chores', () => {
     const o = objSim({ seed: 's1' });
     playObjectives(o, ['tutorial']);
     runTo(o, 2, 6);
-    expect(active(o, 'chore').length).toBeGreaterThan(0);
+    const oldChores = active(o, 'chore').map((x) => x.id);
+    expect(oldChores.length).toBeGreaterThan(0);
     const me = playerOf(o.sim);
-    const hh = o.sim.state.households.get(me.household)!;
-    const sibling = hh.members.map((id) => o.sim.state.persons.get(id)!).find((p) => p.id !== me.id && !p.death && o.sim.eligibleSwitchTargets().includes(p.id));
-    if (!sibling) return; // no one to take over in this household
-    const done: string[] = [];
-    o.sim.events.on('objective', (e) => done.push(e.phase));
-    expect(o.sim.switchTo(sibling.id)).toBe(true);
-    expect(o.obj.obj.save.person).toBe(sibling.id);
+    const targets = o.sim.eligibleSwitchTargets();
+    expect(targets.length).toBeGreaterThan(0);
+    const other = o.sim.state.persons.get(targets.find((id) => (o.sim.absDay - o.sim.state.persons.get(id)!.birthDay) / 16 >= 16) ?? targets[0])!;
+    const phases: string[] = [];
+    o.sim.events.on('objective', (e) => phases.push(e.phase));
+    expect(o.sim.switchTo(other.id)).toBe(true);
+    expect(o.obj.obj.save.person).toBe(other.id);
+    expect(me.id).not.toBe(other.id);
     expect(active(o, 'tutorial')).toHaveLength(0);
     expect(o.obj.obj.save.tut.done).toBe(true);
-    // the summaries of the earlier life stay, the objectives are the new character's
+    // the old character's chores are gone, whatever else the new one is asked
+    expect(active(o).some((x) => oldChores.includes(x.id))).toBe(false);
+    // the summaries of the earlier life stay for the journal
     expect(o.obj.daySummary()).toBeTruthy();
-    expect(o.obj.list().every((x) => x.state !== 'active' || x.source !== 'chore' || x.id > 0)).toBe(true);
+    // the new person has their own day: chores at the next dawn
+    runTo(o, 3, 6);
+    const mine = active(o, 'chore');
+    for (const c of mine) expect(c.giver === undefined || c.giver !== other.id).toBe(true);
   });
 });

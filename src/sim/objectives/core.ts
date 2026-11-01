@@ -303,7 +303,10 @@ export class Obj {
     o.state = state;
     o.ended = this.dayNo;
     if (state === 'done') {
-      for (const s of o.steps) if (!s.done) s.done = true;
+      for (const s of o.steps) {
+        s.done = true;
+        if (s.goal !== undefined) s.progress = s.goal;
+      }
       this.save.n.done++;
       this.save.log.done.push(o.title);
       this.payReward(o);

@@ -59,6 +59,11 @@
   "errand.step": "Run an errand for {nbDesc}",
   "errand.hint": "Walk up to {nb}, hold E for the action wheel and choose 'Run an errand'.",
 
+  "jobs.title": "Look for work",
+  "jobs.why": "There is little for you to do at home, {head} says. A post earns coin and teaches a trade.",
+  "jobs.step": "Ask about work at {place}",
+  "jobs.hint": "Go to {place}, press E and choose 'Ask about work'. The list shows what each post pays and what it asks.",
+
   "mass.title": "Hear Mass",
   "mass.why": "It is the holy day: no work is done, and the whole parish goes to church. The priest notes who is missing.",
   "mass.step": "Hear Mass at {church}",
