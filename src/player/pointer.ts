@@ -200,7 +200,11 @@ export class PointerController {
         if (k === 'strip') f.sublabel = this.stripNote(c.target.id);
         return f;
       }
-      if (k === 'item') return this.found(c.target, c.x, c.z, c.label);
+      if (k === 'item') {
+        const f = this.found(c.target, c.x, c.z, c.label);
+        f.mark = { kind: 'item', id: c.target.id, x: c.x, z: c.z };
+        return f;
+      }
     }
     return this.found({ kind: 'ground', x, z }, x, z, '');
   }

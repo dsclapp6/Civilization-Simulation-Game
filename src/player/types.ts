@@ -208,9 +208,9 @@ export interface PlayerApi {
 /** What a cursor over the world looks like: a system cursor image per kind (src/ui/core/cursors.ts). */
 export type CursorKind = 'default' | 'walk' | 'talk' | 'work' | 'trade' | 'enter' | 'attack' | 'use';
 
-/** A building, strip, tree or common the 3D view may outline while the mouse is over it (renderer: optional `setHover`). */
+/** A building, strip, tree, common or loose pile the 3D view may outline while the mouse is over it (renderer: optional `setHover`). */
 export interface HoverMark {
-  kind: 'building' | 'strip' | 'parcel' | 'scatter';
+  kind: 'building' | 'strip' | 'parcel' | 'scatter' | 'item';
   id: number;
   /** World position of the thing (trees and rocks: their trunk). */
   x?: number;
