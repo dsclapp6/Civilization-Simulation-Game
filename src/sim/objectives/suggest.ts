@@ -69,11 +69,13 @@ export function suggest(O: Obj, limit = 4): Suggestion[] {
 
   // needs
   if (me.needs.hunger < 0.4) {
-    if (foodInPack(O, me)) push(90, T('text', 'sug.hungry.pack'));
-    else if (home && O.state.households.get(me.household)?.settlement === me.settlement) push(90, T('text', 'sug.hungry.home'), homeTarget);
-    else push(90, T('text', 'sug.hungry.buy'));
+    // a body that is starving comes before everything, even the tracked step
+    const score = me.needs.hunger < 0.15 ? 110 : 90;
+    if (foodInPack(O, me)) push(score, T('text', 'sug.hungry.pack'));
+    else if (home && O.state.households.get(me.household)?.settlement === me.settlement) push(score, T('text', 'sug.hungry.home'), homeTarget);
+    else push(score, T('text', 'sug.hungry.buy'));
   }
-  if (me.needs.rest < 0.25) push(88, T('text', 'sug.tired'), homeTarget);
+  if (me.needs.rest < 0.25) push(me.needs.rest < 0.1 ? 105 : 88, T('text', 'sug.tired'), homeTarget);
   else if (me.needs.warmth < 0.25 && home && !nearHome) push(70, T('text', 'sug.cold'), homeTarget);
 
   // the hour

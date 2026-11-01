@@ -51,6 +51,7 @@ export function objSim(opts: ObjSimOptions = {}): ObjSim {
   const home = sim.state.buildings.get(hh.home);
   if (home) { at.x = home.x; at.z = home.z; }
   sim.view.setSource('player', () => ({ personId: sim.state.run.playerId, x: at.x, y: 0, z: at.z, yaw: 0, mounted: false, alive: true }));
+  sim.view.setSource('focus', () => at);
   const o: ObjSim = { sim, social, economy, adv, obj: undefined as unknown as ObjectivesRuntime, deps, player, at };
   if (opts.install !== false) o.obj = installObjectives(sim, deps);
   return o;
@@ -141,6 +142,12 @@ export function setTime(sim: Simulation, fraction: number, day = Math.floor(sim.
 
 export function ageNow(sim: Simulation, p: Person): number { return ageYears(p, sim.absDay); }
 
+/** Ends the tutorial without playing it (for tests about what comes after). */
+export function skipTutorial(o: ObjSim): void {
+  o.obj.obj.save.tut.done = true;
+  for (const x of o.obj.list()) if (x.source === 'tutorial' && x.state === 'active') o.obj.obj.finish(o.obj.obj.byId(x.id)!, 'expired');
+}
+
 /** Puts fallen trees at the given offsets from the player's home (the mock world has no vegetation). Returns their ids. */
 export function addDeadwood(o: ObjSim, offsets: Array<[number, number]> = [[30, 0], [55, 10], [80, -10]]): number[] {
   const hh = o.sim.state.households.get(playerOf(o.sim).household) as Household;
@@ -159,6 +166,27 @@ export function addDeadwood(o: ObjSim, offsets: Array<[number, number]> = [[30, 
   });
   (o.sim.world as { scatterInChunk: (cx: number, cz: number) => unknown }).scatterInChunk = (cx: number, cz: number) => byChunk.get(`${cx}:${cz}`) ?? [];
   return ids;
+}
+
+export interface FakeZone {
+  zone: Wave3Deps['zone'];
+  /** Where the agents stand (people not listed are not in the zone). */
+  agents: Map<number, { x: number; z: number }>;
+  /** What the objectives told the zone about quest givers, each call. */
+  givers: Array<{ ids: number[]; tracked: number | undefined }>;
+}
+
+/** Just enough of the detail zone for the objectives: agents, whereabouts, doors and the quest-giver hook. */
+export function fakeZone(): FakeZone {
+  const agents = new Map<number, { x: number; z: number }>();
+  const givers: FakeZone['givers'] = [];
+  const zone = {
+    agent: (id: number) => { const a = agents.get(id); return a ? { personId: id, x: a.x, y: 0, z: a.z, yaw: 0 } : null; },
+    whereabouts: () => ({ activity: 'home', settlement: 0, building: -1, indoors: false, x: 123, z: 456, label: '' }),
+    nav: { doorOf: () => null },
+    setQuestGivers: (ids: readonly number[], tracked?: number) => { givers.push({ ids: [...ids], tracked }); },
+  } as unknown as Wave3Deps['zone'];
+  return { zone, agents, givers };
 }
 
 /** Runs the calendar to a given hour of a day (hooks fire as in play). */

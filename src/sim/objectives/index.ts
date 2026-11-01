@@ -107,14 +107,20 @@ export function installObjectives(sim: Simulation, deps: Wave3Deps): ObjectivesR
   // ---- events ----
   const feed = (ev: Ev): void => { round(O, ev); follow(); };
 
-  offs.push(sim.actions.onEvent((e: ActionEvent) => {
+  offs.push(sim.events.on('action', (e: ActionEvent) => {
     if (e.type !== 'completed' || e.actor !== O.playerId) return;
     logAction(O, e);
     feed({ t: 'action', id: e.option.id, target: e.option.target, ok: e.outcome.ok });
     syncRequests(O);
   }));
   offs.push(sim.events.on('conversation', (e) => {
-    if (e.phase !== 'start' || e.actor !== O.playerId) return;
+    if (e.actor !== O.playerId) return;
+    if (e.phase === 'end') {
+      // requests are heard, accepted, declined and handed over in conversation
+      syncRequests(O);
+      follow();
+      return;
+    }
     logTalk(O);
     feed({ t: 'talk', who: e.with });
   }));
@@ -168,6 +174,7 @@ export function installObjectives(sim: Simulation, deps: Wave3Deps): ObjectivesR
   let polls = 0;
   const poll = (slow = false): void => {
     if (!O.me) return;
+    if (slow) syncRequests(O);
     round(O, { t: 'poll', slow });
     markers.refresh();
   };

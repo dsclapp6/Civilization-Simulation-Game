@@ -241,7 +241,7 @@ export function makeChores(O: Obj): number {
 export function expireOverdue(O: Obj): void {
   for (const o of O.active()) {
     if (o.dueDay === undefined || O.day < o.dueDay) continue;
-    if (o.source === 'tutorial') continue;
+    if (o.source === 'tutorial' || o.source === 'request') continue;
     O.finish(o, 'expired');
   }
 }
