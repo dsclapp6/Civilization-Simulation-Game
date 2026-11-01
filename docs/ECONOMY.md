@@ -157,8 +157,11 @@ summed by `perkSum`/`perkTotal`.
   reaped part of a strip, hay cocks for two days after a meadow is mown, a woodpile (`count` 1..8 from firewood) and a heap of
   grain sacks (from grain and flour) at each home or barn, stone at quarries, a stump where a tree was felled (permanent) and its
   logs (until the woodcutter has walked off). Households the economy keeps by the day hold no stores, so they show a seasonal
-  baseline; the player's household shows exactly what it keeps. Ids are stable (`kind × 1e9 + entity`); the version moves only
-  when the list differs. What the work leaves is remembered in `Econ.notes` (not saved).
+  baseline; the player's household shows exactly what it keeps. A strip the household farm harvests while it is being watched
+  (the feed saw it ripe or cut, then stubble) stands in five stooks for about three-quarters of a day, as if carried in by the
+  next afternoon. Ids are stable (`kind × 1e9 + entity`); the version moves only when the list differs. What the work leaves is
+  remembered in `Econ.notes` (not saved); each new note moves `notes.rev`, which the feed rebuilds on, so a bout shows at once
+  rather than at the next game hour.
 * `drainFloaters` (`floatfeed.ts`): "+8 sheaves cut", "+3d", "Farming +2" over the player for a completed action, "Farming 3!"
   for a level, "−4d" / "+2 eggs" for a trade, "♥ +3" over the person whose opinion moved; a few a second.
 
