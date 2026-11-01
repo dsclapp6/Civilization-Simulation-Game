@@ -115,10 +115,11 @@ export function workChoices(O: Obj, me: Person): WorkChoice[] {
   return out.sort((a, b) => a.rank - b.rank || (a.at.id - b.at.id));
 }
 
-/** The work of a given kind nearest the player (or the first by rank). */
-export function pickWork(O: Obj, me: Person, kinds?: readonly WorkKind[]): WorkChoice | null {
+/** The best work of the given kinds: by rank, with the household's crafts last unless `craftFirst`. */
+export function pickWork(O: Obj, me: Person, kinds?: readonly WorkKind[], craftFirst = false): WorkChoice | null {
   const all = workChoices(O, me).filter((c) => !kinds || kinds.includes(c.kind));
-  return all[0] ?? null;
+  if (craftFirst) return all.find((c) => c.kind === 'craft') ?? all[0] ?? null;
+  return all.find((c) => c.kind !== 'craft') ?? all[0] ?? null;
 }
 
 /** Text helpers for a work choice. */

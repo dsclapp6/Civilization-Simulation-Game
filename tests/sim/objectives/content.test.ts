@@ -9,7 +9,7 @@ const KNOWN = new Set([
   'head', 'headFull', 'headDesc', 'headRel', 'village', 'home', 'place', 'strip', 'nb', 'nbDesc', 'shop', 'shopDesc', 'keeper', 'church', 'priest', 'priestDesc',
   'steward', 'stewardDesc', 'peer', 'peerDesc', 'pay', 'label', 'player', 'list', 'side', 'n', 'kind', 'title', 'days', 'employer', 'years', 'trade', 'master',
   'recruiter', 'price', 'tool', 'Tool', 'value', 'stat', 'skill', 'pct', 'name', 'town', 'goods', 'season', 'from', 'what', 'when', 'lord', 'have', 'to', 'day',
-  'animal', 'dir', 'money',
+  'animal', 'dir', 'money', 'meet', 'meetDesc',
 ]);
 
 describe('the wording', () => {

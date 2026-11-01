@@ -14,7 +14,7 @@ import { CHAINS, T, cap, type Vars } from './data';
 import {
   buildingPhrase, buildingTarget, churchOf, describePerson, doorXZ, personTarget, placeTarget, stripCentre, stripPhrase, stripTarget,
 } from './places';
-import { boardFor, enabledOption, headOf, neighbourFor, peerFor, priestOf, stewardOf, traderFor } from './roles';
+import { boardFor, enabledOption, headOf, meetPerson, neighbourFor, peerFor, priestOf, stewardOf, traderFor } from './roles';
 import type { ObjectiveTarget } from './types';
 
 const CHAIN_OF: Record<BirthClass, string> = {
@@ -75,12 +75,16 @@ const reachAt = (text: string, hint: string, at: ObjectiveTarget, r: number): St
 // ---------------------------------------------------------------------------------------------
 
 function stageMeet(c: Ctx): Built {
-  const { O, head } = c;
-  if (!head) return null;
-  return make(c, 'meet', [{
-    text: T('tutorial', 'meet.talk.text', c.vars, c.cls), hint: T('tutorial', 'meet.talk.hint', c.vars, c.cls),
-    target: personTarget(O, head, describePerson(O, head)), m: { k: 'talk', who: head.id },
-  }], { pay: { opinion: 2 } });
+  const { O, me } = c;
+  const who = meetPerson(O, me, c.head);
+  if (!who) return null;
+  const vars: Vars = { ...c.vars, meet: who.first, meetDesc: describePerson(O, who) };
+  const spec = make(c, 'meet', [{
+    text: T('tutorial', 'meet.talk.text', vars, c.cls), hint: T('tutorial', 'meet.talk.hint', vars, c.cls),
+    target: personTarget(O, who, describePerson(O, who)), m: { k: 'talk', who: who.id },
+  }], { pay: { opinion: 2 }, vars });
+  spec.giver = who.id;
+  return spec;
 }
 
 /** Which skill a bit of work trains (for the stage's small reward). */
@@ -95,7 +99,8 @@ function skillOfWork(c: WorkChoice, me: Person): SkillId {
 
 function stageWork(c: Ctx): Built {
   const { O, me } = c;
-  const work = pickWork(O, me);
+  // household crafts (brewing, baking) are the first thing to learn only in a craftsman's house
+  const work = pickWork(O, me, undefined, c.cls === 'craft');
   if (!work) return stageJobs(c);
   const vars: Vars = { ...c.vars, place: work.place, label: work.label };
   const steps: Step[] = [];

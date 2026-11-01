@@ -1,5 +1,5 @@
 {
-  "_doc": "The first-day tutorial of each birth chain (clarity pass, docs/CLARITY.md §2). `chains` lists the stages of a chain in order; `text` is a flat dictionary: `stage.part` keys, with a `chain:` prefix for a variant that only that chain uses. Placeholders: {head} {headFull} {headDesc} {headRel} {village} {home} {place} {strip} {nb} {nbDesc} {shop} {shopDesc} {keeper} {church} {priest} {priestDesc} {steward} {stewardDesc} {peer} {peerDesc} {pay} {label}. A stage is skipped when it cannot be made for this player (no neighbour, no shop …).",
+  "_doc": "The first-day tutorial of each birth chain (clarity pass, docs/CLARITY.md §2). `chains` lists the stages of a chain in order; `text` is a flat dictionary: `stage.part` keys, with a `chain:` prefix for a variant that only that chain uses. Placeholders: {head} {headFull} {headDesc} {headRel} {meet} {meetDesc} {village} {home} {place} {strip} {nb} {nbDesc} {shop} {shopDesc} {keeper} {church} {priest} {priestDesc} {steward} {stewardDesc} {peer} {peerDesc} {pay} {label}. A stage is skipped when it cannot be made for this player (no neighbour, no shop …).",
   "chains": {
     "farm": ["meet", "work", "errand", "trade", "night"],
     "craft": ["meet", "work", "errand", "trade", "night"],
@@ -9,12 +9,12 @@
   },
   "text": {
     "meet.title": "Meet your family",
-    "meet.why": "{head} has work for you today. Say good morning first.",
-    "meet.talk.text": "Speak with {headDesc}",
-    "meet.talk.hint": "Walk up to {head} (W A S D to walk, drag with the right mouse button to look round) and press E, or click them.",
-    "meet.reward": "{head}'s good word",
-    "baron:meet.why": "{head} will want to see you before the household's day begins.",
-    "noble:meet.why": "{head} will want to see you before the household's day begins.",
+    "meet.why": "{meet} will tell you what the day holds. Say good morning first.",
+    "meet.talk.text": "Speak with {meetDesc}",
+    "meet.talk.hint": "Walk up to {meet} (W A S D to walk, drag with the right mouse button to look round) and press E, or click them.",
+    "meet.reward": "{meet}'s good word",
+    "baron:meet.why": "{meet} will want to see you before the household's day begins.",
+    "noble:meet.why": "{meet} will want to see you before the household's day begins.",
 
     "work.title": "Lend a hand at home",
     "work.title.strip": "Help on the family's land",
@@ -23,6 +23,9 @@
     "work.title.herd": "Drive the beasts to pasture",
     "work.title.craft": "Work at the bench",
     "craft:work.title.craft": "Learn the workshop",
+    "farm:work.title.craft": "Lend a hand at home",
+    "merchant:work.title.craft": "Lend a hand at home",
+    "farm:work.why.craft": "{head} keeps the household fed by many small crafts: brewing, baking, spinning. Every batch you make is one less to buy.",
     "work.title.barn": "Work in the barn",
     "work.title.dig": "Quarry stone",
     "work.why.strip": "{head}: 'The land will not work itself.' Every task you finish leaves the strip a step further along.",

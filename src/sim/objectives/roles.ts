@@ -7,7 +7,7 @@ import type { Person } from '../state';
 import type { Obj } from './core';
 import {
   adultsNear, buildingPhrase, buildingTarget, buildingsOfKind, homeOf, marketPlaceIn, nearbySettlements, nearestOf, personTarget,
-  settlementTarget,
+  playerXZ, settlementTarget, whereIs,
 } from './places';
 import type { ObjectiveTarget } from './types';
 import type { BuildingKind } from '../../content/types';
@@ -31,6 +31,27 @@ export function headOf(O: Obj, me: Person): Person | undefined {
     if (p && O.age(p) >= 16) return p;
   }
   return undefined;
+}
+
+/**
+ * Whom the player speaks to first: the head if they are at hand, else the family member nearest the player (the
+ * head is often at work in the fields, a long walk from the door at the start of the day).
+ */
+export function meetPerson(O: Obj, me: Person, head: Person | undefined): Person | undefined {
+  const pos = playerXZ(O);
+  if (!pos) return head;
+  const near = (p: Person): number => { const w = whereIs(O, p.id); return dist(pos.x, pos.z, w.x, w.z); };
+  if (head && near(head) <= 160) return head;
+  const hh = O.state.households.get(me.household);
+  let best: Person | undefined, bd = Infinity;
+  for (const id of hh?.members ?? []) {
+    const p = O.state.persons.get(id);
+    if (!p || p.death || p.id === me.id || O.age(p) < 14) continue;
+    const d = near(p);
+    if (d < bd || (d === bd && best && p.id < best.id)) { best = p; bd = d; }
+  }
+  if (best && (!head || bd + 120 < near(head))) return best;
+  return head ?? best;
 }
 
 export function enabledOption(O: Obj, me: Person, target: TargetRef, re: RegExp): ActionOption | undefined {
