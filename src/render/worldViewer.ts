@@ -444,8 +444,11 @@ const CLARITY_PRESETS: Record<string, PresetDef> = {
       return 'follow';
     },
     after: (c) => {
-      const crowd = c.v.characters().filter((it) => it.id >= 108 && it.id < 200);
-      const target = crowd.sort((a, b) => Math.hypot(a.x - c.v.avatar.x, a.z - c.v.avatar.z) - Math.hypot(b.x - c.v.avatar.x, b.z - c.v.avatar.z))[2];
+      // the cursor on someone in the right half of the view (clear of the reeve and the speaker)
+      const cam = c.r.getCamera();
+      const p = new THREE.Vector3();
+      const crowd = c.v.characters().filter((it) => it.id >= 108 && it.id < 200 && p.set(it.x, it.y + 1.8, it.z).project(cam).x > 0.15 && p.x < 0.7 && p.z < 1);
+      const target = crowd.sort((a, b) => Math.hypot(a.x - c.v.avatar.x, a.z - c.v.avatar.z) - Math.hypot(b.x - c.v.avatar.x, b.z - c.v.avatar.z))[0];
       if (target) c.r.setHover?.({ kind: 'person', id: target.id });
       return 0;
     },

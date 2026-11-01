@@ -111,7 +111,9 @@ export function layoutPlates(
     const markOk = !!it.mark && d < MARK_RANGE;
     if (!text && !markOk) continue;
     const tone = it.labelTone ?? 'stranger';
-    const pri = (focus ? 1e6 : 0) + (speech ? 2e4 : 0) + (it.mark === 'quest' ? 6e3 : it.mark === 'track' ? 5e3 : 0) + TONE_WEIGHT[tone] * 900 - d * 10;
+    // the hovered one, then people with a task for the player or tracked, then a spoken line (it steps up over
+    // others), then kin and the like, nearest first
+    const pri = (focus ? 1e6 : 0) + (it.mark === 'quest' ? 3e4 : it.mark === 'track' ? 2.5e4 : 0) + (speech ? 2e4 : 0) + TONE_WEIGHT[tone] * 900 - d * 10;
     cands.push({ it, d, pri, text, sub: !!it.sublabel && !speech && (focus || d < SUB_RANGE), focus, speech, sx: 0, sy: 0 });
   }
   cands.sort((a, b) => b.pri - a.pri);
