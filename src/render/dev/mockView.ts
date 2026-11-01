@@ -6,8 +6,8 @@ import type { AnimalKind, CropKind } from '../../core/domain';
 import { clamp, hash01, hash3, pointInPolygon, type P2 } from '../../core/math';
 import { DAY_SECONDS, DAYS_PER_SEASON, DAYS_PER_YEAR, isNight, toDate, type Season } from '../../core/time';
 import type {
-  AnimalDrawItem, AnimState, BuildingView, CharacterDrawItem, ClockView, FxEvent, MapMarker, PlayerView,
-  ProjectileDrawItem, SimView, StripState, StripView, ViewMode, WeatherView,
+  AnimalDrawItem, AnimState, BuildingView, CharacterDrawItem, ClockView, FloatText, FxEvent, LabelTone, MapMarker, PlayerView,
+  ProjectileDrawItem, SimView, StripState, StripTask, StripView, ViewMode, WeatherView, WorldMarker, WorldPropView,
 } from '../../core/view';
 import { PALETTE } from '../../assets/palette';
 import type { Settlement, WorldModel } from '../../world/types';
@@ -27,7 +27,21 @@ interface Walker {
 interface Beast { item: AnimalDrawItem; centre: P2; radius: number; goal: P2; wait: number; speed: number }
 
 const NAMES = ['Alys', 'Wat', 'Hugh', 'Agnes', 'Robin', 'Maud', 'Geoffrey', 'Edith', 'Walter', 'Joan', 'Piers', 'Isabel', 'Simkin', 'Margery', 'Gilbert', 'Emma'];
-const ROLES = ['the alewife', 'the smith', 'the reeve', 'the miller', 'the shepherd', 'the carter', 'the thatcher', 'the baker'];
+const SURNAMES = ['Atwood', 'Smith', 'Reeve', 'Miller', 'Shepherd', 'Carter', 'Thatcher', 'Baker', 'Webb', 'Fletcher', 'Cooper', 'Hayward'];
+const ROLES = ['alewife', 'smith', 'the reeve', 'miller', 'shepherd', 'carter', 'thatcher', 'baker'];
+/** Nameplate data for the dev crowd (the sim fills these from kinship and careers). */
+const PLATES: { sub: string; tone: LabelTone; range: number; mark?: 'quest' | 'track' }[] = [
+  { sub: 'your father · farmer', tone: 'kin', range: 40 },
+  { sub: 'your sister', tone: 'kin', range: 40, mark: 'track' },
+  { sub: "your father's servant", tone: 'household', range: 40 },
+  { sub: 'friend · carter', tone: 'friend', range: 15 },
+  { sub: 'the reeve', tone: 'stranger', range: 40, mark: 'quest' },
+  { sub: 'the parish priest', tone: 'clergy', range: 15 },
+  { sub: 'rival · thatcher', tone: 'rival', range: 15 },
+  { sub: 'baker', tone: 'stranger', range: 15 },
+  { sub: "Wat's apprentice", tone: 'stranger', range: 15 },
+  { sub: 'miller', tone: 'stranger', range: 15 },
+];
 
 export class MockView implements SimView {
   readonly world: WorldModel;
@@ -54,6 +68,15 @@ export class MockView implements SimView {
   private readonly playerView: PlayerView;
   readonly village: Settlement;
   selectedId = -1;
+  /** The avatar's pose while it stands still (a work loop for screenshots); null = idle. */
+  holdAnim: AnimState | null = null;
+  // ---- clarity & feedback sources (the sim fills these in the game) ----
+  private readonly propList: WorldPropView[] = [];
+  private propsVer = 1;
+  private nextPropId = 1;
+  readonly markerList: WorldMarker[] = [];
+  private readonly floatQueue: FloatText[] = [];
+  private readonly stripOverrides = new Map<number, { state?: StripState; crop?: CropKind; growth?: number; task?: StripTask; work?: number }>();
 
   constructor(world: WorldModel, opts: { time?: number; season?: Season; weather?: WeatherPreset } = {}) {
     this.world = world;
@@ -126,7 +149,14 @@ export class MockView implements SimView {
       const z = p ? p.z + Math.cos(p.rot) * (def!.d / 2 + 2) : this.village.z;
       const id = 100 + i;
       const item = this.makeChar(id, x + (hash01(id, 30) - 0.5) * 4, z + (hash01(id, 31) - 0.5) * 4, hash01(id, 32) * 6.28, 0);
-      if (i < 10) item.label = `${NAMES[i % NAMES.length]} ${ROLES[i % ROLES.length]}`;
+      item.label = `${NAMES[i % NAMES.length]} ${SURNAMES[(i * 5 + 3) % SURNAMES.length]}`;
+      const plate = PLATES[i];
+      if (plate) {
+        item.sublabel = plate.sub; item.labelTone = plate.tone; item.labelRange = plate.range;
+        if (plate.mark) item.mark = plate.mark;
+      } else {
+        item.sublabel = ROLES[i % ROLES.length]; item.labelTone = 'stranger'; item.labelRange = 15;
+      }
       const worker = i % 4 === 3 && nearStrips.length > 0;
       if (worker) {
         const st = nearStrips[i % nearStrips.length];
@@ -144,6 +174,9 @@ export class MockView implements SimView {
     rider.mount = { coat: 0x5a3a22, anim: 'walk', animTime: 0 };
     rider.anim = 'ride_walk';
     rider.label = 'Sir Gilbert of Harrow';
+    rider.sublabel = 'Lord of Dromore';
+    rider.labelTone = 'lord';
+    rider.labelRange = 40;
     rider.look.clothing.tunic = PALETTE.dyes[5][0];
     this.walkers.push({ item: rider, goal: { x: rider.x, z: rider.z }, wait: 0, home: this.village, worker: false });
     this.chars.push(rider);
@@ -279,7 +312,10 @@ export class MockView implements SimView {
       a.yaw += d * Math.min(1, dt * 10);
       const anim: AnimState = move.run ? 'run' : 'walk';
       if (a.anim !== anim) { a.anim = anim; a.animTime = 0; }
-    } else if (a.anim !== 'idle') { a.anim = 'idle'; a.animTime = 0; }
+    } else {
+      const rest: AnimState = this.holdAnim ?? 'idle';
+      if (a.anim !== rest) { a.anim = rest; a.animTime = 0; }
+    }
     a.moveSpeed = speed;
     a.x = clamp(a.x, 5, this.world.size - 5);
     a.z = clamp(a.z, 5, this.world.size - 5);
@@ -392,9 +428,73 @@ export class MockView implements SimView {
       if (sv.state !== state || sv.crop !== crop || Math.abs(sv.growth - growth) > 0.01) {
         sv.state = state; sv.crop = crop; sv.growth = clamp(growth, 0, 1);
       }
+      const o = this.stripOverrides.get(sv.id);
+      if (o) {
+        if (o.state) sv.state = o.state;
+        if (o.crop) sv.crop = o.crop;
+        if (o.growth !== undefined) sv.growth = o.growth;
+        sv.task = o.task;
+        sv.work = o.task ? o.work ?? 0 : undefined;
+      }
     }
     this.stripsVer++;
   }
+
+  // ---------- clarity & feedback (dev stand-ins for the sim's sources) ----------
+  /** Pin a strip's state and/or the task under way on it (survives the seasonal mock rotation). */
+  setStrip(id: number, o: { state?: StripState; crop?: CropKind; growth?: number; task?: StripTask; work?: number }): void {
+    this.stripOverrides.set(id, { ...this.stripOverrides.get(id), ...o });
+    const sv = this.stripList.find((s) => s.id === id);
+    if (!sv) return;
+    const m = this.stripOverrides.get(id)!;
+    if (m.state) sv.state = m.state;
+    if (m.crop) sv.crop = m.crop;
+    if (m.growth !== undefined) sv.growth = m.growth;
+    sv.task = m.task;
+    sv.work = m.task ? m.work ?? 0 : undefined;
+    this.stripsVer++;
+  }
+  clearStripOverrides(): void { this.stripOverrides.clear(); this.updateStrips(true); }
+  addProp(p: Omit<WorldPropView, 'id'>): number {
+    const id = this.nextPropId++;
+    this.propList.push({ id, ...p });
+    this.propsVer++;
+    return id;
+  }
+  removeProp(id: number): void {
+    const i = this.propList.findIndex((p) => p.id === id);
+    if (i >= 0) { this.propList.splice(i, 1); this.propsVer++; }
+  }
+  setPropCount(id: number, count: number): void {
+    const p = this.propList.find((q) => q.id === id);
+    if (p) { p.count = count; this.propsVer++; }
+  }
+  clearProps(): void { this.propList.length = 0; this.propsVer++; }
+  floatText(f: FloatText): void { this.floatQueue.push(f); }
+  /** Point a character's nameplate at someone (tests, presets). */
+  character(id: number): CharacterDrawItem | undefined { return this.chars.find((c) => c.id === id); }
+  /** Place the crowd (not the avatar) around a point, facing it. */
+  gather(x: number, z: number, radius: number, count: number): CharacterDrawItem[] {
+    const out: CharacterDrawItem[] = [];
+    let k = 0;
+    for (const w of this.walkers) {
+      if (w.item.mount || k >= count) continue;
+      const a = hash01(w.item.id, 61) * Math.PI * 2, r = radius * (0.35 + 0.65 * hash01(w.item.id, 62));
+      const it = w.item;
+      it.x = x + Math.sin(a) * r; it.z = z + Math.cos(a) * r; it.y = this.world.heightAt(it.x, it.z);
+      it.yaw = Math.atan2(x - it.x, z - it.z) + (hash01(it.id, 63) - 0.5) * 1.2;
+      it.anim = hash01(it.id, 64) < 0.3 ? 'talk' : 'idle'; it.animTime = hash01(it.id, 65) * 4; it.moveSpeed = 0;
+      if (it.mainHand === 'hoe') it.mainHand = 'none';
+      w.goal = { x: it.x, z: it.z }; w.wait = 1e9; w.worker = false;
+      out.push(it);
+      k++;
+    }
+    return out;
+  }
+  worldPropsVersion(): number { return this.propsVer; }
+  worldProps(): readonly WorldPropView[] { return this.propList; }
+  worldMarkers(): readonly WorldMarker[] { return this.markerList; }
+  drainFloaters(): readonly FloatText[] { const out = this.floatQueue.slice(); this.floatQueue.length = 0; return out; }
 
   private updateMarkers(): void {
     this.markers.length = 0;

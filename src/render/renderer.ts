@@ -5,11 +5,11 @@ import * as THREE from 'three';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { clamp, smoothstep } from '../core/math';
 import { DAYS_PER_SEASON } from '../core/time';
-import type { CharacterDrawItem, AnimalDrawItem, SimView, ViewMode } from '../core/view';
+import type { CharacterDrawItem, AnimalDrawItem, BuildingView, SimView, StripView, ViewMode, WorldMarker, WorldPropView } from '../core/view';
 import type { AssetLibrary } from '../assets/types';
 import type { WorldModel } from '../world/types';
 import { QUALITY, type QualitySettings } from './quality';
-import type { CameraMode, GameRenderer, GroundPoint, PickResult, QualityLevel, RenderStats, RendererOptions } from './types';
+import type { CameraMode, GameRenderer, GroundPoint, HoverTarget, PickResult, QualityLevel, RenderStats, RendererOptions } from './types';
 import { computeAtmosphere, createAtmosphereState } from './sky/atmosphere';
 import { atmoUniforms, installAtmospherePatch } from './sky/atmospherePatch';
 import { Sky } from './sky/sky';
@@ -26,8 +26,16 @@ import { Precipitation } from './weather/precipitation';
 import { buildMapBase, buildMapOverlay } from './map/mapOverlay';
 import { MapLabels } from './map/mapLabels';
 import { PostFx } from './post/postFx';
+import { WorldPropsLayer } from './feedback/worldProps';
+import { BeaconLayer } from './feedback/beacons';
+import { FloaterLayer } from './feedback/floaters';
+import { Nameplates } from './feedback/nameplates';
+import { HoverLayer } from './feedback/hover';
 
-export type { CameraMode, GameRenderer, GroundPoint, PickResult, QualityLevel, RenderStats, RendererOptions } from './types';
+export type { CameraMode, GameRenderer, GroundPoint, HoverTarget, PickResult, QualityLevel, RenderStats, RendererOptions } from './types';
+
+const NO_PROPS: readonly WorldPropView[] = [];
+const NO_MARKERS: readonly WorldMarker[] = [];
 
 const AIM_ANIMS = new Set<string>(['draw_bow', 'aim_bow', 'shoot_bow', 'aim_crossbow', 'shoot_crossbow', 'reload_crossbow']);
 const VIEW_TO_CAMERA: Record<ViewMode, CameraMode> = { street: 'follow', map: 'map', travel: 'map', cinematic: 'cinematic' };
@@ -84,15 +92,25 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
   const roads = new RoadSystem(world, palette, quality.roadRadius);
   roads.weather = { uSnowCover: terrain.uniforms.uSnowCover, uWetness: terrain.uniforms.uWetness };
   const fields = new FieldSystem(world, assets, terrain.uniforms, { stripDistance: quality.stripDistance, cropRadius: quality.cropRadius, cropMax: quality.cropMax, cropTris: quality.cropTris });
-  const dynamic = new DynamicLayers(assets, heightAt, showLabels);
-  const occRay = new THREE.Ray();
-  dynamic.occluded = (from, to) => {
-    const d = from.distanceTo(to);
-    occRay.origin.copy(from);
-    occRay.direction.subVectors(to, from).normalize();
-    const hit = buildings.raycast(occRay, d);
-    return hit !== null && hit.distance < d - 0.6;
-  };
+  const dynamic = new DynamicLayers(assets, heightAt);
+  // clarity & feedback: results of work, where to go, gains, who is who, what the cursor is on
+  const worldProps = new WorldPropsLayer(assets, heightAt);
+  const beacons = new BeaconLayer(heightAt, showLabels);
+  const floaters = new FloaterLayer();
+  const plates = new Nameplates(showLabels);
+  let lastBuildings: readonly BuildingView[] = [];
+  let lastStrips: readonly StripView[] = [];
+  const hover = new HoverLayer({
+    world, heightAt,
+    building: (id) => lastBuildings.find((b) => b.id === id) ?? null,
+    strip: (id) => lastStrips.find((s) => s.id === id) ?? null,
+    prop: (id) => worldProps.find(id),
+    buildingObject: (id) => buildings.assetObject(id),
+  });
+  let hoverKey = '';
+  let hoverStripsVer = -1;
+  // nameplates are DOM overlays (never depth-tested): hide those of people behind houses
+  plates.occluded = (from, to) => buildings.occludes(from, to);
   const precip = new Precipitation(quality.rainDrops, quality.snowFlakes);
   const overlayTex = buildMapOverlay(world);
   const mapBaseTex = buildMapBase(world, palette);
@@ -100,7 +118,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
   terrain.uniforms.uMapBase.value = mapBaseTex;
   const mapLabels = new MapLabels(world);
   const overlayScene = new THREE.Scene();
-  if (showLabels) overlayScene.add(dynamic.labelScene, mapLabels.scene);
+  if (showLabels) overlayScene.add(plates.scene, beacons.labelScene, mapLabels.scene);
 
   const rig = new CameraRig(1, {
     heightAt,
@@ -113,7 +131,8 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
   const lighting = new Lighting(scene);
   lighting.configure(quality.shadows, quality.shadowMapSize, quality.shadowRadius);
 
-  scene.add(sky.stars, sky.dome, terrain.root, water.root, roads.root, vegetation.root, buildings.root, fields.root, dynamic.root, precip.rain, precip.snow);
+  scene.add(sky.stars, sky.dome, terrain.root, water.root, roads.root, vegetation.root, buildings.root, fields.root, dynamic.root,
+    worldProps.root, hover.root, beacons.root, precip.rain, precip.snow);
 
   let post: PostFx | null = null;
   const atmo = createAtmosphereState();
@@ -133,6 +152,9 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
   let frameMsAvg = 0;
   let genMs = 0;
   let terrainMs = 0;
+  let feedbackMs = 0;
+  let floaterMs = 0;
+  let labelMs = 0;
   let lastChars: readonly CharacterDrawItem[] = [];
   let lastAnimals: readonly AnimalDrawItem[] = [];
   let width = 1, height = 1;
@@ -300,8 +322,11 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     water.update(atmo, time, weather.rain, mapBlend, pixelAngle);
     g += roads.update(camera, Math.max(0.5 * budgetScale, budget - g));
     buildings.nightLight = atmo.nightLight * (1 - mapBlend);
-    const bfx = buildings.update(view.buildings(), view.buildingsVersion(), camera, time, dt, Math.max(1.5, budget * 0.6), budgetScale > 1);
-    g += fields.update(view.strips(), view.stripsVersion(), camera, Math.max(0.5 * budgetScale, budget - g));
+    lastBuildings = view.buildings();
+    const bfx = buildings.update(lastBuildings, view.buildingsVersion(), camera, time, dt, Math.max(1.5, budget * 0.6), budgetScale > 1);
+    lastStrips = view.strips();
+    const sv = view.stripsVersion();
+    g += fields.update(lastStrips, sv, camera, Math.max(0.5 * budgetScale, budget - g), dt);
     genMs = g;
 
     // dynamic content
@@ -311,7 +336,25 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     lastAnimals = animals;
     const streetView = mapBlend < 0.98;
     dynamic.root.visible = streetView;
-    dynamic.update(streetView ? chars : [], streetView ? animals : [], view.projectiles(), view.drainFx(), bfx, camera, dt, showLabels && mapBlend < 0.3);
+    dynamic.update(streetView ? chars : [], streetView ? animals : [], view.projectiles(), view.drainFx(), bfx, camera, dt);
+
+    // results of work, beacons, floating gains, nameplates, hover outline
+    const tf = performance.now();
+    worldProps.root.visible = streetView;
+    beacons.root.visible = streetView;
+    hover.root.visible = streetView;
+    worldProps.update(view.worldProps?.() ?? NO_PROPS, view.worldPropsVersion?.() ?? 0, dt);
+    const pl = view.player();
+    beacons.update(view.worldMarkers?.() ?? NO_MARKERS, camera, pl && pl.alive ? pl : null, dt, height, streetView && mapBlend < 0.5);
+    const tfl = performance.now();
+    const fl = view.drainFloaters?.();
+    if (fl && fl.length && streetView) floaters.spawn(fl, camera);
+    floaters.update(dt, camera, height);
+    floaterMs = performance.now() - tfl;
+    plates.update(streetView ? chars : [], camera, width, height, showLabels && mapBlend < 0.3);
+    if (hoverKey && sv !== hoverStripsVer) { hoverStripsVer = sv; hover.refresh(); }
+    hover.update(dt, camera);
+    feedbackMs = performance.now() - tf;
     precip.update(camera, dt, time, weather.rain, weather.snow, weather.windX, weather.windZ, 0.25 + 0.75 * atmo.day, renderer.getPixelRatio() * height / 1080, above);
     mapLabels.update(camera.position.y, heightAt, mapBlend > 0.02 ? view.mapMarkers() : [], mapBlend);
 
@@ -324,7 +367,13 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     } else {
       renderer.render(scene, camera);
     }
-    if (showLabels) labelRenderer.render(overlayScene, camera);
+    // floating texts over everything, untouched by fog, bloom or tone mapping
+    if (floaters.active > 0) {
+      renderer.autoClear = false;
+      renderer.render(floaters.scene, camera);
+      renderer.autoClear = true;
+    }
+    if (showLabels) { const tl = performance.now(); labelRenderer.render(overlayScene, camera); labelMs = performance.now() - tl; }
 
     const ms = performance.now() - t0;
     frameMsAvg = frameMsAvg * 0.9 + ms * 0.1;
@@ -393,6 +442,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
       const groups: [string, THREE.Object3D][] = [
         ['terrain', terrain.root], ['water', water.root], ['roads', roads.root], ['vegetation', vegetation.root],
         ['buildings', buildings.root], ['fields', fields.root], ['dynamic', dynamic.root], ['sky', sky.dome],
+        ['props', worldProps.root], ['beacons', beacons.root], ['hover', hover.root],
       ];
       for (const [name, obj] of groups) {
         const was = obj.visible;
@@ -432,6 +482,16 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
       if (ground) return { type: 'ground', point: { x: ground.point.x, y: ground.point.y, z: ground.point.z } };
       return { type: 'none' };
     },
+    setHover(target: HoverTarget | null): void {
+      const key = target ? `${target.kind}:${target.id ?? ''}` : '';
+      if (key === hoverKey) return;
+      hoverKey = key;
+      const id = target?.id ?? -1;
+      dynamic.hoverPerson = target?.kind === 'person' ? id : -1;
+      dynamic.hoverAnimal = target?.kind === 'animal' ? id : -1;
+      plates.focusId = target?.kind === 'person' ? id : -1;
+      hover.set(target && target.kind !== 'person' && target.kind !== 'animal' ? target : null);
+    },
     setQuality,
     getQuality(): QualityLevel { return quality.level; },
     resize,
@@ -467,6 +527,11 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
       fields.dispose();
       roads.dispose();
       dynamic.dispose();
+      worldProps.dispose();
+      beacons.dispose();
+      floaters.dispose();
+      plates.dispose();
+      hover.dispose();
       precip.dispose();
       mapLabels.dispose();
       overlayTex.dispose();
@@ -498,6 +563,14 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
         cropInstances: fields.cropInstances,
         cameraMode: rig.mode,
         quality: quality.level,
+        worldProps: worldProps.count,
+        beacons: beacons.drawn,
+        floaters: floaters.active,
+        nameplates: plates.shown,
+        workingStrips: fields.workingStrips,
+        feedbackMs,
+        labelMs,
+        floaterMs,
       };
     },
   };
