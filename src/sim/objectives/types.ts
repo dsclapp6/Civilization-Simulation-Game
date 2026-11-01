@@ -82,4 +82,14 @@ export interface ObjectivesApi {
   daySummary(day?: number): DaySummary | null;
   /** Put a marker on a person (the people list's "Find"), or clear it with 0. */
   trackPerson(person: PersonId): void;
+
+  // ---- additive (objectives module): optional, so UI fakes need not implement them ----
+  /** Put a marker on a place (the journal's Places "Find"), or clear it with null. */
+  trackPlace?(target: ObjectiveTarget | null): void;
+  /** The person or place currently marked by "Find", if any. */
+  found?(): { person: PersonId; place: ObjectiveTarget | null };
+  /** Places worth knowing, nearest first: home, the family's strips, the church, the market, the smithy, the workplace… */
+  places?(): ObjectiveTarget[];
+  /** Objectives that were added, finished or changed since the last call has changed this number (cheap change detection for the HUD). */
+  version?(): number;
 }
