@@ -50,6 +50,15 @@ export function whereIs(O: Obj, id: PersonId): { x: number; z: number; live: boo
   return { x: s?.x ?? 0, z: s?.z ?? 0, live: false };
 }
 
+/** On the road or the map, or far from home: the household's work is not the player's business just now. */
+export function awayFromHome(O: Obj, me: Person): boolean {
+  const mode = O.sim.view.mode();
+  if (mode === 'map' || mode === 'travel') return true;
+  const home = homeOf(O, me);
+  const pos = playerXZ(O);
+  return !!home && !!pos && dist(pos.x, pos.z, home.x, home.z) > 1800;
+}
+
 export function metresTo(O: Obj, x: number, z: number): number {
   const me = playerXZ(O);
   return me ? dist(me.x, me.z, x, z) : Infinity;

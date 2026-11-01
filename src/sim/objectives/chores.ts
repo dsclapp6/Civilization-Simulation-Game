@@ -2,7 +2,7 @@
 // the player's age and sex, the household plan, the state of the family's strips, the animals and the woodpile.
 // A chore is a single located step; it pays a little from the household's purse and the head's good opinion,
 // and a chore ignored altogether costs a little of that opinion.
-import { dist, hash01 } from '../../core/math';
+import { hash01 } from '../../core/math';
 import { isHolyDay } from '../calendar';
 import { CAREERS } from '../careers';
 import { skillLevel } from '../people';
@@ -11,7 +11,7 @@ import { workChoices, workTitle, type WorkChoice } from './choices';
 import type { NewObjective, Obj } from './core';
 import { T, cap, type Vars } from './data';
 import {
-  buildingPhrase, buildingTarget, churchOf, deadwoodNear, describePerson, homeOf, personTarget, stripPhrase, stripSide,
+  awayFromHome, buildingPhrase, buildingTarget, churchOf, deadwoodNear, describePerson, homeOf, personTarget, stripPhrase, stripSide,
 } from './places';
 import { enabledOption, headOf, neighbourFor, priestOf } from './roles';
 import { bagQty } from './sources';
@@ -176,11 +176,7 @@ export function makeChores(O: Obj): number {
   const day = O.dayNo;
   if (O.save.choresDay >= day) return 0;
   // the player must be at home (their own village or nearby), not away on the road or the map
-  const home = homeOf(O, me);
-  const view = O.sim.view;
-  if (view.mode() === 'map' || view.mode() === 'travel') return 0;
-  const pos = view.player();
-  if (home && pos && dist(pos.x, pos.z, home.x, home.z) > 1800) return 0;
+  if (awayFromHome(O, me)) return 0;
   O.save.choresDay = day;
 
   const head = headOf(O, me);

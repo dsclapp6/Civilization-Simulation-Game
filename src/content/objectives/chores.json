@@ -77,7 +77,7 @@
 
   "week.title": "Week-work on the lord's land",
   "week.why": "You owe the lord {days} this week; a day shirked is a fine, and the reeve keeps count.",
-  "week.step": "Work on the lord's strip: {label}",
+  "week.step": "Work {label}",
   "week.hint": "Stand on the lord's strip and press E. Every bout counts towards the week's dues.",
 
   "job.title.craft": "Work at {place}",

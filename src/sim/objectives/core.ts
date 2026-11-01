@@ -11,6 +11,7 @@ import { gainSkill } from '../skills';
 import { ageYears, fullName, type GameState, type Person, type PersonId } from '../state';
 import type { Wave3Deps } from '../wave3deps';
 import { T } from './data';
+import { awayFromHome } from './places';
 import type { DaySummary, Objective, ObjectiveSource, ObjectiveStep, ObjectiveTarget } from './types';
 
 export const OBJ_KEY = 'objectives';
@@ -39,7 +40,8 @@ export type Match =
   | { k: 'sleep' }
   | { k: 'skill'; skill: SkillId; level: number }
   | { k: 'stat'; stat: StatId; value: number }
-  | { k: 'money'; pence: number }
+  /** The player's purse (and, for the head of a household, its purse; with `family`, the family's purse whoever holds it). */
+  | { k: 'money'; pence: number; family?: boolean }
   /** The player's career becomes `to` (any change when omitted), or they take a post (`post`). */
   | { k: 'career'; to?: string; post?: boolean }
   /** A request of the happenings module reaches a state. */
@@ -346,9 +348,9 @@ export class Obj {
     const p = this.me;
     const giver = o.giver ? this.state.persons.get(o.giver) : undefined;
     if (!p || !giver || giver.id === p.id || !o.fine) return;
-    // only a chore left wholly untouched, by someone who was at hand all the while, costs the head's good opinion
+    // only a chore left wholly untouched, by someone who was at hand (not on the road), costs the head's good opinion
     const untouched = !o.steps.some((s) => s.done || (s.progress ?? 0) > 0);
-    if (!untouched || p.settlement !== giver.settlement) return;
+    if (!untouched || p.settlement !== giver.settlement || awayFromHome(this, p)) return;
     this.deps.social.adjustOpinion(giver.id, p.id, -o.fine, 'left chores');
     this.notify(note ?? T('chores', 'say.late', { head: giver.first, title: o.title }), 'loss', giver.id);
   }

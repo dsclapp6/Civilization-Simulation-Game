@@ -9,7 +9,7 @@ import type { Person } from '../state';
 import type { NewObjective, Obj } from './core';
 import { T, type Vars } from './data';
 import {
-  buildingPhrase, buildingTarget, describePerson, findNear, homeOf, personTarget, stripCentre, stripPhrase, stripTarget,
+  awayFromHome, buildingPhrase, buildingTarget, describePerson, findNear, homeOf, personTarget, stripCentre, stripPhrase, stripTarget,
 } from './places';
 import { enabledOption } from './roles';
 
@@ -71,7 +71,7 @@ function dutyFor(O: Obj, me: Person, emp: Employment): NewObjective | null {
     }
   }
   // day labour on the lord's land
-  if (emp.career === 'labourer' || emp.career === 'woodward' && false) {
+  if (emp.career === 'labourer') {
     const id = demesneStrip(O, me);
     if (id !== null) {
       const ph = stripPhrase(O, id);
@@ -131,7 +131,7 @@ function dutyFor(O: Obj, me: Person, emp: Employment): NewObjective | null {
 /** Today's duty for someone who holds a post, and the week-work of an unfree adult. */
 export function makeJobs(O: Obj): number {
   const me = O.me;
-  if (!me || isHolyDay(O.day)) return 0;
+  if (!me || isHolyDay(O.day) || awayFromHome(O, me)) return 0;
   O.save.jobsDay = O.dayNo;
   let n = 0;
   const emp = O.deps.economy.employment(me.id);

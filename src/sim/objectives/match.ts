@@ -101,7 +101,7 @@ export function evalStep(O: Obj, o: ObjRec, step: StepRec, ev: Ev | null): boole
     }
     case 'money': {
       const hh = O.state.households.get(me.household);
-      const have = me.money + (hh && hh.head === me.id ? hh.purse : 0);
+      const have = me.money + (hh && (hh.head === me.id || m.family) ? hh.purse : 0);
       setProgress(step, Math.min(Math.floor(have), m.pence), m.pence);
       if (have + 1e-9 >= m.pence) step.done = true;
       break;

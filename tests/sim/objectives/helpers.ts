@@ -40,10 +40,14 @@ export function playerOf(sim: Simulation): Person {
 }
 
 export function objSim(opts: ObjSimOptions = {}): ObjSim {
-  const sim = newSim({ preset: 'tiny', ...opts });
+  return wrapSim(newSim({ preset: 'tiny', ...opts }), opts.zone, opts.install !== false);
+}
+
+/** Installs the modules into an existing simulation (a new one, or one just loaded) and returns the test handle. */
+export function wrapSim(sim: Simulation, zone?: Wave3Deps['zone'], withObjectives = true): ObjSim {
   const social = installSocial(sim);
   const economy = installEconomy(sim, { social });
-  const deps: Wave3Deps = { economy, social, zone: opts.zone };
+  const deps: Wave3Deps = { economy, social, zone };
   const adv = installAdvancement(sim, deps);
   const player = playerOf(sim);
   const at = { x: 0, z: 0 };
@@ -53,7 +57,7 @@ export function objSim(opts: ObjSimOptions = {}): ObjSim {
   sim.view.setSource('player', () => ({ personId: sim.state.run.playerId, x: at.x, y: 0, z: at.z, yaw: 0, mounted: false, alive: true }));
   sim.view.setSource('focus', () => at);
   const o: ObjSim = { sim, social, economy, adv, obj: undefined as unknown as ObjectivesRuntime, deps, player, at };
-  if (opts.install !== false) o.obj = installObjectives(sim, deps);
+  if (withObjectives) o.obj = installObjectives(sim, deps);
   return o;
 }
 

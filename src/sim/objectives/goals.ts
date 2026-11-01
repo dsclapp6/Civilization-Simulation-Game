@@ -102,7 +102,7 @@ function apprenticeGoal(O: Obj, me: Person): NewObjective | null {
   const trade = pick.title.replace(/^Apprentice\s+/i, '').toLowerCase();
   const vars: Vars = { master: describePerson(O, master), trade: `${pick.title.toLowerCase()}`, price: formatMoney(pick.premium ?? 0) };
   const steps: Step[] = [];
-  if ((pick.premium ?? 0) > 0) steps.push({ text: T('goals', 'apprentice.save', vars), hint: T('goals', 'apprentice.save.hint'), m: { k: 'money', pence: pick.premium ?? 0 }, goal: pick.premium ?? 0, progress: 0 });
+  if ((pick.premium ?? 0) > 0) steps.push({ text: T('goals', 'apprentice.save', vars), hint: T('goals', 'apprentice.save.hint'), m: { k: 'money', pence: pick.premium ?? 0, family: true }, goal: pick.premium ?? 0, progress: 0 });
   steps.push({ text: T('goals', 'apprentice.talk', vars), hint: T('goals', 'apprentice.talk.hint'), target: personTarget(O, master, describePerson(O, master)), m: { k: 'talk', who: master.id } });
   steps.push({ text: T('goals', 'apprentice.sign', vars), hint: T('goals', 'apprentice.sign.hint'), m: { k: 'career', post: true } });
   void trade;
