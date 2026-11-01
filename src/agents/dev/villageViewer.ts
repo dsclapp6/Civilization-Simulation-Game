@@ -7,7 +7,7 @@ import { createAssetLibrary } from '../../assets/library';
 import type { AppRoot } from '../../main';
 import { BUILDINGS } from '../../content/types';
 import { clamp, hash01 } from '../../core/math';
-import { SEASON_NAMES, daylight, formatDate, toDate, type Season } from '../../core/time';
+import { DAY_SECONDS, SEASON_NAMES, daylight, formatDate, toDate, type Season } from '../../core/time';
 import type { WeatherView } from '../../core/view';
 import { createRenderer } from '../../render/renderer';
 import type { GameRenderer, QualityLevel } from '../../render/types';
@@ -290,13 +290,15 @@ export function start(root: AppRoot): void {
     setWeather(spec.weather ?? 'clear');
     sim.dispatch({ type: 'setSpeed', speed: 1 });
     // start early enough that the warm-up ends at the wanted time of day
+    // (`warm` is in minutes of play of a one-minute day: the same stretch of the game day lasts DAY_SECONDS / 60 times longer now)
+    const warm = spec.warm * (DAY_SECONDS / 60);
     setClock(spec.season, spec.day, time - spec.warm / 60);
     const ctx: SceneCtx = { world, zone, s, g };
     let pose = spec.camera(ctx);
     placeFocus(pose.look.x, pose.look.z);
     renderer.setCameraPose(pose.pos, pose.look, 0);
     zone.resync();
-    run(spec.warm);
+    run(warm);
     const refined = spec.frame?.(ctx) ?? null;
     if (refined) { pose = refined; placeFocus(pose.look.x, pose.look.z); run(0.5); }
     placeFocus(pose.look.x, pose.look.z);
