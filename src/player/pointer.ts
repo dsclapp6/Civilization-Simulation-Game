@@ -155,7 +155,7 @@ export class PointerController {
     if (!sub) {
       const rel = this.host.social.relationLabel(this.host.personId(), id);
       const role = roleLabel(p.career, p.careerStage, p.sex);
-      sub = [rel, role && role.toLowerCase() !== rel.toLowerCase() ? role.toLowerCase() : ''].filter(Boolean).join(' · ');
+      sub = [rel, role && role.toLowerCase() !== rel.toLowerCase() ? role.toLowerCase() : ''].filter(Boolean).join(', ');
     }
     f.sublabel = sub;
     f.tone = d?.labelTone;

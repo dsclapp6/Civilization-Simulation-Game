@@ -204,7 +204,7 @@ export function journalPanel(ctx: PanelCtx, start: JournalTab | undefined): UiPa
   render();
 
   win.showFoot(
-    h('span.mu-small.mu-dim', null, 'O opens and closes the journal · ← → switch pages · Y asks what to do now'),
+    h('span.mu-small.mu-dim', null, 'O opens and closes the journal · the left and right arrow keys switch pages · Y asks what to do now'),
     h('div.mu-grow'),
     button('Close', { variant: 'primary', onClick: () => ctx.close() }));
 

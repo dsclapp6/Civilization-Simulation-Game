@@ -82,8 +82,12 @@ export function todayModel(game: GameServices, meId: PersonId): TodayModel | nul
     holding.strips.forEach((s, i) => {
       const poly = sim.world.strips.find((q) => q.id === s.id)?.poly;
       const cx = poly ? poly.reduce((a, q) => a + q.x, 0) / poly.length : 0, cz = poly ? poly.reduce((a, q) => a + q.z, 0) / poly.length : 0;
-      const crop = s.crop === 'fallow' ? 'fallow' : s.crop;
-      strips.push({ id: s.id, label: `Strip ${i + 1} · ${crop}`, note: `${STRIP_WORDS[s.state] ?? s.state}${s.nextTask && s.state !== 'fallow' ? `. Next: ${s.nextTask.toLowerCase()}` : ''}`, work: s.work, x: cx, z: cz });
+      const lying = s.crop === 'fallow';
+      strips.push({
+        id: s.id, label: `Strip ${i + 1} · ${s.crop}`,
+        note: lying ? 'Resting. It can be ploughed in spring or autumn.' : `${STRIP_WORDS[s.state] ?? s.state}${s.nextTask ? `. Next: ${s.nextTask.toLowerCase()}` : ''}`,
+        work: s.work, x: cx, z: cz,
+      });
     });
   }
   const open: TodayModel['open'] = [];
@@ -221,7 +225,7 @@ export function placeRows(game: GameServices, meId: PersonId): PlaceRow[] {
       const poly = sim.world.strips.find((q) => q.id === s.id)?.poly;
       if (!poly) return;
       const cx = poly.reduce((a, q) => a + q.x, 0) / poly.length, cz = poly.reduce((a, q) => a + q.z, 0) / poly.length;
-      out.push({ id: `s${s.id}`, name: `Your family’s strip ${i + 1}`, sub: `${s.crop}, ${STRIP_WORDS[s.state] ?? s.state}`, icon: 'farming', x: cx, z: cz, group: 'yours' });
+      out.push({ id: `s${s.id}`, name: `Your family’s strip ${i + 1}`, sub: s.crop === 'fallow' ? 'lying fallow' : `${s.crop}, ${STRIP_WORDS[s.state] ?? s.state}`, icon: 'farming', x: cx, z: cz, group: 'yours' });
     });
   }
   const list = st.buildingsAt.get(me.settlement) ?? [];

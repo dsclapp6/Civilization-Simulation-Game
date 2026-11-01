@@ -92,7 +92,7 @@
 @keyframes mu-edge-bob { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 
 /* ---- the settlement banner ---- */
-.mu-hud > .mu-banner { left: 50%; top: 76px; transform: translateX(-50%); display: none; align-items: center; gap: 14px; padding: 10px 28px 11px 20px; background: var(--paper); border-radius: 3px; box-shadow: 0 0 0 1px #1f1309, 0 0 0 3px rgba(214, 170, 70, 0.95), 0 0 0 4px #1f1309, 0 10px 26px rgba(0, 0, 0, 0.55), inset 0 0 22px rgba(120, 78, 22, 0.3); pointer-events: none; max-width: min(640px, calc(100% - 40px)); }
+.mu-hud > .mu-banner { left: 50%; top: 84px; transform: translateX(-50%); display: none; align-items: center; gap: 14px; padding: 10px 28px 11px 20px; background: var(--paper); border-radius: 3px; box-shadow: 0 0 0 1px #1f1309, 0 0 0 3px rgba(214, 170, 70, 0.95), 0 0 0 4px #1f1309, 0 10px 26px rgba(0, 0, 0, 0.55), inset 0 0 22px rgba(120, 78, 22, 0.3); pointer-events: none; max-width: min(640px, calc(100% - 40px)); }
 .mu-banner.on { display: flex; animation: mu-banner 6s ease both; }
 .mu-banner-orn { color: var(--gold); display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; border: 1px solid #6b4a06; background: var(--gold-leaf); flex: none; }
 .mu-banner-orn svg { color: #3a2506; }

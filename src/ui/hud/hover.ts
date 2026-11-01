@@ -73,7 +73,9 @@ export class HoverCard {
       this.actNote.textContent = info.enabled ? '' : info.preview;
     } else if (info.action) {
       this.actLabel.textContent = info.action;
-      this.actNote.textContent = info.preview;
+      // "Talk · your sister" under a name that already says "your sister" is the same thing twice
+      const again = info.preview !== '' && info.sublabel.toLowerCase().includes(info.preview.toLowerCase());
+      this.actNote.textContent = again ? '' : info.preview;
     } else {
       this.actLabel.textContent = info.enabled ? 'Walk up to it' : '';
       this.actNote.textContent = info.enabled ? '' : info.preview;

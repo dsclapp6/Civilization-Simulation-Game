@@ -103,7 +103,8 @@ const findOnScreen = (kind) => page.evaluate((k) => {
   const g = window.__game; const s = g.session; const sim = s.sim; const z = s.services.zone; const p = s.services.player; const b = p.body();
   const project = (x, y, zz) => s.controls.project(x, y, zz);
   const W = window.innerWidth, H = window.innerHeight;
-  const ok = (pt) => pt && pt.x > 330 && pt.x < W - 330 && pt.y > 120 && pt.y < H - 140;
+  // clear of the corner plates and the right-hand column (about 380 px wide at any size) and of the compass and the dock
+  const ok = (pt) => pt && pt.x > 420 && pt.x < W - 420 && pt.y > 130 && pt.y < H - 160;
   if (k === 'person') {
     const list = [...z.agents()].filter((a) => a.visible && a.personId !== sim.state.run.playerId).sort((u, v) => Math.hypot(u.x - b.x, u.z - b.z) - Math.hypot(v.x - b.x, v.z - b.z));
     for (const a of list) { const pt = project(a.x, a.y + 0.7, a.z); if (ok(pt) && Math.hypot(a.x - b.x, a.z - b.z) < 30) return { x: pt.x, y: pt.y }; }
@@ -115,24 +116,32 @@ const findOnScreen = (kind) => page.evaluate((k) => {
   }
   if (k === 'strip') {
     const near = sim.world.nearestSettlement(b.x, b.z);
+    const cand = [];
+    const hh = sim.state.persons.get(sim.state.run.playerId).household;
     for (const id of near.strips) {
       const st = sim.world.strips.find((q) => q.id === id);
       const cx = st.poly.reduce((a, q) => a + q.x, 0) / 4, cz = st.poly.reduce((a, q) => a + q.z, 0) / 4;
       const pt = project(cx, sim.world.heightAt(cx, cz), cz);
-      if (ok(pt) && Math.hypot(cx - b.x, cz - b.z) < 70) return { x: pt.x, y: pt.y };
+      // the family's own strips first, then whatever is nearest the middle of the screen
+      if (ok(pt) && Math.hypot(cx - b.x, cz - b.z) < 70) cand.push({ x: pt.x, y: pt.y, off: Math.hypot(pt.x - W / 2, pt.y - H * 0.5) + (sim.state.strips.get(id)?.holder === hh ? 0 : 400) });
     }
+    cand.sort((u, v) => u.off - v.off);
+    if (cand.length) return { x: cand[0].x, y: cand[0].y };
   }
   if (k === 'tree') {
     const cs = 64;
+    const cand = [];
     for (let cz = Math.floor((b.z - 60) / cs); cz <= Math.floor((b.z + 60) / cs); cz++) for (let cx = Math.floor((b.x - 60) / cs); cx <= Math.floor((b.x + 60) / cs); cx++) {
       for (const it of sim.world.scatterInChunk(cx, cz)) {
         if (!['oak', 'beech', 'ash', 'birch'].includes(it.kind)) continue;
         const d = Math.hypot(it.x - b.x, it.z - b.z);
-        if (d < 8 || d > 45) continue;
+        if (d < 6 || d > 60) continue;
         const pt = project(it.x, sim.world.heightAt(it.x, it.z) + 2.0, it.z);
-        if (ok(pt)) return { x: pt.x, y: pt.y };
+        if (ok(pt)) cand.push({ x: pt.x, y: pt.y, off: Math.hypot(pt.x - W / 2, pt.y - H * 0.5) });
       }
     }
+    cand.sort((u, v) => u.off - v.off);
+    if (cand.length) return { x: cand[0].x, y: cand[0].y };
   }
   if (k === 'ground') {
     for (const [fx, fy] of [[0.5, 0.78], [0.45, 0.7], [0.55, 0.74]]) { const gp = s.renderer.screenToGround(W * fx, H * fy); if (gp) return { x: W * fx, y: H * fy }; }
@@ -166,6 +175,26 @@ try {
 
   if (want('hover')) {
     for (const kind of ['person', 'building', 'strip', 'tree', 'ground']) {
+      if (kind === 'person') {
+        // stand a few metres from the nearest grown villager and face them (at this hour most are out of sight)
+        const who = await page.evaluate(() => {
+          const s = window.__game.session; const sim = s.sim; const z = s.services.zone; const p = s.services.player;
+          const b = p.body();
+          const list = [...z.agents()].filter((a) => a.personId !== sim.state.run.playerId && a.draw?.kind !== 'child' && Math.hypot(a.x - b.x, a.z - b.z) >= 3)
+            .sort((u, v) => Math.hypot(u.x - b.x, u.z - b.z) - Math.hypot(v.x - b.x, v.z - b.z));
+          const a = list[0];
+          if (!a) return null;
+          const dx = b.x - a.x, dz = b.z - a.z; const d = Math.hypot(dx, dz) || 1;
+          const yaw = Math.atan2(-dx, -dz);
+          p.placeAt(a.x + (dx / d) * 5, a.z + (dz / d) * 5, yaw);
+          const r = s.renderer; r.orbit(Math.atan2(Math.sin(yaw - r.getCameraYaw()), Math.cos(yaw - r.getCameraYaw())), 0);
+          return { id: a.personId, d: Math.round(d) };
+        });
+        console.log('person spot:', JSON.stringify(who));
+        await advance(0.3);
+        await page.evaluate(() => window.__game.settle());
+        await page.evaluate(() => window.__game.draw());
+      }
       if (kind === 'strip') {
         // walk out to the family's strip (or any strip of the village) and look at it
         const spot = await page.evaluate(() => {
@@ -198,6 +227,15 @@ try {
       await shot(`clarity-hover-${kind}`, { settle: false });
       await page.mouse.move(W / 2, 60);
       await frames(3);
+      if (kind === 'person') {
+        // back to where the other shots were framed
+        await page.evaluate((i) => {
+          const s = window.__game.session; const p = s.services.player; p.placeAt(i.x, i.z, i.yaw);
+          const r = s.renderer; r.orbit(Math.atan2(Math.sin(i.yaw - r.getCameraYaw()), Math.cos(i.yaw - r.getCameraYaw())), 0);
+        }, info);
+        await advance(0.3);
+        await page.evaluate(() => window.__game.settle());
+      }
     }
   }
 

@@ -8,9 +8,10 @@ import type { UiHost } from '../types';
 import type { NavMarker, NavState } from './navstate';
 
 /** The arrows keep clear of the plates in the corners, the compass above and the prompt below. */
-function margins(w: number, h: number): { l: number; r: number; t: number; b: number } {
-  const side = Math.min(360, Math.max(120, w * 0.27));
-  return { l: side, r: side, t: 92, b: Math.min(150, h * 0.2) };
+function margins(w: number, h: number, scale: number): { l: number; r: number; t: number; b: number } {
+  // the columns of plates at the sides are 292 interface pixels wide (plus a gutter), the compass 74 high
+  const side = Math.max(120, Math.min(w * 0.36, 336 * scale));
+  return { l: side, r: side, t: 94 * scale, b: Math.min(150, h * 0.2) };
 }
 
 interface Item { el: HTMLElement; arrow: HTMLElement; label: HTMLElement; shown: boolean }
@@ -34,7 +35,7 @@ export class EdgeArrows {
       if (n >= 2 || !r) break;
       if (m.dist < 8) continue;
       const scr = r.project(m.x, m.y, m.z);
-      const a = edgeArrow(relativeYaw(m.yaw, nav.camYaw), scr, w, hgt, margins(w, hgt));
+      const a = edgeArrow(relativeYaw(m.yaw, nav.camYaw), scr, w, hgt, margins(w, hgt, scale));
       if (!a) continue;
       const it = this.item(n++);
       it.shown = true;
