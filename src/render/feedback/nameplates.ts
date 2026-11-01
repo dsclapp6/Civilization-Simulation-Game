@@ -196,15 +196,28 @@ export class Nameplates {
     }
   }
 
+  /** Occlusion answers per person, refreshed every few frames (each test is a ray against the buildings). */
+  private readonly occCache = new Map<number, { f: number; v: boolean }>();
+  private frame = 0;
+
   update(chars: readonly CharacterDrawItem[], camera: THREE.PerspectiveCamera, width: number, height: number, show: boolean): void {
     if (!this.plates.length) return;
+    this.frame++;
     const cp = camera.position;
     const occ = this.occluded;
+    const cached = (it: CharacterDrawItem, h: number): boolean => {
+      const c = this.occCache.get(it.id);
+      if (c && this.frame - c.f < 4) return c.v;
+      const v = occ!(cp, this.to.set(it.x, it.y + h * 0.7, it.z));
+      if (c) { c.f = this.frame; c.v = v; } else this.occCache.set(it.id, { f: this.frame - (it.id & 3), v });
+      return v;
+    };
+    if (this.occCache.size > 400) this.occCache.clear();
     const layout = show ? layoutPlates(chars, cp, this.focusId, (x, y, z) => {
       this.v.set(x, y, z).project(camera);
       if (this.v.z > 1 || this.v.z < -1 || Math.abs(this.v.x) > 1.1 || Math.abs(this.v.y) > 1.1) return null;
       return { x: (this.v.x * 0.5 + 0.5) * width, y: (-this.v.y * 0.5 + 0.5) * height };
-    }, occ ? (it, h) => occ(cp, this.to.set(it.x, it.y + h * 0.7, it.z)) : null) : [];
+    }, occ ? cached : null) : [];
     this.shown = layout.length;
     for (let i = 0; i < this.plates.length; i++) {
       const p = this.plates[i];

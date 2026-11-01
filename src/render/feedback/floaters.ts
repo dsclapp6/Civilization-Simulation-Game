@@ -50,6 +50,8 @@ interface Floater {
   active: boolean;
   /** Line in its stack (0 = bottom). */
   line: number;
+  /** Text still to be drawn into the canvas (drawn when it pops in, one per frame). */
+  pending: { text: string; tone: Tone } | null;
 }
 
 /** A canvas texture to draw a text into (none in a headless test: the layout logic still runs). */
@@ -99,7 +101,17 @@ export class FloaterLayer {
       sprite.renderOrder = 20;
       sprite.frustumCulled = false;
       this.scene.add(sprite);
-      this.pool.push({ sprite, ctx, tex, mat, x: 0, y: 0, z: 0, age: 0, life: LIFE, big: false, active: false, line: 0 });
+      this.pool.push({ sprite, ctx, tex, mat, x: 0, y: 0, z: 0, age: 0, life: LIFE, big: false, active: false, line: 0, pending: null });
+    }
+    // the first text drawn initialises fonts and glyphs (tens of ms): do it now, behind the loading screen
+    const warm = this.pool[0];
+    if (warm.ctx) {
+      for (const big of [false, true]) {
+        this.draw(warm, '+−0123456789 abcdefghijklm', big ? TONES.level : TONES.gain, big);
+        this.draw(warm, 'nopqrstuvwxyz ABCDEFGHIJKLM', TONES.skill, big);
+        this.draw(warm, 'NOPQRSTUVWXYZ ♥!d.,', TONES.loss, big);
+      }
+      warm.ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
     }
   }
 
@@ -125,7 +137,7 @@ export class FloaterLayer {
       if (!anchor) this.recent.push({ x: f.x, y: f.y, z: f.z, t: this.time });
       else this.recent.push({ ...anchor });
       const { tone, big } = floaterStyle(f);
-      this.draw(slot, f.text, tone, big);
+      slot.pending = { text: f.text, tone };
       const at = anchor ?? f;
       slot.x = at.x; slot.y = at.y; slot.z = at.z;
       slot.age = -line * STAGGER;
@@ -155,14 +167,18 @@ export class FloaterLayer {
       w = maxW;
     }
     const cx = CANVAS_W / 2, cy = CANVAS_H / 2 + 2;
-    if (tone.glow) {
-      ctx.shadowColor = tone.glow;
-      ctx.shadowBlur = 18;
-      ctx.fillStyle = tone.fill;
-      ctx.fillText(text, cx, cy);
-      ctx.shadowBlur = 0;
-    }
     ctx.lineJoin = 'round';
+    if (tone.glow) {
+      // a soft halo from two wide translucent strokes (a canvas blur costs milliseconds in software)
+      ctx.strokeStyle = tone.glow;
+      ctx.globalAlpha = 0.22;
+      ctx.lineWidth = 26;
+      ctx.strokeText(text, cx, cy);
+      ctx.globalAlpha = 0.35;
+      ctx.lineWidth = 17;
+      ctx.strokeText(text, cx, cy);
+      ctx.globalAlpha = 1;
+    }
     ctx.lineWidth = big ? 11 : 10;
     ctx.strokeStyle = tone.stroke;
     ctx.globalAlpha = 0.9;
@@ -180,11 +196,19 @@ export class FloaterLayer {
     for (let i = this.recent.length - 1; i >= 0; i--) if (this.time - this.recent[i].t > GROUP_S) this.recent.splice(i, 1);
     const k = (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) / Math.max(1, viewportHeight);
     let n = 0;
+    let drawn = 0;
     for (const p of this.pool) {
       if (!p.active) continue;
       p.age += dt;
-      if (p.age >= p.life) { p.active = false; p.sprite.visible = false; continue; }
+      if (p.age >= p.life) { p.active = false; p.sprite.visible = false; p.pending = null; continue; }
       if (p.age < 0) { p.sprite.visible = false; continue; }
+      if (p.pending) {
+        // rasterise the text as it pops in, at most one per frame (a canvas text costs a little)
+        if (drawn > 0) { p.age = Math.min(p.age, 0); p.sprite.visible = false; continue; }
+        this.draw(p, p.pending.text, p.pending.tone, p.big);
+        p.pending = null;
+        drawn++;
+      }
       n++;
       // the stack rises together: each line keeps to the clock of the stack's first text
       const t = p.age + p.line * STAGGER;
