@@ -1,7 +1,7 @@
 // Screenshots of the clarity pass (CLARITY §2, §3, §5, §6): the objective tracker, the compass ribbon, the minimap,
 // "What now?", the settlement banner, the tooltip that follows the free cursor, the journal, the day summary and the
 // intro. Starts Vite on :5181, plays a real run in headless Chromium (software GL: slow but correct) with the real
-// objectives module and saves docs/game/*.png (`-1920` etc. is added to the name for other sizes).
+// objectives module and saves docs/game/*.png (`-1920.jpg` etc. for other sizes).
 //
 //   node tools/game-clarity-shots.mjs                      # everything, at 1280x720
 //   node tools/game-clarity-shots.mjs hud hover            # selected shots
@@ -70,8 +70,10 @@ async function shot(name, { settle = true } = {}) {
   if (settle) await page.evaluate(() => window.__game.settle());
   await page.evaluate(() => window.__game.draw());
   await page.waitForTimeout(150);
-  const file = resolve(OUT, `${name}${suffix}.png`);
-  await page.screenshot({ path: file });
+  // 1280x720 is the reference set (lossless); other sizes are saved as JPEG (quality 90) to keep the folder small
+  const jpeg = W !== 1280 || H !== 720;
+  const file = resolve(OUT, `${name}${suffix}.${jpeg ? 'jpg' : 'png'}`);
+  await (jpeg ? page.screenshot({ path: file, type: 'jpeg', quality: 90 }) : page.screenshot({ path: file }));
   console.log(`${name}${suffix}: ${Math.round(statSync(file).size / 1024)} KB`);
 }
 
@@ -364,6 +366,32 @@ try {
       await page.evaluate((i) => {
         const s = window.__game.session; s.services.objectives.trackPlace?.(null);
         const p = s.services.player; p.placeAt(i.x, i.z, i.yaw);
+        const r = s.renderer; r.orbit(Math.atan2(Math.sin(i.yaw - r.getCameraYaw()), Math.cos(i.yaw - r.getCameraYaw())), 0);
+      }, info);
+      await advance(0.3);
+    }
+  }
+
+  if (want('beacon')) {
+    // the tracked task's marker seen from a distance: the beacon in the world, the gold disc on the compass, the dot on the minimap
+    const m = await page.evaluate(() => {
+      const s = window.__game.session; const p = s.services.player;
+      const mk = (s.sim.view.worldMarkers?.() ?? []).find((q) => q.primary);
+      if (!mk) return null;
+      const b = p.body(); const dx = b.x - mk.x, dz = b.z - mk.z; const d = Math.hypot(dx, dz) || 1;
+      const yaw = Math.atan2(-dx, -dz);
+      p.placeAt(mk.x + (dx / d) * 45, mk.z + (dz / d) * 45, yaw);
+      const r = s.renderer; r.orbit(Math.atan2(Math.sin(yaw - r.getCameraYaw()), Math.cos(yaw - r.getCameraYaw())), 0);
+      return { label: mk.label, kind: mk.kind };
+    });
+    console.log('beacon:', JSON.stringify(m));
+    if (m) {
+      await advance(0.6);
+      await page.evaluate(() => window.__game.settle());
+      await frames(6);
+      await shot('clarity-beacon');
+      await page.evaluate((i) => {
+        const s = window.__game.session; const p = s.services.player; p.placeAt(i.x, i.z, i.yaw);
         const r = s.renderer; r.orbit(Math.atan2(Math.sin(i.yaw - r.getCameraYaw()), Math.cos(i.yaw - r.getCameraYaw())), 0);
       }, info);
       await advance(0.3);
