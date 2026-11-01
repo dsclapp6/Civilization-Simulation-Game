@@ -844,6 +844,34 @@ export class BuildingSystem {
     return e?.asset ? e.asset.object : null;
   }
 
+  /**
+   * Does a building stand between two points (labels over people)? Footprint boxes slightly shrunk (yards and
+   * eaves are not walls); a box holding either end is ignored — someone in a churchyard or a market stall is
+   * not hidden by the plot they stand in.
+   */
+  occludes(from: THREE.Vector3, to: THREE.Vector3): boolean {
+    const d = from.distanceTo(to);
+    if (d < 1e-3) return false;
+    const inv = this.rcInv, local = this.rcRay, box = this.rcBox, hit = this.rcHit, end = this.ocEnd;
+    const ray = this.ocRay.set(from, this.ocDir.subVectors(to, from).multiplyScalar(1 / d));
+    const near = this.nearValid && d + 60 + from.distanceTo(this.evalPos) < NEAR_R;
+    for (const e of near ? this.nearList : this.ordered) {
+      if (e.dist > d + 60) continue;
+      const def = BUILDINGS[e.kind];
+      const h = e.asset ? e.asset.height : proxyShape(e.kind, e.view.level).wall + 3;
+      inv.makeRotationY(e.rot).setPosition(e.x, e.y, e.z).invert();
+      local.copy(ray).applyMatrix4(inv);
+      box.min.set(-def.w * 0.42, 0, -def.d * 0.42);
+      box.max.set(def.w * 0.42, Math.max(1, h * 0.9), def.d * 0.42);
+      if (box.containsPoint(local.origin) || box.containsPoint(end.copy(to).applyMatrix4(inv))) continue;
+      if (local.intersectBox(box, hit) && hit.distanceTo(local.origin) < d - 0.4) return true;
+    }
+    return false;
+  }
+  private readonly ocRay = new THREE.Ray();
+  private readonly ocDir = new THREE.Vector3();
+  private readonly ocEnd = new THREE.Vector3();
+
   /** Ray vs building footprint boxes (cheap pick / camera collision). Returns nearest hit. */
   private readonly rcInv = new THREE.Matrix4();
   private readonly rcRay = new THREE.Ray();

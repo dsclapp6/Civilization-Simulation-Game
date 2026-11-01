@@ -212,10 +212,10 @@ function stripFrame(w: WorldModel, id: number): StripFrame {
 }
 
 /** A strip of the home village good for a work scene (70–260 m long, inside the open field) and a parallel neighbour. */
-function workStrips(c: Ctx): { a: StripFrame; b: StripFrame | null } {
+function workStrips(c: Ctx): { a: StripFrame; b: StripFrame | null; c2: StripFrame | null } {
   const v = c.v.village;
   const frames = v.strips.map((id) => stripFrame(c.w, id));
-  let best: { a: StripFrame; b: StripFrame | null; s: number } | null = null;
+  let best: { a: StripFrame; b: StripFrame | null; c2: StripFrame | null; s: number } | null = null;
   for (const f of frames) {
     if (f.length < 70 || f.length > 260 || f.width < 6) continue;
     // neighbours on each side (an inner strip: open field all round, no hedge in the way)
@@ -230,10 +230,10 @@ function workStrips(c: Ctx): { a: StripFrame; b: StripFrame | null } {
     const mid = f.at(0.5, 0.46);
     const open = clearOfTrees(c.w, mid.x, mid.z, 18);
     const s = Math.hypot(f.cx - v.x, f.cz - v.z) * 0.5 + (left && right ? 0 : 500) + (open ? 0 : 300);
-    if (!best || s < best.s) best = { a: f, b: right ?? left, s };
+    if (!best || s < best.s) best = { a: f, b: right ?? left, c2: right && left ? left : null, s };
   }
   if (best) return best;
-  return { a: stripFrame(c.w, v.strips[0]), b: null };
+  return { a: stripFrame(c.w, v.strips[0]), b: null, c2: null };
 }
 
 /** No tree or hedge on the line from a camera to its subject (the last stretch excepted). */
@@ -270,10 +270,12 @@ function faceCamera(c: Ctx, yaw: number): void {
 
 /** Reaping half done on one strip (stooks behind the reapers), ploughing on the next; the avatar at the cutting front. */
 function workScene(c: Ctx): { a: StripFrame; b: StripFrame | null; front: { x: number; z: number }; y: number } {
-  const { a, b } = workStrips(c);
+  const { a, b, c2 } = workStrips(c);
   const wA = 0.46;
   c.v.setStrip(a.id, { state: 'ripe', crop: 'wheat', growth: 1, task: 'reap', work: wA });
   if (b) c.v.setStrip(b.id, { state: 'stubble', crop: 'fallow', growth: 0, task: 'plough', work: 0.58 });
+  // on the other side the seed goes in: sown drills over the ploughed tilth
+  if (c2) c.v.setStrip(c2.id, { state: 'ploughed', crop: 'fallow', growth: 0, task: 'sow', work: 0.4 });
   const yaw = Math.atan2(a.ax, a.az);
   let k = 0;
   for (let s = 5; s < wA * a.length - 4; s += 7.5) {
@@ -401,6 +403,17 @@ const CLARITY_PRESETS: Record<string, PresetDef> = {
       c.r.setCameraMode('follow');
       faceCamera(c, yaw);
       return 'follow';
+    },
+  },
+  /** The same at night: the beacon glows without blinding; plates and gems stay readable. */
+  'beacon-night': {
+    season: 1, day: 3, time: 0.93, weather: 'clear',
+    camera: (c) => {
+      const cam = CLARITY_PRESETS['beacon-near'].camera(c);
+      const near = c.v.characters().filter((it) => it.id >= 100 && it.id < 110);
+      const a = c.v.avatar;
+      near.slice(0, 3).forEach((it, i) => { it.x = a.x + (i - 1) * 2.4; it.z = a.z + 5 + i; it.y = c.w.heightAt(it.x, it.z); it.anim = 'idle'; });
+      return cam;
     },
   },
   /** Nameplates in a crowd: kin, household, the reeve with a request, the tracked sister, a lord, strangers, one speaking, one hovered. */

@@ -108,14 +108,9 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     buildingObject: (id) => buildings.assetObject(id),
   });
   let hoverKey = '';
-  let hoverStripsVer = -1;  const occRay = new THREE.Ray();
-  plates.occluded = (from, to) => {
-    const d = from.distanceTo(to);
-    occRay.origin.copy(from);
-    occRay.direction.subVectors(to, from).normalize();
-    const hit = buildings.raycast(occRay, d);
-    return hit !== null && hit.distance < d - 0.6;
-  };
+  let hoverStripsVer = -1;
+  // nameplates are DOM overlays (never depth-tested): hide those of people behind houses
+  plates.occluded = (from, to) => buildings.occludes(from, to);
   const precip = new Precipitation(quality.rainDrops, quality.snowFlakes);
   const overlayTex = buildMapOverlay(world);
   const mapBaseTex = buildMapBase(world, palette);

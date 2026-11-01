@@ -250,6 +250,27 @@ describe('nameplates', () => {
   });
 });
 
+describe('nameplate occlusion', () => {
+  it('hides people behind a house but not people standing in a yard or plot', async () => {
+    const { BuildingSystem } = await import('../../src/render/buildings');
+    const p = world.plots.find((q) => q.kind === 'church') ?? world.plots.find((q) => q.kind === 'cottage')!;
+    const view = { id: p.id, kind: p.kind, level: p.level, x: p.x, z: p.z, rot: 0, culture: p.culture, seed: p.seed, settlement: p.settlement, construction: 1, damage: 0, onFire: false, occupied: false };
+    const bs = new BuildingSystem(world, assets, { detailDistance: 800, drawBudget: 400 });
+    const cam = cameraAt(p.x, p.z - 40, 3, p.x, p.z);
+    for (let i = 0; i < 5; i++) bs.update([view], 1, cam, i * 0.1, 0.1, 1000, true);
+    const y = world.heightAt(p.x, p.z);
+    const from = new THREE.Vector3(p.x, y + 2, p.z - 40);
+    const { BUILDINGS } = await import('../../src/content/types');
+    const d = BUILDINGS[p.kind].d;
+    expect(bs.occludes(from, new THREE.Vector3(p.x, y + 1.5, p.z + d / 2 + 6))).toBe(true);
+    // inside the plot (a churchyard, a yard): visible
+    expect(bs.occludes(from, new THREE.Vector3(p.x, y + 1.5, p.z - d * 0.3))).toBe(false);
+    // off to the side: visible
+    expect(bs.occludes(from, new THREE.Vector3(p.x + 60, y + 1.5, p.z))).toBe(false);
+    bs.dispose();
+  });
+});
+
 describe('hover outline', () => {
   it('frames buildings and strips, rings trees, ignores other targets', () => {
     const view = new MockView(world, { time: 0.5, season: 1 });

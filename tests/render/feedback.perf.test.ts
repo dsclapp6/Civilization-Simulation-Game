@@ -15,6 +15,38 @@ function avgMs(n: number, fn: (i: number) => void): number {
   return (performance.now() - t0) / n;
 }
 
+describe('strip work', () => {
+  it('a gliding reap boundary (strip vertices + cut crops) costs a fraction of a millisecond per frame', async () => {
+    const { createStubWorld } = await import('../../src/render/dev/stubWorld');
+    const { createPlaceholderAssets } = await import('../../src/render/dev/placeholderAssets');
+    const { MockView } = await import('../../src/render/dev/mockView');
+    const { FieldSystem } = await import('../../src/render/fields');
+    const { createTerrainUniforms } = await import('../../src/render/terrain/terrainMaterial');
+    const world = createStubWorld('feedback-perf');
+    const view = new MockView(world, { time: 0.6, season: 1 });
+    view.setDayOfSeason(2);
+    const ripe = view.strips().filter((s) => s.state === 'ripe').slice(0, 6);
+    const c = ripe[0].poly[0];
+    const fs = new FieldSystem(world, createPlaceholderAssets(), createTerrainUniforms(world.size), { stripDistance: 3000, cropRadius: 90, cropMax: 60000, cropTris: 1e9 });
+    const cam = new THREE.PerspectiveCamera(55, 16 / 9, 0.3, 30000);
+    cam.position.set(c.x, world.heightAt(c.x, c.z) + 4, c.z);
+    cam.lookAt(c.x + 10, world.heightAt(c.x, c.z), c.z);
+    cam.updateMatrixWorld();
+    for (const s of ripe) view.setStrip(s.id, { task: 'reap', work: 0.05 });
+    fs.update(view.strips(), view.stripsVersion(), cam, 100, 0.016);
+    fs.settle(cam);
+    let w = 0.05;
+    const ms = avgMs(240, (i) => {
+      // six strips being reaped at once, each bout moving the work on
+      if (i % 30 === 0) { w = Math.min(1, w + 0.08); for (const s of ripe) view.setStrip(s.id, { task: 'reap', work: w }); }
+      fs.update(view.strips(), view.stripsVersion(), cam, 0.5, 1 / 60);
+    });
+    console.log(`strip glide (6 strips reaping): ${ms.toFixed(4)} ms/frame, crops ${fs.cropInstances}`);
+    expect(ms).toBeLessThan(0.6);
+    fs.dispose();
+  });
+});
+
 describe('feedback layer budgets', () => {
   it('floating texts: ≤ 0.3 ms per frame with a full pool (spawning a few per second)', () => {
     const f = new FloaterLayer();
