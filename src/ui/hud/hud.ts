@@ -459,6 +459,9 @@ export class Hud {
   /** The window or the interface scale changed. */
   resized(): void { this.compass.resize(); }
 
+  /** Shows the settlement banner for where the body stands (tools and tests). */
+  announce(): void { this.lastSettlementId = -2; this.suppressBanner = false; this.lastSlow = -10; }
+
   private updateClock(clock: ReturnType<GameServices['sim']['view']['clock']>, _now: number): void {
     const minute = minuteOfDay(clock.dayFraction);
     if (minute !== this.lastMinute) {

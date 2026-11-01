@@ -154,9 +154,12 @@ export class MockObjectives implements ObjectivesApi {
     if (o.state === 'done' && o.tracked) { o.tracked = false; const next = this.objs.find((x) => x.state === 'active'); if (next) next.tracked = true; }
   }
 
+  /** Dev/test: the player's day closes (as when they sleep): writes the summary and emits `dayEnd`. */
+  endDay(): void { this.closeDay(); }
+
   private closeDay(): void {
     this.summary = {
-      day: Math.floor(this.sim.absDay) - 1,
+      day: Math.floor(this.sim.absDay),
       work: this.day.work ? [`${this.day.work} bouts of work`] : [],
       earned: 6, spent: 2,
       goods: [{ label: 'sheaves of barley', amount: 12 }, { label: 'eggs', amount: 3 }],

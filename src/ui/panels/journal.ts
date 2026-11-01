@@ -36,7 +36,8 @@ export function journalPanel(ctx: PanelCtx, start: JournalTab | undefined): UiPa
   let tab: JournalTab = start ?? 'objectives';
   let selected = -1;
   const content = h('div.mu-journal-body');
-  const t = tabs(TABS, tab, (id) => select(id as JournalTab));
+  const open = api ? api.list().filter((o) => o.state === 'active').length : 0;
+  const t = tabs(TABS.map((x) => (x.id === 'objectives' && open ? { ...x, badge: open } : x)), tab, (id) => select(id as JournalTab));
   win.body.classList.add('flush');
   win.body.append(t.el, h('div.mu-tabbar-rule'), content);
 
@@ -61,7 +62,7 @@ export function journalPanel(ctx: PanelCtx, start: JournalTab | undefined): UiPa
       return h('button.mu-jrow', { type: 'button', class: `${o.id === selected ? 'sel' : ''} ${o.state !== 'active' ? 'done' : ''}`, onclick: () => { selected = o.id; render(); } },
         h('span.mu-jrow-ico', null, icon(o.state === 'done' ? 'check' : o.state === 'active' ? SOURCE_ICON[o.source] : 'cross', 15)),
         h('span.mu-jrow-main', null, h('span.mu-jrow-title', null, o.title), h('span.mu-jrow-sub', null, sourceLine(o, ctx.nameOf), tracked ? ' · tracked' : '')),
-        o.state === 'active' ? h('span.mu-jrow-bar', null, bar('gold', frac, { slim: true }).el) : null);
+        o.state === 'active' && frac > 0 ? h('span.mu-jrow-bar', null, bar('gold', frac, { slim: true }).el) : null);
     };
     if (g.tracked) { rows.push(h('div.mu-jhead', null, icon('flag', 14), 'Tracked')); rows.push(row(g.tracked, true)); }
     for (const grp of g.groups) { rows.push(h('div.mu-jhead', null, icon(SOURCE_ICON[grp.source], 14), grp.label)); for (const o of grp.items) rows.push(row(o, false)); }
@@ -116,7 +117,7 @@ export function journalPanel(ctx: PanelCtx, start: JournalTab | undefined): UiPa
             h('div.mu-row.mu-between', null, h('b', null, s.label), h('button.mu-link.mu-small', { type: 'button', onclick: () => find(s.x, s.z, s.label) }, 'Show me')),
             h('div.mu-small.mu-ink2', null, s.note),
             s.work > 0 && s.work < 1 ? bar('gold', s.work, { slim: true }).el : null))
-          : [h('p.mu-dim.mu-small.mu-ital', null, 'Your household holds no strips.')]),
+          : [h('p.mu-dim.mu-small.mu-ital', null, 'Your household holds no strips of its own; its field work is on the lord\u2019s land.')]),
         card('What is open', 'market', m.open.map((o) => h('div.mu-today-row', null, icon(o.icon, 15), h('b', null, o.label), h('span.mu-grow'), h('span', { class: o.good ? 'mu-good' : 'mu-dim' }, o.value)))),
         card('Due soon', 'ledger', m.dues.length
           ? m.dues.map((d) => h('div.mu-today-row', null, h('span', null, d.label), h('span.mu-grow'), h('span', { class: d.overdue ? 'mu-bad' : 'mu-dim' }, d.when)))
@@ -201,7 +202,6 @@ export function journalPanel(ctx: PanelCtx, start: JournalTab | undefined): UiPa
   };
   const select = (id: JournalTab): void => { tab = id; lastSig = ''; lastText = ''; render(); };
   render();
-  if (api) t.badge('objectives', api.list().filter((o) => o.state === 'active').length);
 
   win.showFoot(
     h('span.mu-small.mu-dim', null, 'O opens and closes the journal · ← → switch pages · Y asks what to do now'),

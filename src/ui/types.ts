@@ -122,6 +122,8 @@ export interface GameUIExt extends GameUI {
   showHint?(id: string): boolean;
   /** Opens or closes the "What now?" card (Y) (tools and tests). */
   toggleWhatNow?(): void;
+  /** Shows the settlement banner for where the player stands now (tools and tests). */
+  showBanner?(): void;
   /** The UI's own notes for tools and tests: the pinned place, the open cards. */
   debugState?(): { pin: { x: number; z: number; label: string } | null; whatNowOpen: boolean; tracker: string };
 }

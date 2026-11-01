@@ -34,7 +34,7 @@ export function createPanel(ctx: PanelCtx, req: PanelRequest, hooks: UiHooks): U
     case 'journal': return journalPanel(ctx, req.tab);
     case 'daysummary': return daySummaryPanel(ctx, req.day);
     case 'intro': return introPanel(ctx);
-    case 'tour': return tourPanel(ctx);
+    case 'tour': return tourPanel(ctx, req.stop);
     case 'message': return messagePanel(ctx, req.title, req.text);
     case 'confirm': return confirmPanel(ctx, req.options);
     case 'pause': return pausePanel(ctx, hooks);

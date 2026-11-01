@@ -20,6 +20,9 @@ export const CLICK_WALK_RANGE = 220;
 const RESOLVE_INTERVAL = 0.1;
 const OPTIONS_CACHE = 0.8;
 
+/** Seconds of real time: the pointer's rhythm does not depend on the simulation running. */
+const now = (): number => performance.now() / 1000;
+
 export interface PointerHost {
   readonly sim: Simulation;
   readonly zone: ZoneApi;
@@ -56,7 +59,6 @@ export class PointerController {
   private px = -1;
   private py = -1;
   private pointerValid = false;
-  private clock = 0;
   private lastResolve = -10;
   private lastSig = '';
   private mark: HoverMark | null = null;
@@ -72,15 +74,14 @@ export class PointerController {
     this.px = x; this.py = y;
     this.pointerValid = true;
     this.info.x = x; this.info.y = y;
-    if (this.clock - this.lastResolve >= RESOLVE_INTERVAL) this.refresh();
+    if (now() - this.lastResolve >= RESOLVE_INTERVAL) this.refresh();
   }
 
-  /** Time passes: the thing under a still cursor changes as the world moves. */
-  tick(dt: number): void {
-    this.clock += dt;
+  /** Time passes: the thing under a still cursor changes as the world moves. (Real time: it runs the same while the world is held still.) */
+  tick(_dt: number): void {
     if (!this.pointerValid) return;
     if (!this.host.active()) { this.clear(); return; }
-    if (this.clock - this.lastResolve >= RESOLVE_INTERVAL) this.refresh();
+    if (now() - this.lastResolve >= RESOLVE_INTERVAL) this.refresh();
   }
 
   leave(): void {
@@ -108,7 +109,7 @@ export class PointerController {
   }
 
   private refresh(): void {
-    this.lastResolve = this.clock;
+    this.lastResolve = now();
     if (!this.host.active() || !this.pointerValid) { this.clear(); return; }
     const f = this.resolve(this.px, this.py);
     if (!f) { this.clear(); return; }
@@ -221,11 +222,12 @@ export class PointerController {
   private options(target: TargetRef): ActionOption[] {
     if (target.kind === 'ground') return [];
     const key = targetKey(target);
+    const t = now();
     const hit = this.cache.get(key);
-    if (hit && this.clock - hit.at < OPTIONS_CACHE) return hit.list;
+    if (hit && t - hit.at < OPTIONS_CACHE) return hit.list;
     const list = this.host.sim.actions.list(this.host.personId(), target);
-    this.cache.set(key, { at: this.clock, list });
-    if (this.cache.size > 24) for (const [k, v] of this.cache) if (this.clock - v.at >= OPTIONS_CACHE) this.cache.delete(k);
+    this.cache.set(key, { at: t, list });
+    if (this.cache.size > 24) for (const [k, v] of this.cache) if (t - v.at >= OPTIONS_CACHE) this.cache.delete(k);
     return list;
   }
 

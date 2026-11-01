@@ -90,17 +90,145 @@ const face = (yaw) => page.evaluate((y) => {
   r.orbit(d, 0);
 }, yaw);
 
+/** Moves the real mouse over a point on the screen (the input layer sees real events) and lets the UI settle. */
+async function hoverAt(x, y) {
+  await page.mouse.move(x - 8, y - 8);
+  await page.mouse.move(x, y, { steps: 4 });
+  await page.waitForTimeout(700);
+  await frames(6);
+}
+
+/** The nearest on-screen thing of a kind, as a client position: { x, y, label } or null. */
+const findOnScreen = (kind) => page.evaluate((k) => {
+  const g = window.__game; const s = g.session; const sim = s.sim; const z = s.services.zone; const p = s.services.player; const b = p.body();
+  const project = (x, y, zz) => s.controls.project(x, y, zz);
+  const W = window.innerWidth, H = window.innerHeight;
+  const ok = (pt) => pt && pt.x > 330 && pt.x < W - 330 && pt.y > 120 && pt.y < H - 140;
+  if (k === 'person') {
+    const list = [...z.agents()].filter((a) => a.visible && a.personId !== sim.state.run.playerId).sort((u, v) => Math.hypot(u.x - b.x, u.z - b.z) - Math.hypot(v.x - b.x, v.z - b.z));
+    for (const a of list) { const pt = project(a.x, a.y + 1.0, a.z); if (ok(pt) && Math.hypot(a.x - b.x, a.z - b.z) < 30) return { x: pt.x, y: pt.y }; }
+  }
+  if (k === 'building') {
+    const near = sim.world.nearestSettlement(b.x, b.z);
+    const list = (sim.state.buildingsAt.get(near.id) ?? []).filter((q) => q.kind !== 'well' && q.kind !== 'market_stall').sort((u, v) => Math.hypot(u.x - b.x, u.z - b.z) - Math.hypot(v.x - b.x, v.z - b.z));
+    for (const q of list) { const pt = project(q.x, sim.world.heightAt(q.x, q.z) + 2.5, q.z); if (ok(pt) && Math.hypot(q.x - b.x, q.z - b.z) > 6 && Math.hypot(q.x - b.x, q.z - b.z) < 60) return { x: pt.x, y: pt.y }; }
+  }
+  if (k === 'strip') {
+    const near = sim.world.nearestSettlement(b.x, b.z);
+    for (const id of near.strips) {
+      const st = sim.world.strips.find((q) => q.id === id);
+      const cx = st.poly.reduce((a, q) => a + q.x, 0) / 4, cz = st.poly.reduce((a, q) => a + q.z, 0) / 4;
+      const pt = project(cx, sim.world.heightAt(cx, cz), cz);
+      if (ok(pt) && Math.hypot(cx - b.x, cz - b.z) < 70) return { x: pt.x, y: pt.y };
+    }
+  }
+  if (k === 'tree') {
+    const cs = 64;
+    for (let cz = Math.floor((b.z - 60) / cs); cz <= Math.floor((b.z + 60) / cs); cz++) for (let cx = Math.floor((b.x - 60) / cs); cx <= Math.floor((b.x + 60) / cs); cx++) {
+      for (const it of sim.world.scatterInChunk(cx, cz)) {
+        if (!['oak', 'beech', 'ash', 'birch'].includes(it.kind)) continue;
+        const d = Math.hypot(it.x - b.x, it.z - b.z);
+        if (d < 8 || d > 45) continue;
+        const pt = project(it.x, sim.world.heightAt(it.x, it.z) + 2.0, it.z);
+        if (ok(pt)) return { x: pt.x, y: pt.y };
+      }
+    }
+  }
+  if (k === 'ground') {
+    for (const [fx, fy] of [[0.5, 0.78], [0.45, 0.7], [0.55, 0.74]]) { const gp = s.renderer.screenToGround(W * fx, H * fy); if (gp) return { x: W * fx, y: H * fy }; }
+  }
+  return null;
+}, kind);
+
 try {
-  if (want('hud', 'hover', 'whatnow', 'banner', 'edge', 'journal', 'daysummary', 'intro', 'tour')) {
-    await load('autostart=1&time=0.33');
-    // stand a little way from home, looking at the village
-    await advance(1.5);
-    if (want('hud')) await shot('clarity-hud');
-    if (want('whatnow')) {
-      await ui(() => window.__ui.toggleWhatNow?.());
-      await frames(6);
-      await shot('clarity-whatnow', { settle: false });
-      await ui(() => window.__ui.toggleWhatNow?.());
+  await load('autostart=1&time=0.33');
+  await advance(1.5);
+  const info = await page.evaluate(() => { const b = window.__game.session.services.player.body(); return { x: b.x, z: b.z, yaw: b.yaw }; });
+  console.log('player at', JSON.stringify(info));
+
+  if (want('hud')) await shot('clarity-hud');
+
+  if (want('whatnow')) {
+    await ui(() => window.__ui.toggleWhatNow?.());
+    await frames(6);
+    await shot('clarity-whatnow', { settle: false });
+    await ui(() => window.__ui.toggleWhatNow?.());
+    await frames(3);
+  }
+
+  if (want('banner')) {
+    await ui(() => window.__ui.showBanner?.());
+    await page.waitForTimeout(900);
+    await frames(4);
+    await shot('clarity-banner', { settle: false });
+    await page.waitForTimeout(6500);
+  }
+
+  if (want('hover')) {
+    for (const kind of ['person', 'building', 'strip', 'tree', 'ground']) {
+      const at = await findOnScreen(kind);
+      if (!at) { console.log(`hover ${kind}: nothing on screen`); continue; }
+      await hoverAt(at.x, at.y);
+      const h = await page.evaluate(() => { const v = window.__game.session.services.player.hover?.(); return v ? { target: v.target, label: v.label, sub: v.sublabel, action: v.action, cursor: v.cursor, preview: v.preview } : null; });
+      console.log(`hover ${kind}:`, JSON.stringify(h));
+      const cur = await page.evaluate(() => document.getElementById('viewport').style.cursor);
+      console.log(`   cursor: ${cur ? cur.slice(0, 40) + '…' : '(arrow)'}`);
+      await shot(`clarity-hover-${kind}`, { settle: false });
+      await page.mouse.move(W / 2, 60);
+      await frames(3);
+    }
+  }
+
+  if (want('edge')) {
+    // look away from the task: the arrow on the screen edge points back to it
+    await face(info.yaw + 2.2);
+    await advance(0.3);
+    await frames(4);
+    await shot('clarity-edge');
+    await face(info.yaw);
+    await advance(0.2);
+  }
+
+  if (want('journal')) {
+    for (const tab of ['objectives', 'today', 'people', 'places']) {
+      await ui((t) => window.__ui.openPanel({ panel: 'journal', tab: t }), tab);
+      await page.waitForTimeout(500);
+      await frames(3);
+      await shot(`clarity-journal-${tab}`, { settle: false });
+      await ui(() => window.__ui.closePanel('journal'));
+      await page.waitForTimeout(250);
+    }
+  }
+
+  if (want('daysummary')) {
+    await ui(() => { const o = window.__game.session.services.objectives; o.advance?.(); o.advance?.(); o.endDay?.(); });
+    await page.waitForTimeout(700);
+    await frames(4);
+    console.log('open panels:', JSON.stringify(await ui(() => window.__ui.openPanels())));
+    await shot('clarity-daysummary', { settle: false });
+    await ui(() => window.__ui.closePanel('daysummary'));
+    await page.waitForTimeout(250);
+  }
+
+  if (want('intro')) {
+    await ui(() => window.__ui.openPanel({ panel: 'intro' }));
+    await page.waitForTimeout(600);
+    await frames(4);
+    await shot('clarity-intro', { settle: false });
+    await ui(() => window.__ui.closePanel('intro'));
+    await page.waitForTimeout(250);
+  }
+
+  if (want('tour')) {
+    for (const [i, stop] of ['home', 'strip', 'church'].entries()) {
+      await ui((n) => window.__ui.openPanel({ panel: 'tour', stop: n }), i);
+      // the camera glides in over ~1.7 s of UI time; the stop is held until the panel closes
+      await page.waitForTimeout(2300);
+      await page.evaluate(() => window.__game.settle());
+      await frames(4);
+      await shot(`clarity-tour-${stop}`, { settle: false });
+      await ui(() => window.__ui.closePanel('tour'));
+      await page.waitForTimeout(400);
     }
   }
 } catch (e) {

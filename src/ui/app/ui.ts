@@ -272,6 +272,8 @@ export class UiApp implements GameUIExt {
 
   toggleWhatNow(): void { this.hud.whatNow.toggle(); }
 
+  showBanner(): void { this.hud.announce(); }
+
   debugState(): { pin: { x: number; z: number; label: string } | null; whatNowOpen: boolean; tracker: string } {
     return { pin: this.pins.get(), whatNowOpen: this.hud.whatNow.isOpen(), tracker: this.hud.tracker.el.textContent ?? '' };
   }

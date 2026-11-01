@@ -83,6 +83,12 @@ try {
   check('the host is on the game screen with a running session', await sim(() => window.__game.host.screen === 'game' && !!window.__game.session));
   await page.getByRole('button', { name: 'Begin your life' }).click();
   await wait(300);
+  // (clarity pass) the scene-setting intro card follows the birth reveal; "Straight in" starts the first day
+  s = await ui();
+  check('the birth reveal is followed by the scene-setting intro card, which holds the world', s.panels.join() === 'intro' && s.captures && await sim(() => window.__game.session.sim.clock.paused), JSON.stringify(s));
+  check('the intro says where you wake', (await page.locator('.mu-intro-text').textContent()).includes('You wake in'));
+  await page.getByRole('button', { name: 'Straight in' }).click();
+  await wait(300);
   s = await ui();
   check('beginning the life resumes the world', s.panels.length === 0 && !s.captures && !(await sim(() => window.__game.session.sim.clock.paused)), JSON.stringify(s));
   await tick(0.6);
@@ -192,6 +198,105 @@ try {
   await page.locator('.mu-guide-x').click();
   await tick(0.2);
   check('the hint can be dismissed', (await page.locator('.mu-guide:not(.mu-hide)').count()) === 0);
+
+  // ---- the free cursor (CLARITY §5): hover names things, a click walks there and acts, the right button turns the camera, G draws
+  {
+    await sim(() => { window.__game.session.sim.dispatch({ type: 'setSpeed', speed: 1 }); window.__game.session.sim.hostileNear = () => false; });
+    // someone close by, on the screen
+    const target = await sim(() => {
+      const g = window.__game; const s = g.session; const z = s.services.zone; const p = s.services.player; const b = p.body();
+      const a = [...z.agents()].filter((x) => x.visible && x.personId !== s.sim.state.run.playerId).sort((u, v) => Math.hypot(u.x - b.x, u.z - b.z) - Math.hypot(v.x - b.x, v.z - b.z))[0];
+      if (!a) return null;
+      // stand 6 m from them, facing them, so they are in the middle of the view
+      const dx = b.x - a.x, dz = b.z - a.z; const d = Math.hypot(dx, dz) || 1;
+      p.placeAt(a.x + (dx / d) * 6, a.z + (dz / d) * 6, Math.atan2(-dx, -dz));
+      const r = s.renderer; const yaw = Math.atan2(-dx, -dz); r.orbit(Math.atan2(Math.sin(yaw - r.getCameraYaw()), Math.cos(yaw - r.getCameraYaw())), 0);
+      return a.personId;
+    });
+    if (target !== null) {
+      await tick(0.5);
+      await page.evaluate(() => window.__game.settle());
+      await page.evaluate(() => window.__game.draw());
+      const pt = await page.evaluate((id) => { const s = window.__game.session; const a = s.services.zone.agent(id); return a ? s.controls.project(a.x, a.y + 1.0, a.z) : null; }, target);
+      if (pt) {
+        await page.mouse.move(pt.x - 12, pt.y - 12);
+        await page.mouse.move(pt.x, pt.y, { steps: 3 });
+        await page.waitForTimeout(500);
+        await tick(0.4);
+        const hv = await sim(() => { const h = window.__game.session.services.player.hover?.(); return h ? { kind: h.target.kind, label: h.label, action: h.action, cursor: h.cursor } : null; });
+        check('hovering a person names them and what a click does', hv && hv.kind === 'person' && hv.label.length > 3 && hv.action === 'Talk', JSON.stringify(hv));
+        await wait(300);
+        check('the tooltip card shows the name and the action', (await page.locator('.mu-hover:not(.mu-hide)').count()) === 1 && (await page.locator('.mu-hover-name').textContent()).length > 3, await page.locator('.mu-hover').textContent());
+        check('the cursor changes to the talk cursor', (await page.evaluate(() => document.getElementById('viewport').style.cursor)).includes('url('));
+        // a click walks there and does the default action: the dialogue opens once they are reached
+        await page.mouse.click(pt.x, pt.y);
+        await tick(0.6);
+        check('a left click starts the walk to them', !!(await sim(() => window.__game.session.services.player.hud().going)), JSON.stringify(await sim(() => window.__game.session.services.player.hud().going)));
+        check('the destination ring is on the screen', (await page.locator('.mu-dest:not(.mu-hide)').count()) === 1);
+        await tick(9);
+        s = await ui();
+        check('on arrival the default action runs (a conversation opens)', s.panels.includes('dialogue') || !(await sim(() => window.__game.session.services.player.hud().going)), JSON.stringify(s));
+        if (s.panels.includes('dialogue')) { await page.waitForTimeout(120); await page.keyboard.press('Escape'); await tick(0.3); }
+        await page.waitForTimeout(150);
+        if ((await ui()).panels.length) { await page.keyboard.press('Escape'); await tick(0.3); }
+      } else console.log('     (the person is off the screen: the hover and click checks are skipped)');
+    } else console.log('     (nobody around: the hover and click checks are skipped)');
+    await page.mouse.move(640, 80);
+    await tick(0.3);
+
+    // the right button turns the camera, and only while it is held; the cursor stays free
+    const y0 = await sim(() => window.__game.session.renderer.getCameraYaw());
+    await page.mouse.move(640, 360);
+    await page.mouse.down({ button: 'right' });
+    await page.mouse.move(700, 360, { steps: 6 });
+    await page.mouse.move(760, 360, { steps: 6 });
+    await tick(0.2);
+    const y1 = await sim(() => window.__game.session.renderer.getCameraYaw());
+    check('holding the right button and dragging turns the camera', Math.abs(Math.atan2(Math.sin(y1 - y0), Math.cos(y1 - y0))) > 0.05, `${y0.toFixed(3)} -> ${y1.toFixed(3)}`);
+    await page.mouse.up({ button: 'right' });
+    await tick(0.2);
+    check('the pointer is not locked once the button is up', await page.evaluate(() => document.pointerLockElement === null));
+    const y2 = await sim(() => window.__game.session.renderer.getCameraYaw());
+    await page.mouse.move(600, 340, { steps: 4 });
+    await tick(0.2);
+    check('moving the free cursor does not turn the camera', Math.abs(await sim(() => window.__game.session.renderer.getCameraYaw()) - y2) < 1e-6);
+
+    // G draws and puts away; a drawn weapon takes the mouse for looking
+    await page.keyboard.press('KeyG');
+    await tick(0.2);
+    check('G draws the weapon', (await sim(() => window.__game.session.services.player.drawn?.())) === true && (await sim(() => window.__game.session.services.player.hud().drawn)) === true);
+    check('while drawn the hover card and click-to-act are off', (await sim(() => window.__game.session.services.player.hover?.())) === null);
+    await page.keyboard.press('KeyG');
+    await tick(0.2);
+    check('G again puts it away', (await sim(() => window.__game.session.services.player.drawn?.())) === false);
+
+    // the guidance keys: N hides the minimap, Y asks "what now?", O opens the journal
+    check('the minimap is on by default', (await page.locator('.mu-minimap:not(.mu-hide)').count()) === 1);
+    await page.keyboard.press('KeyN');
+    await tick(0.2);
+    check('N hides the minimap', (await page.locator('.mu-minimap:not(.mu-hide)').count()) === 0);
+    await page.keyboard.press('KeyN');
+    await tick(0.2);
+    check('N shows it again', (await page.locator('.mu-minimap:not(.mu-hide)').count()) === 1);
+    await page.keyboard.press('KeyY');
+    await tick(0.2);
+    check('Y opens the "What now?" card', (await page.locator('.mu-whatnow:not(.mu-hide)').count()) === 1);
+    await page.waitForTimeout(120);
+    await page.keyboard.press('Escape');
+    await tick(0.2);
+    check('Esc closes it before anything else', (await page.locator('.mu-whatnow:not(.mu-hide)').count()) === 0 && (await ui()).panels.length === 0, JSON.stringify(await ui()));
+    await page.keyboard.press('KeyO');
+    await tick(0.2);
+    s = await ui();
+    check('O opens the journal', s.panels.join() === 'journal' && s.captures, JSON.stringify(s));
+    await page.keyboard.press('ArrowRight');
+    await tick(0.1);
+    check('the arrow keys switch the journal\'s pages', (await page.locator('.mu-tab.active').first().textContent()).includes('Today'));
+    await page.waitForTimeout(120);
+    await page.keyboard.press('Escape');
+    await tick(0.2);
+    check('Esc closes the journal', (await ui()).panels.length === 0);
+  }
 
   // ---- hold E for the action wheel; tap E acts
   await page.keyboard.down('KeyE');

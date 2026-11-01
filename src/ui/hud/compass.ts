@@ -25,7 +25,7 @@ export class Compass {
   private readonly slots: Slot[] = [];
   private ctx2d: CanvasRenderingContext2D | null = null;
   private width = 0;
-  private height = 30;
+  private height = 32;
   private lastYaw = NaN;
   private lastSig = '';
   private readonly accepted: Array<{ m: NavMarker; x: number; inside: boolean; side: -1 | 0 | 1 }> = [];
@@ -60,7 +60,7 @@ export class Compass {
     for (const m of order) {
       if (acc.length >= MAX_MARKS) break;
       if (m.dist < 4) continue;
-      const spot = ribbonSpot(relativeYaw(m.yaw, nav.camYaw), this.width, SPAN, 22);
+      const spot = ribbonSpot(relativeYaw(m.yaw, nav.camYaw), this.width, SPAN, m.primary ? 34 : 24);
       // off the ribbon: only the things that matter most are pinned to the edge
       if (!spot.inside && PRIORITY[m.kind] > 2) continue;
       if (acc.some((a) => Math.abs(a.x - spot.x) < 30 && (a.inside || spot.inside || a.side === spot.side))) continue;

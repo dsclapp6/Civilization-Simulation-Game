@@ -29,33 +29,48 @@ eligible is left the run ends and your Legacy gold stays.
 | **Shift** | Sprint (5.5 m/s, drains stamina; out of breath = walk). On a horse: gallop (11 m/s) |
 | **X** | Toggle slow walk (1.4 m/s; riding: 1.7 m/s) |
 | **Space** | Dodge roll (costs stamina) |
+| **Mouse** (cursor free) | Point at a person, animal, door, strip or tree: a tooltip names it and what a click will do, the cursor shows the kind of action (talk, work, trade, go in, fight, walk here) and the thing is outlined |
+| **Left click** | Walk to what is under the cursor along the paths and do its default action there (bare ground: just walk). Any movement key, **E**, **Q** or a dodge stops the walk; a click on something that cannot be done says why instead of walking |
+| **Right button** (hold, drag) | Turn the camera. The pointer is locked only while the button is held, so the cursor is back where it was when you let go |
 | **E** (tap) | The default action on what you face: talk, work, trade, use. The prompt shows what it will do |
 | **E** (hold ½ s) | The action wheel: every option on the target, with reasons for the disabled ones. With nothing in front: rest, sit, sleep (at home) |
+| **G** | Draw or put away the weapon. While it is drawn the mouse looks around (left strikes, right guards; with a bow right draws and aims); a fight draws it by itself and it goes away a few seconds after the fight. The click that takes the mouse is never a blow. Esc frees the mouse, the weapon stays out |
 | **Q** | Stop the timed action in progress (walking away also stops it) |
 | **F** | Mount the household's horse nearby / dismount |
-| **Mouse** | Look around (click the view to capture the mouse; **Esc** releases it and opens the pause menu) |
-| **Left button** | Strike: a tap is a quick blow, holding builds a heavy overhead stroke. With a bow: loose the arrow |
-| **Right button** | Guard (a shield helps a great deal). With a bow or crossbow: hold to draw and aim along the camera |
+| **Y** | The "What now?" card: the tracked task's next step first, then what the hour and the day suggest; choose a line to be shown the way |
+| **O** | The journal: tasks, today, the people you know, places (each with **Find**) |
+| **N** | Show or hide the minimap |
 | **Wheel** | Zoom. Far out, the view becomes the strategic map |
 | **1 / 2 / 3** | Game speed 1× / 3× / 8× (refused with a message while an enemy is within 150 m) |
 | **P** | Pause |
 | **Tab** character · **I** inventory · **H** family and House · **J** ledger · **M** map and travel · **L** chronicle · **Z** sleep or wait | The UI's books and pages |
 | **R** requests and news · **B** wounds · **T** House techniques · **K** realm and politics · **C** command and army (the household page of the ledger when you have no troops) | The wave 3 pages. Each also has a button in the dock (bottom right); modules that are not in the run have none |
 | **F1** | Help and controls (also in the pause menu): all the keys, first steps, fighting, lords and wars |
-| **Esc** | Close the top page; with nothing open, the pause menu |
+| **Esc** | Leave mouse-look first (it never opens the menu for that press); else close the top page (or the "What now?" card); with nothing open, the pause menu |
 | **← →**, **1–9**, **↑ ↓**, **PgUp PgDn**, **Enter** | Inside pages: switch tabs, scroll, confirm. **Enter** with a notice showing at the top of the screen opens the page it points to (a levy call or a war first) |
 
-While a panel or menu has the focus the movement keys and the mouse look do nothing.
+While a panel or menu has the focus the movement keys and the mouse do nothing. The old scheme (the mouse always turns the
+camera, left strikes, right guards, a click on the view takes the mouse) is the setting **Always use mouse-look**.
 
 ## The screen
 
 - **Top left**: your plate: name, age and rank, purse, **health**, **blood** (appears when you bleed or have lost blood),
   **stamina** and four signs for hunger, rest, warmth and mood (gold = soon, red = now). A gold *Perk ready* badge
-  appears when a skill level offers a choice. Under it, in the first minutes of a run, a **hint card** says what to do
-  next and which key does it (see below).
-- **Top right**: the date, time of day and a dial, the place and realm you stand in, holy and market days, and the
-  speed buttons. Badges say *Paused*, *Action time* (the calendar crawls while you fight, talk or trade) and
-  *Danger nearby*.
+  appears when a skill level offers a choice. Under it the **objective tracker**: the task you follow, its next step and
+  how to do it, how far and which way it is (the little arrow turns as you turn), and two buttons: the journal (**O**)
+  and **What now?** (**Y**). Under that, in the first minutes of a run, a **hint card** teaches the controls.
+- **Top centre**: the **compass ribbon**: which way you face, and the tracked objective, a pinned place, home, work, the
+  church and the market with their distances (a mark past the edge sits at the edge with a chevron). When you enter a
+  village or town its **banner** appears for a few seconds: name, kind, county and lord.
+- **Top right**: the date, time of day and a dial, what kind of day it is in words (a working day, market day at Dromore, a
+  holy day) with a tip that a day lasts ten minutes, the place and realm you stand in, and the speed buttons (click the
+  card for *Today* in the journal). Badges say *Paused*, *Action time* (the calendar crawls while you fight, talk or
+  trade) and *Danger nearby*. Under it the **minimap** (**N**): north-up chart of roads, rivers, the buildings of the
+  place (your home in gold), the family's strips (gold), people (kin gold, household amber, others grey), markers and
+  where the camera looks; **+** and **−** zoom, a click opens the map.
+- **On the screen edge**: an arrow for the tracked objective (or a pinned place) when it is out of sight, with its
+  distance. **Under the cursor**: the tooltip (name, who or what, what a click does, how far) and, while you walk to a
+  click, a ring on the destination.
 - **Bottom centre**: the prompt (`E  Reap · strip of barley`), the progress bar of work in progress and floating gains.
   In a fight a small chip names your stance: *On guard*, *Striking*, *Drawing*, *Aiming*, *Staggered*…
 - **Bottom left**: the message feed. **Top centre**: toasts and **notices** (below).
@@ -74,16 +89,35 @@ you are doing first.
 
 ### The first minutes
 
-A new run starts as a twelve-year-old in a peasant household. The hint card under your plate suggests, one at a
-time and only when it applies: how to move and look, what E does, that work earns coin and skill, the character
-sheet, what to do when you are hungry, tired or cold, the speed keys, the map, the holy-day archery, the choice
-of a career as you near fourteen, the fighting controls the first time steel is drawn, the bow, wounds, and F1.
-A hint goes away when you do what it asks, or with its **×**, and is not shown twice in a run. *Hide all hints*
-(on the card) or the **Hints for new players** switch in the settings turns the guide off.
+A new run starts as a twelve-year-old in a peasant household (or the child of a craftsman, a merchant, a lord's page, a
+baronial heir). After the birth reveal comes a short **scene-setting card** ("Spring. You wake in your father's cottage
+in Dromore…"). *Show me round* turns the camera over your home, the family's strip and the church with their names on
+them; *Straight in* skips it. The first-day **tutorial task** is already tracked: meet your family, fetch water, help on the
+strip, sleep at home, each step located (gold marker in the world, compass, minimap, edge arrow) with a one-line *how*.
+Every morning the household head sets a few chores; the journal (**O**) lists them with goals, requests and jobs, and
+**Y** says what is worth doing right now.
+
+Hint cards under the tracker teach only the **controls**, one at a time and only when they apply: walking and looking
+(right button drag), pointing and clicking, where the tasks are, the speed keys, the weapon (**G**) the first time steel
+is drawn, the bow, wounds, and **F1**. A hint goes away when you do what it asks, or with its **×**, and is not shown
+twice in a run. *Hide all hints* (on the card) or the **Hints for new players** switch in the settings turns the guide off.
+
+### The day written up
+
+When you sleep (or the night closes the day) a **day summary** card says what the day was: the work you did, what came in
+and went out of your purse, goods, skills and strength gained, the tasks finished, how the household fared and what
+tomorrow holds (a market day, a holy day, the chores already set). Waking at midnight offers it as a notice instead.
+
+### Sound
+
+Effects are made in the browser, no files: the swish of a scythe or sickle, the chop of an axe, a hammer's clank, a
+pick, a saw, a hoe's thud (keyed to the animation of the work you do), coins on a trade or a wage, a chime for a
+level-up, a ding for a task, the church bell at Mass (louder the nearer the church) and a soft click on buttons. The
+**Sound volume** setting scales them; browsers start sound only after the first click or key press.
 
 ## The loop
 
-- **Time.** A day is 60 s at 1×; a season is 4 days (day 4 is the holy day), a year 16 days. You walk in
+- **Time.** A day is 10 minutes at 1× (about 7 of them daylight); a season is 4 days (day 4 is the holy day), a year 16 days. You walk in
   real time at every speed; the speeds fast-forward the world, your work and your walking together.
   Conversations and standoffs slow the calendar twentyfold.
 - **Acting.** Walk up to something and the prompt names the default action (`E  Reap · strip of barley`).
@@ -182,6 +216,7 @@ All optional, on the URL of the game page (`?mode=world|gallery|chars|village|ui
 | `debug=1` | overlay with frame timings, renderer and simulation statistics (and, with `profile=1`, the cost of the busiest systems) |
 | `hud=1` | a plain-text stand-in for the HUD (prompt, action, journey, encounter choices, successor buttons) for builds without the real UI |
 | `devzone=1` | stand-in villagers and a horse around your home, buildings that block you (for builds without the real agents module) |
+| `fakeobjectives=1` | the UI's stand-in objectives (a first-day chain with real places, chores, goals, suggestions, a day summary): for looking at the tracker, the journal and the day card before the real objectives module is in the build |
 | `shots=1` | keep the drawing buffer and expose `window.__game` / `window.__ui` for tools: `session`, `ready()`, `advance(seconds, input)` (the world moves by simulated seconds with the given input), `tick(seconds)` (whole frames with the real held keys, no drawing), `draw()`, `settle()`, `freeze(on)`, `frames(n)`, `killPlayer()` |
 
 Tools (headless Chromium, software GL, so they are slow): `node tools/game-shots.mjs` plays through the
@@ -192,7 +227,27 @@ start, hotkeys, pause, the action wheel, the map, a journey with encounters, dea
 ## For other modules
 
 - **Input** reaches the player as an `InputState` (`src/player/types.ts`), mapped by `src/app/inputLogic.ts`
-  (pure) from the keys `KEYMAP.input`; `src/app/input.ts` is the DOM layer.
+  (pure) from the keys `KEYMAP.input`; `src/app/input.ts` is the DOM layer. The mouse (`MouseModes` in `inputLogic.ts`):
+  the cursor is free; a left press and release without travel is a **click** (`player.pointerClick`), the right button
+  held turns the camera (pointer lock only while held), and in mouse-look mode (weapon drawn, or the *Always mouse-look*
+  setting) the buttons are `attack`/`block` and the first press only takes the pointer. Esc asks the input layer
+  (`UiHost.releaseMouseLook`) before the UI uses it.
+- **Pointer and click-to-act** (`src/player/pointer.ts`, `PlayerApi.pointerMove/pointerClick/hover/goTo`): the renderer is
+  reached through a `PickPort` (`pick`, `ray`, optional `setHover`, built in `src/app/session.ts`). The thing under the
+  cursor is found with the renderer's `pick` (people, animals, buildings, ground), `pickScatter` (trees and rocks from the
+  world's scatter) and `zone.interactables` (strips, commons, the zone's own names), matched with
+  `sim.actions.list(...)`'s default option, and published as a `HoverInfo` (name, sub-line, action, preview or reason,
+  cursor kind, distance). `goTo({ target, x, z, label })` walks the body along `zone.nav.findPath` and performs the default
+  option on arrival (`goStop` says how close); movement keys, E, Q, dodge, a conversation or a drawn weapon cancel it.
+  `setDrawn` / `drawn` / `PlayerHud.drawn` are the weapon state; `fightOf(player) > 0` draws it by itself.
+- **Hover outlines.** People and animals get `draw.highlight = 1` while hovered; buildings, strips, commons and trees go
+  through `PickPort.setHover({ kind, id, x?, z? })`, which `src/app/session.ts` forwards to the renderer's optional
+  `setHover(target | null)` when it has one.
+- **Objectives** reach the UI as `GameServices.objectives` (`src/sim/objectives/types.ts`): the tracker, the "What now?" card,
+  the journal and the day summary read `tracked()`, `list()`, `suggestions()`, `daySummary()` and call `track(id)` and
+  `trackPerson(id)`. The HUD reads the markers from `SimView.worldMarkers()` (compass, minimap, edge arrows) and listens to
+  the `objective` and `dayEnd` events. A place the player asked to be shown (Find) is a UI-side pin
+  (`src/ui/core/pins.ts`).
 - **Verbs.** The player module registers its own `ActionProvider` (`player`): *Mount*, *Dismount*, *Sit
   down* / *Stand up*, *Follow*, *Rest or wait…*, *Sleep until dawn*, and the encounter choices. Everything
   else (work, trade, talk) comes from the other providers on `sim.actions`; the player controller lists

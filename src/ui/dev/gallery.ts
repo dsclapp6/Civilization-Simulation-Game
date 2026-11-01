@@ -221,6 +221,35 @@ export async function start(root: AppRoot): Promise<void> {
       },
     },
     {
+      id: 'tracker', label: 'HUD: tracker, compass, minimap', group: 'Clarity', run: async (c) => {
+        const mock = await c.enter({ time: 0.36 });
+        mock.objectives.advance();
+        mock.sim.events.emit('objective', { phase: 'progress', id: 1, title: 'Your first day' });
+        await c.frames(4);
+      },
+    },
+    {
+      id: 'whatnow', label: 'What now? card', group: 'Clarity', run: async (c) => {
+        await c.enter({ time: 0.7 });
+        c.ui.toggleWhatNow?.();
+        await c.frames(4);
+      },
+    },
+    { id: 'journal-tasks', label: 'Journal: tasks', group: 'Clarity', run: async (c) => { await c.open({ panel: 'journal', tab: 'objectives' }); } },
+    { id: 'journal-today', label: 'Journal: today', group: 'Clarity', run: async (c) => { await c.open({ panel: 'journal', tab: 'today' }); } },
+    { id: 'journal-people', label: 'Journal: people', group: 'Clarity', run: async (c) => { await c.open({ panel: 'journal', tab: 'people' }); } },
+    { id: 'journal-places', label: 'Journal: places', group: 'Clarity', run: async (c) => { await c.open({ panel: 'journal', tab: 'places' }); } },
+    {
+      id: 'daysummary', label: 'Day summary', group: 'Clarity', run: async (c) => {
+        const mock = await c.enter({ time: 0.3 });
+        mock.objectives.endDay();
+        c.ui.openPanel({ panel: 'daysummary' });
+        await c.frames(4);
+      },
+    },
+    { id: 'intro', label: 'Intro card', group: 'Clarity', run: async (c) => { await c.open({ panel: 'intro' }, { time: 0.3 }); } },
+    { id: 'banner', label: 'Settlement banner', group: 'Clarity', run: async (c) => { await c.enter({ time: 0.4 }); c.ui.showBanner?.(); await c.frames(8); } },
+    {
       id: 'sleep', label: 'Sleeping', group: 'Game', run: async (c) => {
         const mock = await c.enter({ time: 0.92 });
         mock.sim.dispatch({ type: 'sleep' });

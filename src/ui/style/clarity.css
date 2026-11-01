@@ -52,7 +52,7 @@
 .mu-whatnow-foot { display: flex; align-items: center; gap: 8px; }
 
 /* ---- the compass ribbon ---- */
-.mu-hud > .mu-compass { left: 50%; top: 10px; transform: translateX(-50%); width: min(520px, calc(100% - 680px)); height: 58px; pointer-events: none; }
+.mu-hud > .mu-compass { left: 50%; top: 10px; transform: translateX(-50%); width: min(520px, calc(100% - 680px)); height: 64px; pointer-events: none; }
 .mu-compass { background: var(--paper); border-radius: 3px; box-shadow: 0 0 0 1px #1f1309, 0 0 0 2px rgba(172, 130, 58, 0.85), 0 0 0 3px #1f1309, 0 5px 14px rgba(0, 0, 0, 0.45), inset 0 0 14px rgba(120, 78, 22, 0.26); opacity: 0.95; overflow: hidden; }
 .mu-compass-ticks { position: absolute; left: 0; bottom: 0; display: block; }
 .mu-compass-notch { position: absolute; left: 50%; bottom: 0; width: 0; height: 0; margin-left: -5px; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 7px solid var(--vermilion); filter: drop-shadow(0 -1px 0 rgba(255, 244, 205, 0.8)); }
@@ -212,6 +212,7 @@
 .mu-intro-keys { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--rule-soft); }
 .mu-intro-key { display: flex; align-items: center; gap: 5px; font-size: 14px; color: var(--ink-2); }
 .mu-intro-key svg { color: var(--gold); }
+.mu-intro-note { margin-top: 10px; }
 .mu-hud.dimmed { opacity: 0; }
 .mu-tour { position: absolute; inset: 0; pointer-events: auto; cursor: pointer; }
 .mu-tour-label { position: absolute; left: 0; top: 0; margin: -14px 0 0 0; display: inline-flex; align-items: center; gap: 6px; padding: 4px 14px 5px 10px; font-size: 18px; font-weight: 700; color: var(--cream); background: rgba(26, 17, 9, 0.86); border-radius: 18px; box-shadow: 0 0 0 1.5px rgba(236, 189, 66, 0.8), 0 4px 14px rgba(0, 0, 0, 0.5); opacity: 0; transition: opacity 0.4s; white-space: nowrap; translate: -50% -100%; }

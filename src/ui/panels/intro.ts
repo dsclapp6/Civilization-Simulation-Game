@@ -31,9 +31,9 @@ export function introPanel(ctx: PanelCtx): UiPanel {
       h('div.mu-intro-key', null, h('span.mu-key', null, 'W'), h('span.mu-key', null, 'A'), h('span.mu-key', null, 'S'), h('span.mu-key', null, 'D'), h('span', null, 'walk')),
       h('div.mu-intro-key', null, icon('mouse_r', 18), h('span', null, 'hold and drag to look round')),
       h('div.mu-intro-key', null, icon('mouse_l', 18), h('span', null, 'click a thing to go there and act'))),
+    h('p.mu-small.mu-dim.mu-ital.mu-intro-note', null, 'Press O for the journal, and Y whenever you do not know what to do.'),
   );
   win.showFoot(
-    h('span.mu-small.mu-dim.mu-ital', null, 'Press O for the journal, Y when you do not know what to do.'),
     h('div.mu-grow'),
     button('Straight in', { size: 'big', onClick: () => go(false) }),
     button('Show me round', { variant: 'primary', size: 'big', icon: 'compass', onClick: () => go(true) }));
@@ -43,9 +43,12 @@ export function introPanel(ctx: PanelCtx): UiPanel {
 }
 
 /** The camera tour: home, strip, church. A clear panel (no backdrop) that moves the camera and writes the names on the spots. */
-export function tourPanel(ctx: PanelCtx): UiPanel {
+export function tourPanel(ctx: PanelCtx, only?: number): UiPanel {
   const m = introModel(ctx.game);
-  const spots: TourSpot[] = m ? m.spots : [];
+  const all: TourSpot[] = m ? m.spots : [];
+  // a tool may ask for one stop, held for ever, to photograph it
+  const spots: TourSpot[] = only !== undefined ? all.slice(only, only + 1) : all;
+  const hold = only !== undefined ? Infinity : HOLD;
   const renderer = ctx.host.renderer();
   const world = ctx.sim.world;
   const root = h('div.mu-tour');
@@ -109,7 +112,7 @@ export function tourPanel(ctx: PanelCtx): UiPanel {
       caption.classList.toggle('mu-hide', !on);
       const scr = renderer?.project(s.x, world.heightAt(s.x, s.z) + 5, s.z);
       if (scr) { const l = ctx.toLocal(scr); label.style.transform = `translate(${Math.round(l.x)}px, ${Math.round(l.y)}px)`; }
-      if (t > FLY + HOLD) next(now);
+      if (t > FLY + hold) next(now);
     },
     dispose: () => { if (!done) renderer?.setCameraMode('follow'); },
   });

@@ -34,7 +34,8 @@ export type InternalRequest =
   | { panel: 'journal'; tab?: JournalTab }
   | { panel: 'daysummary'; day?: number }
   | { panel: 'intro' }
-  | { panel: 'tour' }
+  /** The camera tour; `stop` shows only that stop (0 = home, 1 = strip, 2 = church) and holds it (tools and tests). */
+  | { panel: 'tour'; stop?: number }
   | { panel: 'confirm'; options: ConfirmOptions };
 
 export type PanelRequest = UiRequest | InternalRequest;

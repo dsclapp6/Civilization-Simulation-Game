@@ -169,7 +169,7 @@ export function peopleRows(game: GameServices, meId: PersonId, limit = 60): Pers
           : r.kinds.some((k) => ['friend', 'lover', 'rival', 'enemy'].includes(k)) ? 'friends' : 'neighbours';
     const existing = rows.get(r.person);
     if (existing) { existing.relation = r.label || existing.relation; if (group === 'family') existing.group = 'family'; continue; }
-    add(r.person, group, r.label, r.theirOpinion);
+    add(r.person, group, group === 'neighbours' && /stranger/.test(r.label) ? 'a neighbour' : r.label, r.theirOpinion);
   }
   // the people the household lives among and under
   const emp = game.economy.employment(meId);
