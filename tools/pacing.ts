@@ -93,6 +93,9 @@ for (let i = 1; i < dealt.length; i++) dgaps.push(dealt[i].day - dealt[i - 1].da
 dgaps.sort((a, b) => a - b);
 const dpct = (q: number): number => (dgaps.length ? dgaps[Math.min(dgaps.length - 1, Math.floor(dgaps.length * q))] : 0);
 console.log(`something to deal with (request, trouble or occasion): ${dealt.length}, ${every(dealt.length)}; gaps (min) median ${dpct(0.5).toFixed(1)}, 90% ${dpct(0.9).toFixed(1)}, longest ${(dgaps[dgaps.length - 1] ?? 0).toFixed(1)}; ${dgaps.length ? Math.round((dgaps.filter((g) => g > 3).length / dgaps.length) * 100) : 0}% of gaps longer than 3 minutes (SPEC §21 target: every 2-3 minutes; encounters on the road come on top)`);
+const nearBy: Record<string, number> = {};
+for (const i of items) nearBy[i.kind] = (nearBy[i.kind] ?? 0) + 1;
+console.log(`near the player by kind: ${JSON.stringify(nearBy)}`);
 const st = hap.stats();
 console.log(`requests: ${JSON.stringify(st.requests)}`);
 console.log(`events started in the world: ${JSON.stringify(st.started)}`);

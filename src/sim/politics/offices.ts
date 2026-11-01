@@ -30,6 +30,9 @@ interface Seat { office: OfficeId; place: number }
 const MAX_ELECTORS = 16;
 const hash = (n: number): number => (Math.imul(n ^ 0x9e3779b1, 2654435761) >>> 0);
 
+/** Slices the hour's office work is dealt out in (also enough for the six stages of a House thinking). */
+export const OFFICE_BUCKETS = 6;
+
 export class Offices {
   private seats: Seat[] = [];
   private bySlot = new Map<number, Seat[]>();
@@ -425,8 +428,17 @@ export class Offices {
   // ---- the daily review ----
 
   /** Hourly: the posts whose review falls today are voted on or filled — a few each hour, spread over the year. */
+  /** The posts to deal with this hour, set by `hourlyBegin` and worked off in buckets by `hourlyStage`. */
+  private due: Array<() => void> = [];
+
   hourly(hour: number): void {
+    this.hourlyBegin(hour);
+    for (let b = 0; b < OFFICE_BUCKETS; b++) this.hourlyStage(b);
+  }
+
+  hourlyBegin(hour: number): void {
     const c = this.core;
+    this.due = [];
     if (hour % 2 === 0) return; // odd hours only: the Houses think on the even ones
     const slot = Math.floor(c.day) % YEAR;
     const list = this.bySlot.get(slot);
@@ -435,12 +447,17 @@ export class Offices {
       for (const k of Object.keys(c.save.pending).sort()) {
         if (c.save.pending[k] <= c.day) {
           const [office, place] = k.split(':');
-          if (isManaged(office)) this.holdElection(office, Number(place));
+          if (isManaged(office)) this.due.push(() => this.holdElection(office, Number(place)));
         }
       }
     }
     if (!list) return;
-    for (let i = 0; i < list.length; i++) if (i % 12 === (hour - 1) / 2) this.review(list[i]);
+    for (let i = 0; i < list.length; i++) if (i % 12 === (hour - 1) / 2) { const seat = list[i]; this.due.push(() => this.review(seat)); }
+  }
+
+  /** Works off every `OFFICE_BUCKETS`-th post of the hour (an election is a few ms, so the hour is dealt out). */
+  hourlyStage(bucket: number): void {
+    for (let i = bucket; i < this.due.length; i += OFFICE_BUCKETS) this.due[i]();
   }
 
   private review(seat: Seat): void {

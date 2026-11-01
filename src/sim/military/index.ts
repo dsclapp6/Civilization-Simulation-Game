@@ -62,27 +62,34 @@ export function installMilitary(sim: Simulation, deps: Wave3Deps): MilitaryRunti
   // The day's military work is dealt out over the hours so no frame carries all of it: wars at midnight (military.day),
   // then each part at an hour of its own; armies think and draw their keep in the hour of their number.
   offs.push(sim.registerSystem({
-    name: 'military.hour', phase: 'hourly', order: 60,
-    run: (_ctx, info) => {
-      ensureHooks();
+    name: 'military.hour', phase: 'hourly', order: 60, shards: 5,
+    run: (_ctx, info, shard = 0) => {
       const h = info.hour;
-      if (h === 5) queueHour(M);
-      else if (h === 8) M.career.daily();
-      else if (h === 11) defendHour(M);
-      else if (h === 14) M.time('day.captives', () => tickCaptives(M));
-      else if (h === 17) M.time('day.sieges', () => M.sieges.tick());
-      else if (h === 20) M.time('day.repair', () => repairDamage(M));
+      // one frame never carries the whole hour: the daily jobs, the armies' movement, their thinking, their keep and contacts are shards
+      if (shard === 0) {
+        ensureHooks();
+        if (h === 5) queueHour(M);
+        else if (h === 8) M.career.daily();
+        else if (h === 11) defendHour(M);
+        else if (h === 14) M.time('day.captives', () => tickCaptives(M));
+        else if (h === 17) M.time('day.sieges', () => M.sieges.tick());
+        else if (h === 20) M.time('day.repair', () => repairDamage(M));
+        return;
+      }
       if (M.data.armies.length === 0 && M.data.battles.length === 0) return;
-      M.time('hour.armies', () => hourlyArmies(M));
-      thinkHour(M, h);
-      M.time('day.upkeep', () => {
-        for (const a of M.allArmies().slice()) {
-          if (a.id % 24 !== h || !M.armyById.has(a.id) || a.reason === 'sally') continue;
-          upkeepDay(M, a);
-        }
-      });
-      M.time('hour.contacts', () => checkContacts(M));
-      M.touch();
+      if (shard === 1) M.time('hour.armies', () => hourlyArmies(M));
+      else if (shard === 2) thinkHour(M, h);
+      else if (shard === 3) {
+        M.time('day.upkeep', () => {
+          for (const a of M.allArmies().slice()) {
+            if (a.id % 24 !== h || !M.armyById.has(a.id) || a.reason === 'sally') continue;
+            upkeepDay(M, a);
+          }
+        });
+      } else {
+        M.time('hour.contacts', () => checkContacts(M));
+        M.touch();
+      }
     },
   }));
   offs.push(sim.registerSystem({

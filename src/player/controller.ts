@@ -976,6 +976,7 @@ export class PlayerController implements PlayerApi {
     const rng = this.sim.rng('travel');
     const b = this.avatar;
     sampleDanger(this.world, b.x, b.z, this.sim.absDay, j.cursor.kind, isNight(this.sim.absDay), this.danger);
+    this.danger.risk = this.sim.services.advancement?.bonus?.(p.house, 'road.risk') ?? 0;
     const rate = encounterRate(this.danger, this.sim.state.difficulty); // per km
     if (!rng.chance(rate * 0.12)) return;
     const kind = pickEncounterKind(rng, this.danger, this.sim.state.difficulty);

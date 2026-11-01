@@ -19,9 +19,19 @@ const DISASTER = /famine|plague|pestilence|blight|drought|flood|murrain|sickness
 export class Ai {
   constructor(private readonly core: PoliticsCore, private readonly wars: Wars, private readonly diplo: Diplomacy) {}
 
+  /** The Houses thinking this hour, one generator each: every `resume` runs one stage of each (see `hourlyBegin`). */
+  private jobs: Array<Generator<void, void>> = [];
+
   /** Hourly slice: each House thinks once every THINK_PERIOD days, at its own hour (about one House per hour). */
   hourly(hourIndex: number): void {
+    this.hourlyBegin(hourIndex);
+    while (this.jobs.length > 0) this.hourlyStage();
+  }
+
+  /** Finds the Houses due this hour and refreshes the snapshot (the first slice of the hour's work). */
+  hourlyBegin(hourIndex: number): void {
     const c = this.core;
+    this.jobs = [];
     if (hourIndex % 2 !== 0) return; // Houses think on even hours, posts are reviewed on odd ones: no frame carries both
     const cycle = THINK_PERIOD * 12;
     const slot = (hourIndex / 2) % cycle;
@@ -32,10 +42,22 @@ export class Ai {
     }
     if (due.length === 0) return;
     c.invalidate(); // decisions are taken on the state of this very hour, live or loaded
-    for (const h of due) if (c.isActor(h)) this.think(h);
+    c.snapshot();
+    for (const h of due) if (c.isActor(h)) this.jobs.push(this.thinkStages(h));
+  }
+
+  /** Runs the next stage of every House thinking this hour (a stage is a few ms; the live game may pause between them). */
+  hourlyStage(): void {
+    if (this.jobs.length === 0) return;
+    this.jobs = this.jobs.filter((j) => !j.next().done);
   }
 
   think(h: HouseId): void {
+    for (const _ of this.thinkStages(h)) void _;
+  }
+
+  /** A House's thinking, cut into stages at the points where it does a different kind of work. */
+  private *thinkStages(h: HouseId): Generator<void, void> {
     const c = this.core;
     if (c.isPlayerHouse(h) || !c.isActor(h)) return;
     const head = c.headOf(h);
@@ -45,14 +67,18 @@ export class Ai {
     mind.goal = this.chooseGoal(h, head);
     if (mind.since < c.day - YEAR) mind.since = c.day;
     c.touch();
-
+    yield;
     this.seekMarriages(h, head);
+    yield;
     this.seekPacts(h);
+    yield;
     if (!adult && !c.state.persons.get(c.primaryTitle(h)?.regent ?? 0)) return;
     if (this.answerRefusal(h)) return;
     if (this.rebel(h, head)) return;
     if (c.day - mind.lastWar < 2 * YEAR) return; // a House rests two years between wars
+    yield;
     if (this.demandSubmission(h)) return;
+    yield;
     this.makeWar(h, head, adult);
   }
 
