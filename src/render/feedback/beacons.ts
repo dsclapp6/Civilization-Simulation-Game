@@ -9,9 +9,9 @@ import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import type { WorldMarker } from '../../core/view';
 
 const MAX = 12;
-/** Pillar height (m) and width at the base for the primary and the secondary markers. */
-const PRIMARY_H = 46, PRIMARY_W = 2.2;
-const SECONDARY_H = 9, SECONDARY_W = 0.9;
+/** Pillar height (m) and width at the base for the primary and the secondary markers; least width on screen (px). */
+const PRIMARY_H = 46, PRIMARY_W = 2.6, PRIMARY_PX = 16;
+const SECONDARY_H = 9, SECONDARY_W = 0.9, SECONDARY_PX = 5;
 /** The beacon is gone when the player stands within ARRIVE m, and back by ARRIVE_FULL m. */
 const ARRIVE = 2.5, ARRIVE_FULL = 7;
 
@@ -44,14 +44,16 @@ varying float vAlpha;
 varying float vH;
 void main() {
   float x = vUv.x;
-  float core = exp(-x * x * 26.0);
-  float glow = exp(-x * x * 4.0) * 0.45;
+  float core = exp(-x * x * 12.0);
+  float glow = exp(-x * x * 2.6) * 0.5;
   float y = vUv.y;
-  float vert = pow(1.0 - y, 1.6) * smoothstep(0.0, 0.025, y);
+  float vert = pow(1.0 - y, 1.35) * smoothstep(0.0, 0.02, y);
   // light rising up the shaft
-  float bands = 0.82 + 0.18 * sin((y * vH - uTime * 2.4) * 0.55);
+  float bands = 0.8 + 0.2 * sin((y * vH - uTime * 2.4) * 0.55);
   float a = (core + glow) * vert * bands * vAlpha;
-  gl_FragColor = vec4(vColor * a, a);
+  // premultiplied: the core partly covers what is behind (gold on a pale sky), the glow only adds light
+  float cover = core * vert * vAlpha * 0.6;
+  gl_FragColor = vec4(vColor * a, cover);
 }`;
 
 const RING_VERT = /* glsl */`
@@ -84,7 +86,7 @@ void main() {
   // a ripple running outwards
   float rip = exp(-pow((r - fract(uTime * 0.45)) * 7.0, 2.0)) * (1.0 - r) * vPrimary;
   float a = (ring + disc + rip * 0.8) * vAlpha;
-  gl_FragColor = vec4(vColor * a, a);
+  gl_FragColor = vec4(vColor * a, ring * vAlpha * 0.6);
 }`;
 
 interface Slot { marker: WorldMarker | null }
@@ -136,7 +138,7 @@ export class BeaconLayer {
     this.shaftGeo.setAttribute('aShape', this.sShape);
     this.shaftGeo.setAttribute('aColor', this.sColor);
     this.shaftGeo.instanceCount = 0;
-    const common = { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false };
+    const common = { transparent: true, depthWrite: false, blending: THREE.NormalBlending, premultipliedAlpha: true, fog: false, toneMapped: false };
     this.shaftMat = new THREE.ShaderMaterial({
       ...common, side: THREE.DoubleSide, vertexShader: SHAFT_VERT, fragmentShader: SHAFT_FRAG,
       uniforms: { uTime: { value: 0 }, uPixelAngle: { value: 0.001 } },
@@ -179,10 +181,10 @@ export class BeaconLayer {
     if (labels && typeof document !== 'undefined') {
       const el = document.createElement('div');
       el.className = 'mil-beacon-label';
-      el.style.cssText = 'font: italic 600 13px Georgia, "Times New Roman", serif; color: #fff3d0; text-shadow: 0 1px 2px #000, 0 0 5px rgba(0,0,0,0.75); white-space: nowrap; pointer-events: none; text-align: center; letter-spacing: 0.02em;';
+      el.style.cssText = 'font: italic 600 14px Georgia, "Palatino Linotype", "Times New Roman", serif; color: #fff1c8; text-shadow: 0 1px 1px #000, 0 0 4px rgba(0,0,0,0.9), 0 0 9px rgba(0,0,0,0.55); white-space: nowrap; pointer-events: none; text-align: center; letter-spacing: 0.02em;';
       const name = document.createElement('div');
       const dist = document.createElement('div');
-      dist.style.cssText = 'font: 600 11px Georgia, serif; opacity: 0.85; font-style: normal;';
+      dist.style.cssText = 'font: 700 12px Georgia, serif; font-style: normal; color: #ffd76a; letter-spacing: 0.04em;';
       el.append(name, dist);
       this.label = new CSS2DObject(el);
       this.label.center.set(0.5, 1);
@@ -224,7 +226,7 @@ export class BeaconLayer {
         this.c.setHex(mk.color);
         // shaft
         this.sBase.setXYZ(n, mk.x, ground + (isP ? 0 : lift), mk.z);
-        this.sShape.setXYZW(n, isP ? PRIMARY_H + Math.min(40, camD * 0.06) : SECONDARY_H, isP ? PRIMARY_W : SECONDARY_W, alpha, isP ? 7 : 3);
+        this.sShape.setXYZW(n, isP ? PRIMARY_H + Math.min(40, camD * 0.06) : SECONDARY_H, isP ? PRIMARY_W : SECONDARY_W, alpha, isP ? PRIMARY_PX : SECONDARY_PX);
         this.sColor.setXYZ(n, this.c.r, this.c.g, this.c.b);
         // ground ring (people markers float over the head: no ring)
         const ringR = isP ? 2.4 + 0.15 * Math.sin(this.time * 2.2) : 1.1;
@@ -246,6 +248,7 @@ export class BeaconLayer {
     this.shaftGeo.instanceCount = n;
     this.ringGeo.instanceCount = n;
     this.gems.count = n;
+    this.shafts.visible = this.rings.visible = this.gems.visible = n > 0;
     for (const a of [this.sBase, this.sShape, this.sColor, this.rBase, this.rShape, this.rColor]) a.needsUpdate = true;
     this.gems.instanceMatrix.needsUpdate = true;
     if (this.gems.instanceColor) this.gems.instanceColor.needsUpdate = true;

@@ -17,8 +17,11 @@ const LIFE = 2.3;
 const LIFE_BIG = 3.4;
 /** Rise over a lifetime (m). */
 const RISE = 1.35;
-/** Seconds between two texts spawned at the same spot. */
-const STAGGER = 0.38;
+/** Texts from one spot within this many seconds form a stack (one line above the other, popping in turn). */
+const GROUP_S = 0.7;
+const STAGGER = 0.14;
+/** Line spacing of a stack, in sprite heights. */
+const LINE = 0.58;
 const MAX_DIST = 90;
 
 interface Tone { fill: string; stroke: string; glow?: string }
@@ -45,6 +48,8 @@ interface Floater {
   life: number;
   big: boolean;
   active: boolean;
+  /** Line in its stack (0 = bottom). */
+  line: number;
 }
 
 /** A canvas texture to draw a text into (none in a headless test: the layout logic still runs). */
@@ -94,7 +99,7 @@ export class FloaterLayer {
       sprite.renderOrder = 20;
       sprite.frustumCulled = false;
       this.scene.add(sprite);
-      this.pool.push({ sprite, ctx, tex, mat, x: 0, y: 0, z: 0, age: 0, life: LIFE, big: false, active: false });
+      this.pool.push({ sprite, ctx, tex, mat, x: 0, y: 0, z: 0, age: 0, life: LIFE, big: false, active: false, line: 0 });
     }
   }
 
@@ -109,18 +114,25 @@ export class FloaterLayer {
         // recycle the oldest
         slot = this.pool.reduce((a, b) => (a.age / a.life > b.age / b.life ? a : b));
       }
-      // texts from one spot rise one after another
-      let start = this.time;
+      // texts from one spot stack up, one line above the other, popping in turn; the stack rises as one
+      let line = 0, anchor: { x: number; y: number; z: number; t: number } | null = null;
       for (const r of this.recent) {
-        if ((r.x - f.x) ** 2 + (r.z - f.z) ** 2 < 2.5 * 2.5 && r.t + STAGGER > start) start = r.t + STAGGER;
+        if ((r.x - f.x) ** 2 + (r.z - f.z) ** 2 < 2.5 * 2.5 && this.time - r.t < GROUP_S) {
+          line++;
+          anchor ??= r;
+        }
       }
-      this.recent.push({ x: f.x, y: f.y, z: f.z, t: start });
+      if (!anchor) this.recent.push({ x: f.x, y: f.y, z: f.z, t: this.time });
+      else this.recent.push({ ...anchor });
       const { tone, big } = floaterStyle(f);
       this.draw(slot, f.text, tone, big);
-      slot.x = f.x; slot.y = f.y; slot.z = f.z;
-      slot.age = this.time - start;
-      slot.life = big ? LIFE_BIG : LIFE;
+      const at = anchor ?? f;
+      slot.x = at.x; slot.y = at.y; slot.z = at.z;
+      slot.age = -line * STAGGER;
+      // the whole stack fades out together, on the first line's clock
+      slot.life = (big ? LIFE_BIG : LIFE) - line * STAGGER;
       slot.big = big;
+      slot.line = line;
       slot.active = true;
       slot.sprite.visible = false;
     }
@@ -165,7 +177,7 @@ export class FloaterLayer {
   update(dt: number, camera: THREE.PerspectiveCamera, viewportHeight: number): void {
     const t0 = performance.now();
     this.time += dt;
-    for (let i = this.recent.length - 1; i >= 0; i--) if (this.time - this.recent[i].t > STAGGER * 4) this.recent.splice(i, 1);
+    for (let i = this.recent.length - 1; i >= 0; i--) if (this.time - this.recent[i].t > GROUP_S) this.recent.splice(i, 1);
     const k = (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) / Math.max(1, viewportHeight);
     let n = 0;
     for (const p of this.pool) {
@@ -174,10 +186,14 @@ export class FloaterLayer {
       if (p.age >= p.life) { p.active = false; p.sprite.visible = false; continue; }
       if (p.age < 0) { p.sprite.visible = false; continue; }
       n++;
-      const u = p.age / p.life;
+      // the stack rises together: each line keeps to the clock of the stack's first text
+      const t = p.age + p.line * STAGGER;
+      const u = Math.min(1, t / (p.big ? LIFE_BIG : LIFE));
       // ease out: quick lift, slow drift; fade in fast, hold, fade out
       const rise = RISE * (1 - Math.pow(1 - u, 2.2)) * (p.big ? 1.15 : 1);
       p.sprite.position.set(p.x, p.y + 0.15 + rise, p.z);
+      // lines above the first: a screen-space offset in sprite heights
+      p.sprite.center.y = -p.line * LINE * (p.big ? 0.75 : 1);
       const fadeIn = Math.min(1, p.age / 0.12);
       const fadeOut = 1 - Math.max(0, (u - 0.62) / 0.38);
       p.mat.opacity = fadeIn * fadeOut * fadeOut;

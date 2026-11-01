@@ -34,6 +34,8 @@ interface PresetDef {
   weather: WeatherPreset;
   snowCover?: number | null;
   camera: (c: Ctx) => Pose | 'follow' | 'map';
+  /** After settling, before the final frame (floating texts, hover): returns seconds to advance. */
+  after?: (c: Ctx) => number;
 }
 
 const g = (w: WorldModel, x: number, z: number) => w.heightAt(clamp(x, 0, w.size), clamp(z, 0, w.size));
@@ -178,6 +180,292 @@ const portTown = (c: Ctx) => {
   return ports[0] ?? portTownAny(c);
 };
 const portTownAny = (c: Ctx) => settlementWhere(c.w, (s) => (s.kind === 'town' || s.kind === 'city') && s.port, c.v.village);
+
+// ---- clarity pass scenes: strip work, results of work, beacons, nameplates, hover ----
+
+interface StripFrame {
+  id: number;
+  /** Point at u across (0..1), w along (0..1) from the strip's first short edge. */
+  at(u: number, w: number): { x: number; z: number };
+  length: number;
+  width: number;
+  /** Unit vectors along and across the strip. */
+  ax: number; az: number; bx: number; bz: number;
+  cx: number; cz: number;
+}
+
+function stripFrame(w: WorldModel, id: number): StripFrame {
+  const p = w.strips[id].poly;
+  const e0 = Math.hypot(p[1].x - p[0].x, p[1].z - p[0].z), e1 = Math.hypot(p[3].x - p[0].x, p[3].z - p[0].z);
+  const longIsV = e1 >= e0;
+  const a = p[0], b = longIsV ? p[1] : p[3], c = p[2], d = longIsV ? p[3] : p[1];
+  const at = (u: number, t: number) => ({
+    x: (a.x * (1 - u) + b.x * u) * (1 - t) + (d.x * (1 - u) + c.x * u) * t,
+    z: (a.z * (1 - u) + b.z * u) * (1 - t) + (d.z * (1 - u) + c.z * u) * t,
+  });
+  const length = longIsV ? e1 : e0, width = longIsV ? e0 : e1;
+  const s = at(0.5, 0), e = at(0.5, 1), l = at(0, 0.5), r = at(1, 0.5);
+  const al = Math.hypot(e.x - s.x, e.z - s.z) || 1, bl = Math.hypot(r.x - l.x, r.z - l.z) || 1;
+  const m = at(0.5, 0.5);
+  return { id, at, length, width, ax: (e.x - s.x) / al, az: (e.z - s.z) / al, bx: (r.x - l.x) / bl, bz: (r.z - l.z) / bl, cx: m.x, cz: m.z };
+}
+
+/** A strip of the home village good for a work scene (70–260 m long, inside the open field) and a parallel neighbour. */
+function workStrips(c: Ctx): { a: StripFrame; b: StripFrame | null } {
+  const v = c.v.village;
+  const frames = v.strips.map((id) => stripFrame(c.w, id));
+  let best: { a: StripFrame; b: StripFrame | null; s: number } | null = null;
+  for (const f of frames) {
+    if (f.length < 70 || f.length > 260 || f.width < 6) continue;
+    // neighbours on each side (an inner strip: open field all round, no hedge in the way)
+    let left: StripFrame | null = null, right: StripFrame | null = null;
+    for (const g of frames) {
+      if (g.id === f.id || Math.abs(g.ax * f.ax + g.az * f.az) < 0.97) continue;
+      const dx = g.cx - f.cx, dz = g.cz - f.cz;
+      const across = dx * f.bx + dz * f.bz, along = dx * f.ax + dz * f.az;
+      if (Math.abs(along) > f.length * 0.3 || Math.abs(across) > (f.width + g.width) * 0.75) continue;
+      if (across > 0) right ??= g; else left ??= g;
+    }
+    const mid = f.at(0.5, 0.46);
+    const open = clearOfTrees(c.w, mid.x, mid.z, 18);
+    const s = Math.hypot(f.cx - v.x, f.cz - v.z) * 0.5 + (left && right ? 0 : 500) + (open ? 0 : 300);
+    if (!best || s < best.s) best = { a: f, b: right ?? left, s };
+  }
+  if (best) return best;
+  return { a: stripFrame(c.w, v.strips[0]), b: null };
+}
+
+/** No tree or hedge on the line from a camera to its subject (the last stretch excepted). */
+function clearSight(w: WorldModel, from: { x: number; z: number }, to: { x: number; z: number }, r: number): boolean {
+  for (let i = 0; i <= 8; i++) {
+    const t = (i / 8) * 0.88;
+    if (!clearOfTrees(w, from.x + (to.x - from.x) * t, from.z + (to.z - from.z) * t, r)) return false;
+  }
+  return true;
+}
+
+/** A camera looking at a point on a strip from its side (sunny side first), clear of trees and hedges. */
+function stripView(c: Ctx, f: StripFrame, front: { x: number; z: number }, dist: number, height: number, back: number, lookUp: number, ahead = 0): Pose {
+  const sunSide = f.bx * c.sunX + f.bz * c.sunZ > 0 ? 1 : -1;
+  const look = { x: front.x + f.ax * ahead, z: front.z + f.az * ahead };
+  const ty = g(c.w, look.x, look.z) + lookUp;
+  const pose = (x: number, z: number): Pose => ({ pos: { x, y: Math.max(g(c.w, x, z), 0) + height, z }, look: { x: look.x, y: ty, z: look.z } });
+  for (const k of [1, 0.85, 1.2, 0.7, 1.45]) {
+    for (const side of [sunSide, -sunSide]) {
+      for (const bk of [back, back * 1.6, back * 0.4, -back]) {
+        const x = front.x + f.bx * side * dist * k - f.ax * bk, z = front.z + f.bz * side * dist * k - f.az * bk;
+        if (clearOfTrees(c.w, x, z, 6) && clearSight(c.w, { x, z }, look, 3)) return pose(x, z);
+      }
+    }
+  }
+  return pose(front.x + f.bx * sunSide * dist - f.ax * back, front.z + f.bz * sunSide * dist - f.az * back);
+}
+
+/** Turn the follow camera to look the way the avatar faces. */
+function faceCamera(c: Ctx, yaw: number): void {
+  const d = Math.atan2(Math.sin(yaw - c.r.getCameraYaw()), Math.cos(yaw - c.r.getCameraYaw()));
+  c.r.orbit(d, 0);
+}
+
+/** Reaping half done on one strip (stooks behind the reapers), ploughing on the next; the avatar at the cutting front. */
+function workScene(c: Ctx): { a: StripFrame; b: StripFrame | null; front: { x: number; z: number }; y: number } {
+  const { a, b } = workStrips(c);
+  const wA = 0.46;
+  c.v.setStrip(a.id, { state: 'ripe', crop: 'wheat', growth: 1, task: 'reap', work: wA });
+  if (b) c.v.setStrip(b.id, { state: 'stubble', crop: 'fallow', growth: 0, task: 'plough', work: 0.58 });
+  const yaw = Math.atan2(a.ax, a.az);
+  let k = 0;
+  for (let s = 5; s < wA * a.length - 4; s += 7.5) {
+    for (const u of [0.27, 0.73]) {
+      const p = a.at(u, s / a.length);
+      const j = (n: number) => (Math.sin(k * 12.9898 + n * 78.233) * 43758.5453) % 1;
+      c.v.addProp({ kind: 'stook', x: p.x + j(1) * 0.6, z: p.z + j(2) * 0.6, rot: yaw + j(3) * 0.35, scale: 0.95 + Math.abs(j(4)) * 0.12 });
+      k++;
+    }
+  }
+  const front = a.at(0.5, wA);
+  c.v.teleportAvatar(front.x - a.ax * 0.9 + a.bx * 1.2, front.z - a.az * 0.9 + a.bz * 1.2, yaw);
+  c.v.holdAnim = 'work_sickle';
+  c.v.avatar.mainHand = 'sickle';
+  return { a, b, front, y: g(c.w, front.x, front.z) };
+}
+
+/** An open-ground tree near the village with room around it (for the felling scene). */
+function lonelyTree(c: Ctx): { id: number; x: number; z: number; scale: number } | null {
+  const v = c.v.village;
+  let best: { id: number; x: number; z: number; scale: number; s: number } | null = null;
+  const C = 64;
+  for (let cz = Math.floor((v.z - 500) / C); cz <= Math.floor((v.z + 500) / C); cz++) {
+    for (let cx = Math.floor((v.x - 500) / C); cx <= Math.floor((v.x + 500) / C); cx++) {
+      for (const it of c.w.scatterInChunk(cx, cz)) {
+        if (it.kind !== 'oak' && it.kind !== 'beech' && it.kind !== 'ash') continue;
+        if (c.w.forestAt(it.x, it.z) > 0.25 || c.v.inStrip(it.x, it.z)) continue;
+        const d = Math.hypot(it.x - v.x, it.z - v.z);
+        if (d < 90) continue;
+        if (!clearOfTrees(c.w, it.x + 6, it.z + 6, 4)) continue;
+        const s = d;
+        if (!best || s < best.s) best = { id: it.id, x: it.x, z: it.z, scale: it.scale, s };
+      }
+    }
+  }
+  return best;
+}
+
+const CLARITY_PRESETS: Record<string, PresetDef> = {
+  /** A strip half reaped (stooks behind the reaper, standing wheat ahead), the next one half ploughed; gains rising. */
+  work: {
+    season: 1, day: 9, time: 0.62, weather: 'clear',
+    camera: (c) => { const s = workScene(c); return stripView(c, s.a, s.front, 11, 3.4, 3, 0.8); },
+    after: (c) => {
+      const a = c.v.avatar;
+      const y = a.y + 1.7;
+      c.v.floatText({ x: a.x, y, z: a.z, text: '+3 sheaves', tone: 'gain' });
+      c.v.floatText({ x: a.x, y, z: a.z, text: 'Farming +6', tone: 'skill' });
+      c.v.floatText({ x: a.x, y, z: a.z, text: '+1d', tone: 'gain' });
+      return 1.0;
+    },
+  },
+  /** The same work from 30–60 m: the reaped band, the stooks and the ploughed furrows read from afar. */
+  'work-far': {
+    season: 1, day: 9, time: 0.62, weather: 'clear',
+    camera: (c) => { const s = workScene(c); return stripView(c, s.a, s.front, 36, 15, 24, 0, 4); },
+  },
+  /** A felled tree: the stump with fresh chips and the trunk sawn into logs; a level-up rises. */
+  felled: {
+    season: 2, day: 2, time: 0.45, weather: 'clear',
+    camera: (c) => {
+      const t = lonelyTree(c);
+      if (!t) return lookFrom(c.w, c.v.village.x, c.v.village.z, 0, 20, 5);
+      c.v.fell(t.id);
+      const fall = Math.atan2(-c.sunZ, c.sunX);
+      c.v.addProp({ kind: 'stump', x: t.x, z: t.z, rot: fall, scale: Math.max(0.8, t.scale) });
+      const lx = t.x + Math.cos(fall) * 4.2, lz = t.z - Math.sin(fall) * 4.2;
+      c.v.addProp({ kind: 'logs', x: lx, z: lz, rot: fall, scale: 1.25, count: 6 });
+      c.v.teleportAvatar(t.x - 1.6, t.z + 1.2, Math.atan2(lx - t.x, lz - t.z));
+      c.v.holdAnim = 'work_axe';
+      c.v.avatar.mainHand = 'axe';
+      return bestView(c, (t.x + lx) / 2, (t.z + lz) / 2, 10, 3.4, 0.4, { sunBehind: 0.8 });
+    },
+    after: (c) => {
+      const a = c.v.avatar;
+      c.v.floatText({ x: a.x, y: a.y + 1.8, z: a.z, text: '+2 logs', tone: 'gain' });
+      c.v.floatText({ x: a.x, y: a.y + 1.8, z: a.z, text: 'Woodcraft 2!', tone: 'skill' });
+      return 0.8;
+    },
+  },
+  /** The tracked objective's beacon seen from ~300 m out in the fields, over the roofs. */
+  'beacon-far': {
+    season: 1, day: 3, time: 0.58, weather: 'clear',
+    camera: (c) => {
+      const v = homeVillage(c);
+      const ch = firstPlot(c.w, v, ['church', 'chapel']) ?? c.w.plots[v.plots[0]];
+      const door = { x: ch.x + Math.sin(ch.rot) * (BUILDINGS[ch.kind].d / 2 + 3), z: ch.z + Math.cos(ch.rot) * (BUILDINGS[ch.kind].d / 2 + 3) };
+      c.v.markerList.push({ id: 1, kind: 'objective', x: door.x, z: door.z, label: "Hear Mass at St Mary's", color: 0xf2c14e, primary: true });
+      const home = firstPlot(c.w, v, ['cottage', 'longhouse']);
+      if (home) c.v.markerList.push({ id: 2, kind: 'home', x: home.x + Math.sin(home.rot) * 4, z: home.z + Math.cos(home.rot) * 4, label: 'Home', color: 0x8fd0ff });
+      // stand ~300 m out, facing the church
+      let pos = { x: v.x + 300, z: v.z };
+      for (let k = 0; k < 24; k++) {
+        const a = (k / 24) * Math.PI * 2;
+        const x = door.x + Math.sin(a) * 300, z = door.z + Math.cos(a) * 300;
+        if (c.w.waterSurfaceAt(x, z) === null && c.w.forestAt(x, z) < 0.1 && clearOfTrees(c.w, x, z, 12)) { pos = { x, z }; break; }
+      }
+      const yaw = Math.atan2(door.x - pos.x, door.z - pos.z);
+      c.v.teleportAvatar(pos.x, pos.z, yaw);
+      c.r.setCameraMode('follow');
+      faceCamera(c, yaw);
+      return 'follow';
+    },
+  },
+  /** Close by: the beacon is quiet (faint shaft, ground ring, gem and label) so the place itself stays readable. */
+  'beacon-near': {
+    season: 1, day: 3, time: 0.5, weather: 'clear',
+    camera: (c) => {
+      const v = homeVillage(c);
+      const well = firstPlot(c.w, v, ['well']) ?? firstPlot(c.w, v, ['church']) ?? c.w.plots[v.plots[0]];
+      const spot = { x: well.x + Math.sin(well.rot) * 2.2, z: well.z + Math.cos(well.rot) * 2.2 };
+      c.v.markerList.push({ id: 1, kind: 'objective', x: spot.x, z: spot.z, label: 'Fetch water from the well', color: 0xf2c14e, primary: true });
+      const s = streetNear(c.w, v, well);
+      const d = Math.hypot(s.x - spot.x, s.z - spot.z) || 1;
+      const px = spot.x + ((s.x - spot.x) / d) * 13, pz = spot.z + ((s.z - spot.z) / d) * 13;
+      const yaw = Math.atan2(spot.x - px, spot.z - pz);
+      c.v.teleportAvatar(px, pz, yaw);
+      c.r.setCameraMode('follow');
+      faceCamera(c, yaw);
+      return 'follow';
+    },
+  },
+  /** Nameplates in a crowd: kin, household, the reeve with a request, the tracked sister, a lord, strangers, one speaking, one hovered. */
+  crowd: {
+    season: 1, day: 1, time: 0.55, weather: 'clear',
+    camera: (c) => {
+      const v = homeVillage(c);
+      const church = firstPlot(c.w, v, ['church', 'chapel']) ?? c.w.plots[v.plots[0]];
+      const s = streetNear(c.w, v, church);
+      c.v.teleportAvatar(s.x, s.z, s.yaw);
+      const fx = s.x + Math.sin(s.yaw) * 11, fz = s.z + Math.cos(s.yaw) * 11;
+      const crowd = c.v.gather(fx, fz, 10, 24);
+      const speaker = crowd[7];
+      if (speaker) { speaker.label = 'Fine weather for the harvest, God be thanked.'; speaker.sublabel = undefined; speaker.anim = 'talk'; }
+      c.r.setCameraMode('follow');
+      faceCamera(c, s.yaw);
+      return 'follow';
+    },
+    after: (c) => {
+      const crowd = c.v.characters().filter((it) => it.id >= 100 && it.id < 200 && it.id !== 103 && it.id !== 104);
+      const target = crowd.sort((a, b) => Math.hypot(a.x - c.v.avatar.x, a.z - c.v.avatar.z) - Math.hypot(b.x - c.v.avatar.x, b.z - c.v.avatar.z))[3];
+      if (target) c.r.setHover?.({ kind: 'person', id: target.id });
+      return 0;
+    },
+  },
+  /** Results of work as piles: the woodpile, sacks and quarry stone at three sizes, hay cocks, sheaves, logs. */
+  props: {
+    season: 1, day: 6, time: 0.6, weather: 'clear',
+    camera: (c) => {
+      const v = homeVillage(c);
+      const pasture = c.w.parcels.find((p) => p.settlement === v.id && (p.use === 'pasture' || p.use === 'meadow'));
+      let cx = v.x + 60, cz = v.z + 60;
+      if (pasture) { cx = 0; cz = 0; for (const p of pasture.poly) { cx += p.x / pasture.poly.length; cz += p.z / pasture.poly.length; } }
+      const yaw = Math.atan2(c.sunX, c.sunZ);
+      const rx = Math.cos(yaw), rz = -Math.sin(yaw);
+      const row = (k: number, depth: number) => ({ x: cx + rx * (k - 3) * 3.2 + Math.sin(yaw) * depth, z: cz + rz * (k - 3) * 3.2 + Math.cos(yaw) * depth });
+      const put = (kind: string, k: number, depth: number, count?: number, rot = 0) => { const p = row(k, depth); c.v.addProp({ kind, x: p.x, z: p.z, rot: yaw + Math.PI + rot, scale: 1, count }); };
+      put('woodpile', 0, 0, 2); put('woodpile', 1.3, 0, 5); put('woodpile', 2.9, 0, 8);
+      put('sack_pile', 4.5, 0, 2); put('sack_pile', 5.4, 0, 5); put('sack_pile', 6.5, 0, 8);
+      put('stone_pile', 0.2, -4.5, 3); put('stone_pile', 1.6, -4.5, 8);
+      put('hay_cock', 3.1, -4.6); put('hay_cock', 4.0, -5.4);
+      put('stook', 5.2, -4.4, undefined, 0.3); put('sheaf', 6.2, -3.8, undefined, 0.8);
+      put('logs', 2.4, -9, 8, 0.2); put('stump', 5.0, -8.6);
+      const mid = row(3.2, -3);
+      c.v.teleportAvatar(mid.x + Math.sin(yaw) * 30, mid.z + Math.cos(yaw) * 30, yaw);
+      const camX = mid.x + Math.sin(yaw) * 13, camZ = mid.z + Math.cos(yaw) * 13;
+      return { pos: { x: camX, y: g(c.w, camX, camZ) + 5.5, z: camZ }, look: { x: mid.x, y: g(c.w, mid.x, mid.z) + 0.4, z: mid.z } };
+    },
+  },
+  /** Hover outlines: a cottage's footprint frame (the cursor is on it). */
+  hover: {
+    season: 1, day: 2, time: 0.56, weather: 'clear',
+    camera: (c) => {
+      const v = homeVillage(c);
+      const home = firstPlot(c.w, v, ['cottage', 'longhouse', 'hovel']) ?? c.w.plots[v.plots[0]];
+      const s = streetNear(c.w, v, home);
+      c.v.teleportAvatar(s.x, s.z, Math.atan2(home.x - s.x, home.z - s.z));
+      c.r.setHover?.({ kind: 'building', id: home.id });
+      c.r.setCameraMode('follow');
+      faceCamera(c, Math.atan2(home.x - s.x, home.z - s.z));
+      return 'follow';
+    },
+  },
+  /** Hover on a strip and on a tree, seen over the fields. */
+  'hover-field': {
+    season: 1, day: 9, time: 0.62, weather: 'clear',
+    camera: (c) => {
+      const s = workScene(c);
+      if (s.b) c.r.setHover?.({ kind: 'strip', id: s.b.id });
+      return stripView(c, s.a, s.front, 26, 11, 16, 0);
+    },
+  },
+};
 
 const PRESETS: Record<string, PresetDef> = {
   village: {
@@ -362,6 +650,8 @@ const PRESETS: Record<string, PresetDef> = {
   },
 };
 
+Object.assign(PRESETS, CLARITY_PRESETS);
+
 export function start(root: AppRoot): void {
   const params = root.params;
   const seed = params.get('seed') ?? 'millennia';
@@ -387,6 +677,13 @@ export function start(root: AppRoot): void {
     const day = p.day ?? 1;
     const time = typeof p.time === 'function' ? p.time(p.season, day) : p.time;
     view.absDay = yearStart + p.season * DAYS_PER_SEASON + day + time;
+    // clarity scenes leave things behind in the mock view: start each preset clean
+    view.clearStripOverrides();
+    view.clearProps();
+    view.markerList.length = 0;
+    view.holdAnim = null;
+    view.avatar.mainHand = 'none';
+    renderer.setHover?.(null);
     view.setSeason(p.season);
     view.setWeather(p.weather);
     view.setSnowCover(p.snowCover ?? null);
@@ -403,6 +700,9 @@ export function start(root: AppRoot): void {
     const t0 = performance.now();
     renderer.settle(view, 60000);
     const t1 = performance.now();
+    const advance = p.after ? p.after({ w: world, v: view, r: renderer, sunX: sd.x / sl, sunZ: sd.z / sl }) : 0;
+    // advance in a few coarse steps (each one is a full draw in SwiftShader)
+    for (let left = advance; left > 1e-3; left -= 0.25) renderer.render(view, Math.min(0.25, left));
     renderer.render(view, 1 / 60);
     console.log(`preset ${name}: settle ${(t1 - t0).toFixed(0)} ms, draw ${(performance.now() - t1).toFixed(0)} ms`);
     const s = renderer.stats();

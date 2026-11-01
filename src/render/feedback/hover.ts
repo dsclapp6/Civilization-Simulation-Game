@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { BUILDINGS } from '../../content/types';
 import type { BuildingView, StripView } from '../../core/view';
-import { CHUNKS_PER_SIDE, type ScatterKind, type WorldModel } from '../../world/types';
+import { CHUNKS_PER_SIDE, type ScatterItem, type ScatterKind, type WorldModel } from '../../world/types';
 import type { HoverTarget } from '../types';
 
 const VERT = /* glsl */`
@@ -20,12 +20,13 @@ uniform vec3 uColor;
 uniform float uAlpha;
 varying float vAcross;
 void main() {
-  // bright core, dark rim: reads on pale stubble, green grass and dark soil alike
+  // a bright core line edged in dark, inside a soft warm glow: reads on pale stubble, grass and dark soil alike
   float x = abs(vAcross - 0.5) * 2.0;
-  float core = 1.0 - smoothstep(0.25, 0.55, x);
-  float rim = smoothstep(0.35, 0.6, x) * (1.0 - smoothstep(0.75, 1.0, x));
-  vec3 col = mix(vec3(0.12, 0.08, 0.03), uColor, core);
-  float a = max(core, rim * 0.55) * uAlpha;
+  float core = 1.0 - smoothstep(0.14, 0.22, x);
+  float edge = smoothstep(0.16, 0.24, x) * (1.0 - smoothstep(0.3, 0.38, x));
+  float glow = pow(1.0 - x, 1.6) * 0.42 * smoothstep(0.26, 0.36, x);
+  vec3 col = core > 0.01 ? uColor : edge > glow ? vec3(0.1, 0.07, 0.03) : uColor;
+  float a = max(core, max(edge * 0.6, glow)) * uAlpha;
   gl_FragColor = vec4(col, a);
 }`;
 
@@ -41,7 +42,29 @@ export interface HoverSources {
   building: (id: number) => BuildingView | null;
   strip: (id: number) => StripView | null;
   prop: (id: number) => { x: number; z: number; kind: string; scale: number } | null;
+  /** The detailed model of a building (for a soft rim glow over it), if one is drawn. */
+  buildingObject?: (id: number) => THREE.Object3D | null;
 }
+
+const RIM_VERT = /* glsl */`
+varying vec3 vN;
+varying vec3 vV;
+void main() {
+  vN = normalize(normalMatrix * normal);
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  vV = -mv.xyz;
+  gl_Position = projectionMatrix * mv;
+}`;
+const RIM_FRAG = /* glsl */`
+uniform vec3 uColor;
+uniform float uAlpha;
+varying vec3 vN;
+varying vec3 vV;
+void main() {
+  float f = 1.0 - abs(dot(normalize(vN), normalize(vV)));
+  float a = (0.07 + 0.6 * f * f) * uAlpha;
+  gl_FragColor = vec4(uColor * a, 1.0);
+}`;
 
 export class HoverLayer {
   readonly root = new THREE.Group();
@@ -54,6 +77,9 @@ export class HoverLayer {
   private time = 0;
   /** The target as given (people/animals are drawn by the dynamic layers). */
   target: HoverTarget | null = null;
+  private readonly rimMat: THREE.ShaderMaterial;
+  private readonly rim = new THREE.Group();
+  private rimSource: THREE.Object3D | null = null;
 
   constructor(private readonly src: HoverSources) {
     this.root.name = 'hover';
@@ -66,7 +92,33 @@ export class HoverLayer {
     for (const m of [this.mesh, this.ghost]) { m.frustumCulled = false; m.visible = false; }
     this.mesh.renderOrder = 6;
     this.ghost.renderOrder = 4;
-    this.root.add(this.ghost, this.mesh);
+    this.rimMat = new THREE.ShaderMaterial({
+      vertexShader: RIM_VERT, fragmentShader: RIM_FRAG, uniforms: { uColor: { value: new THREE.Color(0xffd98a) }, uAlpha: { value: 0.8 } },
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, depthFunc: THREE.LessEqualDepth,
+      polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2, fog: false, toneMapped: false,
+    });
+    this.rim.name = 'hover-rim';
+    this.root.add(this.ghost, this.mesh, this.rim);
+  }
+
+  /** A soft glow over the hovered building's own model (sharing its geometry, placed where it stands). */
+  private buildRim(obj: THREE.Object3D | null): void {
+    this.rim.clear();
+    this.rimSource = obj;
+    this.rim.visible = !!obj;
+    if (!obj) return;
+    obj.updateMatrixWorld(true);
+    for (const c of obj.children) {
+      const m = c as THREE.Mesh;
+      if (!m.isMesh || (m.name !== 'body' && m.name !== 'windows')) continue;
+      const o = new THREE.Mesh(m.geometry, this.rimMat);
+      o.matrixAutoUpdate = false;
+      o.matrix.copy(m.matrixWorld);
+      o.matrixWorld.copy(m.matrixWorld);
+      o.frustumCulled = false;
+      o.renderOrder = 6;
+      this.rim.add(o);
+    }
   }
 
   set(target: HoverTarget | null): void {
@@ -83,16 +135,16 @@ export class HoverLayer {
   private rebuild(): void {
     const t = this.target;
     let loop: { x: number; z: number }[] | null = null;
-    let width = 0.32;
+    let width = 0.9;
     if (t && t.id !== undefined) {
       if (t.kind === 'building') {
         const b = this.src.building(t.id);
         if (b) loop = buildingLoop(b);
-        width = 0.36;
+        width = 1.1;
       } else if (t.kind === 'strip') {
         const s = this.src.strip(t.id);
-        if (s && s.poly.length >= 3) loop = insetLoop(s.poly, 0.25);
-        width = 0.42;
+        if (s && s.poly.length >= 3) loop = insetLoop(s.poly, 0.5);
+        width = 1.2;
       } else if (t.kind === 'scatter') {
         const it = scatterItem(this.src.world, t.id);
         if (it) loop = circle(it.x, it.z, (SCATTER_R[it.kind] ?? 1) * Math.max(0.6, it.scale) + 0.35, 28);
@@ -105,6 +157,7 @@ export class HoverLayer {
     this.mesh.visible = show;
     this.ghost.visible = show;
     if (loop) this.ribbon(loop, width);
+    this.buildRim(t && t.kind === 'building' && t.id !== undefined && this.src.buildingObject ? this.src.buildingObject(t.id) : null);
   }
 
   /** A closed ribbon draped on the ground along `loop`. */
@@ -151,13 +204,22 @@ export class HoverLayer {
   update(dt: number): void {
     if (!this.mesh.visible) return;
     this.time += dt;
-    this.mat.uniforms.uAlpha.value = 0.78 + 0.18 * Math.sin(this.time * 4.2);
+    const pulse = Math.sin(this.time * 4.2);
+    this.mat.uniforms.uAlpha.value = 0.8 + 0.16 * pulse;
+    this.rimMat.uniforms.uAlpha.value = 0.75 + 0.2 * pulse;
+    // the building swapped its model (detail level): follow it
+    const t = this.target;
+    if (t && t.kind === 'building' && t.id !== undefined && this.src.buildingObject) {
+      const obj = this.src.buildingObject(t.id);
+      if (obj !== this.rimSource) this.buildRim(obj);
+    }
   }
 
   dispose(): void {
     this.geo.dispose();
     this.mat.dispose();
     this.xray.dispose();
+    this.rimMat.dispose();
     this.root.clear();
   }
 }
@@ -198,7 +260,7 @@ function circle(x: number, z: number, r: number, n: number): { x: number; z: num
 }
 
 /** The scatter item (tree, rock…) with this id (ids are chunkIndex × 4096 + index), or null. */
-export function scatterItem(world: WorldModel, id: number): { x: number; z: number; kind: ScatterKind; scale: number } | null {
+export function scatterItem(world: WorldModel, id: number): ScatterItem | null {
   const chunk = Math.floor(id / 4096);
   const cx = chunk % CHUNKS_PER_SIDE, cz = Math.floor(chunk / CHUNKS_PER_SIDE);
   if (cz < 0 || cz >= CHUNKS_PER_SIDE) return null;

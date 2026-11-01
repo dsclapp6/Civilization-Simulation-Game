@@ -96,17 +96,40 @@ function post(b: MeshBuilder, x: number, z: number, h: number, w = 0.12, col = W
 }
 
 // ---- results of work (clarity pass): sheaves, stooks, hay cocks, stumps, logs and growing piles ----
-const STRAW = 0xdcc070, STRAW_BUTT = 0xcdb47e, EARS = 0xc7994a, EARS_D = 0xae8442, BAND = 0x8a6a3c;
+const STRAW = 0xe2c87c, STRAW_BUTT = 0xd2ba84, EARS = 0xd0a95c, EARS_D = 0xb98f4c, BAND = 0x8f6e3e;
 const HAY = 0xbcae62, HAY_L = 0xcabc72, HAY_D = 0x9f9452;
 const FRESH = 0xdcc294, HEART = 0xc19a66, CUT_END = 0xd2b282, BARK_L = 0x6e5840;
+const SACKCLOTH = 0xd3bf90, SACK_TIE = 0x8a6a3c;
 
 /** One sheaf standing on its butt (axis +y, `h` tall): flared butt, a twisted straw band at the waist, a full head of ears. */
 function sheafUp(b: MeshBuilder, h: number, sides: number, butt = false): void {
   const k = h / 1.1;
-  const prof: V2[] = [[0.15, 0], [0.072, 0.4 * k], [0.072, 0.47 * k], [0.165, 0.74 * k], [0.11, 0.94 * k], [0.035, h]];
+  const prof: V2[] = [[0.17, 0], [0.092, 0.4 * k], [0.092, 0.47 * k], [0.19, 0.74 * k], [0.135, 0.94 * k], [0.045, h]];
   if (butt) prof.unshift([0, 0]);
   const cols = [STRAW, BAND, STRAW, EARS, EARS_D, EARS];
   b.lathe(prof, sides, butt ? [STRAW_BUTT, ...cols] : cols, { capTop: true, rot: 0.3 });
+}
+
+/** A sack lying on its side (length along local x), the neck tied off at +x. */
+function sackLying(b: MeshBuilder, x: number, y: number, z: number, s: number, rot: number, salt: number): void {
+  b.push();
+  b.translate(x, y, z);
+  b.rotY(rot);
+  b.blob(0, 0.2 * s, 0, 0.4 * s, 0.21 * s, 0.26 * s, shade(SACKCLOTH, 0.94 + (salt % 3) * 0.04), 0.07, 1, salt);
+  b.tube([0.34 * s, 0.21 * s, 0], [0.5 * s, 0.23 * s, 0], 0.07 * s, 0.035 * s, 5, SACK_TIE);
+  b.blob(0.54 * s, 0.24 * s, 0, 0.06 * s, 0.07 * s, 0.07 * s, SACKCLOTH, 0.2, 0, salt + 3);
+  b.pop();
+}
+
+/** A sack standing up, its neck tied with a cord and a tuft of cloth above. */
+function sackUp(b: MeshBuilder, x: number, z: number, s: number, rot: number): void {
+  b.push();
+  b.translate(x, 0, z);
+  b.rotY(rot);
+  b.lathe([[0.2 * s, 0], [0.27 * s, 0.1 * s], [0.28 * s, 0.34 * s], [0.24 * s, 0.52 * s], [0.12 * s, 0.6 * s], [0.07 * s, 0.63 * s]], 7,
+    [SACKCLOTH, shade(SACKCLOTH, 1.04), SACKCLOTH, shade(SACKCLOTH, 0.96), SACK_TIE], { capTop: false });
+  b.lathe([[0.07 * s, 0.63 * s], [0.11 * s, 0.7 * s], [0.06 * s, 0.75 * s], [0, 0.76 * s]], 6, SACKCLOTH);
+  b.pop();
 }
 
 /** One log lying along x from x0 to x1 at height y (its centre line), pale cut ends. */
@@ -150,31 +173,34 @@ function woodStack(b: MeshBuilder, r: () => number, lod: 0 | 1 | 2, size: number
   }
 }
 
-/** Sacks of grain or flour: `size` sacks (1..8) in rows of 4, 3 and 1. */
+/** Sacks of grain or flour: `size` sacks (1..8): one or two stand at the door; more lie stacked 4, 3 and 1. */
 function sackStack(b: MeshBuilder, r: () => number, size: number): void {
   const c = Math.max(1, Math.min(8, Math.round(size)));
+  if (c <= 2) {
+    for (let i = 0; i < c; i++) sackUp(b, (i - (c - 1) / 2) * 0.58, (r() - 0.5) * 0.1, 0.95 + r() * 0.1, r() * 6);
+    return;
+  }
   const rows = [Math.min(c, 4), Math.min(Math.max(c - 4, 0), 3), Math.max(c - 7, 0)];
   rows.forEach((n, row) => {
     for (let i = 0; i < n; i++) {
-      const x = (i - (n - 1) / 2) * 0.44, z = (r() - 0.5) * 0.12 + row * 0.04;
-      sack(b, x, row * 0.4, z, 0.64 + r() * 0.08, (r() - 0.5) * 0.7, i + row * 5 + 7);
+      const z = (i - (n - 1) / 2) * 0.5, x = (r() - 0.5) * 0.12;
+      sackLying(b, x, row * 0.33, z, 1.0 + r() * 0.08, (r() - 0.5) * 0.25 + (row % 2) * Math.PI, i + row * 5 + 7);
     }
   });
 }
 
-/** Rough-dressed quarry blocks: 2 × `size` blocks (1..8), stacked in courses. */
+/** Rough-dressed quarry blocks: 2 × `size` blocks (1..8) in courses of up to 3 × 2, each course set back a little. */
 function stoneBlocks(b: MeshBuilder, r: () => number, size: number): void {
   const c = Math.max(1, Math.min(8, Math.round(size)));
   const total = c * 2;
-  const perCourse = c <= 2 ? 2 : c <= 5 ? 4 : 6;
   let k = 0;
   for (let course = 0; k < total; course++) {
-    const n = Math.max(1, Math.min(perCourse - course * 2, total - k));
-    const cols = Math.min(n, 3), depthRows = Math.ceil(n / 3);
+    const n = Math.min(course < 2 ? 6 : course === 2 ? 4 : 2, total - k);
+    const cols = Math.min(3, Math.ceil(n / 2)), deep = n > cols ? 2 : 1;
     for (let i = 0; i < n; i++, k++) {
       const w = 0.62 + r() * 0.16, h = 0.34 + r() * 0.06, d = 0.42 + r() * 0.08;
-      const x = (i % 3 - (cols - 1) / 2) * 0.72 + (r() - 0.5) * 0.06;
-      const z = (Math.floor(i / 3) - (depthRows - 1) / 2) * 0.5;
+      const x = ((i % cols) - (cols - 1) / 2) * 0.72 + (r() - 0.5) * 0.06;
+      const z = (Math.floor(i / cols) - (deep - 1) / 2) * 0.5;
       b.push();
       b.translate(x, course * 0.36, z);
       b.rotY((r() - 0.5) * 0.12);
@@ -704,14 +730,14 @@ const P: Record<PropKind, PropFn> = {
     // fibres where the trunk broke away, axe chips on the ground.
     const R = 0.3 + r() * 0.06, h = 0.42 + r() * 0.14, sides = lod === 0 ? 8 : 6;
     b.lathe([[R * 1.3, -0.2], [R * 1.12, 0.1], [R, 0.28], [R * 0.96, h], [0, h]], sides,
-      [shade(COL.bark, 0.92), COL.bark, COL.bark, FRESH], { rot: r() * 3 });
+      [shade(BARK_L, 0.9), BARK_L, BARK_L, FRESH], { rot: r() * 3 });
     b.cyl(0, 0, h, h + 0.012, R * 0.42, R * 0.4, sides, { side: HEART, top: HEART });
     b.box(-R * 0.55, h, -R * 0.82, R * 0.5, h + 0.1, -R * 0.6, { side: shade(FRESH, 0.9), top: FRESH });
     for (let i = 0; i < 4; i++) {
       // root buttresses running out into the ground
       b.push();
       b.rotY((i / 4) * Math.PI * 2 + 0.4 + r() * 0.5);
-      b.blob(R * 1.15, 0.02, 0, R * 0.95, 0.15, 0.14, COL.bark, 0.15, 0, i);
+      b.blob(R * 1.15, 0.02, 0, R * 0.95, 0.15, 0.14, shade(BARK_L, 0.92), 0.15, 0, i);
       b.pop();
     }
     if (lod === 0) {

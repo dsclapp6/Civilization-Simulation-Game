@@ -113,28 +113,37 @@ export function layoutPlates(
   const boxes: { x0: number; y0: number; x1: number; y1: number }[] = [];
   const out: { it: CharacterDrawItem; mode: 'full' | 'name' | 'mark'; focus: boolean; speech: boolean; d: number }[] = [];
   const hit = (x0: number, y0: number, x1: number, y1: number) => boxes.some((b) => x0 < b.x1 && x1 > b.x0 && y0 < b.y1 && y1 > b.y0);
-  for (const c of cands) {
-    if (out.length >= max) break;
-    const it = c.it;
-    const h = it.look.height + (it.mount ? 1.25 : 0) + 0.3;
-    const s = project(it.x, it.y + h, it.z);
-    if (!s) continue;
-    if (occluded && occluded(it, h)) continue;
-    const k = plateScale(c.d, c.focus);
-    const nameW = Math.min(it.label!.length, c.speech ? 44 : 40) * (c.speech ? 6.6 : 8.2) * k + 8;
-    const subW = c.sub ? (it.sublabel!.length * 6.1 * k + 8) : 0;
-    const markH = it.mark ? 19 * k : 0;
-    const lines = c.speech ? Math.ceil(it.label!.length / 44) : 1;
-    const tries: ('full' | 'name' | 'mark')[] = c.text ? (c.sub ? ['full', 'name', 'mark'] : ['name', 'mark']) : ['mark'];
-    for (const mode of tries) {
-      if (mode === 'mark' && !it.mark) break;
-      const w = mode === 'mark' ? 18 * k : Math.max(nameW, mode === 'full' ? subW : 0);
-      const hh = mode === 'mark' ? markH : markH + (15 * lines + (mode === 'full' ? 13 : 0)) * k + 4;
-      const x0 = s.x - w / 2, x1 = s.x + w / 2, y1 = s.y, y0 = s.y - hh;
-      if (!c.focus && hit(x0, y0, x1, y1)) continue;
-      boxes.push({ x0, y0, x1, y1 });
-      out.push({ it, mode, focus: c.focus, speech: c.speech, d: c.d });
-      break;
+  // names first (best first), then marks for whoever is left: a far mark never pushes a near name out
+  const later: Cand[] = [];
+  for (let pass = 0; pass < 2; pass++) {
+    for (const c of pass === 0 ? cands : later) {
+      if (out.length >= max) break;
+      const it = c.it;
+      const h = it.look.height + (it.mount ? 1.25 : 0) + 0.3;
+      if (pass === 0) {
+        const s = project(it.x, it.y + h, it.z);
+        if (!s) continue;
+        if (occluded && occluded(it, h)) continue;
+        c.sx = s.x; c.sy = s.y;
+      }
+      const k = plateScale(c.d, c.focus);
+      const nameW = Math.min(it.label!.length, c.speech ? 44 : 40) * (c.speech ? 6.6 : 8.2) * k + 8;
+      const subW = c.sub ? (it.sublabel!.length * 6.1 * k + 8) : 0;
+      const markH = it.mark ? 19 * k : 0;
+      const lines = c.speech ? Math.ceil(it.label!.length / 44) : 1;
+      const tries: ('full' | 'name' | 'mark')[] = pass === 1 ? ['mark'] : c.text ? (c.sub ? ['full', 'name'] : ['name']) : [];
+      let placed = false;
+      for (const mode of tries) {
+        const w = mode === 'mark' ? 18 * k : Math.max(nameW, mode === 'full' ? subW : 0);
+        const hh = mode === 'mark' ? markH : markH + (15 * lines + (mode === 'full' ? 13 : 0)) * k + 4;
+        const x0 = c.sx - w / 2, x1 = c.sx + w / 2, y1 = c.sy, y0 = c.sy - hh;
+        if (!c.focus && hit(x0, y0, x1, y1)) continue;
+        boxes.push({ x0, y0, x1, y1 });
+        out.push({ it, mode, focus: c.focus, speech: c.speech, d: c.d });
+        placed = true;
+        break;
+      }
+      if (pass === 0 && !placed && it.mark && !c.speech) later.push(c);
     }
   }
   return out;

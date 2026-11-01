@@ -68,6 +68,8 @@ export class MockView implements SimView {
   private readonly playerView: PlayerView;
   readonly village: Settlement;
   selectedId = -1;
+  /** The avatar's pose while it stands still (a work loop for screenshots); null = idle. */
+  holdAnim: AnimState | null = null;
   // ---- clarity & feedback sources (the sim fills these in the game) ----
   private readonly propList: WorldPropView[] = [];
   private propsVer = 1;
@@ -310,7 +312,10 @@ export class MockView implements SimView {
       a.yaw += d * Math.min(1, dt * 10);
       const anim: AnimState = move.run ? 'run' : 'walk';
       if (a.anim !== anim) { a.anim = anim; a.animTime = 0; }
-    } else if (a.anim !== 'idle') { a.anim = 'idle'; a.animTime = 0; }
+    } else {
+      const rest: AnimState = this.holdAnim ?? 'idle';
+      if (a.anim !== rest) { a.anim = rest; a.animTime = 0; }
+    }
     a.moveSpeed = speed;
     a.x = clamp(a.x, 5, this.world.size - 5);
     a.z = clamp(a.z, 5, this.world.size - 5);

@@ -105,6 +105,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     building: (id) => lastBuildings.find((b) => b.id === id) ?? null,
     strip: (id) => lastStrips.find((s) => s.id === id) ?? null,
     prop: (id) => worldProps.find(id),
+    buildingObject: (id) => buildings.assetObject(id),
   });
   let hoverKey = '';
   let hoverStripsVer = -1;

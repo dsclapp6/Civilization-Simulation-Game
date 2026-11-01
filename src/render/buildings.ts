@@ -829,6 +829,12 @@ export class BuildingSystem {
     for (const e of this.ordered) this.showProxy(e, !(e.detailed && e.asset));
   }
 
+  /** The detailed model drawn for a building (placed in world space; hidden while batched), or null. */
+  assetObject(id: number): THREE.Object3D | null {
+    const e = this.entries.get(id);
+    return e?.asset ? e.asset.object : null;
+  }
+
   /** Ray vs building footprint boxes (cheap pick / camera collision). Returns nearest hit. */
   private readonly rcInv = new THREE.Matrix4();
   private readonly rcRay = new THREE.Ray();
