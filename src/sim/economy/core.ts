@@ -251,7 +251,9 @@ export class Econ {
   age(p: Person): number { return ageYears(p, this.sim.absDay); }
   touchSave(): void { this.state.touchExt(ECON_KEY); }
   touchMarkets(): void { this.state.touchExt(MARKETS_KEY); }
-  touchFarm(): void { this.state.touchExt(FARM_KEY); }
+  /** Bumped by every change to the farm section (strip tasks in progress, sheaves, gardens): the view reads it to know when to look again. */
+  farmRev = 0;
+  touchFarm(): void { this.farmRev++; this.state.touchExt(FARM_KEY); }
 
   /** The lord's policy on a manor (politics): rents and labour beyond custom, −1 relief … 2 harsh; customary without politics. */
   manorPolicy(settlement: number): { rent: number; labour: number } {

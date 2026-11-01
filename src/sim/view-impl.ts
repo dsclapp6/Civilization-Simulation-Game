@@ -7,7 +7,7 @@ import { yawTo } from '../core/math';
 import { DAY_SECONDS, isNight, toDate } from '../core/time';
 import type {
   AnimalDrawItem, BuildingView, CharacterDrawItem, ClockView, FloatText, FxEvent, MapMarker, PlayerView, ProjectileDrawItem,
-  SimView, StripView, ViewMode, WeatherView, WorldMarker, WorldPropView,
+  SimView, StripTask, StripView, ViewMode, WeatherView, WorldMarker, WorldPropView,
 } from '../core/view';
 import type { WorldModel } from '../world/types';
 import { AppearanceCache } from './appearance';
@@ -30,6 +30,9 @@ export interface ViewSources {
   worldPropsVersion?: () => number;
   worldMarkers?: () => readonly WorldMarker[];
   drainFloaters?: () => readonly FloatText[];
+  /** Strips with a task under way and how far it has got (economy/stripfeed.ts); `stripWorkVersion` moves when that changes visibly. */
+  stripWork?: () => ReadonlyArray<{ id: number; task: StripTask; work: number }>;
+  stripWorkVersion?: () => number;
 }
 
 export interface ViewHost {
@@ -86,6 +89,8 @@ export class SimViewImpl implements SimView {
   private stripsVer = 0;
   private lastStripRev = -1;
   private lastStripDay = NaN;
+  private lastWorkVer = -1;
+  private workIds: number[] = [];
 
   private readonly felledSet = new Set<number>();
   private felledVer = 0;
@@ -274,7 +279,8 @@ export class SimViewImpl implements SimView {
   private refreshStrips(): void {
     const st = this.host.state;
     const day = Math.floor(this.host.clock.absDay);
-    if (st.stripRevision === this.lastStripRev && day === this.lastStripDay) return;
+    const workVer = this.sources.stripWorkVersion ? this.sources.stripWorkVersion() : 0;
+    if (st.stripRevision === this.lastStripRev && day === this.lastStripDay && workVer === this.lastWorkVer) return;
     const revChanged = st.stripRevision !== this.lastStripRev;
     this.lastStripRev = st.stripRevision;
     this.lastStripDay = day;
@@ -296,6 +302,20 @@ export class SimViewImpl implements SimView {
       const stage = Math.min(3, Math.floor(s.growth * 4));
       if (stage !== v.stage) { v.stage = stage; changed = true; }
       v.crop = s.crop; v.growth = s.growth; v.state = s.state;
+    }
+    if (workVer !== this.lastWorkVer) {
+      // the strips with a task under way: the ones that had one and no longer do are cleared
+      this.lastWorkVer = workVer;
+      for (const id of this.workIds) { const v = this.stripViews.get(id); if (v) { delete v.task; delete v.work; } }
+      this.workIds.length = 0;
+      const list = this.sources.stripWork ? this.sources.stripWork() : [];
+      for (const it of list) {
+        const v = this.stripViews.get(it.id);
+        if (!v) continue;
+        v.task = it.task; v.work = it.work;
+        this.workIds.push(it.id);
+      }
+      changed = true;
     }
     if (changed) this.stripsVer++;
   }

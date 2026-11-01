@@ -15,6 +15,7 @@ import { attachObligationEvents, obligationsDaily, obligationsOf } from './oblig
 import { addOwned, capacityOf, ownedQty, takeOwned, weightOf, canCarry } from './own';
 import { announcePerkChoices, choosePerk, openChoices } from './perks';
 import { initFresh, registerSystems } from './systems';
+import { StripFeed } from './stripfeed';
 import { economyTopics } from './topics';
 import { craftProvider } from './work-craft';
 import { farmProvider } from './work-farm';
@@ -58,6 +59,12 @@ export function installEconomy(sim: Simulation, deps: EconomyDeps): EconomyRunti
     const np = E.person(e.to);
     if (np) giveKit(E, np);
   }));
+
+  // the view's strip work (ploughing, sowing, reaping… in progress, by the player or the household farm)
+  const stripFeed = new StripFeed(E);
+  sim.view.setSource('stripWork', () => stripFeed.list());
+  sim.view.setSource('stripWorkVersion', () => stripFeed.version());
+  offs.push(() => { sim.view.setSource('stripWork', undefined); sim.view.setSource('stripWorkVersion', undefined); });
 
   const noPerson: Result = { ok: false, reason: 'Nobody there' };
 
