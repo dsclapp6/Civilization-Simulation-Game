@@ -92,10 +92,11 @@ you are doing first.
 A new run starts as a twelve-year-old in a peasant household (or the child of a craftsman, a merchant, a lord's page, a
 baronial heir). After the birth reveal comes a short **scene-setting card** ("Spring. You wake in your father's cottage
 in Dromore…"). *Show me round* turns the camera over your home, the family's strip and the church with their names on
-them; *Straight in* skips it. The first-day **tutorial task** is already tracked: meet your family, fetch water, help on the
-strip, sleep at home, each step located (gold marker in the world, compass, minimap, edge arrow) with a one-line *how*.
-Every morning the household head sets a few chores; the journal (**O**) lists them with goals, requests and jobs, and
-**Y** says what is worth doing right now.
+them; *Straight in* skips it. The first-day **tutorial task** is already tracked: a short chain fitted to who you were born
+as (a farm child meets the family member at hand, works at what the household needs, runs a neighbour's errand, buys or
+sells something, hears Mass, and goes home to sleep), each step located (gold marker and beacon in the world, compass,
+minimap, edge arrow) with a one-line *how*. Every morning the household head sets a few chores; the journal (**O**) lists
+them with goals, requests and jobs, and **Y** says what is worth doing right now.
 
 Hint cards under the tracker teach only the **controls**, one at a time and only when they apply: walking and looking
 (right button drag), pointing and clicking, where the tasks are, the speed keys, the weapon (**G**) the first time steel
@@ -106,7 +107,8 @@ twice in a run. *Hide all hints* (on the card) or the **Hints for new players** 
 
 When you sleep (or the night closes the day) a **day summary** card says what the day was: the work you did, what came in
 and went out of your purse, goods, skills and strength gained, the tasks finished, how the household fared and what
-tomorrow holds (a market day, a holy day, the chores already set). Waking at midnight offers it as a notice instead.
+tomorrow holds (a market day, a holy day, the chores already set). If you are still up at midnight it is offered as a
+notice (*Read it*) rather than a page that stops the world.
 
 ### Sound
 

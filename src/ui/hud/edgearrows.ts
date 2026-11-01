@@ -27,7 +27,7 @@ export class EdgeArrows {
     if (nav.street && r) {
       const primary = nav.primary();
       if (primary) want.push(primary);
-      for (const m of nav.markers) if (m.kind === 'pin' || (m.kind === 'person' && !m.primary)) want.push(m);
+      for (const m of nav.markers) if (m.kind === 'pin' || m.kind === 'place' || (m.kind === 'person' && !m.primary)) want.push(m);
     }
     const w = window.innerWidth, hgt = window.innerHeight;
     let n = 0;

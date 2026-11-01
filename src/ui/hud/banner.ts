@@ -1,5 +1,5 @@
 // The settlement banner: when you walk into a village or town, its name appears across the top of the screen for a
-// few seconds — "DROMORE — a village in Mornia · lord: Sir Hugh of Dromore" — so you always know where you are.
+// few seconds — "DROMORE — a village in Mornia, lord: Sir Hugh of Dromore" — so you always know where you are.
 import { h } from '../core/dom';
 import { icon } from '../core/icons';
 
@@ -21,7 +21,7 @@ export class Banner {
     const where = info.county || info.kingdom;
     const article = /^[aeiou]/i.test(info.kind) ? 'an' : 'a';
     this.name.textContent = info.name;
-    this.sub.textContent = [`${article} ${info.kind}${where ? ` in ${where}` : ''}`, info.lord ? `lord: ${info.lord}` : ''].filter(Boolean).join(' · ');
+    this.sub.textContent = [`${article} ${info.kind}${where ? ` in ${where}` : ''}`, info.lord ? `lord: ${info.lord}` : ''].filter(Boolean).join(', ');
     this.until = now + SHOW_SECONDS;
     this.el.classList.remove('on');
     void this.el.offsetWidth;

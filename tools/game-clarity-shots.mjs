@@ -116,15 +116,32 @@ const findOnScreen = (kind) => page.evaluate((k) => {
     for (const q of list) { const pt = project(q.x, sim.world.heightAt(q.x, q.z) + 2.5, q.z); if (ok(pt) && Math.hypot(q.x - b.x, q.z - b.z) > 6 && Math.hypot(q.x - b.x, q.z - b.z) < 60) return { x: pt.x, y: pt.y }; }
   }
   if (k === 'strip') {
+    // the family's own strip first: any screen point whose ground point lies inside it (so the pitch of the camera does not matter),
+    // nearest the middle of the screen; else a strip of the place near the middle
+    const hh = sim.state.persons.get(sim.state.run.playerId).household;
+    const inside = (x, zz, poly) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { if ((poly[i].z > zz) !== (poly[j].z > zz) && x < ((poly[j].x - poly[i].x) * (zz - poly[i].z)) / (poly[j].z - poly[i].z) + poly[i].x) c = !c; } return c; };
+    const mine = sim.world.strips.filter((q) => sim.state.strips.get(q.id)?.holder === hh);
+    let best = null;
+    // not on the player's own body (the pick would find them): clear of where they stand on the screen
+    const me3 = project(b.x, sim.world.heightAt(b.x, b.z) + 1, b.z);
+    for (let fy = 0.25; fy <= 0.8; fy += 0.04) for (let fx = 0.36; fx <= 0.64; fx += 0.04) {
+      const x = W * fx, y = H * fy;
+      if (me3 && Math.abs(x - me3.x) < 110 && Math.abs(y - me3.y) < 150) continue;
+      const g = s.renderer.screenToGround(x, y);
+      if (!g) continue;
+      const own = mine.some((q) => inside(g.x, g.z, q.poly));
+      const off = Math.hypot(x - W / 2, y - H * 0.55) + (own ? 0 : 1000);
+      if (own && (!best || off < best.off)) best = { x, y, off };
+    }
+    if (best) return { x: best.x, y: best.y };
     const near = sim.world.nearestSettlement(b.x, b.z);
     const cand = [];
-    const hh = sim.state.persons.get(sim.state.run.playerId).household;
     for (const id of near.strips) {
       const st = sim.world.strips.find((q) => q.id === id);
-      const cx = st.poly.reduce((a, q) => a + q.x, 0) / 4, cz = st.poly.reduce((a, q) => a + q.z, 0) / 4;
+      const n = st.poly.length;
+      const cx = st.poly.reduce((a, q) => a + q.x, 0) / n, cz = st.poly.reduce((a, q) => a + q.z, 0) / n;
       const pt = project(cx, sim.world.heightAt(cx, cz), cz);
-      // the family's own strips first, then whatever is nearest the middle of the screen
-      if (ok(pt) && Math.hypot(cx - b.x, cz - b.z) < 70) cand.push({ x: pt.x, y: pt.y, off: Math.hypot(pt.x - W / 2, pt.y - H * 0.5) + (sim.state.strips.get(id)?.holder === hh ? 0 : 400) });
+      if (ok(pt) && Math.hypot(cx - b.x, cz - b.z) < 70) cand.push({ x: pt.x, y: pt.y, off: Math.hypot(pt.x - W / 2, pt.y - H * 0.5) });
     }
     cand.sort((u, v) => u.off - v.off);
     if (cand.length) return { x: cand[0].x, y: cand[0].y };
@@ -174,6 +191,60 @@ try {
     await page.waitForTimeout(6500);
   }
 
+  if (want('click')) {
+    // click-to-act on the person the first task points at: the real mouse clicks them, the body walks there along the
+    // paths (a ring marks where), and on arrival does what a click on them promises (a conversation opens)
+    let at = null, who = null;
+    for (const dist of [11, 8, 14, 6, 17]) {
+      who = await page.evaluate((dd) => {
+        const s = window.__game.session; const sim = s.sim; const z = s.services.zone; const p = s.services.player;
+        const o = s.services.objectives.tracked?.();
+        const step = o?.steps.find((x) => !x.done);
+        let a = step?.target?.kind === 'person' ? z.agent(step.target.id) : null;
+        const b = p.body();
+        if (!a) a = [...z.agents()].filter((q) => q.personId !== sim.state.run.playerId && Math.hypot(q.x - b.x, q.z - b.z) >= 3).sort((u, v) => Math.hypot(u.x - b.x, u.z - b.z) - Math.hypot(v.x - b.x, v.z - b.z))[0] ?? null;
+        if (!a) return null;
+        const dx = b.x - a.x, dz = b.z - a.z; const d = Math.hypot(dx, dz) || 1;
+        const ux = d < 1 ? 0 : dx / d, uz = d < 1 ? 1 : dz / d;
+        const yaw = Math.atan2(-ux, -uz);
+        p.placeAt(a.x + ux * dd, a.z + uz * dd, yaw);
+        const r = s.renderer; r.orbit(Math.atan2(Math.sin(yaw - r.getCameraYaw()), Math.cos(yaw - r.getCameraYaw())), 0);
+        return { id: a.personId };
+      }, dist);
+      if (!who) break;
+      await advance(0.3);
+      await page.evaluate(() => window.__game.settle());
+      await page.evaluate(() => window.__game.draw());
+      at = await page.evaluate(([id, w, h]) => {
+        const s = window.__game.session; const a = s.services.zone.agent(id);
+        const pt = a ? s.controls.project(a.x, a.y + 0.65, a.z) : null;
+        // clear of the plates, the compass and the dock
+        return pt && pt.x > 420 && pt.x < w - 420 && pt.y > 130 && pt.y < h - 160 ? pt : null;
+      }, [who.id, W, H]);
+      if (at) { console.log('click target:', JSON.stringify(who), 'at', dist, 'm'); break; }
+    }
+    if (who && at) {
+      await hoverAt(at.x, at.y);
+      await page.mouse.click(at.x, at.y);
+      await advance(2);
+      await frames(6);
+      console.log('click: going', JSON.stringify(await page.evaluate(() => window.__game.session.services.player.hud()?.going ?? null)));
+      await shot('clarity-click-walk', { settle: false });
+      await advance(9);
+      await frames(8);
+      console.log('click: open panels', JSON.stringify(await ui(() => window.__ui.openPanels())));
+      await shot('clarity-click-act', { settle: false });
+      for (const id of await ui(() => window.__ui.openPanels())) await ui((x) => window.__ui.closePanel(x), id);
+      await page.waitForTimeout(300);
+    } else console.log('click: nobody to click on screen');
+    await page.mouse.move(W / 2, 60);
+    await page.evaluate((i) => {
+      const s = window.__game.session; const p = s.services.player; p.cancelGoTo?.(); p.placeAt(i.x, i.z, i.yaw);
+      const r = s.renderer; r.orbit(Math.atan2(Math.sin(i.yaw - r.getCameraYaw()), Math.cos(i.yaw - r.getCameraYaw())), 0);
+    }, info);
+    await advance(0.3);
+  }
+
   if (want('hover')) {
     for (const kind of ['person', 'building', 'strip', 'tree', 'ground']) {
       if (kind === 'person') {
@@ -192,6 +263,30 @@ try {
           return { id: a.personId, d: Math.round(d) };
         });
         console.log('person spot:', JSON.stringify(who));
+        await advance(0.3);
+        await page.evaluate(() => window.__game.settle());
+        await page.evaluate(() => window.__game.draw());
+      }
+      if (kind === 'tree') {
+        // stand ten metres from the nearest broadleaf tree and face it
+        const t = await page.evaluate(() => {
+          const s = window.__game.session; const sim = s.sim; const p = s.services.player; const b = p.body();
+          const cs = 64; let best = null; let bd = Infinity;
+          for (let cz = Math.floor((b.z - 90) / cs); cz <= Math.floor((b.z + 90) / cs); cz++) for (let cx = Math.floor((b.x - 90) / cs); cx <= Math.floor((b.x + 90) / cs); cx++) {
+            for (const it of sim.world.scatterInChunk(cx, cz)) {
+              if (!['oak', 'beech', 'ash', 'birch'].includes(it.kind)) continue;
+              const d = Math.hypot(it.x - b.x, it.z - b.z);
+              if (d > 14 && d < bd) { bd = d; best = it; }
+            }
+          }
+          if (!best) return null;
+          const dx = b.x - best.x, dz = b.z - best.z; const d = Math.hypot(dx, dz) || 1;
+          const yaw = Math.atan2(-dx, -dz);
+          p.placeAt(best.x + (dx / d) * 10, best.z + (dz / d) * 10, yaw);
+          const r = s.renderer; r.orbit(Math.atan2(Math.sin(yaw - r.getCameraYaw()), Math.cos(yaw - r.getCameraYaw())), 0);
+          return { kind: best.kind, d: Math.round(d) };
+        });
+        console.log('tree spot:', JSON.stringify(t));
         await advance(0.3);
         await page.evaluate(() => window.__game.settle());
         await page.evaluate(() => window.__game.draw());
@@ -240,47 +335,35 @@ try {
     }
   }
 
-  if (want('click')) {
-    // click-to-act on the family's strip: the real mouse clicks it, the body walks there along the paths (the ring marks
-    // where), and on arrival does what a click on it promises
-    const spot = await page.evaluate(() => {
-      const s = window.__game.session; const sim = s.sim; const p = s.services.player;
-      const me = sim.state.persons.get(sim.state.run.playerId); const hh = me.household;
-      const st = sim.world.strips.find((q) => sim.state.strips.get(q.id)?.holder === hh);
-      if (!st) return null;
-      const cx = st.poly.reduce((a, q) => a + q.x, 0) / 4, cz = st.poly.reduce((a, q) => a + q.z, 0) / 4;
-      const b = p.body();
-      const dx = b.x - cx, dz = b.z - cz; const d = Math.hypot(dx, dz) || 1;
+  if (want('find')) {
+    // "Find" on a place in the journal's Places page: the module marks it (compass, minimap, a beacon in the world); seen from afar
+    const f = await page.evaluate(() => {
+      const s = window.__game.session; const o = s.services.objectives; const p = s.services.player;
+      const places = o.places?.() ?? [];
+      const church = places.find((q) => /church|chapel/i.test(q.label)) ?? places[1];
+      if (!church || !o.trackPlace) return null;
+      o.trackPlace(church);
+      const b = p.body(); const dx = b.x - church.x, dz = b.z - church.z; const d = Math.hypot(dx, dz) || 1;
       const yaw = Math.atan2(-dx, -dz);
-      p.placeAt(cx + (dx / d) * 22, cz + (dz / d) * 22, yaw);
+      p.placeAt(church.x + (dx / d) * 75, church.z + (dz / d) * 75, yaw);
       const r = s.renderer; r.orbit(Math.atan2(Math.sin(yaw - r.getCameraYaw()), Math.cos(yaw - r.getCameraYaw())), 0);
-      return { id: st.id };
+      return { label: church.label };
     });
-    console.log('click spot:', JSON.stringify(spot));
-    if (spot) {
-      await advance(0.4);
+    console.log('find:', JSON.stringify(f));
+    if (f) {
+      await advance(0.6);
       await page.evaluate(() => window.__game.settle());
-      await page.evaluate(() => window.__game.draw());
-      const at = await findOnScreen('strip');
-      if (at) {
-        await page.mouse.move(at.x - 6, at.y - 6);
-        await page.mouse.move(at.x, at.y, { steps: 3 });
-        await page.waitForTimeout(500);
-        await frames(4);
-        await page.mouse.click(at.x, at.y);
-        await advance(2.5);
-        await frames(6);
-        const going = await page.evaluate(() => window.__game.session.services.player.hud()?.going ?? null);
-        console.log('click: going', JSON.stringify(going));
-        await shot('clarity-click-walk', { settle: false });
-        await advance(14);
-        await frames(6);
-        console.log('click: arrived, hud', JSON.stringify(await page.evaluate(() => { const h = window.__game.session.services.player.hud(); return h ? { going: h.going ?? null, action: h.action ?? null } : null; })));
-        await shot('clarity-click-act', { settle: false });
-      } else console.log('click: the strip is not on screen');
-      await page.mouse.move(W / 2, 60);
+      await frames(6);
+      await shot('clarity-find');
+      await ui(() => window.__ui.openPanel({ panel: 'journal', tab: 'places' }));
+      await page.waitForTimeout(500);
+      await frames(3);
+      await shot('clarity-journal-places-found', { settle: false });
+      await ui(() => window.__ui.closePanel('journal'));
+      await page.waitForTimeout(250);
       await page.evaluate((i) => {
-        const s = window.__game.session; const p = s.services.player; p.cancelGoTo?.(); p.placeAt(i.x, i.z, i.yaw);
+        const s = window.__game.session; s.services.objectives.trackPlace?.(null);
+        const p = s.services.player; p.placeAt(i.x, i.z, i.yaw);
         const r = s.renderer; r.orbit(Math.atan2(Math.sin(i.yaw - r.getCameraYaw()), Math.cos(i.yaw - r.getCameraYaw())), 0);
       }, info);
       await advance(0.3);
