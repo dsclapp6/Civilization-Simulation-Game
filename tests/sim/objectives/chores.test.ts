@@ -56,7 +56,7 @@ describe('dawn chores', () => {
     for (const c of stripChores) {
       const tgt = c.steps[0].target!;
       expect(holding.strips.some((s) => s.id === tgt.id)).toBe(true);
-      expect(c.title).toMatch(/^(Plough|Harrow|Sow|Weed|Reap|Bind the sheaves on|Carry the sheaves from) the \w+ strip$/);
+      expect(c.title).toMatch(/^(Plough|Harrow|Sow|Weed|Reap|Bind the sheaves on|Carry the sheaves from) the [\w-]+ strip$/);
     }
   });
 

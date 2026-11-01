@@ -8,7 +8,7 @@ import { shiftFamilyRank } from '../succession';
 import { ageYears, type BuildingState, type Household, type Person, type PersonId, type StripState } from '../state';
 import type { Econ } from './core';
 import { CAREER_ECON, careerEcon, goodOf, pd } from './data';
-import { nextTask, sowingNow, taskLabel } from './farm';
+import { nextTask, restingReason, sowingNow, taskLabel } from './farm';
 import { aiTask, landLadder } from './jobs';
 import { bagEntries } from './items';
 import { rentOf, weekWorkDays } from './obligations';
@@ -55,17 +55,6 @@ export function tenureOf(E: Econ, hh: Household): Tenure {
 }
 
 /** What a strip waits for when there is nothing to do on it today. */
-function idleLabel(st: StripState): string {
-  switch (st.state) {
-    case 'sown': case 'growing': return 'Growing: wait for the harvest';
-    case 'ripe': return 'Ready to reap';
-    case 'ploughed': return 'Ploughed: waiting for the sowing season';
-    case 'harvested': return 'Cut: bind the sheaves';
-    case 'stubble': return 'Stubble: waiting for the plough season';
-    default: return 'Fallow: waiting for the plough season';
-  }
-}
-
 export function holding(E: Econ, householdId: number): HoldingView | null {
   const hh = E.household(householdId);
   if (!hh) return null;
@@ -79,7 +68,7 @@ export function holding(E: Econ, householdId: number): HoldingView | null {
       const t = nextTask(E, st);
       strips.push({
         id, field: st.field, crop: st.crop, state: st.state, growth: st.growth, work: peekExtra(E.farm, id)?.p ?? 0,
-        nextTask: t ? (t === 'sow' ? `Sow ${sowingNow(E, st)?.crop ?? ''}`.trim() : taskLabel(t, st)) : idleLabel(st),
+        nextTask: t ? (t === 'sow' ? `Sow ${sowingNow(E, st)?.crop ?? ''}`.trim() : taskLabel(t, st)) : restingReason(E, st),
       });
     }
   }

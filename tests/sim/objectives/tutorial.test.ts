@@ -77,9 +77,9 @@ describe('the tutorial chains', () => {
     const work = byTitle(o, /family's land/);
     expect(work, active(o).map((x) => x.title).join(', ')).toBeTruthy();
     const [walk, task] = work!.steps;
-    expect(walk.text).toMatch(/^Walk to your family's \w+ strip$/);
+    expect(walk.text).toMatch(/^Walk to your family's [\w-]+ strip$/);
     expect(walk.target?.kind).toBe('strip');
-    expect(task.text).toMatch(/^(Plough|Harrow|Sow|Weed|Reap|Bind the sheaves on|Carry the sheaves from) your family's \w+ strip/);
+    expect(task.text).toMatch(/^(Plough|Harrow|Sow|Weed|Reap|Bind the sheaves on|Carry the sheaves from) your family's [\w-]+ strip/);
     expect(task.goal).toBeGreaterThanOrEqual(2);
     expect(task.hint).toMatch(/E/);
     expect(work!.reward).toMatch(/thanks/);

@@ -98,7 +98,7 @@ describe('the day summary', () => {
     o.sim.dispatch({ type: 'sleep' });
     for (let g = 0; o.sim.clock.skip && g < 4000; g++) o.sim.step(0.25);
     const s = o.obj.daySummary(0)!;
-    expect(s.work.some((w) => /^(Ploughed|Harrowed|Sowed|Weeded|Reaped|Bound the sheaves on|Carried sheaves from) your family's \w+ strip$/.test(w)), s.work.join(' | ')).toBe(true);
+    expect(s.work.some((w) => /^(Ploughed|Harrowed|Sowed|Weeded|Reaped|Bound the sheaves on|Carried sheaves from) your family's [\w-]+ strip$/.test(w)), s.work.join(' | ')).toBe(true);
   });
 
   it('keeps the last few days', () => {

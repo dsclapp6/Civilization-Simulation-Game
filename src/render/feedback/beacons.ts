@@ -12,6 +12,9 @@ const MAX = 12;
 /** Pillar height (m) and width at the base for the primary and the secondary markers; least width on screen (px). */
 const PRIMARY_H = 46, PRIMARY_W = 2.6, PRIMARY_PX = 12;
 const SECONDARY_H = 9, SECONDARY_W = 0.9, SECONDARY_PX = 5;
+/** What the player asked to find (the journal's Find: kinds 'person' and 'place'): taller than a house, so it shows over
+ *  the roofs like the objective's pillar, but thinner and paler than it. */
+const FIND_H = 24, FIND_W = 1.5, FIND_PX = 8;
 /** The beacon is gone when the player stands within ARRIVE m, and back by ARRIVE_FULL m. */
 const ARRIVE = 2.5, ARRIVE_FULL = 7;
 
@@ -220,13 +223,16 @@ export class BeaconLayer {
         // quiet up close, full from ~60 m
         const near = 0.32 + 0.68 * smooth(8, 60, camD);
         const isP = !!mk.primary;
-        const alpha = (isP ? 0.95 : 0.4) * arrive * near;
+        const isFind = !isP && (mk.kind === 'person' || mk.kind === 'place');
+        const alpha = (isP ? 0.95 : isFind ? 0.7 : 0.4) * arrive * near;
         if (alpha < 0.01) continue;
         if (isP) { primary = { m: mk, y: ground + lift, d: camD, a: alpha, arrive }; this.primaryAlpha = alpha; }
         this.c.setHex(mk.color);
         // shaft
         this.sBase.setXYZ(n, mk.x, ground + (isP ? 0 : lift), mk.z);
-        this.sShape.setXYZW(n, isP ? PRIMARY_H + Math.min(160, camD * 0.08) : SECONDARY_H, isP ? PRIMARY_W : SECONDARY_W, alpha, isP ? PRIMARY_PX : SECONDARY_PX);
+        if (isP) this.sShape.setXYZW(n, PRIMARY_H + Math.min(160, camD * 0.08), PRIMARY_W, alpha, PRIMARY_PX);
+        else if (isFind) this.sShape.setXYZW(n, FIND_H + Math.min(90, camD * 0.05), FIND_W, alpha, FIND_PX);
+        else this.sShape.setXYZW(n, SECONDARY_H, SECONDARY_W, alpha, SECONDARY_PX);
         this.sColor.setXYZ(n, this.c.r, this.c.g, this.c.b);
         // ground ring (people markers float over the head: no ring)
         const ringR = isP ? 2.4 + 0.15 * Math.sin(this.time * 2.2) : 1.1;

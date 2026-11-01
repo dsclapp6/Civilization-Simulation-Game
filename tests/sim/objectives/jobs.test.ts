@@ -74,7 +74,7 @@ describe('the duty of a post', () => {
       return;
     }
     expect(week.why).toMatch(/You owe the lord/);
-    expect(week.steps[1].text).toMatch(/^Work the lord's \w+ strip$/);
+    expect(week.steps[1].text).toMatch(/^Work the lord's [\w-]+ strip$/);
     expect(week.steps[1].goal).toBeGreaterThanOrEqual(2);
     expect(week.dueDay).toBe(before.due);
     const played = playObjectives(o, ['job']);

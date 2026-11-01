@@ -11,7 +11,7 @@ import { workChoices, workTitle, type WorkChoice } from './choices';
 import type { NewObjective, Obj } from './core';
 import { T, cap, type Vars } from './data';
 import {
-  awayFromHome, buildingPhrase, buildingTarget, churchOf, deadwoodNear, describePerson, homeOf, personTarget, stripPhrase, stripSide,
+  awayFromHome, buildingPhrase, buildingTarget, churchOf, deadwoodNear, describePerson, homeOf, personTarget, stripDir, stripPhrase,
 } from './places';
 import { boardFor, enabledOption, headOf, neighbourFor, priestOf } from './roles';
 import { bagQty } from './sources';
@@ -53,8 +53,7 @@ function fromWork(O: Obj, me: Person, head: Person | undefined, c: WorkChoice, d
   const hv = headVars(O, me, head);
   if (c.kind === 'strip' && c.strip) {
     const ph = stripPhrase(O, c.strip.id);
-    const st = O.state.strips.get(c.strip.id);
-    const vars: Vars = { ...hv, strip: ph.phrase, side: stripSide(st?.field ?? 1) };
+    const vars: Vars = { ...hv, strip: ph.phrase, side: stripDir(O, c.strip.id) };
     return {
       ...choreBase(O, me, head, `chore:${day}:strip:${c.strip.id}`, T('chores', `strip.title.${c.strip.task}`, vars), T('chores', `strip.why.${c.strip.task}`, vars), 1),
       steps: [{

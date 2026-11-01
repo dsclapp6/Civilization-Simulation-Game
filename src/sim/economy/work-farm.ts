@@ -13,7 +13,7 @@ import type { Person, StripState } from '../state';
 import type { Econ } from './core';
 import { CAREER_ECON, GOODS, TOOL_SPEED, pd } from './data';
 import {
-  TASK_BOUTS, TITHE, grossYield, nextTask, payTithe, seedFor, sowingNow, taskLabel, type StripTask,
+  TASK_BOUTS, TITHE, grossYield, nextTask, payTithe, restingReason, seedFor, sowingNow, taskLabel, type StripTask,
 } from './farm';
 import { bagAdd, bagGet, bagTake, bestOf, countGood } from './items';
 import { applyForJob, employmentOf } from './jobs';
@@ -163,16 +163,8 @@ export function farmProvider(E: Econ): ActionProvider {
 
 function waitReason(E: Econ, st: StripState): string {
   const ex = peekExtra(E.farm, st.id);
-  switch (st.state) {
-    case 'fallow': case 'bare': return 'Fallow: ploughing is in spring (spring crop) or autumn (winter corn)';
-    case 'stubble': return ex && (ex.k ?? 0) > 0 ? 'Sheaves wait to be carried' : 'Stubble: ploughing is in spring or autumn';
-    case 'ploughed': return 'Wait for sowing time: spring for barley, oats and pulse; autumn for wheat and rye';
-    case 'sown': case 'growing': {
-      const roles = roleOn(st.field, E.day);
-      return roles === 1 || roles === 0 ? 'Growing: it ripens in a few days' : 'Growing';
-    }
-    default: return 'Nothing to do now';
-  }
+  if (st.state === 'stubble' && ex && (ex.k ?? 0) > 0) return 'Sheaves wait to be carried';
+  return restingReason(E, st);
 }
 
 function listStrip(E: Econ, p: Person, id: number, out: ActionOption[]): void {

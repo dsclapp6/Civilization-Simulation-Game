@@ -8,10 +8,9 @@ import { roleLabel } from '../careers';
 import { fullName, type BuildingState, type Person, type PersonId } from '../state';
 import type { Obj } from './core';
 import type { ObjectiveTarget } from './types';
+import { buildingName, compassWord, stripName } from '../placenames';
 
 const SIDES = ['east', 'middle', 'west'] as const;
-const SAINTS = ['Mary', 'Peter', 'Michael', 'Andrew', 'Giles', 'John', 'Nicholas', 'Martin', 'Margaret', 'Helen', 'Oswald', 'Cuthbert', 'Swithin', 'Edmund'] as const;
-const INNS = ['Bell', 'Plough', 'Swan', 'Crown', 'Green Man', 'White Hart', 'Fleece', 'Anchor', 'Wheatsheaf', 'Red Lion'] as const;
 
 export const CHURCH_KINDS: readonly BuildingKind[] = ['church', 'chapel', 'abbey_church', 'cathedral'];
 export const MARKET_KINDS: readonly BuildingKind[] = ['market_hall', 'market_stall', 'market_cross'];
@@ -70,66 +69,29 @@ export function metresTo(O: Obj, x: number, z: number): number {
 
 export const stripSide = (field: number): string => SIDES[field] ?? 'middle';
 
-/** Household head of the building's household, for "Wat's smithy". */
-function keeperOf(O: Obj, b: BuildingState): Person | undefined {
-  const hh = b.household ? O.state.households.get(b.household) : undefined;
-  const head = hh ? O.state.persons.get(hh.head) : undefined;
-  return head && !head.death ? head : undefined;
+/** The strip's side of its settlement as the zone names it ("north-west"), for chore titles; the field's side word
+ *  when the strip has no settlement. */
+export function stripDir(O: Obj, id: number): string {
+  const ws = O.world.strips.find((q) => q.id === id);
+  const st = O.state.strips.get(id);
+  const set = st ? O.settlementById.get(st.settlement) : undefined;
+  if (!ws || !set || ws.poly.length === 0) return stripSide(st?.field ?? 1);
+  let cx = 0, cz = 0;
+  for (const p of ws.poly) { cx += p.x; cz += p.z; }
+  return compassWord(set.x, set.z, cx / ws.poly.length, cz / ws.poly.length);
 }
 
-/** A building as a noun phrase for a sentence ("your home", "Wat's smithy", "St Mary's church"). */
+/** A building as a noun phrase for a sentence ("your home", "Wat's smithy", "St Mary's church"): the zone's own name
+ *  for it (src/sim/placenames), with a leading article or "Your" lowered and a bare kind given "the". */
 export function buildingPhrase(O: Obj, b: BuildingState): string {
-  const me = O.me;
-  if (me) {
-    const hh = O.state.households.get(me.household);
-    if (hh && hh.home === b.id) return 'your home';
-  }
-  const keeper = keeperOf(O, b);
-  switch (b.kind) {
-    case 'church': case 'chapel': {
-      const saint = SAINTS[(b.id * 7 + b.settlement) % SAINTS.length];
-      return `St ${saint}'s ${b.kind}`;
-    }
-    case 'abbey_church': return 'the abbey church';
-    case 'cathedral': return 'the cathedral';
-    case 'alehouse': return `The ${INNS[(b.id * 5 + b.settlement) % INNS.length]} (alehouse)`;
-    case 'tavern': return `The ${INNS[(b.id * 3 + b.settlement + 1) % INNS.length]} (tavern)`;
-    case 'smithy': return keeper ? `${keeper.first}'s smithy` : 'the smithy';
-    case 'carpenter': return keeper ? `${keeper.first}'s carpentry` : 'the carpenter\'s';
-    case 'weaver': return keeper ? `${keeper.first}'s loom-house` : 'the weaver\'s';
-    case 'bakehouse': return keeper ? `${keeper.first}'s bakehouse` : 'the bakehouse';
-    case 'brewhouse': return 'the brewhouse';
-    case 'watermill': return 'the watermill';
-    case 'windmill': return 'the windmill';
-    case 'market_hall': return 'the market hall';
-    case 'market_stall': return 'the market stalls';
-    case 'market_cross': return 'the market cross';
-    case 'guildhall': return 'the guildhall';
-    case 'archery_butts': return 'the archery butts';
-    case 'barracks': return 'the barracks';
-    case 'training_yard': return 'the training yard';
-    case 'manor_house': return keeper ? `${keeper.first}'s manor house` : 'the manor house';
-    case 'great_hall': return 'the great hall';
-    case 'keep_stone': return 'the keep';
-    case 'school': return 'the school';
-    case 'well': return 'the well';
-    case 'barn': case 'tithe_barn': return keeper && keeper.id !== O.playerId ? `${keeper.first}'s barn` : 'the barn';
-    case 'granary': return 'the granary';
-    case 'cowshed': return 'the cowshed';
-    case 'stable': return 'the stable';
-    case 'sheepfold': return 'the sheepfold';
-    case 'pigsty': return 'the pigsty';
-    case 'henhouse': return 'the henhouse';
-    case 'quarry': return 'the quarry';
-    case 'mine': return 'the mine';
-    case 'infirmary': return 'the infirmary';
-    case 'cloister': return 'the cloister';
-    case 'warehouse': return 'the warehouse';
-    case 'tannery': return 'the tannery';
-    case 'hovel': case 'cottage': case 'longhouse': case 'townhouse':
-      return keeper ? `${keeper.first}'s house` : 'a house';
-    default: return `the ${b.kind.replace(/_/g, ' ')}`;
-  }
+  return namePhrase(buildingName(O, b));
+}
+
+/** "Your home" to "your home", "The well" to "the well", "Market stall" to "the market stall"; proper names kept. */
+function namePhrase(name: string): string {
+  if (/^(The|Your|Empty|A) /.test(name)) return name.charAt(0).toLowerCase() + name.slice(1);
+  if (/^St |'s |\(| manor$| castle$/.test(name)) return name;
+  return `the ${name.charAt(0).toLowerCase()}${name.slice(1)}`;
 }
 
 export function capFirst(s: string): string { return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -196,21 +158,13 @@ function distToSegmentXZ(px: number, pz: number, a: P2, b: P2): number {
   return dist(px, pz, a.x + abx * t, a.z + abz * t);
 }
 
-/** "your family's east strip", "the lord's middle strip", "Hob's west strip" (and the capitalised label). */
+/** "your family's east strip", "the lord's north strip", "Hob's west strip" (and the capitalised label): the zone's
+ *  own name for the strip (src/sim/placenames) without its crop and stage. */
 export function stripPhrase(O: Obj, id: number): { phrase: string; label: string } {
+  const ws = O.world.strips.find((q) => q.id === id);
   const st = O.state.strips.get(id);
-  const side = st ? stripSide(st.field) : 'middle';
-  const me = O.me;
-  let whose = 'a';
-  if (st && me && st.holder === me.household && st.holder !== 0) whose = "your family's";
-  else if (st && st.holder === 0) whose = "the lord's";
-  else if (st) {
-    const hh = O.state.households.get(st.holder);
-    const head = hh ? O.state.persons.get(hh.head) : undefined;
-    whose = head ? `${head.first}'s` : 'a';
-  }
-  const phrase = `${whose} ${side} strip`;
-  return { phrase, label: capFirst(phrase) };
+  const label = ws ? stripName(O, ws, st).split(' · ')[0] : 'A strip';
+  return { phrase: namePhrase(label), label };
 }
 
 export function stripTarget(O: Obj, id: number): ObjectiveTarget {

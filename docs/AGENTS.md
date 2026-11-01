@@ -48,7 +48,7 @@ beyond it is finished instantly, a trip into view starts at the edge of it, one 
 is carried across the street. A person who goes in at a door (or out of the settlement) ahead of the schedule is kept out of the
 scan until the schedule has them arrive too (`Zone.hide`), so they are not put back on the street.
 
-### Nameplates and names (`plates.ts`, `names.ts`)
+### Nameplates and names (`plates.ts`; place names in `src/sim/placenames.ts`, re-exported as `names.ts`)
 
 Every agent's draw item carries `label` (the full name), `sublabel` (relation · role from `social.relationLabel` and the career or
 office: "your father · farmer", "the reeve", "Lord of Dromore", "Siobhan's apprentice", "tenant · from Slievecairn"), `labelTone`
@@ -57,7 +57,8 @@ player and the tracked person 40 m, rivals and enemies 30 m, everyone else 15 m)
 requests, `'track'` for the tracked person). A spoken line (`say`) takes the place of the plate while it lasts. The plate is worked
 out when an agent spawns and every ~4 s after. Two optional hooks on the `ZoneApi`: `setQuestGivers(ids)` (the objectives module
 passes the people who have a task for the player; open happenings requests are always included) and `setTrackedPerson(id)` (0
-clears). `interactables` labels things with real names: "Your home", "Wat's smithy", "St Mary's church", "The Bell (alehouse)"
+clears). `interactables` labels things with real names (the objectives module names buildings and strips through the same functions, so the
+tracker, the journal and the tooltip agree): "Your home", "Wat's smithy", "St Mary's church", "The Bell (alehouse)"
 (saint and inn sign by a hash of the settlement and building), "Your family's east strip · barley, ripe", "The lord's north-east
 strip · stubble", "Common pasture", "Oak".
 

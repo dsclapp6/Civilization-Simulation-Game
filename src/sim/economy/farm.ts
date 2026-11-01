@@ -216,6 +216,41 @@ export function nextTask(E: Econ, strip: StripState): StripTask | null {
   }
 }
 
+/**
+ * Why a strip needs nothing now, told by the field's place in this year's rotation (role 0 winter corn, 1 spring
+ * crop, 2 fallow) and how long until its next work: "The fallow field rests this year: ploughing for winter corn
+ * begins in autumn (in about 8 days)". Shared by the strip's disabled option and the holding view.
+ */
+export function restingReason(E: Econ, st: StripState, at: number = E.day): string {
+  const role = roleOn(st.field, at);
+  const d = dayInYear(at);
+  const when = (start: number): string => {
+    const n = Math.round(start - d);
+    return n <= 0 ? 'soon' : n === 1 ? 'tomorrow' : `in about ${n} days`;
+  };
+  switch (st.state) {
+    case 'fallow': case 'bare': case 'stubble': {
+      const what = st.state === 'stubble' ? 'Stubble' : 'Fallow';
+      if (role === 2) {
+        return d < 8.4
+          ? `${what}: this is the fallow field this year; ploughing for the winter corn begins in autumn (${when(8.4)})`
+          : `${what}: too late to plough for the winter corn this year`;
+      }
+      if (role === 1) return `${what}: too late to plough for this year's spring crop; the field lies fallow next year`;
+      return `${what}: this field takes the spring crop next year (ploughing next spring)`;
+    }
+    case 'ploughed': {
+      if (role === 1 && d < CALENDAR.springSow[0]) return `Ploughed: sowing begins ${when(CALENDAR.springSow[0])}`;
+      if (role === 2 && d < CALENDAR.winterSow[0]) return `Ploughed: sowing the winter corn begins ${when(CALENDAR.winterSow[0])}`;
+      return 'Ploughed: the sowing time for this field has passed';
+    }
+    case 'sown': case 'growing': return role === 0 || role === 1 ? 'Growing: it ripens in summer' : 'Growing';
+    case 'ripe': return 'Ripe: ready to reap';
+    case 'harvested': return 'Cut: the sheaves wait to be bound';
+    default: return 'Nothing to do now';
+  }
+}
+
 export function taskLabel(task: StripTask, strip: StripState): string {
   switch (task) {
     case 'plough': return 'Plough';
