@@ -75,6 +75,8 @@ export class Agent implements ZoneAgent {
   seat = 0;
   radiusWander = 0;
   replanAt = 0;
+  /** Absolute day the schedule wants the agent at its target (a walk is paced to arrive then). */
+  arriveBy = 0;
   intentLabel = '';
 
   // ---- movement ----

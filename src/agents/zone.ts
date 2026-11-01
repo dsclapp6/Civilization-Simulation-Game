@@ -98,6 +98,8 @@ export class Zone {
   private questFolk: ReadonlySet<PersonId> = new Set();
   private trackedId: PersonId = 0;
   private plateCtx: PlateContext;
+  /** People who went in at a door (or out of the settlement) ahead of the schedule: left alone until the schedule has them arrive too. */
+  private readonly hidden = new Map<PersonId, number>();
 
   private candidates: Person[] = [];
   private scanIndex = 0;
@@ -307,9 +309,17 @@ export class Zone {
     this.stats.spawnMs = performance.now() - t0;
   }
 
+  /** A person has gone indoors or away before the schedule says they have arrived: the scan must not put them back in the street. */
+  hide(person: PersonId, until: number): void {
+    this.hidden.set(person, until);
+    if (this.hidden.size > 600) for (const [id, t] of this.hidden) if (t < this.now) this.hidden.delete(id);
+  }
+
   /** Looks at one person; adds an agent if they are outdoors within range. Returns true if added. */
   private consider(p: Person, force: boolean): boolean {
     const I = this.tmpIntent;
+    const until = this.hidden.get(p.id);
+    if (until !== undefined) { if (until > this.now) return false; this.hidden.delete(p.id); }
     this.sched.intent(p, this.now, I);
     if (I.away) return false;
     let x = I.x, z = I.z;
@@ -427,6 +437,7 @@ export class Zone {
   /** Forgets everyone and places people where their schedules say they are now. */
   resync(): void {
     this.needResync = false;
+    this.hidden.clear();
     this.clearAll();
     this.now = this.sim.absDay;
     this.updateFocus();
