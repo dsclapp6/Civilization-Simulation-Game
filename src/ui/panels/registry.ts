@@ -11,6 +11,8 @@ import { dialoguePanel } from './dialogue';
 import { familyPanel } from './family';
 import { helpPanel } from './help';
 import { journalPanel } from './journal';
+import { daySummaryPanel } from './daysummary';
+import { introPanel, tourPanel } from './intro';
 import { inventoryPanel } from './inventory';
 import { ledgerPanel } from './ledger';
 import { mapPanel } from './map';
@@ -30,6 +32,9 @@ export function createPanel(ctx: PanelCtx, req: PanelRequest, hooks: UiHooks): U
     }
     case 'help': return helpPanel(ctx, req.tab);
     case 'journal': return journalPanel(ctx, req.tab);
+    case 'daysummary': return daySummaryPanel(ctx, req.day);
+    case 'intro': return introPanel(ctx);
+    case 'tour': return tourPanel(ctx);
     case 'message': return messagePanel(ctx, req.title, req.text);
     case 'confirm': return confirmPanel(ctx, req.options);
     case 'pause': return pausePanel(ctx, hooks);

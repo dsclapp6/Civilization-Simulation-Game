@@ -34,6 +34,7 @@ export type InternalRequest =
   | { panel: 'journal'; tab?: JournalTab }
   | { panel: 'daysummary'; day?: number }
   | { panel: 'intro' }
+  | { panel: 'tour' }
   | { panel: 'confirm'; options: ConfirmOptions };
 
 export type PanelRequest = UiRequest | InternalRequest;

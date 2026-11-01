@@ -135,35 +135,46 @@ describe('the first-minutes guide', () => {
     for (const h of HINTS) { expect(h.title.length).toBeGreaterThan(3); expect(h.text.length).toBeGreaterThan(30); }
   });
 
-  it('walks a new player through moving, doing and working in order', () => {
+  it('walks a new player through moving, pointing and clicking, and where the tasks are, in order', () => {
     const seen = new Set<string>();
     expect(pickHint(facts({ seconds: 1 }), seen)).toBeNull();
     expect(pickHint(facts(), seen)!.id).toBe('move');
     expect(pickHint(facts({ moved: 20 }), seen)!.id).toBe('interact');
     seen.add('move');
     seen.add('interact');
-    expect(pickHint(facts({ moved: 20, interacted: 1, seconds: 60 }), seen)!.id).toBe('work');
-    expect(pickHint(facts({ moved: 20, interacted: 1, worked: 3, seconds: 60 }), seen)!.id).toBe('character');
+    expect(pickHint(facts({ moved: 20, interacted: 1, seconds: 60 }), seen)!.id).toBe('tasks');
+    expect(pickHint(facts({ moved: 20, interacted: 1, seconds: 60, opened: new Set(['journal']) }), seen)).toBeNull();
   });
 
   it('is answered by doing the thing', () => {
     const move = HINTS.find((h) => h.id === 'move')!;
     expect(move.done(facts({ moved: 3 }))).toBe(false);
     expect(move.done(facts({ moved: 9 }))).toBe(true);
-    const character = HINTS.find((h) => h.id === 'character')!;
-    expect(character.done(facts({ opened: new Set(['character']) }))).toBe(true);
+    const tasks = HINTS.find((h) => h.id === 'tasks')!;
+    expect(tasks.done(facts({ opened: new Set(['journal']) }))).toBe(true);
   });
 
-  it('speaks of hunger, of the career at thirteen and a half, and only of fighting in a fight', () => {
-    const seen = new Set<string>(['move', 'interact', 'work', 'character']);
-    expect(pickHint(facts({ moved: 20, interacted: 1, worked: 3, needs: { hunger: 0.2, rest: 0.8, warmth: 0.8, mood: 0.8 } }), seen)!.id).toBe('hunger');
-    expect(pickHint(facts({ moved: 20, interacted: 1, worked: 3, age: 13.6 }), seen)!.id).toBe('career');
-    expect(pickHint(facts({ moved: 20, interacted: 1, worked: 3, age: 13.6, careerChosen: true }), seen)).toBeNull();
+  it('keeps to the controls: the old teaching hints are the objectives\u2019 business now', () => {
+    const ids = HINTS.map((h) => h.id);
+    expect(ids).toEqual(['move', 'interact', 'tasks', 'time', 'fight', 'bow', 'wounds', 'help']);
+    for (const gone of ['work', 'character', 'hunger', 'rest', 'warmth', 'map', 'holy', 'career']) expect(ids).not.toContain(gone);
+    // hunger and the like no longer interrupt
+    const seen = new Set<string>(['move', 'interact', 'tasks']);
+    expect(pickHint(facts({ moved: 20, interacted: 1, worked: 3, age: 13.6, needs: { hunger: 0.1, rest: 0.1, warmth: 0.1, mood: 0.1 } }), seen)).toBeNull();
+  });
+
+  it('speaks of the weapon only in a fight, and the mouse text names the weapon key and the free cursor', () => {
+    const seen = new Set<string>(['move', 'interact', 'tasks']);
     expect(pickHint(facts({ engaged: true, needs: { hunger: 0.1, rest: 0.8, warmth: 0.8, mood: 0.8 } }), seen)!.id).toBe('fight');
     expect(pickHint(facts({ engaged: true, ranged: true }), seen)!.id).toBe('bow');
     seen.add('fight');
     seen.add('bow');
     expect(pickHint(facts({ engaged: true, needs: { hunger: 0.1, rest: 0.8, warmth: 0.8, mood: 0.8 } }), seen)).toBeNull();
+    const fight = HINTS.find((h) => h.id === 'fight')!;
+    expect(fight.keys).toContain(keyLabel(KEYMAP.input.weapon));
+    expect(fight.text).toMatch(/Esc frees the mouse/);
+    expect(HINTS.find((h) => h.id === 'move')!.text).toMatch(/right mouse button/);
+    expect(HINTS.find((h) => h.id === 'interact')!.text).toMatch(/click/i);
   });
 
   it('is switched on by default and can be switched off in the settings', () => {

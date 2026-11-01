@@ -1,4 +1,5 @@
-// The first-minutes guide: small, dismissable hints driven by what the player has and has not done yet.
+// The first-minutes guide: small, dismissable hints about the CONTROLS (clarity pass: what to do is the objectives'
+// business — the tracker, "What now?" and the journal), driven by what the player has and has not done yet.
 // Pure model (no DOM, no sim): `HINTS` say when each one applies and when it has been answered; `pickHint`
 // chooses the one to show. The card that shows it lives in hud/guide.ts.
 import { KEYMAP } from '../../player/types';
@@ -50,78 +51,37 @@ export interface HintDef {
 }
 
 const k = keyLabel;
-const LOW = 0.38;
 
 export const HINTS: readonly HintDef[] = [
   {
-    id: 'move', icon: 'boot', title: 'Find your feet', keys: [k(KEYMAP.input.forward), k(KEYMAP.input.left), k(KEYMAP.input.back), k(KEYMAP.input.right)],
-    text: 'Walk about with W A S D. Click the view to take the mouse and look around (Esc gives it back). Hold Shift to sprint.',
+    id: 'move', icon: 'boot', title: 'Walk and look', keys: [k(KEYMAP.input.forward), k(KEYMAP.input.left), k(KEYMAP.input.back), k(KEYMAP.input.right), 'RMB'],
+    text: 'Walk about with W A S D (Shift sprints). Hold the right mouse button and drag to turn the camera; the wheel zooms. Your cursor stays free.',
     when: (f) => f.seconds > 2 && f.moved < 8, done: (f) => f.moved >= 8,
   },
   {
-    id: 'interact', icon: 'hand', title: 'Lend a hand', keys: [k(KEYMAP.input.interact)],
-    text: 'Walk up to something or someone: the prompt at the bottom names what E will do. Hold E to see every option. At twelve, your best use is to help the household.',
+    id: 'interact', icon: 'hand', title: 'Point and click', keys: ['LMB', k(KEYMAP.input.interact)],
+    text: 'Move the cursor over a person, a door, a strip or a tree: a label says what it is and what a click will do. Click to walk there and do it, or stand close and press E. Hold E for every option.',
     when: (f) => f.moved >= 8 && f.interacted === 0, done: (f) => f.interacted > 0,
   },
   {
-    id: 'work', icon: 'farming', title: 'Work earns',
-    text: 'Reaping, hauling, tending beasts and fetching water earn your keep, a few pence of your own and skill. Keep at a job: it repeats in bouts until you walk away or press Q.',
-    keys: [k(KEYMAP.input.cancel)],
-    when: (f) => f.interacted > 0 && f.worked === 0 && f.seconds > 25, done: (f) => f.worked >= 1,
-  },
-  {
-    id: 'character', icon: 'user', title: 'See how you grow', keys: [k(KEYMAP.ui.character), k(KEYMAP.ui.inventory)],
-    text: 'Work trains skills and every fifth level offers a perk. Tab shows your stats and skills; I your purse and belongings.',
-    link: { label: 'Open the character page', request: { panel: 'character' } },
-    when: (f) => f.worked >= 2, done: (f) => f.opened.has('character'),
-  },
-  {
-    id: 'hunger', icon: 'bread', title: 'You are hungry', keys: [k(KEYMAP.ui.inventory)],
-    text: 'Eat before the hunger turns to weakness: open your inventory and eat what you carry, or find the household’s food. Bread and ale keep a peasant going.',
-    link: { label: 'Open inventory', request: { panel: 'inventory' } },
-    when: (f) => f.needs.hunger < LOW, done: (f) => f.needs.hunger >= LOW + 0.1, maxSeconds: 25,
-  },
-  {
-    id: 'rest', icon: 'moon_z', title: 'You are tired', keys: [k(KEYMAP.ui.rest)],
-    text: 'Go home and sleep: at your own door the wheel offers Sleep until dawn, and Z lets you sleep or wait anywhere you are safe.',
-    link: { label: 'Sleep or wait…', request: { panel: 'rest' } },
-    when: (f) => f.needs.rest < LOW, done: (f) => f.needs.rest >= LOW + 0.1, maxSeconds: 25,
-  },
-  {
-    id: 'warmth', icon: 'flame', title: 'You are cold',
-    text: 'Get indoors, by a hearth, or put on warmer clothes. Winter is hard on a child in a thin tunic.',
-    when: (f) => f.needs.warmth < LOW, done: (f) => f.needs.warmth >= LOW + 0.1, maxSeconds: 20,
+    id: 'tasks', icon: 'flag', title: 'What to do', keys: [k(KEYMAP.ui.whatNow), k(KEYMAP.ui.journal)],
+    text: 'Your task is written in the top left corner and a gold marker shows where it is. When you do not know what to do, press Y; O opens the journal with everything you could do.',
+    link: { label: 'Open the journal', request: { panel: 'journal' } },
+    when: (f) => f.seconds > 20 && f.interacted > 0 && !f.opened.has('journal'), done: (f) => f.opened.has('journal'), maxSeconds: 22,
   },
   {
     id: 'time', icon: 'hourglass', title: 'Time is yours', keys: [k(KEYMAP.input.speed1), k(KEYMAP.input.speed2), k(KEYMAP.input.speed3), k(KEYMAP.input.pause)],
-    text: 'A day is a minute; a year is sixteen days. 1, 2 and 3 set the speed (use the fast ones when you are only waiting) and P pauses. Panels pause the world while they are open.',
-    when: (f) => f.seconds > 100 && f.worked >= 1 && !f.speedChanged, done: (f) => f.speedChanged, maxSeconds: 20,
+    text: 'A day lasts ten minutes; a year is sixteen days. 1, 2 and 3 set the speed (use the fast ones when you are only waiting) and P pauses. Panels pause the world while they are open.',
+    when: (f) => f.seconds > 150 && f.worked >= 1 && !f.speedChanged, done: (f) => f.speedChanged, maxSeconds: 20,
   },
   {
-    id: 'map', icon: 'map', title: 'Beyond the village', keys: [k(KEYMAP.ui.map)],
-    text: 'M opens the map of the land. Pick a town and travel there: you ride the roads at speed, and may meet travellers, patrols or worse on the way.',
-    link: { label: 'Open the map', request: { panel: 'map' } },
-    when: (f) => f.seconds > 190 && f.worked >= 2, done: (f) => f.opened.has('map'), maxSeconds: 25,
-  },
-  {
-    id: 'holy', icon: 'cross_holy', title: 'A holy day',
-    text: 'On the fourth day of every season the village goes to Mass; afterwards men and youths practise archery at the butts. It is the cheapest way to learn the bow, and a skilled archer is worth a lord’s notice.',
-    when: (f) => f.holyDay && f.seconds > 40 && f.worked >= 1 && !f.engaged, done: () => false, maxSeconds: 18,
-  },
-  {
-    id: 'career', icon: 'signpost', title: 'Soon you must choose', keys: [k(KEYMAP.ui.character)],
-    text: 'At fourteen a youth takes up a trade, goes into service, the Church or arms. See which fields are open to you and what each asks of you: Character, then Career paths.',
-    link: { label: 'See the career paths', request: { panel: 'character' } },
-    when: (f) => f.age >= 13.4 && !f.careerChosen && !f.travelling, done: (f) => f.opened.has('career'), maxSeconds: 40,
-  },
-  {
-    id: 'fight', icon: 'swords', title: 'Steel is out', keys: ['LMB', 'RMB', k(KEYMAP.input.dodge)],
-    text: 'Tap the left button to strike, hold it for a heavy blow. Hold the right button to guard. Space rolls out of the way. Watch your stamina, and your blood: wounds do not simply heal at once.',
+    id: 'fight', icon: 'swords', title: 'Steel is out', keys: ['LMB', 'RMB', k(KEYMAP.input.dodge), k(KEYMAP.input.weapon)],
+    text: 'The mouse looks around while the weapon is drawn: tap the left button to strike, hold it for a heavy blow, hold the right to guard, Space rolls out of the way. G puts the weapon away; Esc frees the mouse.',
     link: { label: 'Fighting help', request: { panel: 'help', tab: 'combat' } },
-    when: (f) => f.engaged && !f.ranged, done: () => false, maxSeconds: 14,
+    when: (f) => f.engaged && !f.ranged, done: () => false, maxSeconds: 16,
   },
   {
-    id: 'bow', icon: 'archery', title: 'Drawing the bow', keys: ['RMB', 'LMB'],
+    id: 'bow', icon: 'archery', title: 'Drawing the bow', keys: ['RMB', 'LMB', k(KEYMAP.input.weapon)],
     text: 'Hold the right button to draw: the ring closes and holds steady. Aim the centre of the screen at the target and click the left button to loose. A long shot drops, so aim a little high.',
     when: (f) => f.engaged && f.ranged, done: () => false, maxSeconds: 14,
   },
