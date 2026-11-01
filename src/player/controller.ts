@@ -449,6 +449,7 @@ export class PlayerController implements PlayerApi {
   travelTo(settlement: number): Result {
     const p = this.person();
     if (this.dead || !p) return { ok: false, reason: 'You cannot travel now.' };
+    if (p.flags.captive) return { ok: false, reason: 'You are a prisoner; your ransom must be paid first.' };
     if (this.avatar.lock) return { ok: false, reason: 'Wait a moment.' };
     // an encounter is open: asking to go on (or elsewhere) settles it the way a traveller would — pressing on
     // runs past the outlaws or pays the patrol, going elsewhere gets away from them

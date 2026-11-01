@@ -141,7 +141,7 @@ function householdDay(
   {
     const ce = careerEcon(head.career);
     const stage = Math.min(3, head.careerStage);
-    let inc = (ce.income[stage] ?? 0) * workDays;
+    let inc = head.flags.captive ? 0 : (ce.income[stage] ?? 0) * workDays; // a prisoner earns nothing
     if (ce.produces) inc *= 0.4;
     if (!playerHere) { hh.purse = Math.round((hh.purse + inc) * 100) / 100; E.probe?.('income', tier, inc); }
   }
@@ -300,7 +300,7 @@ function hayWinter(E: Econ, hh: Household, st: Record<string, number>, dt: numbe
 }
 
 function produceFromTrade(E: Econ, s: Settlement, hh: Household, head: Person, workDays: number, playerHere: boolean): void {
-  if (workDays <= 0 || playerHere) return;
+  if (workDays <= 0 || playerHere || head.flags.captive) return;
   const ce = CAREER_ECON[head.career];
   if (!ce?.produces) return;
   const scale = workDays * (head.careerStage >= 1 ? 1 : 0.35) * Math.min(1.5, 0.6 + 0.4 * hh.members.length / 3);
@@ -397,10 +397,15 @@ function payRent(E: Econ, s: Settlement, hh: Household, head: Person, lordHH: Ho
   if (head.estate === 'free') rent = strips * RENT_PER_STRIP / 2;
   else if (strips > 0) rent = strips * 0.6; // chevage and fines in place of money rent for the unfree
   rent *= Math.max(0.3, 1 + 0.35 * E.manorPolicy(s.id).rent); // the lord's policy: relief to harsh
+  rent *= 1 + E.techBonus(s.id, 'tax.efficiency'); // rolls, tallies and an accountant: less of the rent is missed
   if (rent <= 0) return;
   const paid = Math.min(rent, hh.purse * 0.5);
   hh.purse = Math.round((hh.purse - paid) * 100) / 100;
-  if (lordHH) E.credit(lordHH, paid);
+  if (!lordHH) return;
+  // a guardian who holds a minor's manor keeps a share of its revenues (advancement `ward.income`)
+  const guard = E.guardianOf(s.id);
+  const cut = guard ? Math.min(0.6, E.guardBonus(guard.person, 'ward.income')) : 0;
+  if (guard?.household && cut > 0) { E.credit(guard.household, paid * cut); E.credit(lordHH, paid * (1 - cut)); } else E.credit(lordHH, paid);
 }
 
 /** Money rent of one strip per year for a free tenant (pence). */

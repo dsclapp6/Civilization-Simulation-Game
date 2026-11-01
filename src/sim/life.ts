@@ -18,6 +18,7 @@ import {
 import { refreshStrips } from './farming';
 import { foundHouse, youthCareer } from './family';
 import { familyOf, isCloseKin } from './kin';
+import { gainSkill } from './skills';
 import { createNewborn, createPerson, learnFactor, refreshTrained, xpForLevel, XP_PER_YEAR } from './people';
 import type { Scheduler } from './scheduler';
 import {
@@ -304,6 +305,12 @@ function onBirthday(ctx: SimContext, rng: Rng, p: Person, age: number, now: numb
       const mult = [1, 0.45, 0.25];
       for (let i = 0; i < def.skills.length && i < 3; i++) sk[def.skills[i]] += Math.round(XP_PER_YEAR * lf * mult[i]);
     }
+  }
+
+  // schooling: where the village keeps a school and a clerk (advancement `literacy`) some children learn their letters each year
+  if (age >= 6 && age <= 15 && p.career === 'child') {
+    const lit = ctx.services?.advancement?.settlementBonus?.(p.settlement, 'literacy') ?? 0;
+    if (lit > 0 && rng.chance(Math.min(0.9, lit * 2))) gainSkill(ctx, p, 'letters', 35);
   }
 
   if (!p.flags.player) {

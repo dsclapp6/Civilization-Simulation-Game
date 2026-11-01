@@ -162,6 +162,11 @@ export class PoliticsCore {
     return seat && !house.name.includes(seat) ? `House ${house.name} of ${seat}` : `House ${house.name}`;
   }
 
+  /** A technique effect the House commands (`diplomacy.truce`, `realm.council`…); 0 without the advancement module. */
+  techBonus(house: HouseId, key: string): number {
+    return house ? this.sim.services.advancement?.bonus?.(house, key) ?? 0 : 0;
+  }
+
   // ---- snapshot ----
   invalidate(): void { this.rev++; this.snap = null; this.stanceMemo.clear(); }
 

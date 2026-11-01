@@ -292,6 +292,10 @@ export class Schedule {
     } else if (this.bedridden(p, age)) {
       this.fromUntil(o, day, T.wake, T.bed);
       this.atHome(o, home, true, 'sleep', 'Ill in bed');
+    } else if (p.flags.captive) {
+      // a prisoner neither works nor travels: held where he was taken, until the ransom is paid
+      this.fromUntil(o, day, T.wake, T.bed);
+      this.atHome(o, home, true, 'home', 'Held prisoner');
     } else if (age < 3) {
       this.fromUntil(o, day, T.wake, T.bed);
       this.atHome(o, home, true, 'home', 'Indoors with the family');

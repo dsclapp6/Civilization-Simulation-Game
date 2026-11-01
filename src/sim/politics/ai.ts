@@ -226,7 +226,8 @@ export class Ai {
     const lead = c.headOf(liege);
     if (!lead) return false;
     const pw = c.personality(h);
-    const unhappy = -c.social.opinion(head.id, lead.id);
+    // a liege who rules with a council (advancement `realm.council`): grievances are heard in the hall, not on the field
+    const unhappy = -c.social.opinion(head.id, lead.id) - 20 * c.techBonus(liege, 'realm.council');
     const mine = c.strengthOf(h);
     const others = Math.max(1, c.strengthOf(liege) - mine * 0.8);
     const weak = this.weakness(liege);

@@ -8,6 +8,7 @@ import type { SimEvents } from './events';
 import type { Profile } from './legacy';
 import type { ScoreKeeper } from './score';
 import type { GameState } from './state';
+import type { Wave3Services } from './wave3';
 
 export interface SimContext {
   readonly state: GameState;
@@ -21,6 +22,8 @@ export interface SimContext {
   readonly absDay: number;
   /** Named deterministic RNG stream (state saved with the run). */
   rng(name: string): Rng;
+  /** The gameplay modules installed so far (advancement bonuses, politics…); absent in light test contexts. */
+  readonly services?: Wave3Services;
   /** Ask for an immediate autosave (important events). */
   requestSave(reason: string): void;
 }
