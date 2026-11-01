@@ -314,7 +314,7 @@ function listPerson(E: Econ, p: Person, id: number, out: ActionOption[]): void {
   // an errand for a neighbour
   if (age >= 10 && ageYears(q, E.day) >= 16 && q.settlement === p.settlement) {
     const n = errandsToday(E, p);
-    const pay = round2(0.45 * Math.max(0, 1 - n / 6));
+    const pay = round2(0.3 * Math.max(0, 1 - n / 12)); // twelve errands fill a day of ten minutes; they pay like labour
     const o = option({
       id: 'errand.run', label: `Run an errand for ${q.first}`, seconds: 9, anim: 'carry_walk', mainHand: 'basket', carry: 'basket', category: 'work', priority: 6, repeat: false,
       preview: pay > 0 ? `A ha'penny or two for the trouble (${pd(pay)}) · Odd jobs` : 'Nobody has more errands for you today', ...base, data: { act: 'errand', person: id } as WorkData,
@@ -428,7 +428,7 @@ function listBuilding(E: Econ, p: Person, id: number, out: ActionOption[]): void
 function errand(E: Econ, p: Person, personId: number): ActionOutcome {
   const q = E.person(personId);
   const n = errandsToday(E, p);
-  const pay = round2(0.45 * Math.max(0, 1 - n / 6));
+  const pay = round2(0.3 * Math.max(0, 1 - n / 12)); // twelve errands fill a day of ten minutes; they pay like labour
   E.save.ww[`e${p.id}`] = [Math.floor(E.day), n + 1];
   E.touchSave();
   if (pay > 0) E.earn(p, pay, 'An errand');

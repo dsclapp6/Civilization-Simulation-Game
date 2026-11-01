@@ -125,6 +125,7 @@ export class StripFeed {
         return v;
       };
       for (const id of s.strips) {
+        if (!this.nearFocus(id, fx, fz)) continue;
         const st = E.state.strips.get(id);
         if (!st) continue;
         const ex = peekExtra(E.farm, id);
