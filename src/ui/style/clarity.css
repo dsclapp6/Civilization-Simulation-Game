@@ -184,6 +184,7 @@
 .mu-journal-pin { display: flex; align-items: center; gap: 7px; padding: 6px 24px; border-top: 1px solid var(--rule-soft); background: rgba(127, 208, 216, 0.16); font-size: 13.5px; flex: none; }
 .mu-journal-people { padding: 4px 28px 18px; min-height: 0; flex: 1 1 auto; }
 .mu-prow { display: flex; align-items: center; gap: 12px; padding: 7px 4px; border-bottom: 1px solid var(--rule-soft); }
+.mu-prow.found { background: linear-gradient(90deg, rgba(242, 193, 78, 0.28), rgba(242, 193, 78, 0.04)); box-shadow: inset 3px 0 0 var(--gold, #c79a25); }
 .mu-prow-ico { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: rgba(26, 17, 9, 0.88); color: var(--gold-hi); }
 .mu-prow-main { flex: 1; min-width: 0; }
 .mu-prow-name { font-size: 15.5px; }

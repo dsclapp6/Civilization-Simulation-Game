@@ -5,20 +5,33 @@
 // normal game: `?fakeobjectives=1` (app) or the gallery turn it on.
 import type { ZoneApi } from '../../agents/types';
 import { BUILDINGS } from '../../content/types';
-import { isNight } from '../../core/time';
+import { SEASON_NAMES, isNight, toDate } from '../../core/time';
 import type { WorldMarker } from '../../core/view';
 import { isHolyDay, isMarketDay } from '../../sim/calendar';
 import type { Simulation } from '../../sim/sim';
 import { fullName } from '../../sim/state';
 import type { DaySummary, Objective, ObjectiveStep, ObjectivesApi, ObjectiveTarget, Suggestion } from '../../sim/objectives/types';
 
-type Wanted = (sim: Simulation) => ObjectiveTarget | undefined;
+/** The places the stand-in lists beyond home and the strips (names are the module's style: a saint, a keeper). */
+const PLACES: ReadonlyArray<readonly [readonly string[], string]> = [
+  [['church', 'chapel', 'abbey_church', 'cathedral'], 'St Mary’s church'],
+  [['market_hall', 'market_stall', 'market_cross'], 'The market cross'],
+  [['smithy'], 'The smithy'],
+  [['alehouse', 'tavern'], 'The Bell (alehouse)'],
+  [['watermill', 'windmill'], 'The mill'],
+  [['archery_butts'], 'The archery butts'],
+  [['well'], 'The well'],
+];
 
 export class MockObjectives implements ObjectivesApi {
   private objs: Objective[] = [];
   private seq = 1;
   private person = 0;
   private strips = 0;
+  /** What "Find" points at (the module's `trackPerson` / `trackPlace`), and a counter that changes with anything a list shows. */
+  private foundPerson = 0;
+  private foundPlace: ObjectiveTarget | null = null;
+  private ver = 1;
   private readonly offs: Array<() => void> = [];
   private summary: DaySummary | null = null;
   private readonly day = { work: 0, earned: 0, skills: new Map<string, number>() };
@@ -124,6 +137,12 @@ export class MockObjectives implements ObjectivesApi {
     }
     const home = this.target('home');
     if (home) out.push({ id: 9001, kind: 'home', x: home.x, z: home.z, label: 'Home', color: 0x6fbf73 });
+    if (this.foundPerson) {
+      const per = this.sim.state.persons.get(this.foundPerson);
+      const w = this.zone?.agent(this.foundPerson) ?? this.zone?.whereabouts(this.foundPerson);
+      if (per && w) out.push({ id: 9004, kind: 'person', x: w.x, z: w.z, y: 2.4, label: per.first, color: 0x5aa2e6 });
+    }
+    if (this.foundPlace) out.push({ id: 9005, kind: 'place', x: this.foundPlace.x, z: this.foundPlace.z, label: this.foundPlace.label, color: 0xe6a15a });
     return out;
   }
 
@@ -149,6 +168,7 @@ export class MockObjectives implements ObjectivesApi {
   }
 
   private after(o: Objective, phase?: 'progress'): void {
+    this.ver++;
     if (o.steps.every((x) => x.done)) { o.state = 'done'; this.sim.events.emit('objective', { phase: 'done', id: o.id, title: o.title }); }
     else this.sim.events.emit('objective', { phase: phase ?? 'progress', id: o.id, title: o.title });
     if (o.state === 'done' && o.tracked) { o.tracked = false; const next = this.objs.find((x) => x.state === 'active'); if (next) next.tracked = true; }
@@ -158,6 +178,7 @@ export class MockObjectives implements ObjectivesApi {
   endDay(): void { this.closeDay(); }
 
   private closeDay(): void {
+    this.ver++;
     this.summary = {
       day: Math.floor(this.sim.absDay),
       work: this.day.work ? [`${this.day.work} bouts of work`] : [],
@@ -177,7 +198,7 @@ export class MockObjectives implements ObjectivesApi {
 
   list(): readonly Objective[] { return this.objs; }
   tracked(): Objective | null { return this.objs.find((o) => o.tracked && o.state === 'active') ?? null; }
-  track(id: number): void { for (const o of this.objs) o.tracked = o.id === id && o.state === 'active'; }
+  track(id: number): void { this.ver++; for (const o of this.objs) o.tracked = o.id === id && o.state === 'active'; }
 
   suggestions(limit = 4): Suggestion[] {
     const out: Suggestion[] = [];
@@ -200,7 +221,48 @@ export class MockObjectives implements ObjectivesApi {
   }
 
   trackPerson(person: number): void {
-    this.person = person || this.person;
+    this.foundPerson = person > 0 ? person : 0;
+    this.ver++;
+  }
+
+  // ---- the module's additive members ----
+  trackPlace(target: ObjectiveTarget | null): void { this.foundPlace = target ? { ...target } : null; this.ver++; }
+  found(): { person: number; place: ObjectiveTarget | null } { return { person: this.foundPerson, place: this.foundPlace }; }
+  version(): number { return this.ver; }
+
+  intro(): string {
+    const st = this.sim.state;
+    const p = st.persons.get(st.run.playerId);
+    const place = p ? this.sim.world.settlements.find((q) => q.id === p.settlement)?.name ?? 'the village' : 'the village';
+    return `${SEASON_NAMES[toDate(this.sim.absDay).season]}. You wake in your family’s cottage in ${place}; the barley must go in.`;
+  }
+
+  places(): ObjectiveTarget[] {
+    const st = this.sim.state;
+    const p = st.persons.get(st.run.playerId);
+    const hh = p ? st.households.get(p.household) : undefined;
+    const home = hh ? st.buildings.get(hh.home) : undefined;
+    const out: ObjectiveTarget[] = [];
+    if (!p || !home) return out;
+    out.push({ kind: 'building', id: home.id, x: home.x, z: home.z, label: 'Your home' });
+    let n = 0;
+    for (const s of this.sim.world.strips) {
+      if (st.strips.get(s.id)?.holder !== hh!.id || n >= 3) continue;
+      const cx = s.poly.reduce((a, q) => a + q.x, 0) / s.poly.length, cz = s.poly.reduce((a, q) => a + q.z, 0) / s.poly.length;
+      out.push({ kind: 'strip', id: s.id, x: cx, z: cz, label: `Your family’s strip ${++n}` });
+    }
+    const here = st.buildingsAt.get(p.settlement) ?? [];
+    for (const [kinds, label] of PLACES) {
+      let best: { id: number; x: number; z: number } | null = null;
+      let bd = Infinity;
+      for (const b of here) {
+        if (!kinds.includes(b.kind)) continue;
+        const d = Math.hypot(b.x - home.x, b.z - home.z);
+        if (d < bd) { bd = d; best = b; }
+      }
+      if (best) out.push({ kind: 'building', id: best.id, x: best.x, z: best.z, label });
+    }
+    return out;
   }
 
   /** Dev/test: finish the next step of the first-day chain. */

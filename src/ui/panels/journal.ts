@@ -6,6 +6,7 @@
 import { h, replace } from '../core/dom';
 import { distanceText, plural } from '../core/format';
 import { icon } from '../core/icons';
+import { findState, isFound, showPerson, showPlace, stopFinding, type FindState, type Spot } from '../core/finder';
 import { where } from '../core/nav';
 import {
   PERSON_GROUPS, peopleRows, placeRows, todayModel, type PersonRow, type PlaceRow,
@@ -82,7 +83,7 @@ export function journalPanel(ctx: PanelCtx, start: JournalTab | undefined): UiPa
           state === 'now' && s.hint ? h('div.mu-jstep-hint', null, s.hint) : null,
           state === 'now' && frac !== null ? bar('gold', frac, { thin: true }).el : null,
           state !== 'done' && s.target ? h('div.mu-jstep-where', null, icon('pin', 12), `${s.target.label}, ${dist(s.target.x, s.target.z)}`,
-            h('button.mu-link', { type: 'button', onclick: () => find(s.target!.x, s.target!.z, s.target!.label) }, 'Show me')) : null));
+            h('button.mu-link', { type: 'button', onclick: () => find({ ...s.target! }) }, 'Show me')) : null));
     });
     const due = dueLine(o, ctx.sim.absDay);
     return h('div.mu-jdetail', null,
@@ -114,7 +115,7 @@ export function journalPanel(ctx: PanelCtx, start: JournalTab | undefined): UiPa
           : [h('p.mu-dim.mu-small.mu-ital', null, 'Nobody has been given a task yet.')]),
         card('Your strips', 'farming', m.strips.length
           ? m.strips.map((s) => h('div.mu-today-row.col', null,
-            h('div.mu-row.mu-between', null, h('b', null, s.label), h('button.mu-link.mu-small', { type: 'button', onclick: () => find(s.x, s.z, s.label) }, 'Show me')),
+            h('div.mu-row.mu-between', null, h('b', null, s.label), h('button.mu-link.mu-small', { type: 'button', onclick: () => find({ x: s.x, z: s.z, label: `Your family’s ${s.label.split(' · ')[0].toLowerCase()}`, kind: 'strip', id: s.id }) }, 'Show me')),
             h('div.mu-small.mu-ink2', null, s.note),
             s.work > 0 && s.work < 1 ? bar('gold', s.work, { slim: true }).el : null))
           : [h('p.mu-dim.mu-small.mu-ital', null, 'Your household holds no strips of its own; its field work is on the lord\u2019s land.')]),
@@ -129,21 +130,29 @@ export function journalPanel(ctx: PanelCtx, start: JournalTab | undefined): UiPa
 
   // ---------------------------------------------------------------------------------------- People and places
 
-  const find = (x: number, z: number, label: string): void => {
-    ctx.pins.set({ x, z, label });
-    ctx.say('info', `${label}: ${dist(x, z)}. Look for the marker on the compass and the minimap.`);
+  const find = (spot: Spot): void => {
+    const inWorld = showPlace(game, ctx.pins, spot);
+    ctx.say('info', `${spot.label}: ${dist(spot.x, spot.z)}. Look for the marker on the compass and the minimap${inWorld ? ' and in the world' : ''}.`);
     render();
   };
 
+  const stop = (): void => { stopFinding(game, ctx.pins); render(); };
+
   const findPerson = (r: PersonRow): void => {
-    if (game.objectives) { game.objectives.trackPerson(r.id); ctx.say('info', `Looking for ${r.name}: watch the compass.`); }
-    if (r.x !== null && r.z !== null) ctx.pins.set({ x: r.x, z: r.z, label: r.name });
-    else ctx.say('warn', `${r.name} is not near enough to find: ${r.where}.`);
+    if (game.objectives) {
+      // the module's marker follows them wherever they go
+      showPerson(game, ctx.pins, r.id);
+      ctx.say('info', r.x !== null ? `Looking for ${r.name}: watch the compass.` : `${r.name} is ${r.where}: the marker points the way.`);
+    } else if (r.x !== null && r.z !== null) {
+      ctx.pins.set({ x: r.x, z: r.z, label: r.name });
+      ctx.say('info', `Looking for ${r.name}: watch the compass.`);
+    } else ctx.say('warn', `${r.name} is not near enough to find: ${r.where}.`);
     render();
   };
 
   const peopleView = (): HTMLElement => {
     const rows = peopleRows(game, me());
+    const fs = findState(game, ctx.pins);
     if (!rows.length) return h('div.mu-journal-empty', null, empty('You do not know anyone yet.', { icon: 'users', title: 'No acquaintances' }));
     const out: HTMLElement[] = [];
     for (const grp of PERSON_GROUPS) {
@@ -151,11 +160,12 @@ export function journalPanel(ctx: PanelCtx, start: JournalTab | undefined): UiPa
       if (!mine.length) continue;
       out.push(h('div.mu-jhead.wide', null, grp.label));
       for (const r of mine) {
-        out.push(h('div.mu-prow', null,
+        const on = fs.person === r.id;
+        out.push(h('div.mu-prow', { class: on ? 'found' : '' },
           h('div.mu-prow-main', null,
             h('div.mu-prow-name', null, h('b', null, r.name), h('span.mu-dim', null, ` · ${r.relation || 'known to you'}`)),
             h('div.mu-prow-sub', null, [r.role ? `${r.role}, ${plural(r.age, 'year')}` : plural(r.age, 'year'), r.where].filter(Boolean).join(' · '))),
-          button('Find', { size: 'small', icon: 'pin', onClick: () => findPerson(r) })));
+          on ? button('Stop', { size: 'small', icon: 'cross', onClick: stop }) : button('Find', { size: 'small', icon: 'pin', onClick: () => findPerson(r) })));
       }
     }
     return h('div.mu-journal-people.mu-scroll', null, out);
@@ -163,16 +173,19 @@ export function journalPanel(ctx: PanelCtx, start: JournalTab | undefined): UiPa
 
   const placesView = (): HTMLElement => {
     const rows = placeRows(game, me());
+    const fs = findState(game, ctx.pins);
     if (!rows.length) return h('div.mu-journal-empty', null, empty('You do not know the places hereabouts yet.', { icon: 'pin', title: 'No places' }));
     const out: HTMLElement[] = [];
     const section = (title: string, items: PlaceRow[]): void => {
       if (!items.length) return;
       out.push(h('div.mu-jhead.wide', null, title));
       for (const r of items) {
-        out.push(h('div.mu-prow', null,
+        const on = isFound(fs, { x: r.x, z: r.z, kind: r.target?.kind, id: r.target?.id });
+        out.push(h('div.mu-prow', { class: on ? 'found' : '' },
           h('span.mu-prow-ico', null, icon(r.icon, 18)),
-          h('div.mu-prow-main', null, h('div.mu-prow-name', null, h('b', null, r.name)), h('div.mu-prow-sub', null, `${r.sub} · ${dist(r.x, r.z)}`)),
-          button('Find', { size: 'small', icon: 'pin', onClick: () => find(r.x, r.z, r.name) })));
+          h('div.mu-prow-main', null, h('div.mu-prow-name', null, h('b', null, r.name)), h('div.mu-prow-sub', null, [r.sub, dist(r.x, r.z)].filter(Boolean).join(' · '))),
+          on ? button('Stop', { size: 'small', icon: 'cross', onClick: stop })
+            : button('Find', { size: 'small', icon: 'pin', onClick: () => find({ x: r.x, z: r.z, label: r.name, kind: r.target?.kind, id: r.target?.id }) })));
       }
     };
     section('Yours', rows.filter((r) => r.group === 'yours'));
@@ -182,15 +195,29 @@ export function journalPanel(ctx: PanelCtx, start: JournalTab | undefined): UiPa
 
   // ---------------------------------------------------------------------------------------- frame
 
+  /** "Showing: the well (380 m west) · Stop showing" while "Find" points at something. */
+  const findingBar = (f: FindState): HTMLElement | null => {
+    let label = '';
+    let at: { x: number; z: number } | null = null;
+    if (f.person) {
+      const a = game.zone.agent(f.person) ?? game.zone.whereabouts(f.person);
+      at = a && Number.isFinite(a.x) ? { x: a.x, z: a.z } : null;
+      label = `Looking for ${ctx.nameOf(f.person)}`;
+    } else if (f.place) { at = f.place; label = `Showing: ${f.place.label}`; }
+    if (!label) return null;
+    const me = ctx.player.body();
+    const far = at && me ? ` (${distanceText(Math.hypot(at.x - me.x, at.z - me.z))})` : '';
+    return h('div.mu-journal-pin', null, icon('pin', 14), `${label}${far}`, h('button.mu-link', { type: 'button', onclick: stop }, 'Stop showing'));
+  };
+
   let lastSig = '';
   let lastText = '';
+  let lastVersion = -1;
   /** Draws the open page. Unless `force`d it leaves the page alone when nothing it says has changed, so a click is never lost to a redraw. */
   const render = (force = true): void => {
     t.set(tab);
-    const open = ctx.pins.get();
     const body = tab === 'objectives' ? objectivesView() : tab === 'today' ? todayView() : tab === 'people' ? peopleView() : placesView();
-    const pinned = open ? h('div.mu-journal-pin', null, icon('pin', 14), `Showing: ${open.label} (${distanceText(Math.hypot(open.x - (ctx.player.body()?.x ?? 0), open.z - (ctx.player.body()?.z ?? 0)))})`,
-      h('button.mu-link', { type: 'button', onclick: () => { ctx.pins.set(null); render(); } }, 'Stop showing')) : null;
+    const pinned = findingBar(findState(game, ctx.pins));
     const text = `${tab}|${body.textContent}|${pinned?.textContent ?? ''}`;
     if (!force && text === lastText) return;
     lastText = text;
@@ -213,8 +240,16 @@ export function journalPanel(ctx: PanelCtx, start: JournalTab | undefined): UiPa
     key: tabKeys(TABS.map((x) => x.id), () => tab, (id) => select(id as JournalTab), { scroller: content }),
     tick: (now) => {
       // the objectives move as events arrive; the lists of people and places as everyone walks about
-      const sig = tab === 'objectives' ? (api ? api.list().map(objectiveSignature).join('~') : '') : '';
-      if (sig !== lastSig && tab === 'objectives') { lastSig = sig; render(false); return; }
+      if (tab === 'objectives') {
+        // the module says when anything changed; without that, compare what the tasks say
+        const v = api?.version?.();
+        if (v !== undefined) {
+          if (v !== lastVersion) { lastVersion = v; render(false); return; }
+        } else {
+          const sig = api ? api.list().map(objectiveSignature).join('~') : '';
+          if (sig !== lastSig) { lastSig = sig; render(false); return; }
+        }
+      }
       if (now - lastRefresh > 1.5) { lastRefresh = now; render(false); }
     },
   });

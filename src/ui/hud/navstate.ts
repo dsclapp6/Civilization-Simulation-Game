@@ -78,6 +78,18 @@ export class NavState {
     const pin = pins.get();
     if (pin) this.push('pin', 'pin', pin.x, pin.z, sim.world.heightAt(pin.x, pin.z) + 3, pin.label, COLOR.pin, false);
 
+    // the same spot marked twice (the church the task points at, and the church we mark anyway; a pin on the home) is
+    // shown once, as the first of them: the objectives module's markers come first
+    let n = 0;
+    for (let i = 0; i < this.used; i++) {
+      const m = this.pool[i];
+      let again = false;
+      if (!m.primary) for (let j = 0; j < n; j++) { const o = this.pool[j]; if (Math.abs(o.x - m.x) < 3 && Math.abs(o.z - m.z) < 3) { again = true; break; } }
+      if (again) continue;
+      if (n !== i) { this.pool[i] = this.pool[n]; this.pool[n] = m; }
+      n++;
+    }
+    this.used = n;
     this.markers.length = this.used;
     for (let i = 0; i < this.used; i++) this.markers[i] = this.pool[i];
     for (const m of this.markers) {

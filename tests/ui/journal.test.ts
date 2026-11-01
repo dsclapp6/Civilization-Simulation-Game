@@ -104,6 +104,28 @@ describe('Places', () => {
   });
 });
 
+describe('Places from the objectives module', () => {
+  it('takes the module\u2019s list and its names, so the journal and the tracker call a place the same thing', () => {
+    const g = game();
+    const listed = g.objectives!.places!();
+    expect(listed.length).toBeGreaterThan(2);
+    const rows = placeRows(g, g.sim.state.run.playerId);
+    expect(rows.map((r) => r.name)).toEqual(listed.map((t) => t.label));
+    for (const r of rows) { expect(r.target).toBeDefined(); expect(r.sub.length).toBeGreaterThan(2); }
+    // what is yours is set apart from what is the village\u2019s
+    expect(rows.filter((r) => r.group === 'yours').every((r) => /^Your/.test(r.name))).toBe(true);
+    expect(rows.some((r) => r.group === 'village')).toBe(true);
+  });
+
+  it('falls back to its own list when the module has none (an older module, a fake)', () => {
+    const g = game();
+    const bare = { list: () => [], tracked: () => null, track: () => {}, suggestions: () => [], daySummary: () => null, trackPerson: () => {} };
+    const rows = placeRows({ ...g, objectives: bare }, g.sim.state.run.playerId);
+    expect(rows[0].name).toBe('Your home');
+    expect(rows.every((r) => r.target === undefined)).toBe(true);
+  });
+});
+
 describe('The intro card', () => {
   it('opens with the season, where you wake and what the first task is, and names three places to visit', () => {
     const g = game();
@@ -116,6 +138,21 @@ describe('The intro card', () => {
     expect(m.spots[0].kind).toBe('home');
     expect(m.spots[0].label).toBe('Your home');
     for (const s of m.spots) { expect(Number.isFinite(s.x)).toBe(true); expect(s.caption.length).toBeGreaterThan(10); }
+  });
+
+  it('uses the module\u2019s own opening line when it has one, and tells what kind of place it is', () => {
+    const g = game();
+    const m = introModel(g)!;
+    expect(m.paragraphs[0]).toBe(g.objectives!.intro!());
+    const settlement = g.sim.world.settlements.find((s) => s.id === g.sim.state.persons.get(g.sim.state.run.playerId)!.settlement)!;
+    expect(m.paragraphs[1]).toContain(settlement.name);
+  });
+
+  it('writes the opening itself when the module has no line', () => {
+    const g = game();
+    const bare = { list: () => [], tracked: () => null, track: () => {}, suggestions: () => [], daySummary: () => null, trackPerson: () => {} };
+    const m = introModel({ ...g, objectives: bare })!;
+    expect(m.paragraphs[0]).toMatch(/^(Spring|Summer|Autumn|Winter)\. You wake in your/);
   });
 
   it('takes the reason for the tracked task into the story', () => {
@@ -177,6 +214,23 @@ describe('The stand-in objectives', () => {
     o.endDay();
     expect(o.daySummary()?.day).toBe(ended);
     expect(o.daySummary(ended + 5)).toBeNull();
+  });
+
+  it('marks a found person and a found place in the world markers, and counts every change', () => {
+    const r = rig({ preset: 'small' });
+    const o = new MockObjectives(r.sim, r.zone);
+    const me = r.sim.state.run.playerId;
+    const other = r.sim.state.households.get(r.sim.state.persons.get(me)!.household)!.members.find((id) => id !== me)!;
+    const v0 = o.version();
+    o.trackPerson(other);
+    expect(o.found().person).toBe(other);
+    expect(o.version()).toBeGreaterThan(v0);
+    expect(r.sim.view.worldMarkers!().some((m) => m.kind === 'person')).toBe(true);
+    o.trackPlace({ kind: 'place', id: -1, x: 5, z: 6, label: 'There' });
+    expect(r.sim.view.worldMarkers!().find((m) => m.kind === 'place')).toMatchObject({ x: 5, z: 6, label: 'There' });
+    o.trackPlace(null); o.trackPerson(0);
+    expect(o.found()).toEqual({ person: 0, place: null });
+    expect(r.sim.view.worldMarkers!().some((m) => m.kind === 'person' || m.kind === 'place')).toBe(false);
   });
 
   it('feeds the world markers: the tracked step is the primary one', () => {

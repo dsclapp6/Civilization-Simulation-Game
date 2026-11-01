@@ -9,6 +9,7 @@ import {
 } from '../core/objectiveModel';
 import { dueLine } from '../core/objectiveModel';
 import { bar, type BarHandle } from '../components/widgets';
+import type { Objective } from '../../sim/objectives/types';
 import type { GameServices } from '../types';
 import type { NavState } from './navstate';
 
@@ -37,6 +38,10 @@ export class Tracker {
   private readonly empty = h('div.mu-tracker-empty.mu-hide', null, 'Nothing is asked of you just now. Press ', h('span.mu-key', null, 'Y'), ' to see what is worth doing.');
   private readonly body = h('div.mu-tracker-body');
   private sig = '';
+  /** The module's change counter when the tracked task was last read (it says when anything about the tasks changed). */
+  private version = -2;
+  private checkedAt = -10;
+  private cur: Objective | null = null;
   private lastTargetText = '';
   private flashUntil = 0;
   private now = 0;
@@ -74,17 +79,24 @@ export class Tracker {
     const api = game?.objectives;
     if (!game || !api) { this.setVisible(false); return; }
     this.setVisible(true);
-    const o = api.tracked();
-    const absDay = game.sim.absDay;
-    const sig = objectiveSignature(o);
-    if (sig !== this.sig) {
-      this.sig = sig;
-      this.paint(o, absDay);
+    // without a change counter the task is read every frame; with one, when it changes (and once a second regardless)
+    const v = api.version?.();
+    if (v === undefined || v !== this.version || now - this.checkedAt > 1) {
+      this.version = v ?? -2;
+      this.checkedAt = now;
+      this.cur = api.tracked();
+      const sig = objectiveSignature(this.cur);
+      if (sig !== this.sig) {
+        this.sig = sig;
+        this.paint(this.cur, game.sim.absDay);
+      }
     }
+    const o = this.cur;
     // the way to go changes as you walk and turn
     if (o) {
       const st = currentStep(o);
-      const t = st?.target ?? this.deps.nav.primary();
+      // the world marker follows a person about; the step's own copy of where they are is only refreshed now and then
+      const t = this.deps.nav.primary() ?? st?.target;
       if (t) {
         const nav = this.deps.nav;
         const rel = relativeYaw(Math.atan2(t.x - nav.x, t.z - nav.z), nav.camYaw);

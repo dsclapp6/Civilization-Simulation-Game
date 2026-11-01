@@ -195,9 +195,12 @@ export class PointerController {
     for (const c of list) {
       const k = c.target.kind;
       if (k === 'strip' || k === 'parcel') {
-        const f = this.found(c.target, x, z, c.label);
+        // the zone names a strip "Your family's east strip · barley, ripe": the name, then what is on it
+        const cut = c.label.indexOf(' · ');
+        const f = this.found(c.target, x, z, cut > 0 ? c.label.slice(0, cut) : c.label);
         f.mark = { kind: k, id: c.target.id };
-        if (k === 'strip') f.sublabel = this.stripNote(c.target.id);
+        if (cut > 0) f.sublabel = c.label.slice(cut + 3);
+        else if (k === 'strip') f.sublabel = this.stripNote(c.target.id);
         return f;
       }
       if (k === 'item') {
