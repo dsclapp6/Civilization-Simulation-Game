@@ -835,7 +835,8 @@ export class BuildingSystem {
   private readonly rcBox = new THREE.Box3();
   private readonly rcHit = new THREE.Vector3();
 
-  raycast(ray: THREE.Ray, maxDist: number): { id: number; distance: number } | null {
+  /** `pad` grows the box sideways and up (eaves overhang the footprint) for a camera boom; a start point inside only the padding counts as outside. */
+  raycast(ray: THREE.Ray, maxDist: number, pad = 0): { id: number; distance: number } | null {
     let best: { id: number; distance: number } | null = null;
     const inv = this.rcInv, local = this.rcRay, box = this.rcBox, hit = this.rcHit;
     for (const e of this.ordered) {
@@ -849,6 +850,12 @@ export class BuildingSystem {
       // standing inside a walk-through footprint (market stall, cross, well): the boom must stay
       // short, under the awning, rather than run out to the far side of the box
       if (box.containsPoint(local.origin)) { if (!best || best.distance > 0) best = { id: e.id, distance: 0 }; continue; }
+      if (pad > 0) {
+        box.min.x -= pad; box.min.z -= pad; box.max.x += pad; box.max.z += pad; box.max.y += pad * 0.5;
+        if (box.containsPoint(local.origin)) {
+          box.min.x += pad; box.min.z += pad; box.max.x -= pad; box.max.z -= pad; box.max.y -= pad * 0.5;
+        }
+      }
       if (local.intersectBox(box, hit)) {
         const d = hit.distanceTo(local.origin);
         if (d <= maxDist && (!best || d < best.distance)) best = { id: e.id, distance: d };
