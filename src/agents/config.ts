@@ -40,17 +40,18 @@ export const SPAWN_BUDGET_MS = 1.0;
 export const WALK_SPEED = 1.42;
 export const RUN_SPEED = 3.4;
 /**
- * The day is only 60 s, so a 300 m walk to the fields would take several days. People far from the
- * focus therefore move faster than a stroll (they are small dots out there); close to the player
- * they walk at a natural pace.
+ * A day is ten minutes: people walk their trips (the schedule sends them off early enough, schedule.ts `tripDays`) at an easy
+ * pace, hurrying (up to MAX_HURRY times) when they are behind. Far from the player, where they are small dots, they go a little
+ * faster still, so a trip across the fields is over in a believable time.
  */
-export const WARP_NEAR = 80;
-export const WARP_FAR = 160;
-export const WARP_MAX = 3;
+export const MAX_HURRY = 1.7;
+export const WARP_NEAR = 120;
+export const WARP_FAR = 220;
+export const WARP_MAX = 1.8;
 /**
- * Trips are only walked where someone can see them: within this distance of the focus (metres). A trip
- * that starts and ends beyond it, and never comes near, is done instantly; a trip that enters the area
- * starts at its edge; one that leaves it ends when the walker is out of sight.
+ * Trips are only walked where someone can see them: within this distance of the focus (metres). A trip that starts and ends
+ * beyond it, and never comes near, is done instantly; a trip that enters the area starts at its edge; one that leaves it ends
+ * when the walker is out of sight. People this far off are a few pixels high.
  */
-export const SEEN_RADIUS = 80;
+export const SEEN_RADIUS = 190;
 export const WALK_SPEED_BASE = 1.42;

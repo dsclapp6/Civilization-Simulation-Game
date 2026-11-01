@@ -56,6 +56,8 @@ export interface Intent {
   indoors: boolean;
   /** Not in this settlement now (visitors who went home). */
   away: boolean;
+  /** Walking out of the settlement to go away (to the gate or the edge); `x`, `z` are that exit. */
+  leaving: boolean;
   x: number;
   z: number;
   yaw: number;
@@ -72,9 +74,11 @@ export interface Intent {
   bz: number;
   /** People with the same group key at the same place stand facing a common centre and talk. */
   group: number;
-  /** Absolute days this stretch of the day starts and ends. */
+  /** Absolute days this stretch of the day starts and ends. While `travel` < 1 these are the place being walked to: `from` is the time of arrival. */
   from: number;
   until: number;
+  /** The earliest the person sets out for their next place (the stretch ends `until`; they must walk in time to be there). */
+  leave: number;
   /** Where the person was before (travel interpolation) and how far along they are (1 = arrived). */
   prevX: number;
   prevZ: number;
@@ -86,14 +90,22 @@ export interface Intent {
 
 export function newIntent(): Intent {
   return {
-    activity: 'idle', label: '', settlement: -1, building: -1, indoors: false, away: false, x: 0, z: 0, yaw: 0,
+    activity: 'idle', label: '', settlement: -1, building: -1, indoors: false, away: false, leaving: false, x: 0, z: 0, yaw: 0,
     anim: 'idle', main: 'none', off: 'none', carry: 'none', back: 'none', seat: 0, mode: Mode.Stay, radius: 0, bx: 0, bz: 0,
-    group: -1, from: 0, until: 0, prevX: 0, prevZ: 0, travel: 1, exitX: NaN, exitZ: NaN,
+    group: -1, from: 0, until: 0, leave: 0, prevX: 0, prevZ: 0, travel: 1, exitX: NaN, exitZ: NaN,
   };
 }
 
+/** Copies every field of an intent (the place being walked to becomes the intent while its walk is on). */
+function assign(o: Intent, s: Intent): void {
+  o.activity = s.activity; o.label = s.label; o.settlement = s.settlement; o.building = s.building; o.indoors = s.indoors; o.away = s.away;
+  o.leaving = s.leaving; o.x = s.x; o.z = s.z; o.yaw = s.yaw; o.anim = s.anim; o.main = s.main; o.off = s.off; o.carry = s.carry; o.back = s.back;
+  o.seat = s.seat; o.mode = s.mode; o.radius = s.radius; o.bx = s.bx; o.bz = s.bz; o.group = s.group; o.from = s.from; o.until = s.until;
+  o.exitX = s.exitX; o.exitZ = s.exitZ;
+}
+
 function reset(o: Intent): void {
-  o.activity = 'idle'; o.label = ''; o.building = -1; o.indoors = false; o.away = false; o.yaw = 0;
+  o.activity = 'idle'; o.label = ''; o.building = -1; o.indoors = false; o.away = false; o.leaving = false; o.yaw = 0;
   o.anim = 'idle'; o.main = 'none'; o.off = 'none'; o.carry = 'none'; o.back = 'none'; o.seat = 0; o.mode = Mode.Stay;
   o.radius = 0; o.bx = 0; o.bz = 0; o.group = -1; o.travel = 1; o.exitX = NaN; o.exitZ = NaN;
 }
@@ -200,10 +212,17 @@ interface DayTimes {
   massA: number; massB: number; gatherA: number; afterB: number;
 }
 
+/** Shortest and longest walk (days) the schedule gives between two places: 7 s to 3 game hours at 1×. */
 const TRAVEL_MIN = 0.012;
-const TRAVEL_MAX = 0.07;
-/** Day fraction a stroll of one metre takes on the macro clock (a person "covers" ~1000 m/day). */
-const TRAVEL_PER_METRE = 1 / 2200;
+const TRAVEL_MAX = 0.3;
+/**
+ * Days a walk of `d` metres is given. The day is ten minutes long and people walk their trips (agents.ts shows them): an easy
+ * 1.7 m/s over the first hundred metres, a brisk pace on the long ways to the fields (a 400 m walk is 0.24 of a day, 3 m/s).
+ * People set out early enough to be there when their next stretch of the day begins.
+ */
+export function tripDays(d: number): number {
+  return Math.min(TRAVEL_MAX, Math.max(TRAVEL_MIN, d <= 100 ? d / 1000 : 0.1 + (d - 100) / 2500));
+}
 
 export class Schedule {
   private readonly state: GameState;
@@ -311,26 +330,69 @@ export class Schedule {
       this.workDay(p, o, day, f, T, age, wet, cold, home, sp, ownMarket);
     }
     o.until = Math.max(o.until, absDay + 1e-6);
-    // ---- travel: people take a while to get from one stretch of the day to the next ----
+    // ---- travel: people set out early enough to be at their next place when its stretch of the day begins ----
     o.travel = 1;
+    o.leave = o.until - TRAVEL_MAX;
     if (depth === 0) {
-      const since = absDay - o.from;
-      if (since >= 0 && since < TRAVEL_MAX && !o.away) {
-        const pr = this.prevIntent(p, o.from - 1e-4);
-        // arriving from outside: the entry point named by this stretch (a gate), else where the person left
-        const px = pr.away ? (o.exitX === o.exitX ? o.exitX : pr.exitX) : pr.x;
-        const pz = pr.away ? (o.exitZ === o.exitZ ? o.exitZ : pr.exitZ) : pr.z;
-        const dist = Math.hypot(o.x - px, o.z - pz);
-        if (dist > 3 && (pr.away || pr.settlement === o.settlement)) {
-          const win = Math.min(TRAVEL_MAX, Math.max(TRAVEL_MIN, dist * TRAVEL_PER_METRE)) * (0.8 + 0.4 * hash01(p.id, 77));
-          const t = since / win;
-          if (t < 1) { o.prevX = px; o.prevZ = pz; o.travel = t; }
-        }
-      }
+      if (o.until - absDay < TRAVEL_MAX && this.travelAhead(p, absDay, o)) return;
+      if (absDay - o.from < TRAVEL_MAX) this.travelTail(p, absDay, o);
     }
   }
 
+  private readonly trip = { ox: 0, oz: 0, win: 0, leave: 0 };
+
+  /** The walk from the end of stretch `a` to the start of stretch `b`, which follows it: from where, for how long, and when it begins. */
+  private tripBetween(p: Person, a: Intent, b: Intent): boolean {
+    if (a.away && b.away) return false;
+    if (!a.away && !b.away && b.settlement !== a.settlement) return false;
+    // arriving from outside, the person comes in by the gate named by the next stretch
+    let ox = a.x, oz = a.z;
+    if (a.away && b.settlement !== a.settlement && Number.isFinite(b.exitX)) { ox = b.exitX; oz = b.exitZ; }
+    const dist = Math.hypot(b.x - ox, b.z - oz);
+    if (dist <= 3) return false;
+    const win = tripDays(dist) * (0.85 + 0.3 * hash01(p.id, 77));
+    const t = this.trip;
+    t.ox = ox; t.oz = oz; t.win = win;
+    // as early as the walk needs, but not before this stretch has begun (a long way after a short stretch ends in the next one)
+    t.leave = Math.max(a.from + 0.002, a.until - win);
+    return true;
+  }
+
+  /** If it is time to set out for the next stretch of the day, turns `o` into that stretch with the walk under way; true if so. */
+  private travelAhead(p: Person, absDay: number, o: Intent): boolean {
+    const nx = this.nextIntent(p, o.until + 1e-4);
+    if (!this.tripBetween(p, o, nx)) return false;
+    const T = this.trip;
+    o.leave = T.leave;
+    if (absDay < T.leave) return false;
+    const ox = T.ox, oz = T.oz, leave = T.leave;
+    const t = (absDay - leave) / Math.max(1e-6, T.win);
+    assign(o, nx);
+    // walking out of the settlement: still here until the exit is reached
+    if (o.away) { o.away = false; o.leaving = true; o.indoors = false; }
+    o.prevX = ox; o.prevZ = oz;
+    o.travel = Math.min(0.999, Math.max(0, t));
+    o.leave = leave;
+    return true;
+  }
+
+  /** A walk that did not fit into the stretch before (a long way after a short stretch) is still going on in this one. */
+  private travelTail(p: Person, absDay: number, o: Intent): void {
+    const pr = this.prevIntent(p, o.from - 1e-4);
+    if (!this.tripBetween(p, pr, o)) return;
+    const T = this.trip;
+    if (absDay >= T.leave + T.win) return;
+    o.prevX = T.ox; o.prevZ = T.oz;
+    o.travel = Math.min(0.999, Math.max(0, (absDay - T.leave) / Math.max(1e-6, T.win)));
+    if (o.away) { o.away = false; o.leaving = true; o.indoors = false; }
+  }
+
   private prevIntent(p: Person, absDay: number): Intent {
+    this.plan(p, absDay, this.prev, 1);
+    return this.prev;
+  }
+
+  private nextIntent(p: Person, absDay: number): Intent {
     this.plan(p, absDay, this.prev, 1);
     return this.prev;
   }
@@ -416,7 +478,7 @@ export class Schedule {
     const j = (k: number): number => hash01(p.id, 100 + k);
     T.sr = sunrise; T.ss = sunset;
     T.wake = sunrise - 0.012 + 0.02 * j(1);
-    T.chore = T.wake + 0.035;
+    T.chore = T.wake + 0.045;
     T.mealA = 0.47 + 0.04 * j(2);
     T.mealB = T.mealA + 0.04 + 0.02 * j(6);
     T.workEnd = sunset - 0.085 + 0.025 * j(3);
@@ -673,14 +735,14 @@ export class Schedule {
   }
 
   private meal(p: Person, o: Intent, day: number, home: BuildingState | null, sp: SettlementPlaces | null, wet: number, marketDay: boolean): void {
-    // The day is a minute long and a walk across the village takes longer than that, so nobody goes home for dinner
+    // The midday meal is a short stretch of the day and a walk takes people a while (tripDays), so nobody goes home for dinner
     // unless home is (nearly) where they work: a packed meal at the workplace for the rest (as field workers had)
     const wp = this.workTemplate(p);
     if (wp && wet < 0.6 && home) {
       this.working(p, o, day, 0.5, this.times, 30, wet, home, sp, marketDay, true);
       if (!o.indoors && !o.away && o.building !== home.id) {
         const dh = Math.hypot(o.x - home.x, o.z - home.z);
-        if (dh > 40) {
+        if (dh > 25) {
           o.activity = 'eat'; o.label = 'Eating a packed meal'; o.anim = 'eat'; o.main = 'none'; o.off = 'none'; o.carry = 'none'; o.mode = Mode.Stay;
           o.group = -1; o.x += 0.9; o.z -= 0.5;
           return;

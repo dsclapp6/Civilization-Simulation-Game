@@ -24,8 +24,11 @@ import { GOODS } from './data';
 import { addStock, marketBuy, postedPrice } from './market';
 
 export const TITHE = 0.1;
-/** Work units (bouts at speed 1) each strip task takes for a player; see work.ts. */
-export const TASK_BOUTS = { plough: 4, harrow: 2, sow: 2, weed: 3, reap: 4, bind: 3, carry: 2, thresh: 3, winnow: 2 } as const;
+/**
+ * Work units (bouts at speed 1, 12 s each) each strip task takes for a player; see work-farm.ts. A bout is about an hour of
+ * a labourer's work: reaping an ordinary strip is seven bouts (a minute and a half), ploughing it with a team about the same.
+ */
+export const TASK_BOUTS = { plough: 7, harrow: 3, sow: 4, weed: 5, reap: 7, bind: 5, carry: 3, thresh: 5, winnow: 3 } as const;
 export type StripTask = 'plough' | 'harrow' | 'sow' | 'weed' | 'reap' | 'bind' | 'carry';
 
 // ---------------------------------------------------------------------------------------------
@@ -166,24 +169,30 @@ export function daysToHarvest(d: number): number {
   return x > 0.5 ? x : x + 16;
 }
 
-/** Is it the season to sow this strip, and with what? null if not now. */
-export function sowingNow(E: Econ, strip: StripState): { crop: CropKind; late: number } | null {
-  const role = roleOn(strip.field, E.day);
-  const d = E.dayOfYear;
-  const y = E.yearIndex;
+/** Year index and day of the year of an absolute day (the calendar's, not the economy's `now`). */
+const yearOf = (at: number): number => Math.floor(at / 16);
+const dayInYear = (at: number): number => at - yearOf(at) * 16;
+
+/** Is it the season to sow this strip, and with what? null if not now (`at`: the day asked about, default today). */
+export function sowingNow(E: Econ, strip: StripState, at: number = E.day): { crop: CropKind; late: number } | null {
+  const role = roleOn(strip.field, at);
+  const d = dayInYear(at);
+  const y = yearOf(at);
   if (role === 1 && d >= CALENDAR.springSow[0] && d < CALENDAR.springSow[1] + 1) {
     return { crop: cropFor(strip.settlement, strip.field, 1, y), late: Math.max(0, d - 1.8) };
   }
   if (role === 2 && d >= CALENDAR.winterSow[0] && d < CALENDAR.winterSow[1]) {
     return { crop: cropFor(strip.settlement, strip.field, 2, y), late: Math.max(0, d - 10.4) };
   }
+  void E;
   return null;
 }
 
 /** Is it time to plough this strip? (spring for the spring crop, autumn for the winter corn.) */
-export function ploughingNow(E: Econ, strip: StripState): boolean {
-  const role = roleOn(strip.field, E.day);
-  const d = E.dayOfYear;
+export function ploughingNow(E: Econ, strip: StripState, at: number = E.day): boolean {
+  const role = roleOn(strip.field, at);
+  const d = dayInYear(at);
+  void E;
   if (role === 1) return d >= 0 && d < 3.9;
   if (role === 2) return d >= 8.4 && d < 11.9;
   return false;
@@ -308,33 +317,34 @@ function lagFor(E: Econ, strip: StripState, eff: number): number {
   return (1 / eff - 1) * 1.1 + (holderIsPlayer ? 1.5 : 0) + 0.9 * hash01(strip.id, 7);
 }
 
-function macroStrip(E: Econ, s: Settlement, strip: StripState, effOf: (holder: number) => number): boolean {
-  const farm = E.farm;
-  const now = E.day;
+/** What the macro farm does to a strip when its settlement's day is run. */
+export type MacroAct = 'harvest' | 'harvest_cut' | 'carry' | 'fallow' | 'plough' | 'sow';
+
+/**
+ * What the household farm would do to a strip at time `now` (a pure reading of the state, so the view can ask about the
+ * next run of the settlement's day and show the work being done before it lands): null = nothing.
+ */
+export function macroPlan(E: Econ, strip: StripState, effOf: (holder: number) => number, now: number): MacroAct | null {
   const st = strip.state;
-  const ex = peekExtra(farm, strip.id);
-  if (st === 'sown' || st === 'growing') return growStrip(E.state, strip, ex, now);
-  if (ex && (ex.p ?? 0) > 0.001) return false; // somebody is in the middle of a task
-  const d = E.dayOfYear;
+  const ex = peekExtra(E.farm, strip.id);
+  if (st === 'sown' || st === 'growing') return null; // growth is the calendar's
+  if (ex && (ex.p ?? 0) > 0.001) return null; // somebody is in the middle of a task
+  const d = dayInYear(now);
   const role = roleOn(strip.field, now);
 
   if (st === 'ripe') {
     const ripeSince = ex?.r ?? now;
-    if (now - ripeSince < 0.4) return false;
-    const eff = effOf(strip.holder);
-    const lag = lagFor(E, strip, eff);
-    if (now - ripeSince < 0.4 + lag) return false;
-    macroHarvest(E, s, strip, eff);
-    return true;
+    if (now - ripeSince < 0.4) return null;
+    const lag = lagFor(E, strip, effOf(strip.holder));
+    if (now - ripeSince < 0.4 + lag) return null;
+    return 'harvest';
   }
   if (st === 'harvested') {
     const cut = ex?.r ?? now;
-    if (now - cut < 2) return false;
-    const eff = effOf(strip.holder);
-    const lag = lagFor(E, strip, eff);
-    if (now - cut < 2 + lag) return false;
-    macroHarvest(E, s, strip, eff, true);
-    return true;
+    if (now - cut < 2) return null;
+    const lag = lagFor(E, strip, effOf(strip.holder));
+    if (now - cut < 2 + lag) return null;
+    return 'harvest_cut';
   }
 
   // the turn of the year: last year's spring-crop stubble becomes this year's fallow
@@ -342,48 +352,65 @@ function macroStrip(E: Econ, s: Settlement, strip: StripState, effOf: (holder: n
     if (ex && (ex.k ?? 0) > 0.5) {
       // sheaves still in the field are brought in first
       const lag = lagFor(E, strip, effOf(strip.holder));
-      if (isFinite(lag) && ex.r !== undefined && now - ex.r > 2 + lag) { carryAll(E, s, strip, ex); return true; }
-      return false;
+      return isFinite(lag) && ex.r !== undefined && now - ex.r > 2 + lag ? 'carry' : null;
     }
-    strip.state = 'fallow';
-    strip.crop = 'fallow';
-    strip.growth = 0;
-    E.state.touchStrip(strip);
-    if (ex) { for (const k of Object.keys(ex) as Array<keyof StripExtra>) if (k !== 'm') delete ex[k]; }
-    addFieldFert(E, s.id, strip.field, 0.09 / Math.max(1, s.strips.length / 3));
-    return true;
+    return 'fallow';
   }
 
   if (st === 'fallow' || st === 'stubble' || st === 'bare') {
     if (ex && (ex.k ?? 0) > 0.5) {
-      if (ex.r === undefined || now - ex.r <= 2) return false;
+      if (ex.r === undefined || now - ex.r <= 2) return null;
       const lag = lagFor(E, strip, effOf(strip.holder));
-      if (!isFinite(lag) || now - ex.r <= 2 + lag) return false;
-      carryAll(E, s, strip, ex);
-      return true;
+      return !isFinite(lag) || now - ex.r <= 2 + lag ? null : 'carry';
     }
-    if (!ploughingNow(E, strip)) return false;
-    const eff = effOf(strip.holder);
-    const lag = lagFor(E, strip, eff);
-    if (!isFinite(lag)) return false;
-    if (d < (role === 1 ? 0.2 + lag : 8.6 + lag)) return false;
-    strip.state = 'ploughed';
-    strip.crop = 'fallow';
-    E.state.touchStrip(strip);
-    extraOf(farm, strip.id).h = 1;
-    return true;
+    if (!ploughingNow(E, strip, now)) return null;
+    const lag = lagFor(E, strip, effOf(strip.holder));
+    if (!isFinite(lag)) return null;
+    return d < (role === 1 ? 0.2 + lag : 8.6 + lag) ? null : 'plough';
   }
   if (st === 'ploughed') {
-    const sw = sowingNow(E, strip);
-    if (!sw) return false;
-    const eff = effOf(strip.holder);
-    const lag = lagFor(E, strip, eff);
-    if (!isFinite(lag)) return false;
-    if (d < (role === 1 ? 0.6 + lag : 9.4 + lag)) return false;
-    macroSow(E, s, strip, sw.crop);
-    return true;
+    if (!sowingNow(E, strip, now)) return null;
+    const lag = lagFor(E, strip, effOf(strip.holder));
+    if (!isFinite(lag)) return null;
+    return d < (role === 1 ? 0.6 + lag : 9.4 + lag) ? null : 'sow';
   }
-  return false;
+  return null;
+}
+
+function macroStrip(E: Econ, s: Settlement, strip: StripState, effOf: (holder: number) => number): boolean {
+  const farm = E.farm;
+  const now = E.day;
+  const st = strip.state;
+  const ex = peekExtra(farm, strip.id);
+  if (st === 'sown' || st === 'growing') return growStrip(E.state, strip, ex, now);
+  const act = macroPlan(E, strip, effOf, now);
+  switch (act) {
+    case 'harvest': macroHarvest(E, s, strip, effOf(strip.holder)); return true;
+    case 'harvest_cut': macroHarvest(E, s, strip, effOf(strip.holder), true); return true;
+    case 'carry': carryAll(E, s, strip, ex as StripExtra); return true;
+    case 'fallow': {
+      strip.state = 'fallow';
+      strip.crop = 'fallow';
+      strip.growth = 0;
+      E.state.touchStrip(strip);
+      if (ex) { for (const k of Object.keys(ex) as Array<keyof StripExtra>) if (k !== 'm') delete ex[k]; }
+      addFieldFert(E, s.id, strip.field, 0.09 / Math.max(1, s.strips.length / 3));
+      return true;
+    }
+    case 'plough':
+      strip.state = 'ploughed';
+      strip.crop = 'fallow';
+      E.state.touchStrip(strip);
+      extraOf(farm, strip.id).h = 1;
+      return true;
+    case 'sow': {
+      const sw = sowingNow(E, strip);
+      if (!sw) return false;
+      macroSow(E, s, strip, sw.crop);
+      return true;
+    }
+    default: return false;
+  }
 }
 
 function macroSow(E: Econ, s: Settlement, strip: StripState, crop: CropKind): void {

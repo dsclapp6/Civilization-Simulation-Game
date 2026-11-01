@@ -143,6 +143,15 @@ export interface ZoneApi {
   /** Carry-look and held items the routine gives a person for an activity (shared with the player). */
   propsFor(person: PersonId, activity: Activity): { mainHand: HeldItem; offHand: HeldItem; carry: CarryLook };
 
+  // ---- additive (clarity pass): nameplates. Optional so fakes need not implement them. ----
+  /**
+   * The people who have a task or request for the player right now (the objectives module's givers): their nameplate
+   * carries `mark: 'quest'`. Replaces the previous list; open happenings requests are always included as well.
+   */
+  setQuestGivers?(ids: readonly PersonId[]): void;
+  /** The person the player is tracking (journal "Find"): their plate carries `mark: 'track'`. 0 clears. */
+  setTrackedPerson?(id: PersonId): void;
+
   // ---- additive (player module): riding. Optional; without them the player still rides, but the
   // household's animal keeps standing where it was (a second horse is drawn). ----
   /** The player mounts this animal: the zone stops drawing it and keeps it out of its routines. False = cannot be ridden. */

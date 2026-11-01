@@ -83,9 +83,9 @@
   },
   "requests": {
     "maxOpen": 4,
-    "minGapDays": 2.5,
-    "dailyChance": 0.15,
-    "offerDays": 4,
+    "minGapDays": 0.25,
+    "hourlyChance": 0.32,
+    "offerDays": 2.5,
     "weights": { "fetch": 3, "loan": 1.4, "work": 3, "message": 1.6, "lost_animal": 1.3, "watch": 0.5, "godparent": 0.5, "marriage": 0.25 },
     "fetch": {
       "goods": [
@@ -93,7 +93,7 @@
         { "good": "wool", "qty": [3, 6] }, { "good": "wheat", "qty": [3, 6] }, { "good": "bread", "qty": [4, 8] }
       ],
       "famineGoods": [{ "good": "wheat", "qty": [4, 8] }, { "good": "bread", "qty": [6, 10] }],
-      "premium": 1.35, "days": 5,
+      "premium": 1.35, "days": 3,
       "ask": [
         "I am short of {good}, {name}. Could you bring me {qty}? I will pay you well.",
         "My family has run out of {good}. If you could spare {qty}, I would make it worth your while.",
@@ -102,7 +102,7 @@
       "thanks": ["That will do nicely, {name}. Here is your silver.", "God bless you, {name}. We shall not forget this."]
     },
     "loan": {
-      "amounts": [24, 48, 72, 120, 240], "interest": 0.2, "days": 24, "offerDays": 4,
+      "amounts": [24, 48, 72, 120, 240], "interest": 0.2, "days": 24, "offerDays": 2.5,
       "ask": [
         "I am in a bad way, {name}. Could you lend me {pence}? I will pay it back with interest by the next harvest, on my word.",
         "The reeve has fined me and I cannot pay. Lend me {pence}, {name}, and I shall repay you with a gift on top."
@@ -110,7 +110,7 @@
       "thanks": ["Bless you. You will have it back, every penny.", "I will not forget your kindness, {name}."]
     },
     "work": {
-      "count": [3, 6], "wage": 3, "days": 4,
+      "count": [8, 14], "wage": 1, "days": 3,
       "ask": [
         "My back is bad and the work will not wait. Could you give me {qty} bouts of labour, {name}? I will pay a fair wage.",
         "I need an extra pair of hands for the {qty} jobs that must be done before the weather turns. Will you help?"
@@ -118,7 +118,7 @@
       "thanks": ["Well done, {name}. Here is your wage."]
     },
     "message": {
-      "days": 8, "pay": 24, "radius": 7500,
+      "days": 5, "pay": 24, "radius": 7500,
       "ask": [
         "Would you carry a message to {who} at {place}? It is nothing secret, only family business, and I will make it worth the walk.",
         "{name}, I must get word to {who} in {place}, and I have no one to send. Will you go?"
@@ -127,7 +127,7 @@
       "delivered": ["So {from} sends word. Thank you for coming all this way; here is something for your trouble."]
     },
     "lost_animal": {
-      "radius": [140, 380], "found": 30, "days": 3, "pay": 24,
+      "radius": [140, 380], "found": 30, "days": 2.5, "pay": 24,
       "ask": [
         "My {animal} has strayed again, {name}. I think she went towards the {dir}, a few hundred paces out. Would you look for her?",
         "A {animal} of mine is missing since yesterday, somewhere {dir} of the village. I would pay you to find her."

@@ -2,10 +2,11 @@
 // earns (wages, week-work credit, experience, strength) and what it costs (tool wear, strength,
 // hunger). Actions themselves live in work-farm.ts, work-craft.ts and work-misc.ts.
 import type { SkillId, StatId } from '../../core/domain';
+import { DAY_SECONDS } from '../../core/time';
 import type { ActionOption } from '../actions';
 import { isHolyDay } from '../calendar';
 import { skillLevel } from '../people';
-import { gainSkill, trainStat } from '../skills';
+import { TRAIN_SCALE, XP_SCALE, gainSkill, trainStat } from '../skills';
 import type { Household, Person } from '../state';
 import type { Econ } from './core';
 import { TOOL_SPEED } from './data';
@@ -15,10 +16,21 @@ import { creditWeekWork } from './obligations';
 import { perkSum, perkTotal } from './perks';
 import { parseItemKey, type ItemKey, type Quality } from './types';
 
-/** Seconds a bout takes at speed 1. */
+/** Seconds a bout takes at speed 1 (10 to 15 s; ≈ half a game hour). */
 export const BOUT = 12;
-/** Fraction of a working day one bout stands for (a day's work is a little over three bouts). */
-export const BOUT_DAYS = 0.3;
+/** Game hours one bout of work stands for at 1× (a 600 s day: 25 s an hour). */
+export const BOUT_HOURS = (BOUT * 24) / DAY_SECONDS;
+/** The hero compresses the chores: per game hour the player does about twice what a capable adult does. */
+export const HERO_FACTOR = 2;
+/** Hours of work in a labourer's day (the day wages are paid for). */
+export const WORK_DAY_HOURS = 10;
+/**
+ * Fraction of a working day one bout stands for: the pay of a bout, or its credit towards week-work, at NPC rates per unit
+ * of work (a bout ≈ one hour of a labourer's work). A hard day's work of twenty bouts is worth about two labourer's days.
+ */
+export const BOUT_DAYS = Math.round(((BOUT_HOURS * HERO_FACTOR) / WORK_DAY_HOURS) * 1000) / 1000;
+/** Wear on tools per bout, relative to the days when a bout stood for 0.3 of a working day: tools last as long against what they earn. */
+export const WEAR_SCALE = BOUT_DAYS / 0.3;
 
 export interface ToolRef { key: ItemKey; quality: Quality; bag: Bag; shared: boolean }
 
@@ -63,18 +75,18 @@ export function secondsFor(bouts: number, speed: number, min = 5, max = 90): num
 /** Experience for `bouts` bouts of work (perks and quick learners are applied by gainSkill). */
 export function giveXp(E: Econ, p: Person, skill: SkillId, base: number, bouts: number): void {
   const mult = 1 + perkSum(p, skill, 'xp') + perkTotal(p, 'xpAll');
-  gainSkill(E.sim, p, skill, base * bouts * mult);
+  gainSkill(E.sim, p, skill, base * bouts * mult * XP_SCALE);
 }
 
-/** Heavy labour builds strength and endurance (0.012 / 0.010 a bout at full effort: STR 10 by 14 for a boy of 12 with potential 11+). */
+/** Heavy labour builds strength and endurance (0.012 / 0.010 a bout at full effort, scaled by TRAIN_SCALE: STR 10 by 14 or 15 for a boy of 12 with potential 11+). */
 export function trainBout(E: Econ, p: Person, strWeight: number, endWeight: number, bouts: number): void {
-  if (strWeight > 0) trainStat(E.sim, p, 'str', 0.012 * strWeight * bouts);
-  if (endWeight > 0) trainStat(E.sim, p, 'end', 0.01 * endWeight * bouts);
+  if (strWeight > 0) trainStat(E.sim, p, 'str', 0.012 * strWeight * bouts * TRAIN_SCALE);
+  if (endWeight > 0) trainStat(E.sim, p, 'end', 0.01 * endWeight * bouts * TRAIN_SCALE);
 }
 
 export function wearOut(E: Econ, p: Person, tool: ToolRef | null, amount: number, skill: SkillId): void {
   if (!tool) return;
-  const a = amount * (1 - Math.min(0.8, perkSum(p, skill, 'wear')));
+  const a = amount * WEAR_SCALE * (1 - Math.min(0.8, perkSum(p, skill, 'wear')));
   const res = wearTool(tool.bag, tool.key, a);
   if (tool.shared) { const hh = E.hhOf(p); if (hh) E.state.touchHousehold(hh); } else E.state.touch(p);
   if (res !== 'ok' && E.isPlayer(p.id)) {

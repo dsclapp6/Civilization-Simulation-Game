@@ -8,9 +8,14 @@ import { PACE_FACTOR, RouteCursor, thin, type RoutePlan } from './route';
 import type { TravelState } from './types';
 import { ageFactor, agilityFactor, loadFactor, ridingFactor } from './movement';
 
-/** Travel pace (m/s of body time): a brisk road march on foot, a steady trot and canter on a horse. */
-export const TRAVEL_FOOT = 2.4;
-export const TRAVEL_RIDE = 6.5;
+/**
+ * Travel pace (m/s of body time): the map's abstraction of a day's march on foot, and a canter on a horse. The calendar runs
+ * `body seconds / DAY_SECONDS` days for a journey whatever the speed: a four-kilometre walk to the next town costs about two game
+ * days (two minutes of play at 8×) and a ride about three quarters of one. At 2.4 m/s it was three days and 3.5 minutes; on
+ * the old one-minute day thirty.
+ */
+export const TRAVEL_FOOT = 3.4;
+export const TRAVEL_RIDE = 9;
 /** One encounter roll per this many metres of route. */
 export const ROLL_SPACING = 120;
 /** No rolls this close to the start (the village is still around you). */

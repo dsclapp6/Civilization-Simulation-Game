@@ -15,6 +15,23 @@ A game day is one *working day*: wages, prices and rations are the historical pe
 2d a day, a gallon of wheat costs 1d). A game year is only 16 days, so a year's flows are 16 days' worth: a
 household eats about 17 gallons of grain a year, and a strip gives 30 to 40 gallons.
 
+**The day is ten minutes of play** (`DAY_SECONDS = 600`, clarity pass): a game hour is 25 s at 1×, daylight about
+seven minutes, a year 2 h 40 min. Everything the calendar runs (needs per hour, markets, households, growth, rents) simply runs
+ten times slower in real time. What had to be retuned is everything counted *per bout* of the player's work, because a bout
+(12 s) is now half a game hour (`BOUT_HOURS` 0.48) and a day holds fifty of them:
+
+* **The hero works about twice as fast per game hour as a capable adult** (`HERO_FACTOR`): one bout ≈ one hour of a labourer's
+  work. Piece pay is at NPC rates per unit of work: a bout pays `wage × BOUT_DAYS` (0.096 of a day's wage), week-work credit
+  the same, so ten bouts are a labourer's day and a hard day's work of twenty pays about twice that.
+* Strip tasks take more bouts (`TASK_BOUTS`): plough 7, harrow 3, sow 4, weed 5, reap 7, bind 5 (a strip is reaped in a minute and
+  a half). Felling a tree stays three bouts.
+* Experience and stat training per bout are scaled back (`XP_SCALE` 0.25, `TRAIN_SCALE` 0.5, in `sim/skills.ts`), tool wear by
+  `WEAR_SCALE` (a third), the hunger and tiredness a bout costs are about half a game hour's worth on top of the hour's own
+  (`needs.ts drainWork`). A youth who practises most days still has STR 10 and Archery 3 at 14 or 15 (the archer test), a
+  14-year-old farmer is Farming 2 after a year on three strips.
+* Anything that was a count of bouts per day (errand pay, request work counts, bark and rapport limits that read real time) was
+  rescaled; things that are counts of *days* (rents, deadlines in days, the 4-day week) are as they were.
+
 Money is pence (`formatMoney` writes it as £ s d). Texts for the player use `pd()` from `data.ts`.
 
 ## Goods (`src/content/goods.json`, ~95 goods)
@@ -78,19 +95,20 @@ Yield = settlement base × crop ratio × field fertility × weather × the kingd
 × lateness. The base is calibrated so that a normal year feeds the continent. A tenth goes to the parish priest
 (tithe), seed corn is set aside, and a sixteenth of what is ground goes to the lord's mill.
 
-Player bouts (12 seconds at speed 1; a game day is 60 seconds):
+Player bouts (12 seconds at speed 1, half a game hour; a game day is 600 seconds):
 
 | task | bouts | notes |
 |---|---|---|
-| plough 4, harrow 2, sow 2 | | seed 14 gallons a strip |
-| weed 3 | | unweeded crops lose 14% |
-| reap 4, bind 3, carry 2 | | sickle or scythe; quality tools are faster |
-| thresh 3, winnow 2 | | flail; chaffy grain loses 10% on sale |
+| plough 7, harrow 3, sow 4 | | seed 14 gallons a strip |
+| weed 5 | | unweeded crops lose 14% |
+| reap 7, bind 5, carry (8 sheaves a trip) | | sickle or scythe; quality tools are faster |
+| thresh (8 sheaves a bout), winnow (12 gallons a bout) | | flail; chaffy grain loses 10% on sale |
 | mill (8 gallons a bout) | | at the village mill, a sixteenth to the miller |
 
-*Expected pace*: one spring strip, harrow to winnowed grain, takes about 18 game days with eating and sleeping and the
-holy days (the farmer-loop test measures 17.8 days); it gives about 35 gallons, worth 20 to 35d. A 14-year-old
-reaches Farming 3 in the first year of work and gains about 0.7 STR.
+*Expected pace*: one spring strip, harrow to winnowed grain, is about 45 bouts (nine minutes of work) spread over the
+growing days (the farmer-loop test measures about ten game days for three strips); it gives about 35 gallons, worth
+20 to 35d, for about 8d of labour at NPC rates. Each task shows on the strip while it is under way (`StripView.task/work`,
+`stripfeed.ts`).
 
 ## Work, jobs and careers (`jobs.ts`, `work-craft.ts`, `work-misc.ts`)
 
@@ -127,6 +145,27 @@ home from the stores. Hunger, tiredness and cold slow work; starvation and expos
 numbers (`speed`, `yield`, `quality`, `xp`, `wear`, `save`, `sell`, `buy`, `fee`, `rent`, `fertility`, `carry`, …)
 summed by `perkSum`/`perkTotal`.
 
+## What the view is fed (clarity pass)
+
+`installEconomy` also feeds three view sources (no state is written; all are quiet when nothing is near the focus):
+
+* `stripWork` / `stripWorkVersion` (`stripfeed.ts`): `StripView.task` and `work` for the strips near the focus. A task under
+  way (the player's bouts, a half-done task) shows its saved progress exactly; the household farm lands its work in one step when
+  its settlement's day is run (`farm.ts macroPlan`, the pure part of `macroStrip`), so the strips it is about to work show the
+  work through the working day before, each starting a little later than the last.
+* `worldProps` / `worldPropsVersion` (`propfeed.ts`): stooks (bound sheaves waiting to be carried) and lying sheaves along the
+  reaped part of a strip (the strip's *start* is the middle of the short end that holds `poly[0]`, its direction the long axis:
+  `stripFrame`; `StripView.work` is meant to be drawn from the same end, so the sheaves lie inside the cut band), hay cocks for two days after a meadow is mown, a woodpile (`count` 1..8 from firewood) and a heap of
+  grain sacks (from grain and flour) at each home or barn, stone at quarries, a stump where a tree was felled (permanent) and its
+  logs (until the woodcutter has walked off). Households the economy keeps by the day hold no stores, so they show a seasonal
+  baseline; the player's household shows exactly what it keeps. A strip the household farm harvests while it is being watched
+  (the feed saw it ripe or cut, then stubble) stands in five stooks for about three-quarters of a day, as if carried in by the
+  next afternoon. Ids are stable (`kind × 1e9 + entity`); the version moves only when the list differs. What the work leaves is
+  remembered in `Econ.notes` (not saved); each new note moves `notes.rev`, which the feed rebuilds on, so a bout shows at once
+  rather than at the next game hour.
+* `drainFloaters` (`floatfeed.ts`): "+8 sheaves cut", "+3d", "Farming +2" over the player for a completed action, "Farming 3!"
+  for a level, "−4d" / "+2 eggs" for a trade, "♥ +3" over the person whose opinion moved; a few a second.
+
 ## Links
 
 * Social hooks (`setHooks`): `giveHook`, `itemInfoHook`, `priceTipsHook`, `dressTierHook`, `apprenticeHook`.
@@ -138,8 +177,8 @@ summed by `perkSum`/`perkTotal`.
 ## Measured
 
 Large mock world (about 12 000 people), economy systems per game hour: average 1.5 ms, 95th percentile 5 ms on a quiet
-machine (the tests allow more because they share cores); one hour is one frame, so at 1x (150 frames an hour) the
-average frame pays 0.01 ms and at 8x 0.1 ms. A hundred years of the tiny world take 5 s of the whole simulation.
+machine (the tests allow more because they share cores); one hour is one frame, so at 1x (1500 frames an hour) the
+average frame pays 0.001 ms and at 8x (190 frames an hour) 0.008 ms. A hundred years of the tiny world take 5 s of the whole simulation.
 Prices over 100 years: wheat 0.5 to 3.2 times base through the years (bad harvests), averaging 0.6 to 1.2.
 
 ## Known gaps

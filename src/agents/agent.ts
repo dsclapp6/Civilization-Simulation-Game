@@ -5,6 +5,7 @@ import type { AnimState, BackLook, CarryLook, CharacterDrawItem, HeldItem } from
 import type { TargetRef } from '../sim/actions';
 import type { Person, PersonId } from '../sim/state';
 import { MAX_WAYPOINTS } from './nav/path';
+import type { Plate } from './plates';
 import { Mode, type ModeId } from './schedule';
 import type { Activity, AgentOrder, ZoneAgent } from './types';
 
@@ -74,6 +75,8 @@ export class Agent implements ZoneAgent {
   seat = 0;
   radiusWander = 0;
   replanAt = 0;
+  /** Absolute day the schedule wants the agent at its target (a walk is paced to arrive then). */
+  arriveBy = 0;
   intentLabel = '';
 
   // ---- movement ----
@@ -105,6 +108,11 @@ export class Agent implements ZoneAgent {
   stepDir = 1;
   partner = 0;
   facing = NaN;
+
+  // ---- nameplate (plates.ts) ----
+  plate: Plate | null = null;
+  /** The draw item shows the plate now (not a spoken line or a debug label). */
+  plateOn = false;
 
   // ---- reactions and speech ----
   speech: string | null = null;

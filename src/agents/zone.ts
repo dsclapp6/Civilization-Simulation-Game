@@ -18,6 +18,7 @@ import { ADULT_RADIUS, CHILD_RADIUS, ENTER_RADIUS, LEAVE_RADIUS, NAV_BUILD_BUDGE
 import { SpatialHash } from './hash';
 import { findInteractables } from './interact';
 import { Nav } from './nav';
+import { makePlate, type PlateContext } from './plates';
 import { Places } from './places';
 import { newIntent, Schedule, type Intent } from './schedule';
 import { propsFor } from './props';
@@ -92,6 +93,13 @@ export class Zone {
   /** Set when time jumped (skip, load, switch) so the next step re-places everyone. */
   needResync = true;
   private modeOff = false;
+  /** Nameplates: givers of tasks set from outside, the tracked person, and the folk of open requests (refreshed about once a second). */
+  private questHook: ReadonlySet<PersonId> = new Set();
+  private questFolk: ReadonlySet<PersonId> = new Set();
+  private trackedId: PersonId = 0;
+  private plateCtx: PlateContext;
+  /** People who went in at a door (or out of the settlement) ahead of the schedule: left alone until the schedule has them arrive too. */
+  private readonly hidden = new Map<PersonId, number>();
 
   private candidates: Person[] = [];
   private scanIndex = 0;
@@ -115,6 +123,7 @@ export class Zone {
     this.places = new Places(sim.state, sim.world);
     this.sched = new Schedule({ state: sim.state, world: sim.world, places: this.places, economy: deps.economy });
     this.fauna = new AnimalSystem(this);
+    this.plateCtx = { state: sim.state, world: sim.world, social: deps.social };
     // conversations refuse people the schedules have asleep indoors (SocialApi.setHooks merges into the current hooks)
     deps.social.setHooks?.({
       awakeHook: (person) => {
@@ -181,6 +190,7 @@ export class Zone {
     const speedScale = 1 / Math.sqrt(Math.max(1, this.clockSpeed));
     this.nav.update(this.focusX, this.focusZ, NAV_BUILD_BUDGET_MS * speedScale, this.stepCount % 40 === 0);
     this.updatePlayer(dt);
+    if (this.stepCount % 20 === 3) this.refreshQuestFolk();
     // bodies
     const tA = performance.now();
     this.rebuildGrid();
@@ -299,9 +309,17 @@ export class Zone {
     this.stats.spawnMs = performance.now() - t0;
   }
 
+  /** A person has gone indoors or away before the schedule says they have arrived: the scan must not put them back in the street. */
+  hide(person: PersonId, until: number): void {
+    this.hidden.set(person, until);
+    if (this.hidden.size > 600) for (const [id, t] of this.hidden) if (t < this.now) this.hidden.delete(id);
+  }
+
   /** Looks at one person; adds an agent if they are outdoors within range. Returns true if added. */
   private consider(p: Person, force: boolean): boolean {
     const I = this.tmpIntent;
+    const until = this.hidden.get(p.id);
+    if (until !== undefined) { if (until > this.now) return false; this.hidden.delete(p.id); }
     this.sched.intent(p, this.now, I);
     if (I.away) return false;
     let x = I.x, z = I.z;
@@ -344,6 +362,7 @@ export class Zone {
     this.agentsArr.push(a);
     this.byPerson.set(p.id, a);
     this.spawned.n++;
+    this.refreshPlate(a);
     replan(this, a, true);
     return a;
   }
@@ -353,11 +372,72 @@ export class Zone {
     if (c.version !== a.draw.lookVersion) { a.draw.look = c.look; a.draw.lookVersion = c.version; }
     a.age = ageYears(a.person, this.now);
     a.tier = a.person.rankTier;
+    this.refreshPlate(a);
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // nameplates (plates.ts)
+  // ---------------------------------------------------------------------------------------------
+
+  private isQuestGiver(id: PersonId): boolean { return this.questHook.has(id) || this.questFolk.has(id); }
+
+  /** Works out the plate of an agent (who they are to the player) and puts it on the draw item unless they are speaking. */
+  refreshPlate(a: Agent): void {
+    const viewer = this.state.persons.get(this.state.run.playerId) ?? null;
+    a.plate = makePlate(this.plateCtx, viewer, a.person, this.isQuestGiver(a.personId), a.personId === this.trackedId);
+    if (a.speech === null) this.showPlate(a);
+  }
+
+  /** Writes the plate into the draw item (a debug label replaces the name). */
+  showPlate(a: Agent): void {
+    const p = a.plate;
+    const d = a.draw;
+    if (!p) return;
+    d.label = this.debugLabels ? `${a.person.first}: ${a.intentLabel}` : p.name;
+    d.sublabel = p.sub || undefined;
+    d.labelTone = p.tone;
+    d.labelRange = p.range;
+    d.mark = p.mark;
+    a.plateOn = true;
+  }
+
+  /** Open requests of the happenings module are tasks for the player: their askers carry the quest mark. */
+  private refreshQuestFolk(): void {
+    const h = this.sim.services.happenings as unknown as { openRequests?: () => ReadonlyArray<{ from: PersonId }> } | undefined;
+    let next: Set<PersonId> | null = null;
+    if (h?.openRequests) {
+      try { for (const r of h.openRequests()) (next ??= new Set()).add(r.from); } catch { next = null; }
+    }
+    const cur = this.questFolk;
+    const same = (next?.size ?? 0) === cur.size && (next === null || [...next].every((id) => cur.has(id)));
+    if (same) return;
+    this.questFolk = next ?? new Set();
+    this.refreshMarks();
+  }
+
+  private refreshMarks(): void {
+    for (const a of this.agentsArr) {
+      if (a.dead || !a.plate) continue;
+      const mark = this.isQuestGiver(a.personId) ? 'quest' : a.personId === this.trackedId ? 'track' : undefined;
+      if (mark === a.plate.mark) continue;
+      this.refreshPlate(a);
+    }
+  }
+
+  setQuestGivers(ids: readonly PersonId[]): void {
+    this.questHook = new Set(ids);
+    this.refreshMarks();
+  }
+
+  setTrackedPerson(id: PersonId): void {
+    this.trackedId = id;
+    this.refreshMarks();
   }
 
   /** Forgets everyone and places people where their schedules say they are now. */
   resync(): void {
     this.needResync = false;
+    this.hidden.clear();
     this.clearAll();
     this.now = this.sim.absDay;
     this.updateFocus();
@@ -578,8 +658,11 @@ export class Zone {
   say(person: PersonId, text: string, seconds = 3): void {
     const a = this.byPerson.get(person);
     if (!a) return;
+    // the spoken line takes the place of the nameplate while it lasts
     a.speech = text; a.speechUntil = this.zoneT + seconds;
-    a.draw.label = text;
+    const d = a.draw;
+    d.label = text; d.sublabel = undefined; d.mark = undefined;
+    a.plateOn = false;
   }
 
   attachPlayer(person: PersonId, draw: CharacterDrawItem): void {

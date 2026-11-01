@@ -231,7 +231,7 @@ first (rare; the betrothal then lapses).
 ## 7. Barks
 
 `bark(speaker, situation, listener?)` returns a line for a speech bubble or `null` — usually null. A speaker is
-silent for 0.15 day (9 s at 1×) after speaking; at most 3 non-urgent barks street-wide per 0.05 day (3 s); each
+silent for 9 s after speaking (`BARK.cooldownDays`, 9 / `DAY_SECONDS` of a day); at most 3 non-urgent barks street-wide per 3 s; each
 situation has its own chance per ten game-minutes (`greet` 55 %, `idle` 8 %, `fear` 95 %…); `fear`, `bump`, `angry`
 ignore the street-wide limit. `greet` is upgraded to `greet_kin` / `greet_superior` by kinship and standing.
 Every situation has ≥ 8 lines that suit anyone plus conditional ones (culture, rank, age, sex, trade, trait, weather,

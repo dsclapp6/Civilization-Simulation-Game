@@ -14,7 +14,7 @@ export interface HappeningData {
   names: Record<HappeningKind, string>;
   text: Record<HappeningKind, { start: string[]; end: string[] }>;
   requests: {
-    maxOpen: number; minGapDays: number; dailyChance: number; offerDays: number;
+    maxOpen: number; minGapDays: number; hourlyChance: number; offerDays: number;
     weights: Record<RequestType, number>;
     fetch: { goods: FetchGood[]; famineGoods: FetchGood[]; premium: number; days: number; ask: string[]; thanks: string[] };
     loan: { amounts: number[]; interest: number; days: number; offerDays: number; ask: string[]; thanks: string[] };
