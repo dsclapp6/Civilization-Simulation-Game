@@ -214,9 +214,9 @@ export function updateAgent(z: Zone, a: Agent, dt: number): void {
   const v = Math.sqrt(a.dx * a.dx + a.dz * a.dz) / dt;
   a.speed = v;
   d.moveSpeed = v * z.clockSpeed;
-  // speech bubble
+  // speech bubble: a spoken line replaces the nameplate while it lasts
   if (a.speech !== null) {
-    if (z.zoneT >= a.speechUntil) { a.speech = null; d.label = z.debugLabels ? a.intentLabel : undefined; } else d.label = a.speech;
+    if (z.zoneT >= a.speechUntil) { a.speech = null; z.showPlate(a); } else d.label = a.speech;
   } else if (z.debugLabels) d.label = `${a.person.first}: ${a.intentLabel}`;
 }
 
