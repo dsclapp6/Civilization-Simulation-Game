@@ -28,7 +28,7 @@ const GradeShader = {
       vec4 c = texture2D(tDiffuse, vUv);
       float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
       c.rgb = mix(vec3(l), c.rgb, uSaturation);
-      c.rgb *= vec3(1.0 + uWarmth, 1.0, 1.0 - uWarmth);
+      c.rgb *= vec3(1.0 + uWarmth, 1.0 + uWarmth * 0.3, 1.0 - uWarmth * 1.1);
       vec2 d = vUv - 0.5;
       float v = 1.0 - uVignette * smoothstep(0.25, 0.85, dot(d, d) * 2.2);
       gl_FragColor = vec4(c.rgb * v, c.a);
@@ -61,8 +61,8 @@ export class PostFx {
   }
 
   update(dusk: number, night: number): void {
-    this.grade.uniforms.uWarmth.value = dusk * 0.035 - night * 0.02;
-    this.grade.uniforms.uSaturation.value = 1.05 + dusk * 0.06 - night * 0.08;
+    this.grade.uniforms.uWarmth.value = dusk * 0.14 - night * 0.02;
+    this.grade.uniforms.uSaturation.value = 1.05 + dusk * 0.14 - night * 0.08;
     this.bloom.strength = 0.22 + night * 0.25 + dusk * 0.08;
   }
 

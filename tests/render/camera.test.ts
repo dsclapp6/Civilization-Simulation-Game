@@ -57,6 +57,29 @@ describe('camera rig', () => {
     expect(rig.camera.position.y).toBeLessThan(1.55 + 9 * Math.sin(0.3) + 0.3);
   });
 
+  it('swings round a tall narrow wall behind the character instead of pulling in beside it', () => {
+    const box = new THREE.Box3(new THREE.Vector3(497.5, 0, 489), new THREE.Vector3(502.5, 14, 496));
+    const hit = new THREE.Vector3();
+    const flat = { heightAt: () => 0, worldSize: 16000, raycastBuildings: (ray: THREE.Ray, max: number) => {
+      const p = ray.intersectBox(box, hit);
+      const d = p ? p.distanceTo(ray.origin) : null;
+      return d !== null && d <= max ? d : null;
+    } };
+    const rig = new CameraRig(16 / 9, flat);
+    rig.yaw = 0; rig.pitch = 0.3; rig.distance = 9;
+    const focus = new THREE.Vector3(500, 0, 499);
+    for (let i = 0; i < 120; i++) rig.update(1 / 30, focus);
+    const head = new THREE.Vector3(500, 1.55, 499);
+    // kept most of the boom, outside the wall, and the controls follow what is on screen
+    expect(rig.camera.position.distanceTo(head)).toBeGreaterThan(6);
+    expect(box.containsPoint(rig.camera.position)).toBe(false);
+    expect(Math.abs(rig.getYaw())).toBeGreaterThan(0.3);
+    // in the open it swings back
+    const open = new THREE.Vector3(800, 0, 800);
+    for (let i = 0; i < 300; i++) rig.update(1 / 30, open);
+    expect(Math.abs(rig.getYaw())).toBeLessThan(0.05);
+  });
+
   it('moves over the right shoulder while aiming, so the screen centre is clear of the head', () => {
     const flat = { heightAt: () => 0, worldSize: 16000 };
     const rig = new CameraRig(16 / 9, flat);

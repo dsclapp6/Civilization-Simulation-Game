@@ -105,7 +105,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
   const rig = new CameraRig(1, {
     heightAt,
     worldSize: world.size,
-    raycastBuildings: (ray, maxDist) => buildings.raycast(ray, maxDist)?.distance ?? null,
+    raycastBuildings: (ray, maxDist, pad) => buildings.raycast(ray, maxDist, pad)?.distance ?? null,
   });
   rig.autoMapZoom = opts.autoMapZoom !== false;
   const camera = rig.camera;
@@ -265,7 +265,10 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     const tint = terrain.uniforms.uGrassTint.value.setHex(seasonHex[season]).lerp(tmpColor.setHex(seasonHex[next]), smoothstep(0.6, 1, seasonProgress));
     const lum = tint.r * 0.2126 + tint.g * 0.7152 + tint.b * 0.0722;
     tint.multiplyScalar(1 / Math.max(1e-3, lum));
-    terrain.uniforms.uGrassTintStrength.value = 0.38;
+    // golden hour: open ground turns honey-gold instead of staying a dark green
+    const goldenAmt = atmo.dusk * (1 - atmo.night) * (1 - atmo.overcast);
+    if (goldenAmt > 0.001) tint.lerp(tmpColor.setRGB(1.75, 1.3, 0.5).multiplyScalar(1.12), goldenAmt * 0.85);
+    terrain.uniforms.uGrassTintStrength.value = 0.38 + 0.4 * goldenAmt;
     terrain.uniforms.uSnowCover.value = weather.snowCover;
     const targetWet = clamp(weather.rain * 1.3, 0, 1);
     wetness += (targetWet - wetness) * (1 - Math.exp(-dt * (targetWet > wetness ? 0.25 : 0.04)));

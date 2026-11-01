@@ -24,7 +24,7 @@ export function createSharedUniforms(): SharedUniforms {
     uSnow: { value: 0 },
     uNight: { value: 0 },
     uGrassTint: { value: new THREE.Color(1, 1, 1) },
-    uSnowColor: { value: new THREE.Color(0xf4f7fb) },
+    uSnowColor: { value: new THREE.Color(0xe6ebf2) },
   };
 }
 

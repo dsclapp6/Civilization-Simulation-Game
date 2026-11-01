@@ -238,7 +238,9 @@ export function computeAtmosphere(input: AtmosphereInput, palette: Palette, out:
   const sunI = SUN_NOON * dayAmt * (0.92 + 0.08 * (1 - golden)) * (1 - overcast * 0.72);
   if (sh > -0.02) {
     out.lightDir.copy(out.sunDir);
-    if (out.lightDir.y < 0.02) out.lightDir.y = 0.02;
+    // a very low sun lights open ground at a grazing angle and leaves it dark green: keep the key a little
+    // higher than the disc so golden hours read golden (shadows stay long, ~4x)
+    out.lightDir.y = Math.max(out.lightDir.y, 0.02, 0.24 * smoothstep(-0.02, 0.1, sh) * (1 - smoothstep(0.1, 0.3, sh)) + 0.02);
     out.lightDir.normalize();
     out.lightColor.setHex(palette.sun.day).lerp(_b.setHex(palette.sun.dusk), golden * 0.85);
     out.lightIntensity = sunI;
@@ -255,17 +257,17 @@ export function computeAtmosphere(input: AtmosphereInput, palette: Palette, out:
   }
 
   // ---- hemisphere: cool sky fill, warmed at golden hour, deep blue at night ----
-  out.hemiSky.setHex(0xbfd9ef).lerp(_a.setHex(0xe8b896), golden * dayAmt * 0.6).lerp(_b.setHex(palette.ambient.night), artNight);
-  out.hemiGround.setHex(HEMI_GROUND).lerp(_c.setHex(0xa8764a), golden * dayAmt * 0.45).lerp(_a.setHex(0x1e2433), artNight);
+  out.hemiSky.setHex(0xbfd9ef).lerp(_a.setHex(0xf2b98a), golden * dayAmt * 0.85).lerp(_b.setHex(palette.ambient.night), artNight);
+  out.hemiGround.setHex(HEMI_GROUND).lerp(_c.setHex(0xb98048), golden * dayAmt * 0.7).lerp(_a.setHex(0x1e2433), artNight);
   // overcast skies are one big soft light: the fill rises as the sun goes
-  out.hemiIntensity = (HEMI_DAY * (0.3 + 0.7 * dayAmt) * (1 + overcast * 0.3)) * (1 - artNight) + 1.02 * artNight;
+  out.hemiIntensity = (HEMI_DAY * (0.3 + 0.7 * dayAmt) * (1 + overcast * 0.3 + golden * dayAmt * 0.16)) * (1 - artNight) + 1.02 * artNight;
 
   // ---- sky fill: the bright sky opposite the sun (bluer at golden hour), none at night ----
   {
     const sd = out.sunDir;
     const hz = Math.hypot(sd.x, sd.z) || 1;
     out.fillDir.set(-sd.x / hz, 0, -sd.z / hz).multiplyScalar(0.8).setY(0.6).normalize();
-    out.fillColor.setHex(0xc9dcf0).lerp(_a.setHex(0x9fb2dc), golden * 0.7);
+    out.fillColor.setHex(0xc9dcf0).lerp(_a.setHex(0xc2b4cc), golden * 0.7);
     out.fillIntensity = FILL_DAY * dayAmt * (1 - overcast * 0.6);
   }
   out.exposure = 1.0 + overcast * 0.06 + golden * dayAmt * 0.12 * (1 - overcast);

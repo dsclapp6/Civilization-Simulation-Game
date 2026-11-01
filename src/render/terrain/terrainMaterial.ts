@@ -112,7 +112,7 @@ ${far ? `if (texture2D(uMask, vTWorld.xz / uWorldSize).r > 0.5) discard;` : ''}`
   float alt = smoothstep(uSnowLine - 160.0, uSnowLine + 120.0, vTWorld.y + (n - 0.5) * 160.0);
   float snow = max(seasonal, alt * smoothstep(0.3, 0.62, vTUp));
   snow *= smoothstep(-0.3, 0.4, vTWorld.y);
-  base = mix(base, vec3(0.78, 0.82, 0.88) + n * 0.07, clamp(snow, 0.0, 1.0));
+  base = mix(base, vec3(0.60, 0.63, 0.69) + n * 0.09, clamp(snow, 0.0, 1.0));
   // rain: darker, slightly more saturated ground
   float wet = uWetness * vTMat.z * (1.0 - snow);
   base = mix(base, base * base * 1.6, wet * 0.35);

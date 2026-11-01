@@ -9,13 +9,15 @@ import type { CameraMode } from '../types';
 export interface CameraEnv {
   heightAt(x: number, z: number): number;
   /** Distance along the ray to the first building box, or null. */
-  raycastBuildings?(ray: THREE.Ray, maxDist: number): number | null;
+  raycastBuildings?(ray: THREE.Ray, maxDist: number, pad?: number): number | null;
   worldSize: number;
 }
 
 interface Pose { pos: THREE.Vector3; quat: THREE.Quaternion; fov: number }
 
 const FOLLOW_MIN = 2.2;
+/** Eaves, bulging thatch and jetties overhang a building's footprint box by this much (m); the boom keeps clear of it. */
+const EAVE_PAD = 0.6;
 const FOLLOW_MAX = 140;
 const MAP_MIN = 450;
 /** Aiming: shoulder offset to the right (m) and boom length. */
@@ -23,6 +25,8 @@ const AIM_SHOULDER = 0.62;
 const AIM_DISTANCE = 3.2;
 /** Extra boom pitches tried, in order, when the way back is blocked. */
 const PITCH_LIFTS = [0, 0.12, 0.24, 0.36];
+/** Yaw swings (rad, either side) tried before the boom is pulled in close to a wall. */
+const YAW_SWINGS = [0.35, 0.7, 1.05];
 const MAP_MAX = 30000;
 
 export class CameraRig {
@@ -59,9 +63,14 @@ export class CameraRig {
   private readonly up = new THREE.Vector3(0, 1, 0);
   private readonly focusTmp = new THREE.Vector3();
   private readonly probe = new THREE.Vector3();
+  private readonly probe2 = new THREE.Vector3();
   private readonly side = new THREE.Vector3();
   /** Extra pitch (smoothed) that lifts the boom over a roof or wall behind the character. */
   private pitchLift = 0;
+  /** Smoothed yaw swing (rad) that takes the boom round a tall wall behind the character, its target and the re-search timer. */
+  private yawOff = 0;
+  private yawTarget = 0;
+  private yawSearchT = 0;
   /** Over-the-shoulder aim blend (0 normal follow … 1 aiming a bow or crossbow) and its target. */
   private aimK = 0;
   private aimWant = false;
@@ -189,7 +198,7 @@ export class CameraRig {
   getYaw(): number {
     if (this.mode === 'free') return this.freeYaw;
     if (this.mode === 'map') return this.mapYaw;
-    return this.yaw;
+    return this.mode === 'follow' ? this.yaw + this.yawOff : this.yaw;
   }
 
   /** 0 at street level … 1 high above (strategic view). */
@@ -244,16 +253,39 @@ export class CameraRig {
         else if (k === 3) o.y += 0.3;
         this.ray.origin.copy(o);
         this.ray.direction.copy(dir);
-        const hit = this.env.raycastBuildings(this.ray, want);
+        const hit = this.env.raycastBuildings(this.ray, want, EAVE_PAD);
         if (hit !== null) allowed = Math.min(allowed, Math.max(1.2, hit - 0.45));
       }
     }
     return allowed;
   }
 
-  private boomDir(pitch: number, out: THREE.Vector3): THREE.Vector3 {
+  private boomDir(pitch: number, out: THREE.Vector3, yawOff = this.yawOff): THREE.Vector3 {
     const cp = Math.cos(pitch), sp = Math.sin(pitch);
-    return out.set(-Math.sin(this.yaw) * cp, sp, -Math.cos(this.yaw) * cp);
+    const yaw = this.yaw + yawOff;
+    return out.set(-Math.sin(yaw) * cp, sp, -Math.cos(yaw) * cp);
+  }
+
+  /**
+   * Tall walls right behind the character (a townhouse across a lane): before the boom is pulled in
+   * close, look for a clear yaw swing to either side (cheapest swing and lowest rise that keep most of
+   * the wanted distance). Returns the swing in radians, 0 when straight back is fine.
+   */
+  private searchYaw(head: THREE.Vector3, want: number, need: number): number {
+    let bestOff = 0, bestCost = Infinity;
+    const offs = [0];
+    for (const a of YAW_SWINGS) { offs.push(a, -a); }
+    for (const off of offs) {
+      for (const l of PITCH_LIFTS) {
+        const p = this.pitch + l;
+        if (l > 0 && p > 1.3) break;
+        const reach = this.boomReach(head, this.boomDir(p, this.probe2, off), want);
+        // mild preference for the swing already in use (no flip-flopping) and for staying put
+        const cost = (off === 0 ? 0 : 1 + Math.abs(off)) + l * 4 - (off === this.yawTarget ? 0.35 : 0);
+        if (reach >= need) { if (cost < bestCost) { bestCost = cost; bestOff = off; } break; }
+      }
+    }
+    return Number.isFinite(bestCost) ? bestOff : 0;
   }
 
   private computeFollow(out: Pose, focus: THREE.Vector3, dt: number): void {
@@ -278,6 +310,17 @@ export class CameraRig {
     // pulls in ends up in the character's hair. Prefer to crane up over the obstacle: find the
     // smallest extra pitch that keeps most of the wanted distance, and ease towards it.
     const want = this.distance + (Math.min(this.distance, AIM_DISTANCE) - this.distance) * this.aimK;
+    // wanted reach for the boom to count as clear (shared by the yaw search and the pitch lift below)
+    const need = Math.min(want - 0.3, Math.max(want * 0.8, 3.5));
+    if (want > 4) {
+      this.yawSearchT -= dt;
+      if (this.yawSearchT <= 0 || dt === 0) {
+        this.yawSearchT = 0.25;
+        this.yawTarget = this.searchYaw(head, want, need);
+        if (dt === 0) this.yawOff = this.yawTarget;
+      }
+      this.yawOff += (this.yawTarget - this.yawOff) * (dt > 0 ? 1 - Math.exp(-dt * (this.yawTarget === 0 ? 1.6 : 4)) : 1);
+    } else { this.yawTarget = 0; this.yawOff *= dt > 0 ? Math.exp(-dt * 6) : 0; }
     let lift = 0;
     if (dt > 0 || this.pitchLift === 0) {
       let best = -1, bestLift = 0;
@@ -286,7 +329,7 @@ export class CameraRig {
         if (l > 0 && p > 1.3) break;
         const reach = this.boomReach(head, this.boomDir(p, this.tmp), want);
         if (reach > best + 0.6 + l * 4) { best = reach; bestLift = l; }
-        if (reach >= Math.min(want - 0.3, Math.max(want * 0.8, 3.5))) { bestLift = l; break; }
+        if (reach >= need) { bestLift = l; break; }
       }
       lift = bestLift;
       // rise quickly, settle back slowly
