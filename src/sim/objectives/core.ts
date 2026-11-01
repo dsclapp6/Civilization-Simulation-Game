@@ -166,7 +166,7 @@ export function newObjSave(): ObjSave {
 }
 
 /** Auto-tracking order: what the player most needs to see first. */
-const SOURCE_RANK: Record<ObjectiveSource, number> = { story: 0, tutorial: 1, job: 2, request: 3, chore: 4, career: 5, goal: 6 };
+const SOURCE_RANK: Record<ObjectiveSource, number> = { story: 0, tutorial: 1, job: 2, chore: 3, request: 4, career: 5, goal: 6 };
 /** How long finished objectives stay in the list (days). */
 const KEEP_FINISHED = 3;
 const MAX_LIST = 48;

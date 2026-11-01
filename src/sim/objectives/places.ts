@@ -316,8 +316,7 @@ export function describePerson(O: Obj, p: Person): string {
   const me = O.me;
   if (!me) return p.first;
   const rel = O.deps.social.relationLabel(me.id, p.id);
-  if (rel && rel.toLowerCase().includes(p.first.toLowerCase())) return rel;
-  if (rel && !/^a stranger/i.test(rel)) return `${p.first}, ${rel}`;
+  if (rel && !/a stranger/i.test(rel)) return rel.toLowerCase().includes(p.first.toLowerCase()) ? rel : `${p.first}, ${rel}`;
   // a stranger is better described by their trade
   const role = roleLabel(p.career, p.careerStage, p.sex).toLowerCase();
   if (role && !['boy', 'girl', 'householder', 'child'].includes(role)) return `${p.first}, ${/^[aeiou]/.test(role) ? 'an' : 'a'} ${role}`;

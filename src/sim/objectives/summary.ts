@@ -67,9 +67,12 @@ function workClass(id: string): string {
   return id;
 }
 
+/** Actions that are not work for the day's record: talk, rest, meals, panels. */
+const NOT_WORK = /^(social\.(talk|greet|play)|sleep|rest|sit|stand|follow|unfollow|mount|dismount|eat\.|manage\.|trade\.|politics\.|command\.|arms\.(attack|draw))/;
+
 /** Notes a finished action of the player's. */
 export function logAction(O: Obj, e: Extract<ActionEvent, { type: 'completed' }>): void {
-  if (!e.outcome.ok) return;
+  if (!e.outcome.ok || NOT_WORK.test(e.option.id)) return;
   const log = O.save.log;
   const o = e.option;
   const t = o.target;

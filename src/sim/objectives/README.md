@@ -22,7 +22,7 @@ npx vitest run tests/sim/objectives         # the module's tests (about 80)
 | `story` | `story.ts` | a dear one gravely ill (visit, pray), the wedding feast (church, the morning after, a window), a child born (home), the lord's levy call (`military.service().call`) | |
 
 Auto-tracking (`core.retrack`): the player's pick (`track(id)`) while it lives, else story > tutorial > job >
-request > chore > career > goal, then earliest due. `suggestions()` (`suggest.ts`): the tracked step, then hunger /
+chore > request > career > goal, then earliest due. `suggestions()` (`suggest.ts`): the tracked step, then hunger /
 exhaustion (starving or spent outranks the tracked step), the dark (home), the market day (what to sell), the holy
 day (Mass, the butts), a villager waiting for a word, a perk to choose, and honest ideas when nothing presses.
 
