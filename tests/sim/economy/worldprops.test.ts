@@ -112,6 +112,35 @@ describe('world props', () => {
     expect(onStrip('stook')).toBe(0);
   }, 60000);
 
+  it('lays the sheaves behind the reaper: inside the part of the strip cut so far, from its start', () => {
+    const { sim } = econSim({ seed: 'props' });
+    const { strips } = makeFarmer(sim, { age: 15, strips: 2, role: 1, strength: 12 });
+    const id = strips[0];
+    const ws = sim.world.strips[id];
+    const c = ws.poly.reduce((a, p) => ({ x: a.x + p.x / 4, z: a.z + p.z / 4 }), { x: 0, z: 0 });
+    sim.view.setSource('focus', () => c);
+    const st = sim.state.strips.get(id)!;
+    st.state = 'ripe'; st.crop = 'barley'; st.growth = 1;
+    sim.state.touchStrip(st);
+    const f = stripFrame(ws.poly, { sx: 0, sz: 0, ux: 0, uz: 1, len: 1, vx: 1, vz: 0, width: 1 });
+    const along = (): number[] => sim.view.worldProps!()
+      .filter((p) => p.kind === 'sheaf' && Math.floor((p.id - 1e9) / 64) === id)
+      .map((p) => ((p.x - f.sx) * f.ux + (p.z - f.sz) * f.uz) / f.len);
+    expect(along().length).toBe(0);
+    let before = 0;
+    for (let bout = 1; bout <= 3; bout++) {
+      const o = optionsFor(sim, { kind: 'strip', id }).find((x) => x.enabled && x.id === 'farm.reap')!;
+      expect(perform(sim, o).ok).toBe(true);
+      const done = peekExtra(sim.state.ext.farm as never, id)?.p ?? 0;
+      const ts = along();
+      expect(ts.length).toBeGreaterThan(0);
+      expect(ts.length).toBeGreaterThanOrEqual(before);
+      for (const t of ts) { expect(t).toBeGreaterThanOrEqual(0); expect(t).toBeLessThanOrEqual(Math.max(0.1, done) + 1e-9); }
+      before = ts.length;
+    }
+    expect(Math.max(...along())).toBeLessThan(0.6); // three bouts of seven: the far half is still standing corn
+  });
+
   it('leaves a stump where a tree was felled, and logs until the woodcutter has gone', () => {
     const { sim } = econSim({ seed: 'props' });
     const { player } = makeFarmer(sim, { age: 16, strips: 1, role: 1, strength: 12 });

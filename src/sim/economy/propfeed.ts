@@ -222,6 +222,8 @@ export class PropFeed {
     if ((prev === 'ripe' || prev === 'harvested') && stp.state === 'stubble' && !(ex && (ex.k ?? 0) > 0.5)) this.stookUntil.set(id, now + 0.7);
     this.seen.set(id, stp.state);
     let sheaves = 0, stooks = 0;
+    /** How much of the strip, from its start, the props lie along (the part reaped so far while the reaping is on). */
+    let span = 1;
     const k = ex?.k ?? 0;
     const task = ex && (ex.p ?? 0) > 0.001 ? nextTask(E, stp) : null;
     if (stp.state === 'harvested' && k > 0.5) {
@@ -232,7 +234,9 @@ export class PropFeed {
     } else if (stp.state === 'stubble' && k > 0.5) {
       stooks = Math.max(1, Math.min(12, Math.ceil(k / 8)));
     } else if (stp.state === 'ripe' && task === 'reap') {
+      // behind the reaper: the cut band runs from the strip's start as far as the reaping has got
       sheaves = Math.round((ex?.p ?? 0) * 10);
+      span = Math.max(0.1, Math.min(1, ex?.p ?? 0));
     } else if (stp.state === 'stubble' && this.stookUntil.has(id)) {
       stooks = 5;
     }
@@ -241,7 +245,7 @@ export class PropFeed {
     const total = sheaves + stooks;
     for (let i = 0; i < total; i++) {
       // stooks first along the strip from its start, then the sheaves still lying beyond them; two staggered rows
-      const t = (i + 0.5) / total;
+      const t = ((i + 0.5) / total) * span;
       const lat = ((i % 2 === 0 ? -1 : 1) * 0.18 + (hash01(id, i, 7) - 0.5) * 0.12) * f.width;
       const x = f.sx + f.ux * f.len * t + f.vx * lat, z = f.sz + f.uz * f.len * t + f.vz * lat;
       const isStook = i < stooks;
