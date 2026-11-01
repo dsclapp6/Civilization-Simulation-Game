@@ -6,8 +6,8 @@ import type { P2 } from '../core/math';
 import { yawTo } from '../core/math';
 import { DAY_SECONDS, isNight, toDate } from '../core/time';
 import type {
-  AnimalDrawItem, BuildingView, CharacterDrawItem, ClockView, FxEvent, MapMarker, PlayerView, ProjectileDrawItem,
-  SimView, StripView, ViewMode, WeatherView,
+  AnimalDrawItem, BuildingView, CharacterDrawItem, ClockView, FloatText, FxEvent, MapMarker, PlayerView, ProjectileDrawItem,
+  SimView, StripView, ViewMode, WeatherView, WorldMarker, WorldPropView,
 } from '../core/view';
 import type { WorldModel } from '../world/types';
 import { AppearanceCache } from './appearance';
@@ -26,6 +26,10 @@ export interface ViewSources {
   focus?: () => P2;
   mode?: () => ViewMode;
   mapMarkers?: () => readonly MapMarker[];
+  worldProps?: () => readonly WorldPropView[];
+  worldPropsVersion?: () => number;
+  worldMarkers?: () => readonly WorldMarker[];
+  drainFloaters?: () => readonly FloatText[];
 }
 
 export interface ViewHost {
@@ -37,6 +41,9 @@ export interface ViewHost {
 const EMPTY_ANIMALS: readonly AnimalDrawItem[] = [];
 const EMPTY_PROJECTILES: readonly ProjectileDrawItem[] = [];
 const EMPTY_FX: readonly FxEvent[] = [];
+const EMPTY_PROPS: readonly WorldPropView[] = [];
+const EMPTY_MARKERS: readonly WorldMarker[] = [];
+const EMPTY_FLOATERS: readonly FloatText[] = [];
 
 /** World position in front of a building's door (door is on local +z, yaw `rot`). */
 export function doorPoint(b: BuildingState, extra = 1.5): { x: number; z: number; yaw: number } {
@@ -295,6 +302,12 @@ export class SimViewImpl implements SimView {
 
   stripsVersion(): number { this.refreshStrips(); return this.stripsVer; }
   strips(): readonly StripView[] { this.refreshStrips(); return this.stripList; }
+
+  // ---- clarity & feedback sources (empty unless a module installs them) ----
+  worldPropsVersion(): number { return this.sources.worldPropsVersion ? this.sources.worldPropsVersion() : 0; }
+  worldProps(): readonly WorldPropView[] { return this.sources.worldProps ? this.sources.worldProps() : EMPTY_PROPS; }
+  worldMarkers(): readonly WorldMarker[] { return this.sources.worldMarkers ? this.sources.worldMarkers() : EMPTY_MARKERS; }
+  drainFloaters(): readonly FloatText[] { return this.sources.drainFloaters ? this.sources.drainFloaters() : EMPTY_FLOATERS; }
 
   // ---- felled scatter ----
   felledVersion(): number { return this.felledVer; }

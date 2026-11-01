@@ -18,7 +18,7 @@ describe('calendar work is spread over frames', () => {
     }
     const hours: number[] = [];
     sim.events.on('hourStarted', (h) => hours.push(h.hourIndex));
-    for (let f = 0; f < 600; f++) {
+    for (let f = 0; f < 4000; f++) { // 200 s: about eight game hours of a 10-minute day
       perFrame = 0;
       sim.step(0.05);
       if (perFrame > maxPerFrame) maxPerFrame = perFrame;

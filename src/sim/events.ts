@@ -60,6 +60,11 @@ export type SimEvents = {
   request: { id: number; from: PersonId; text: string };
   tech: { house: number; tech: string; person: PersonId };
 
+  // ---- clarity pass ----
+  objective: { phase: 'added' | 'progress' | 'done' | 'failed' | 'expired'; id: number; title: string };
+  /** The player's day closed (they slept, or midnight passed): the summary is ready (objectives.daySummary). */
+  dayEnd: { day: number };
+
   /** Something worth an immediate autosave happened. */
   important: { reason: string };
   saved: { records: number; bytes: number; ms: number };

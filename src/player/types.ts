@@ -18,12 +18,16 @@ export const KEYMAP = {
     interact: 'KeyE', mount: 'KeyF', dodge: 'Space', speed1: 'Digit1', speed2: 'Digit2', speed3: 'Digit3', pause: 'KeyP',
     /** Stop the timed action in progress (added by the player module; moving also cancels). */
     cancel: 'KeyQ',
+    /** Clarity pass: draw / sheathe your weapon (combat mouse-look while drawn). */
+    weapon: 'KeyG',
   },
   ui: {
     menu: 'Escape', character: 'Tab', inventory: 'KeyI', ledger: 'KeyJ', map: 'KeyM', command: 'KeyC',
     family: 'KeyH', chronicle: 'KeyL', rest: 'KeyZ',
     /** Wave 4 (UI): realm and politics, House techniques, the requests journal, wounds, help and controls. */
     politics: 'KeyK', techs: 'KeyT', requests: 'KeyR', wounds: 'KeyB', help: 'F1',
+    /** Clarity pass: the journal (objectives, today, people you know) and the minimap toggle. */
+    journal: 'KeyO', minimap: 'KeyN',
   },
 } as const;
 

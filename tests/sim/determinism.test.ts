@@ -26,7 +26,7 @@ describe('determinism', () => {
     expect(hashState(a.state)).toBe(hashState(b.state));
     play(a, 3000);
     play(b, 3000);
-    expect(a.absDay).toBeGreaterThan(10);
+    expect(a.absDay).toBeGreaterThan(1); // 10-minute days: a few days pass in these 3000 frames
     expect(a.absDay).toBe(b.absDay);
     expect(hashState(a.state)).toBe(hashState(b.state));
     // and keeps doing so for years of macro life

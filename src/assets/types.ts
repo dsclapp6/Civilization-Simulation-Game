@@ -65,7 +65,9 @@ export type PropKind =
   | 'fence_wattle' | 'fence_rail' | 'gate' | 'trough' | 'bench' | 'table' | 'anvil' | 'grindstone' | 'loom'
   | 'market_goods' | 'banner_pole' | 'wayside_cross' | 'gravestone' | 'scarecrow' | 'beehive' | 'archery_target'
   | 'pell' | 'campfire' | 'cauldron' | 'plough' | 'harrow' | 'boat' | 'signpost' | 'washing_line' | 'dung_heap'
-  | 'well_bucket' | 'lantern_post';
+  | 'well_bucket' | 'lantern_post'
+  // results of work (clarity pass): a stook of sheaves, a single sheaf, a hay cock, a felled tree's stump and logs
+  | 'stook' | 'sheaf' | 'hay_cock' | 'stump' | 'logs';
 
 /** Shared colour palette so terrain, models and UI agree. Values are 0xRRGGBB. */
 export interface Palette {

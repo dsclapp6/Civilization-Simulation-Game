@@ -17,6 +17,7 @@ import { installCombat } from '../combat';
 import { installPolitics } from '../sim/politics';
 import { installMilitary } from '../sim/military';
 import { installAdvancement } from '../sim/advancement';
+import { installObjectives } from '../sim/objectives';
 import type { GameServices, QualitySetting, UiRendererControls } from '../ui/types';
 import { wrapWithDevZone } from './devZone';
 
@@ -71,6 +72,8 @@ export async function buildSession(sim: Simulation, o: SessionOptions): Promise<
   installMilitary(sim, w3);
   installCombat(sim, w3);
   installAdvancement(sim, w3);
+  // clarity pass: what to do now, markers, day summaries
+  const objectives = installObjectives(sim, w3);
   // the camera looks where the character faces: at the start, and after taking over someone else
   const alignCamera = (): void => {
     const b = player.body();
@@ -90,7 +93,7 @@ export async function buildSession(sim: Simulation, o: SessionOptions): Promise<
   const t5 = performance.now();
   await o.progress(0.95, 'Almost there…');
 
-  const services: GameServices = { sim, economy, social, zone, player };
+  const services: GameServices = { sim, economy, social, zone, player, objectives };
   return {
     loadMs: { assets: t1 - t0, renderer: t2 - t1, modules: t3 - t2, settle: t5 - t4 },
     sim, services, renderer, assets, controls: makeControls(renderer),

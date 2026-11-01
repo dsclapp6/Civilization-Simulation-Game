@@ -1,8 +1,8 @@
 // Calendar constants and conversions (SPEC §2). Time is tracked as an absolute
 // float day count since the run began: day 0.0 = dawn-ish midnight of Year 1, Spring.
 
-/** Real seconds per in-game day at 1x speed. Single tuning constant. */
-export const DAY_SECONDS = 60;
+/** Real seconds per in-game day at 1x speed. Single tuning constant (10 minutes: about 7 min of daylight). */
+export const DAY_SECONDS = 600;
 export const DAYS_PER_SEASON = 4;
 export const SEASONS_PER_YEAR = 4;
 export const DAYS_PER_YEAR = DAYS_PER_SEASON * SEASONS_PER_YEAR; // 16

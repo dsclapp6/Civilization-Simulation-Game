@@ -25,7 +25,7 @@ async function savedSim(seed = 'save'): Promise<{ sim: Simulation; store: Memory
 describe('save and load', () => {
   it('round-trips the whole run: the loaded state equals the saved one, entity by entity', async () => {
     const { sim, store } = await savedSim('rt');
-    expect(sim.absDay).toBeGreaterThan(0.5);
+    expect(sim.absDay).toBeGreaterThan(0.05); // 40 s of a 10-minute day
     const loaded = await Simulation.load(store, gen);
     expect(loaded).not.toBeNull();
     const a = sim.state, b = loaded!.state;

@@ -90,6 +90,9 @@ function post(b: MeshBuilder, x: number, z: number, h: number, w = 0.12, col = W
   b.box(x - w / 2, -0.4, z - w / 2, x + w / 2, h, z + w / 2, { side: col, top: shade(col, 1.1) });
 }
 
+// Stand-ins for the clarity-pass prop kinds until they get their own models (results of work).
+const STAND_IN: Partial<Record<PropKind, PropKind>> = { stook: 'haystack', sheaf: 'haystack', hay_cock: 'haystack', stump: 'woodpile', logs: 'woodpile' };
+
 const P: Record<PropKind, PropFn> = {
   cart(b, r, lod) {
     // Two-wheeled cart with shafts.
@@ -543,6 +546,11 @@ const P: Record<PropKind, PropFn> = {
     b.cyl(0, 0.55, 2.3, 2.46, 0.16, 0.02, 4, COL.iron, { rot: Math.PI / 4 });
     void r; void lod;
   },
+  stook(b, r, lod, ...rest) { P[STAND_IN.stook as PropKind](b, r, lod, ...rest); },
+  sheaf(b, r, lod, ...rest) { P[STAND_IN.sheaf as PropKind](b, r, lod, ...rest); },
+  hay_cock(b, r, lod, ...rest) { P[STAND_IN.hay_cock as PropKind](b, r, lod, ...rest); },
+  stump(b, r, lod, ...rest) { P[STAND_IN.stump as PropKind](b, r, lod, ...rest); },
+  logs(b, r, lod, ...rest) { P[STAND_IN.logs as PropKind](b, r, lod, ...rest); },
 };
 
 function pick<T>(r: () => number, arr: readonly T[]): T { return arr[Math.floor(r() * arr.length) % arr.length]; }

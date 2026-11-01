@@ -62,16 +62,16 @@ describe('clock hooks', () => {
     expect(rb.log).toEqual(ra.log);
   });
 
-  it('advances 1 day per 60 s at 1x, faster at 3x/8x, not when paused, slower in action time', () => {
+  it('advances 1 day per DAY_SECONDS (10 min) at 1x, faster at 3x/8x, not when paused, slower in action time', () => {
     const c = mk();
-    expect(DAY_SECONDS).toBe(60);
-    c.advance(60);
+    expect(DAY_SECONDS).toBe(600);
+    c.advance(DAY_SECONDS);
     expect(c.absDay).toBeCloseTo(1, 9);
     c.setSpeed(8);
-    c.advance(60);
+    c.advance(DAY_SECONDS);
     expect(c.absDay).toBeCloseTo(9, 9);
     c.setSpeed(3);
-    c.advance(20);
+    c.advance(DAY_SECONDS / 3);
     expect(c.absDay).toBeCloseTo(10, 9);
     c.pause();
     expect(c.advance(100)).toBe(0);
@@ -80,7 +80,7 @@ describe('clock hooks', () => {
     c.setActionTime(true);
     expect(c.calendarRate()).toBe(ACTION_TIME_FACTOR);
     const before = c.absDay;
-    c.advance(60);
+    c.advance(DAY_SECONDS);
     expect(c.absDay - before).toBeCloseTo(ACTION_TIME_FACTOR, 9);
   });
 

@@ -109,9 +109,19 @@ export interface CharacterDrawItem {
   highlight: 0 | 1 | 2 | 3;
   /** Short floating label (name or role) shown when close. */
   label?: string;
+  /** Second nameplate line: relation and role ("your father · farmer", "Wat's apprentice"). */
+  sublabel?: string;
+  /** Nameplate colour family (relationship to the player). */
+  labelTone?: LabelTone;
+  /** How far away (m) the nameplate shows; default the renderer's own (≈25 m). Larger for kin, quest people, the hovered one. */
+  labelRange?: number;
+  /** Mark above the head: someone with a task/request for the player ('quest'), or the tracked person ('track'). */
+  mark?: 'quest' | 'track';
   /** For anim 'sit': seat height in metres above the feet (bench, stool, throne). Omit/0 = sit on the ground. */
   seatHeight?: number;
 }
+
+export type LabelTone = 'player' | 'kin' | 'household' | 'friend' | 'rival' | 'enemy' | 'lord' | 'clergy' | 'stranger' | 'quest';
 
 export type AnimalAnim = 'idle' | 'graze' | 'walk' | 'trot' | 'run' | 'lie' | 'sleep' | 'eat' | 'attack' | 'hit' | 'dead';
 export interface AnimalDrawItem {
@@ -185,6 +195,50 @@ export interface StripView {
   /** 0..1 within the growth cycle. */
   growth: number;
   state: StripState;
+  /** The field task under way on this strip and how much of it is done (0..1): drawn as a partly ploughed,
+   *  sown or reaped strip (the worked part from the strip's first edge onwards). */
+  task?: StripTask;
+  work?: number;
+}
+
+export type StripTask = 'plough' | 'harrow' | 'sow' | 'weed' | 'reap' | 'mow' | 'bind' | 'carry' | 'glean';
+
+/** A loose thing in the world that shows the result of work: stooks of sheaves on a reaped strip, a growing
+ *  woodpile at home, sacks at the mill, a stump and logs where a tree was felled, stone at a quarry. */
+export interface WorldPropView {
+  id: number;
+  /** An asset PropKind (src/assets/types.ts). */
+  kind: string;
+  x: number;
+  z: number;
+  rot: number;
+  scale: number;
+  /** Stack size for piles (woodpile, sacks, stone): 1 = small … 8 = full. */
+  count?: number;
+}
+
+/** A place to point the player at: the tracked objective, home, work, a tracked person. Drawn as a beacon in
+ *  the world (renderer) and on the compass/minimap/map (UI). */
+export interface WorldMarker {
+  id: number;
+  kind: 'objective' | 'home' | 'work' | 'person' | 'place';
+  x: number;
+  z: number;
+  /** Height above the ground for the beacon (people: over the head). */
+  y?: number;
+  label: string;
+  color: number;
+  /** The tracked objective's marker is the prominent one. */
+  primary?: boolean;
+}
+
+/** A short floating text at a point in the world (gains at a work spot), drained like FX. */
+export interface FloatText {
+  x: number;
+  y: number;
+  z: number;
+  text: string;
+  tone: 'gain' | 'loss' | 'skill' | 'info';
 }
 
 export interface MapMarker {
@@ -260,4 +314,10 @@ export interface SimView {
   /** Scatter ids (trees, rocks) removed by players/NPCs; render must hide them. */
   felled(): ReadonlySet<number>;
   mapMarkers(): readonly MapMarker[];
+  // ---- clarity & feedback (optional: absent sources draw nothing) ----
+  worldPropsVersion?(): number;
+  worldProps?(): readonly WorldPropView[];
+  worldMarkers?(): readonly WorldMarker[];
+  /** Floating texts since the last call (drained). */
+  drainFloaters?(): readonly FloatText[];
 }
