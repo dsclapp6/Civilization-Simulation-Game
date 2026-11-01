@@ -15,6 +15,7 @@ import { attachObligationEvents, obligationsDaily, obligationsOf } from './oblig
 import { addOwned, capacityOf, ownedQty, takeOwned, weightOf, canCarry } from './own';
 import { announcePerkChoices, choosePerk, openChoices } from './perks';
 import { initFresh, registerSystems } from './systems';
+import { FloatFeed } from './floatfeed';
 import { PropFeed } from './propfeed';
 import { StripFeed } from './stripfeed';
 import { economyTopics } from './topics';
@@ -34,6 +35,8 @@ export interface EconomyRuntime extends EconomyApi {
   /** Throws goods away (the inventory's Drop button); `give(person, 0, key, qty)` does the same. */
   drop(person: PersonId, key: ItemKey | 'money', qty: number): Result;
   readonly econ: Econ;
+  /** The floating texts of the player's gains (view source `drainFloaters`); tests and tools can drive its clock. */
+  readonly floaters: FloatFeed;
   /** Removes every system, provider, topic and listener the economy installed. */
   dispose(): void;
 }
@@ -72,6 +75,11 @@ export function installEconomy(sim: Simulation, deps: EconomyDeps): EconomyRunti
   sim.view.setSource('worldPropsVersion', () => propFeed.version());
   offs.push(() => { sim.view.setSource('worldProps', undefined); sim.view.setSource('worldPropsVersion', undefined); });
 
+  // and floating texts for what the player's actions and trades bring
+  const floatFeed = new FloatFeed(E);
+  sim.view.setSource('drainFloaters', () => floatFeed.drain());
+  offs.push(() => { sim.view.setSource('drainFloaters', undefined); floatFeed.dispose(); });
+
   const noPerson: Result = { ok: false, reason: 'Nobody there' };
 
   /** Throws goods (or coins) away: they leave the pack and are gone. Whatever is no longer carried is also taken off the body. */
@@ -102,6 +110,7 @@ export function installEconomy(sim: Simulation, deps: EconomyDeps): EconomyRunti
 
   const api: EconomyRuntime = {
     econ: E,
+    floaters: floatFeed,
     dispose() { for (const o of offs.splice(0)) o(); },
 
     // ---- goods ----
