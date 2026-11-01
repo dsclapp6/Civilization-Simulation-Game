@@ -31,6 +31,8 @@ export const CHAINS: Readonly<Record<string, readonly string[]>> = (tutorialJson
 /** Tests turn this on so a missing key fails loudly; in play a missing key shows its name. */
 let strict = false;
 export function setStrictText(on: boolean): void { strict = on; }
+/** In tests an error in a listener fails the test; in play it is logged and the game goes on. */
+export function isStrict(): boolean { return strict; }
 
 /** Fills {placeholders}; unknown ones are left as they are (tests look for them). */
 export function fill(text: string, vars: Vars): string {

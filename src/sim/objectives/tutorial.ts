@@ -291,7 +291,12 @@ export function advanceTutorial(O: Obj): void {
     O.touch();
     return;
   }
-  if (O.save.list.some((o) => o.source === 'tutorial' && o.state === 'active')) return;
+  const live = O.save.list.find((o) => o.source === 'tutorial' && o.state === 'active');
+  if (live) {
+    // a stage nobody could get to (the neighbour keeps walking off, the shop is shut) does not hold the others up
+    if (O.day - live.born > 1.5 && !live.steps.some((s) => s.done || (s.progress ?? 0) > 0)) O.finish(live, 'expired');
+    return;
+  }
   const chain = CHAINS[t.cls] ?? CHAINS.farm;
   while (t.stage < chain.length) {
     const id = chain[t.stage];

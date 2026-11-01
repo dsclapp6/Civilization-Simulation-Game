@@ -16,6 +16,7 @@ import type { Wave3Deps } from '../wave3deps';
 import { advanceTutorial, startTutorial } from './tutorial';
 import { choreDone, expireOverdue, makeChores } from './chores';
 import { Obj, type ObjRec } from './core';
+import { isStrict } from './data';
 import { notablePlaces } from './directory';
 import { refreshGoals, retireGoals } from './goals';
 import { installMarkers } from './markers';
@@ -105,15 +106,23 @@ export function installObjectives(sim: Simulation, deps: Wave3Deps): ObjectivesR
   }
 
   // ---- events ----
+  // a fault in the objectives must never stop the simulation or the frame: it is logged, and the game goes on
+  const safe = <A extends unknown[]>(fn: (...a: A) => void): ((...a: A) => void) => (...a: A): void => {
+    try { fn(...a); } catch (err) {
+      if (isStrict()) throw err;
+      console.error('objectives:', err);
+    }
+  };
+  const on: Simulation['events']['on'] = (type, fn) => sim.events.on(type, safe(fn as (...a: unknown[]) => void) as never);
   const feed = (ev: Ev): void => { round(O, ev); follow(); };
 
-  offs.push(sim.events.on('action', (e: ActionEvent) => {
+  offs.push(on('action', (e: ActionEvent) => {
     if (e.type !== 'completed' || e.actor !== O.playerId) return;
     logAction(O, e);
     feed({ t: 'action', id: e.option.id, target: e.option.target, ok: e.outcome.ok });
     syncRequests(O);
   }));
-  offs.push(sim.events.on('conversation', (e) => {
+  offs.push(on('conversation', (e) => {
     if (e.actor !== O.playerId) return;
     if (e.phase === 'end') {
       // requests are heard, accepted, declined and handed over in conversation
@@ -124,36 +133,36 @@ export function installObjectives(sim: Simulation, deps: Wave3Deps): ObjectivesR
     logTalk(O);
     feed({ t: 'talk', who: e.with });
   }));
-  offs.push(sim.events.on('trade', (e) => {
+  offs.push(on('trade', (e) => {
     const me = O.playerId;
     if (e.buyer !== me && e.seller !== me) return;
     logTrade(O, e.buyer, e.seller, e.pence);
     feed({ t: 'trade', buy: e.buyer === me, item: e.item });
   }));
-  offs.push(sim.events.on('skip', (e) => {
+  offs.push(on('skip', (e) => {
     if (e.kind !== 'sleep') return;
     if (e.phase === 'start') { feed({ t: 'sleep' }); closeDay(O, false); }
     else round(O, null);
   }));
-  offs.push(sim.events.on('skillLevel', (e) => { if (e.person === O.playerId) feed({ t: 'flag', name: 'skill' }); }));
-  offs.push(sim.events.on('careerChanged', (e) => {
+  offs.push(on('skillLevel', (e) => { if (e.person === O.playerId) feed({ t: 'flag', name: 'skill' }); }));
+  offs.push(on('careerChanged', (e) => {
     if (e.person !== O.playerId) return;
     feed({ t: 'career', to: e.to });
     retireGoals(O);
     refreshGoals(O);
   }));
-  offs.push(sim.events.on('marriage', (e) => {
+  offs.push(on('marriage', (e) => {
     const me = O.playerId;
     if (e.a !== me && e.b !== me) return;
     storyMarried(O, e.a === me ? e.b : e.a);
     feed({ t: 'flag', name: 'married' });
     retireGoals(O);
   }));
-  offs.push(sim.events.on('birth', (e) => storyBorn(O, e.person, e.mother, e.father)));
-  offs.push(sim.events.on('request', () => { syncRequests(O); follow(); }));
-  offs.push(sim.events.on('notify', (e) => { if (e.ref && e.ref.startsWith('request:')) { syncRequests(O); follow(); } }));
-  offs.push(sim.events.on('dayStarted', () => { closeDay(O, true); }));
-  offs.push(sim.events.on('hourStarted', (info) => {
+  offs.push(on('birth', (e) => storyBorn(O, e.person, e.mother, e.father)));
+  offs.push(on('request', () => { syncRequests(O); follow(); }));
+  offs.push(on('notify', (e) => { if (e.ref && e.ref.startsWith('request:')) { syncRequests(O); follow(); } }));
+  offs.push(on('dayStarted', () => { closeDay(O, true); }));
+  offs.push(on('hourStarted', (info) => {
     const me = O.me;
     if (!me) return;
     if (O.save.person !== O.playerId) { O.reset(); begin(false); }
@@ -167,8 +176,8 @@ export function installObjectives(sim: Simulation, deps: Wave3Deps): ObjectivesR
     round(O, { t: 'poll', slow: true });
     follow();
   }));
-  offs.push(sim.events.on('playerSwitched', () => { O.reset(); begin(false); markers.invalidate(); follow(); }));
-  offs.push(sim.events.on('playerDied', () => { O.touch(); }));
+  offs.push(on('playerSwitched', () => { O.reset(); begin(false); markers.invalidate(); follow(); }));
+  offs.push(on('playerDied', () => { O.touch(); }));
 
   // ---- the periodic look (cheap: only the current step of each live objective) ----
   let polls = 0;
@@ -180,11 +189,18 @@ export function installObjectives(sim: Simulation, deps: Wave3Deps): ObjectivesR
   };
   offs.push(sim.registerSystem({
     name: 'objectives.poll', phase: 'perStep', order: 90,
-    run: (_ctx, info) => { if (info.step % POLL_STEPS === 0) poll(++polls % SLOW_EVERY === 0); },
+    run: safe((_ctx, info) => { if (info.step % POLL_STEPS === 0) poll(++polls % SLOW_EVERY === 0); }),
   }));
 
   // ---- what the world and the HUD read ----
-  sim.view.setSource('worldMarkers', () => markers.source());
+  const noMarkers: readonly never[] = [];
+  sim.view.setSource('worldMarkers', () => {
+    try { return markers.source(); } catch (err) {
+      if (isStrict()) throw err;
+      console.error('objectives:', err);
+      return noMarkers;
+    }
+  });
 
   const api: ObjectivesRuntime = {
     obj: O,

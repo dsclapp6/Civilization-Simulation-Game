@@ -69,10 +69,20 @@ function homeXZ(O: Obj, me: Person): { x: number; z: number } {
 export function neighbourFor(O: Obj, me: Person, skip: ReadonlySet<number> = new Set()): Person | undefined {
   const h = homeXZ(O, me);
   const hhMembers = new Set<number>([me.id, ...(O.state.households.get(me.household)?.members ?? []), ...skip]);
-  for (const p of adultsNear(O, me.settlement, h.x, h.z, 16, 8, hhMembers)) {
-    if (enabledOption(O, me, { kind: 'person', id: p.id }, /^errand\.run/)) return p;
+  // someone who stays put (at home, at work, at the stalls): a neighbour who is walking about is hard to catch
+  const steady = (p: Person): boolean => {
+    const z = O.deps.zone;
+    if (!z) return true;
+    const a = z.whereabouts(p.id).activity;
+    return a !== 'patrol' && a !== 'walk' && a !== 'travel' && a !== 'errand' && a !== 'guard' && a !== 'follow' && a !== 'flee' && a !== 'fight';
+  };
+  let fallback: Person | undefined;
+  for (const p of adultsNear(O, me.settlement, h.x, h.z, 16, 10, hhMembers)) {
+    if (!enabledOption(O, me, { kind: 'person', id: p.id }, /^errand\.run/)) continue;
+    if (steady(p)) return p;
+    fallback ??= p;
   }
-  return undefined;
+  return fallback;
 }
 
 /** The nearest living resident of the player's place (or those nearby) whose career is among `careers`. */
