@@ -56,11 +56,9 @@ const SEASONAL: Record<string, readonly [number, number, number, number]> = {
 // Market state
 // ---------------------------------------------------------------------------------------------
 
-/** Target stock per macro good for the market at `mid`: a number of days of the hinterland's use. */
-export function marketTargets(E: Econ, mid: number): Float64Array {
-  let arr = E.targets.get(mid);
-  if (arr) return arr;
-  arr = new Float64Array(MACRO_GOODS.length);
+/** Target stock per macro good for the market at `mid`: a number of days of the hinterland's use (not cached). */
+function computeTargets(E: Econ, mid: number): Float64Array {
+  const arr = new Float64Array(MACRO_GOODS.length);
   for (const sid of E.hinterland.get(mid) ?? [mid]) {
     const s = E.settlementById.get(sid);
     if (!s) continue;
@@ -72,6 +70,14 @@ export function marketTargets(E: Econ, mid: number): Float64Array {
     for (let i = 0; i < MACRO_GOODS.length; i++) arr[i] += pop * share * dailyUse(MACRO_GOODS[i], tier, urban);
   }
   for (let i = 0; i < MACRO_GOODS.length; i++) arr[i] = Math.max(3, arr[i] * (COVER[MACRO_GOODS[i]] ?? 5));
+  return arr;
+}
+
+/** Target stock per macro good for the market at `mid`: a number of days of the hinterland's use. */
+export function marketTargets(E: Econ, mid: number): Float64Array {
+  let arr = E.targets.get(mid);
+  if (arr) return arr;
+  arr = computeTargets(E, mid);
   E.targets.set(mid, arr);
   return arr;
 }
@@ -88,9 +94,21 @@ export function marketRec(E: Econ, mid: number): MarketRec {
   return rec;
 }
 
+/**
+ * Reads only: the stocks of a market that has not been touched yet are what `marketRec` would create (the targets), but
+ * nothing is stored or cached, so asking a price (the inventory's values, the detail zone's livestock) never changes the
+ * saved state or the run's later history.
+ */
+function marketStocks(E: Econ, mid: number): { stock: ArrayLike<number>; target: Float64Array } {
+  const rec = E.mk.m[String(mid)];
+  const target = E.targets.get(mid) ?? computeTargets(E, mid);
+  if (rec) return { stock: rec.s, target };
+  return { stock: Array.from(target, (v) => Math.round(v * 100) / 100), target };
+}
+
 export function stockOf(E: Econ, mid: number, good: string): number {
   const i = MACRO_INDEX[good];
-  return i === undefined || mid < 0 ? 0 : marketRec(E, mid).s[i];
+  return i === undefined || mid < 0 ? 0 : marketStocks(E, mid).stock[i];
 }
 
 export function addStock(E: Econ, mid: number, good: string, qty: number): void {
@@ -133,9 +151,9 @@ export function midPrice(E: Econ, sid: number, good: string): number {
   if (mi === undefined) return def.basePrice * lf;
   const mid = E.marketFor(sid);
   if (mid < 0) return def.basePrice * lf;
-  const rec = marketRec(E, mid);
-  const target = marketTargets(E, mid)[mi];
-  const stock = rec.s[mi];
+  const m = marketStocks(E, mid);
+  const target = m.target[mi];
+  const stock = m.stock[mi];
   const scarcity = Math.max(0.5, Math.min(2.6, Math.pow(target / Math.max(stock, 0.1 * target), 0.5)));
   const season = SEASONAL[good]?.[toDate(E.day).season] ?? 1;
   return def.basePrice * lf * season * scarcity;

@@ -3,24 +3,18 @@
 // the player (so the thing you are looking at wins), and carries a short label for the prompt.
 import { BUILDINGS } from '../content/types';
 import { angleDiff, pointInPolygon } from '../core/math';
-import { roleLabel } from '../sim/careers';
 import { fullName, type BuildingState } from '../sim/state';
-import type { LandParcel, Strip } from '../world/types';
+import type { Strip } from '../world/types';
 import { doorStand } from './geometry';
+import { buildingName, parcelName, stripName, type NameContext } from './names';
 import { scatterKindOf } from './nav/obstacles';
 import type { InteractCandidate } from './types';
 import type { Zone } from './zone';
 
 const SCATTER_NAMES: Record<string, string> = {
   oak: 'Oak', beech: 'Beech', birch: 'Birch', ash: 'Ash', willow: 'Willow', pine: 'Pine', spruce: 'Spruce', apple: 'Apple tree',
-  deadtree: 'Dead tree', rock_large: 'Rock', boulder: 'Boulder',
-};
-const PARCEL_NAMES: Record<LandParcel['use'], string> = {
-  pasture: 'Pasture', meadow: 'Meadow', garden: 'Garden', orchard: 'Orchard', woodlot: 'Woodlot', demesne: "The lord's close",
-};
-const CROP_NAMES: Record<string, string> = {
-  wheat: 'wheat', rye: 'rye', barley: 'barley', oats: 'oats', peas: 'peas', beans: 'beans', flax: 'flax', cabbage: 'cabbages',
-  onions: 'onions', leeks: 'leeks', turnips: 'turnips', fallow: 'fallow',
+  deadtree: 'Dead tree', rock_large: 'Rock', rock_small: 'Small rock', boulder: 'Boulder', bush: 'Bush', bramble: 'Brambles',
+  stump: 'Old stump', log: 'Fallen log',
 };
 
 /** A coarse cell index over rectangles, built once. */
@@ -121,14 +115,15 @@ export function findInteractables(zone: Zone, x: number, z: number, yaw: number,
 
   // people
   const st = zone.state;
+  const names: NameContext = { state: st, world: zone.world };
   for (const a of zone.agentsArr) {
     if (a.dead || !a.visible) continue;
     const dx = a.x - x, dz = a.z - z;
     const d2 = dx * dx + dz * dz;
     if (d2 > r2) continue;
     const p = a.person;
-    const role = roleLabel(p.career, p.careerStage, p.sex).toLowerCase();
-    push({ kind: 'person', id: a.personId }, a.x, a.z, Math.sqrt(d2), role ? `${fullName(p)}, ${role}` : fullName(p), -0.4);
+    const pl = a.plate;
+    push({ kind: 'person', id: a.personId }, a.x, a.z, Math.sqrt(d2), pl ? (pl.sub ? `${pl.name} · ${pl.sub}` : pl.name) : fullName(p), -0.4);
   }
   // animals
   for (const an of zone.fauna.list()) {
@@ -154,7 +149,7 @@ export function findInteractables(zone: Zone, x: number, z: number, yaw: number,
     // the point is always the door, so a caller checking its action range against (x, z) agrees with `distance`
     void dFoot;
     if (dd > range) return;
-    push({ kind: 'building', id: b.id }, door.x, door.z, dd, def.name, 0.5);
+    push({ kind: 'building', id: b.id }, door.x, door.z, dd, buildingName(names, b), 0.5);
   });
   // trees and rocks
   zone.nav.obstacles.forSolids(x - range, z - range, x + range, z + range, (ch, i) => {
@@ -176,9 +171,8 @@ export function findInteractables(zone: Zone, x: number, z: number, yaw: number,
       const s: Strip = zone.world.strips[id];
       if (!pointInPolygon(x, z, s.poly) && !pointInPolygon(fx, fz, s.poly)) continue;
       const ss = st.strips.get(id);
-      const crop = ss ? CROP_NAMES[ss.crop] ?? ss.crop : 'fallow';
       const inHere = pointInPolygon(x, z, s.poly);
-      push({ kind: 'strip', id }, inHere ? x : fx, inHere ? z : fz, inHere ? 0 : 1.1, ss && ss.crop === 'fallow' ? 'Fallow strip' : `Strip of ${crop}`, 3.4, false);
+      push({ kind: 'strip', id }, inHere ? x : fx, inHere ? z : fz, inHere ? 0 : 1.1, stripName(names, s, ss), 3.4, false);
     }
   }
   const seenParcel = new Set<number>();
@@ -190,7 +184,7 @@ export function findInteractables(zone: Zone, x: number, z: number, yaw: number,
       const p = zone.world.parcels[id];
       if (!pointInPolygon(x, z, p.poly) && !pointInPolygon(fx, fz, p.poly)) continue;
       const inHere = pointInPolygon(x, z, p.poly);
-      push({ kind: 'parcel', id }, inHere ? x : fx, inHere ? z : fz, inHere ? 0 : 1.1, PARCEL_NAMES[p.use], 3.8, false);
+      push({ kind: 'parcel', id }, inHere ? x : fx, inHere ? z : fz, inHere ? 0 : 1.1, parcelName(p.use), 3.8, false);
     }
   }
   // best first

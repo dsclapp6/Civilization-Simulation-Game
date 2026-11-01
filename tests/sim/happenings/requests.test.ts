@@ -53,7 +53,7 @@ describe('offering', () => {
     const notes: string[] = [];
     a.sim.events.on('request', (e) => events.push(e.id));
     a.sim.events.on('notify', (e) => { if (e.kind === 'quest') notes.push(e.text); });
-    a.sim.advanceDays(32); // two years: a request every five minutes or so
+    a.sim.advanceDays(32); // two years: a request every seven minutes or so (a day is ten minutes of play)
     expect(events.length).toBeGreaterThan(2);
     expect(notes.length).toBeGreaterThanOrEqual(events.length);
     const journal = a.adv.happenings.requests();
@@ -65,7 +65,7 @@ describe('offering', () => {
     }
   });
 
-  it('keeps to the pacing target: about one request every two to four minutes, never more than the cap open', () => {
+  it('keeps to the pacing target: about one request every five to ten minutes of play (a day is ten), never more than the cap open', () => {
     const a = advSim({ seed: 'req-pace' });
     const days: number[] = [];
     a.sim.events.on('request', () => days.push(a.sim.absDay));
@@ -73,9 +73,9 @@ describe('offering', () => {
     for (let d = 0; d < 48; d++) { a.sim.advanceDays(1); maxOpen = Math.max(maxOpen, a.adv.happenings.openRequests().length); }
     // the player answers by declining at once, so the slots keep freeing
     expect(maxOpen).toBeLessThanOrEqual(4);
-    const per = 48 / days.length;
-    expect(per).toBeGreaterThan(1.5);
-    expect(per).toBeLessThan(6);
+    const per = 48 / days.length; // game days between requests
+    expect(per).toBeGreaterThan(0.45);
+    expect(per).toBeLessThan(1.3);
   });
 
   it('lets the player ask a neighbour whether there is anything to do', () => {

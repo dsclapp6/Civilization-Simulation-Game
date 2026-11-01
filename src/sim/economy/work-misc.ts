@@ -7,7 +7,7 @@ import { isHolyDay } from '../calendar';
 import type { ActionOption, ActionOutcome, ActionProvider, TargetRef, TradePartnerRef } from '../actions';
 import { CAREERS } from '../careers';
 import { skillLevel } from '../people';
-import { trainStat } from '../skills';
+import { TRAIN_SCALE, trainStat } from '../skills';
 import { shiftFamilyRank } from '../succession';
 import { ageYears, type Person } from '../state';
 import type { Econ } from './core';
@@ -314,7 +314,7 @@ function listPerson(E: Econ, p: Person, id: number, out: ActionOption[]): void {
   // an errand for a neighbour
   if (age >= 10 && ageYears(q, E.day) >= 16 && q.settlement === p.settlement) {
     const n = errandsToday(E, p);
-    const pay = round2(0.45 * Math.max(0, 1 - n / 6));
+    const pay = round2(0.3 * Math.max(0, 1 - n / 12)); // twelve errands fill a day of ten minutes; they pay like labour
     const o = option({
       id: 'errand.run', label: `Run an errand for ${q.first}`, seconds: 9, anim: 'carry_walk', mainHand: 'basket', carry: 'basket', category: 'work', priority: 6, repeat: false,
       preview: pay > 0 ? `A ha'penny or two for the trouble (${pd(pay)}) · Odd jobs` : 'Nobody has more errands for you today', ...base, data: { act: 'errand', person: id } as WorkData,
@@ -428,7 +428,7 @@ function listBuilding(E: Econ, p: Person, id: number, out: ActionOption[]): void
 function errand(E: Econ, p: Person, personId: number): ActionOutcome {
   const q = E.person(personId);
   const n = errandsToday(E, p);
-  const pay = round2(0.45 * Math.max(0, 1 - n / 6));
+  const pay = round2(0.3 * Math.max(0, 1 - n / 12)); // twelve errands fill a day of ten minutes; they pay like labour
   E.save.ww[`e${p.id}`] = [Math.floor(E.day), n + 1];
   E.touchSave();
   if (pay > 0) E.earn(p, pay, 'An errand');
@@ -445,8 +445,8 @@ function practise(E: Econ, p: Person, buildingId: number): ActionOutcome {
   const heavy = bow.key.startsWith('longbow') ? 1 : 0.55;
   giveXp(E, p, 'archery', holy ? 13 : 9, 1);
   boutDone(E, p, { skill: 'archery', xp: 0, heavy: 0.5, str: 0, end: 0.4, bouts: 1 });
-  trainStat(E.sim, p, 'str', 0.012 * heavy); // drawing a bow is full-effort strength work: a longbow bout builds as much as a bout at the plough
-  trainStat(E.sim, p, 'per', 0.006 * (holy ? 1.2 : 1));
+  trainStat(E.sim, p, 'str', 0.012 * heavy * TRAIN_SCALE); // drawing a bow is full-effort strength work: a longbow bout builds as much as a bout at the plough
+  trainStat(E.sim, p, 'per', 0.006 * (holy ? 1.2 : 1) * TRAIN_SCALE);
   // arrows are mostly picked up again; now and then one splits
   if (E.rng('arrows').next() < 0.18) bagTake(p.inventory, keyOf('arrow', 1), 1) || bagTake(p.inventory, keyOf('arrow', 0), 1) || bagTake(p.inventory, keyOf('arrow', 2), 1);
   void buildingId;

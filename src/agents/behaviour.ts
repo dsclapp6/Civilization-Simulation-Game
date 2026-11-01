@@ -6,7 +6,8 @@ import { angleDiff, clamp, distToSegment, hash01, smoothstep, yawTo } from '../c
 import type { AnimState } from '../core/view';
 import { ageYears, hasFlag } from '../sim/state';
 import { Agent, Ph, St } from './agent';
-import { RUN_SPEED, SEEN_RADIUS, WARP_FAR, WARP_MAX, WARP_NEAR } from './config';
+import { DAY_SECONDS } from '../core/time';
+import { MAX_HURRY, RUN_SPEED, SEEN_RADIUS, WARP_FAR, WARP_MAX, WARP_NEAR } from './config';
 import { Mode, type Intent } from './schedule';
 import type { Zone } from './zone';
 
@@ -45,7 +46,7 @@ function warp(dist: number): number {
 // ---------------------------------------------------------------------------------------------
 
 function signature(I: Intent): number {
-  let h = I.activity.length * 131 + (I.indoors ? 7 : 0) + (I.away ? 13 : 0) + I.mode * 17;
+  let h = I.activity.length * 131 + (I.indoors ? 7 : 0) + (I.away ? 13 : 0) + (I.leaving ? 19 : 0) + I.mode * 17;
   h = (h * 31 + Math.round(I.x * 2)) | 0;
   h = (h * 31 + Math.round(I.z * 2)) | 0;
   h = (h * 31 + I.building) | 0;
@@ -60,12 +61,15 @@ function signature(I: Intent): number {
 export function replan(z: Zone, a: Agent, spawning: boolean): void {
   const I = z.I;
   z.sched.intent(a.person, z.now, I);
-  a.replanAt = Math.min(I.until, z.now + 0.025 + 0.01 * ((a.personId * 7) % 5));
+  // look again when the person is due to set out for their next place, and now and then in between
+  const next = I.travel < 1 ? I.until : Math.max(I.leave, z.now + 0.002);
+  a.replanAt = Math.min(next, z.now + 0.012 + 0.004 * ((a.personId * 7) % 5));
+  a.arriveBy = I.travel < 1 ? I.from : z.now;
   const sig = signature(I);
   if (sig === a.sig && !spawning) return;
   const hadSpot = a.sig !== 0;
   a.sig = sig;
-  a.activity = I.away ? 'travel' : I.activity;
+  a.activity = I.away || I.leaving ? 'travel' : I.activity;
   a.intentLabel = I.label;
   a.mode = I.mode;
   a.group = I.group;
@@ -78,7 +82,7 @@ export function replan(z: Zone, a: Agent, spawning: boolean): void {
   a.wantIn = false; a.wantAway = false;
   a.building = I.building;
   a.tyaw = I.yaw;
-  if (I.away) {
+  if (I.away || I.leaving) {
     a.wantAway = true;
     a.tx = Number.isFinite(I.exitX) ? I.exitX : I.x; a.tz = Number.isFinite(I.exitZ) ? I.exitZ : I.z;
     a.carry = I.carry;
@@ -97,8 +101,16 @@ export function replan(z: Zone, a: Agent, spawning: boolean): void {
   a.stuck = 0;
   const dist = Math.hypot(a.tx - a.x, a.tz - a.z);
   if (!hadSpot && !spawning) return;
-  if (dist > (a.wantIn || a.wantAway ? 0.9 : 1.3)) goTo(z, a, a.tx, a.tz, I.activity === 'church' ? 1.5 : 1);
+  if (dist > (a.wantIn || a.wantAway ? 0.9 : 1.3)) goTo(z, a, a.tx, a.tz, arrivalPace(z, a));
   else if (a.wantIn) { a.st = St.Door; } else { a.st = St.Idle; a.timer = 1 + 5 * rnd(a, 4); }
+}
+
+/** How fast to walk to arrive when the schedule wants the person there: an easy walk when there is time, up to MAX_HURRY when behind. */
+function arrivalPace(z: Zone, a: Agent): number {
+  const left = (a.arriveBy - z.now) * DAY_SECONDS;
+  if (left <= 4) return a.arriveBy > z.now ? MAX_HURRY : 1;
+  const need = (Math.hypot(a.tx - a.x, a.tz - a.z) * 1.15) / left / a.baseSpeed;
+  return Math.max(1, Math.min(MAX_HURRY, need));
 }
 
 /**
@@ -106,7 +118,7 @@ export function replan(z: Zone, a: Agent, spawning: boolean): void {
  * leaving the settlement is gone.
  */
 function teleport(z: Zone, a: Agent, tx: number, tz: number): void {
-  if (a.wantIn || a.wantAway) { a.dead = true; return; }
+  if (a.wantIn || a.wantAway) { a.dead = true; z.hide(a.personId, a.arriveBy + 0.001); return; }
   const out = z.tmpP;
   if (z.nav.nearestWalkable(tx, tz, 2.5, out)) { tx = out.x; tz = out.z; }
   a.x = tx; a.z = tz; a.y = z.nav.groundY(tx, tz);
@@ -116,7 +128,7 @@ function teleport(z: Zone, a: Agent, tx: number, tz: number): void {
 
 /** A path that starts out of sight: the walker joins it where it comes into view (or the trip is skipped). */
 function enterSeen(z: Zone, a: Agent): void {
-  const fx = z.focusX, fz = z.focusZ, R = SEEN_RADIUS * 0.75;
+  const fx = z.focusX, fz = z.focusZ, R = SEEN_RADIUS;
   let px = a.x, pz = a.z;
   for (let i = 0; i < a.pathN; i++) {
     const qx = a.path[i * 2], qz = a.path[i * 2 + 1];
@@ -170,14 +182,34 @@ export function goTo(z: Zone, a: Agent, tx: number, tz: number, pace: number): v
         return;
       }
       a.pathFails++;
-      // no route (the goal lies beyond the navigation window, or is sealed in): walk straight at it when it is
-      // close or far from the player's eyes; stuck handling folds the body back if it cannot get there
-      if (d > 3 && (d < 24 || a.distFocus > 150) && a.pathFails < 4) { a.setDirect(tx, tz); a.st = St.Walk; return; }
-      // nowhere to go from here: stay put and look again a little later (or just be there when unseen)
+      // no route: the walker is beyond the navigation window (nothing to search there), or the goal is sealed in.
+      // Out where nobody can see, slide to where the way comes into sight and look again; close by, walk straight at it
+      if (a.control === 'ai' && a.distFocus > SEEN_RADIUS + 10) { slideIn(z, a, tx, tz); return; }
+      if (d > 3 && d < 24 && a.pathFails < 4) { a.setDirect(tx, tz); a.st = St.Walk; return; }
+      // nowhere to go from here: stay put and look again a little later
       a.st = St.Idle; a.replanAt = z.now + 0.04;
-      if (a.distFocus > 90 && a.pathFails >= 2) { a.x = tx; a.z = tz; a.y = z.nav.groundY(tx, tz); }
     },
   });
+}
+
+/**
+ * A walker too far away for a path to be searched: when the way to the goal passes through the part of the world people
+ * can see, the walker joins it at that edge (a small, far-off step); a trip that never comes into sight just ends.
+ */
+function slideIn(z: Zone, a: Agent, tx: number, tz: number): void {
+  const fx = z.focusX, fz = z.focusZ, R = SEEN_RADIUS;
+  const ox = a.x - fx, oz = a.z - fz, dx = tx - a.x, dz = tz - a.z;
+  const A = dx * dx + dz * dz, B = 2 * (ox * dx + oz * dz), C = ox * ox + oz * oz - R * R;
+  const disc = B * B - 4 * A * C;
+  if (A > 1e-6 && disc >= 0 && C > 0) {
+    const t = (-B - Math.sqrt(disc)) / (2 * A);
+    if (t >= 0 && t <= 1) {
+      a.x += dx * t; a.z += dz * t; a.y = z.nav.groundY(a.x, a.z);
+      a.st = St.Idle; a.pathFails = 0; a.replanAt = z.now; a.sig = 0;
+      return;
+    }
+  }
+  teleport(z, a, tx, tz);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -214,9 +246,9 @@ export function updateAgent(z: Zone, a: Agent, dt: number): void {
   const v = Math.sqrt(a.dx * a.dx + a.dz * a.dz) / dt;
   a.speed = v;
   d.moveSpeed = v * z.clockSpeed;
-  // speech bubble
+  // speech bubble: a spoken line replaces the nameplate while it lasts
   if (a.speech !== null) {
-    if (z.zoneT >= a.speechUntil) { a.speech = null; d.label = z.debugLabels ? a.intentLabel : undefined; } else d.label = a.speech;
+    if (z.zoneT >= a.speechUntil) { a.speech = null; z.showPlate(a); } else d.label = a.speech;
   } else if (z.debugLabels) d.label = `${a.person.first}: ${a.intentLabel}`;
 }
 
@@ -303,6 +335,7 @@ function arrive(z: Zone, a: Agent): void {
   if (a.wantAway) {
     // left the settlement (a gate, the edge of the village): fold back into the macro tier
     a.dead = true;
+    z.hide(a.personId, a.arriveBy + 0.001);
     return;
   }
   if (a.wantIn) { a.st = St.Door; return; }
@@ -504,7 +537,7 @@ function atDoor(z: Zone, a: Agent, dt: number): void {
   void dt;
   setAnim(a, 'idle');
   a.draw.carry = a.carry === 'child' ? 'child' : a.draw.carry;
-  if (a.building < 0) { a.dead = true; return; }
+  if (a.building < 0) { a.dead = true; z.hide(a.personId, a.arriveBy + 0.001); return; }
   a.yaw = turnToward(a.yaw, a.tyaw + Math.PI, TURN_RATE * 0.5 * dt);
   const free = z.doorNext.get(a.building) ?? 0;
   if (z.zoneT < free) return;
@@ -521,7 +554,7 @@ function ghost(z: Zone, a: Agent, dt: number): void {
   setAnim(a, a.draw.carry !== 'none' ? 'carry_walk' : 'walk');
   a.draw.moveSpeed = 1.5 * z.clockSpeed;
   a.yaw = turnToward(a.yaw, Math.atan2(dx, dz), TURN_RATE * dt);
-  if (d <= v) { a.x = a.ghostX; a.z = a.ghostZ; a.dead = true; return; }
+  if (d <= v) { a.x = a.ghostX; a.z = a.ghostZ; a.dead = true; z.hide(a.personId, a.arriveBy + 0.001); return; }
   a.x += (dx / d) * v; a.z += (dz / d) * v;
 }
 

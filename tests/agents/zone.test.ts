@@ -182,14 +182,14 @@ describe('orders and conversation', () => {
     expect(a.control).toBe('ai');
   });
 
-  it('shows speech bubbles through the draw label for the time asked, then clears them', () => {
+  it('shows speech bubbles through the draw label for the time asked, then gives the nameplate back', () => {
     const { zone, sim } = rig;
     const a = pick();
     zone.say(a.personId, 'Good morrow!', 2);
     run(sim, 0.5);
     expect(a.draw.label).toBe('Good morrow!');
     run(sim, 2);
-    expect(a.draw.label).toBeUndefined();
+    expect(a.draw.label).toBe(`${a.person.first}${a.person.byname ? ` ${a.person.byname}` : ''}`);
   });
 
   it('lets the social module make people greet the player who passes close', () => {
@@ -407,7 +407,7 @@ describe('interactables', () => {
     zone.interactables(d.x, d.z, d.yaw + Math.PI, 5, out);
     const hit = out.find((c) => c.target.kind === 'building' && c.target.id === church.id);
     expect(hit).toBeDefined();
-    expect(hit!.label).toBe('Parish church');
+    expect(hit!.label).toMatch(/^St .+'s church$/);
     // a strip: stand in the middle of one
     const strip = world.strips[vil.strips[0]];
     const cx = strip.poly.reduce((s, p) => s + p.x, 0) / 4, cz = strip.poly.reduce((s, p) => s + p.z, 0) / 4;

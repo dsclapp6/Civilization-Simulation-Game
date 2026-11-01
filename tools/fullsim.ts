@@ -4,6 +4,7 @@
 //   npx tsx tools/fullsim.ts --years 10 [--seed millennia] [--difficulty knight] [--preset tiny|small|large] [--quiet] [--keep-player] [--cpu] [--sections]
 import { performance } from 'node:perf_hooks';
 import type { Difficulty } from '../src/core/domain';
+import { DAY_SECONDS } from '../src/core/time';
 import { installCombat } from '../src/combat';
 import { installAdvancement } from '../src/sim/advancement';
 import { installEconomy } from '../src/sim/economy';
@@ -119,8 +120,9 @@ if (spikeMs > 0) {
 let totalMs = 0;
 for (const p of sim.scheduler.profile.values()) totalMs += p.totalMs;
 const perHour = totalMs / (years * 16 * 24);
-// at 8x a game hour lasts 0.3125 s = 18.75 frames of 60 Hz; the headless run has no agents, zone or player systems
-console.log(`all systems: ${perHour.toFixed(3)} ms per game hour = ${(perHour / 18.75).toFixed(3)} ms per frame at 8x (averaged over the hour)`);
+// at 8x a game hour lasts DAY_SECONDS / 24 / 8 seconds (3.1 s on a ten-minute day) = that many frames of 60 Hz; the headless run has no agents, zone or player systems
+const framesPerHourAt8x = (DAY_SECONDS / 24 / 8) * 60;
+console.log(`all systems: ${perHour.toFixed(3)} ms per game hour = ${(perHour / framesPerHourAt8x).toFixed(3)} ms per frame at 8x (averaged over the hour)`);
 
 if (rows.length >= 20) {
   console.log('\nper decade (counts are events in the decade; pop/prosperity are the min..max of the yearly values):');

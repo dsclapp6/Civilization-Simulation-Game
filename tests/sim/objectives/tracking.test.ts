@@ -45,9 +45,11 @@ describe('tracking', () => {
     expect(tracked(o)?.source).toBe('tutorial');
     playObjectives(o, ['tutorial']);
     runTo(o, 1, 6);
-    o.adv.happenings.offerRequest('fetch');
+    // villagers may already have asked something of their own by now (offers are checked each daytime hour)
+    const id = o.adv.happenings.offerRequest('fetch');
     o.obj.poll(true);
-    expect(active(o, 'request')).toHaveLength(1);
+    const summary = o.adv.happenings.requests().find((r) => r.id === id)!.summary;
+    expect(active(o, 'request').some((x) => x.title === summary)).toBe(true);
     expect(tracked(o)?.source).toBe('chore');
   });
 

@@ -2,6 +2,7 @@
 // static caches rebuilt from the world on install, and the small helpers every part uses (money,
 // ledger, notifications, deeds). Nothing here is hidden state: whatever influences the simulation
 // is either in the saved sections or a pure function of the world and the saved state.
+import { newFeedNotes, type FeedNotes } from './feednotes';
 import { DAYS_PER_YEAR } from '../../core/time';
 import { dist2 } from '../../core/math';
 import type { Rng } from '../../core/rng';
@@ -128,6 +129,8 @@ export interface TickPrices {
 }
 
 export class Econ {
+  /** What the player's work leaves lying about, drawn for a while and never saved (feednotes.ts). */
+  readonly notes: FeedNotes = newFeedNotes();
   readonly sim: Simulation;
   readonly state: GameState;
   readonly world: WorldModel;
@@ -251,7 +254,9 @@ export class Econ {
   age(p: Person): number { return ageYears(p, this.sim.absDay); }
   touchSave(): void { this.state.touchExt(ECON_KEY); }
   touchMarkets(): void { this.state.touchExt(MARKETS_KEY); }
-  touchFarm(): void { this.state.touchExt(FARM_KEY); }
+  /** Bumped by every change to the farm section (strip tasks in progress, sheaves, gardens): the view reads it to know when to look again. */
+  farmRev = 0;
+  touchFarm(): void { this.farmRev++; this.state.touchExt(FARM_KEY); }
 
   /** The lord's policy on a manor (politics): rents and labour beyond custom, −1 relief … 2 harsh; customary without politics. */
   manorPolicy(settlement: number): { rent: number; labour: number } {

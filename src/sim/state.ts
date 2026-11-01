@@ -463,6 +463,9 @@ export class GameState {
   /** Bumped whenever a building / strip changes, so views know when to refresh (not saved). */
   buildingRevision = 0;
   stripRevision = 0;
+  /** Bumped whenever a household's stores or purse are marked changed, and whenever an ext section is (views read these to know when to look again; not saved). */
+  householdRevision = 0;
+  extRevision = 0;
 
   constructor(seed: string, difficulty: Difficulty) {
     this.seed = seed;
@@ -510,13 +513,13 @@ export class GameState {
 
   // ---- dirty helpers ----
   touch(p: Person): void { this.dirty.sets.persons.add(p.id >> CHUNK_SHIFT.persons); }
-  touchHousehold(h: Household): void { this.dirty.sets.households.add(h.id >> CHUNK_SHIFT.households); }
+  touchHousehold(h: Household): void { this.dirty.sets.households.add(h.id >> CHUNK_SHIFT.households); this.householdRevision++; }
   touchHouse(h: House): void { this.dirty.sets.houses.add(h.id >> CHUNK_SHIFT.houses); }
   touchTitle(t: Title): void { this.dirty.sets.titles.add(t.id >> CHUNK_SHIFT.titles); }
   touchBuilding(b: BuildingState): void { this.dirty.sets.buildings.add(b.id >> CHUNK_SHIFT.buildings); this.buildingRevision++; }
   touchStrip(s: StripState): void { this.dirty.sets.strips.add(s.id >> CHUNK_SHIFT.strips); this.stripRevision++; }
   touchSettlement(s: SettlementState): void { this.dirty.sets.settlements.add(s.id >> CHUNK_SHIFT.settlements); }
-  touchExt(key: string): void { this.dirty.ext.add(key); }
+  touchExt(key: string): void { this.dirty.ext.add(key); this.extRevision++; }
 
   /** Marks every entity dirty (used for the first save of a fresh run). */
   markAllDirty(): void {

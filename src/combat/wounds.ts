@@ -4,11 +4,12 @@
 // wounds in `state.ext['combat']` and mirrors them onto `Person.health` (hp fraction, an 'injury'
 // condition, the `lame` / `scarred` traits).
 //
-// Time: bleeding runs in simulated seconds (a day is 60 s). People in the detail zone are advanced every
-// sub-step, everybody else by the hour (2.5 s of bleeding per hour), so a bad wound left alone kills in
-// about a game day and a bound one is survivable. Healing runs in game days.
+// Time: bleeding runs in simulated seconds (a day is 600 s). People in the detail zone are advanced every
+// sub-step, everybody else by the hour (a game hour's worth of those seconds), so a bad wound left alone kills in
+// a few game hours, as it does in a fight, and a bound one is survivable. Healing runs in game days.
 import type { Rng } from '../core/rng';
 import { clamp } from '../core/math';
+import { DAY_SECONDS } from '../core/time';
 import type { SimContext } from '../sim/context';
 import type { GameState, Person, PersonId } from '../sim/state';
 import { fullName } from '../sim/state';
@@ -64,7 +65,8 @@ export interface CombatExt {
 
 export const BLOOD_DEAD = 0.3;
 export const BLOOD_DOWN = 0.5;
-export const HOUR_SECONDS = 2.5;
+/** Seconds of bleeding in one game hour for people outside the detail zone: the same pace as inside it (25 s on a ten-minute day). */
+export const HOUR_SECONDS = DAY_SECONDS / 24;
 
 // ---------------------------------------------------------------------------------------------
 // Tunables

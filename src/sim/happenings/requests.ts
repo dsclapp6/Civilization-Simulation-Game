@@ -227,7 +227,7 @@ export function offerRequest(H: Hap, type: RequestType, from?: PersonId): number
   return r ? r.id : 0;
 }
 
-/** Daily: possibly offer a new request, keeping to the pacing target. */
+/** Each daytime hour: possibly offer a new request, keeping to the pacing target (a day is ten minutes of play: about one request every seven or eight). */
 function maybeOffer(H: Hap): void {
   const me = H.state.persons.get(H.playerId);
   if (!me || me.death || H.state.run.phase !== 'alive') return;
@@ -237,7 +237,7 @@ function maybeOffer(H: Hap): void {
   const since = H.day - H.save.lastOffer;
   if (since < cfg.minGapDays) return;
   // a long quiet spell makes the next request likelier
-  const p = cfg.dailyChance * H.diff('requests') + Math.min(0.5, Math.max(0, since - 3.5) * 0.15);
+  const p = cfg.hourlyChance * H.diff('requests') + Math.min(0.5, Math.max(0, since - 1.2) * 0.35);
   if (!H.rng().chance(p)) return;
   offer(H, me);
 }
@@ -380,7 +380,6 @@ export function requestsDaily(H: Hap, _info: DayInfo): void {
     }
     if (now >= r.expires) fail(H, r, `You did not finish what you promised ${from ? from.first : 'them'}.`);
   }
-  maybeOffer(H);
 }
 
 function repay(H: Hap, r: RequestRec, from: Person, me: Person | undefined): void {
@@ -407,6 +406,8 @@ function repay(H: Hap, r: RequestRec, from: Person, me: Person | undefined): voi
 export function requestsHourly(H: Hap, info: HourInfo): void {
   const me = H.state.persons.get(H.playerId);
   if (!me || me.death) return;
+  // people ask for help through the working day, not in the small hours
+  if (info.hour >= 7 && info.hour <= 17) maybeOffer(H);
   const night = info.hour >= 20 || info.hour < 5;
   const body = H.deps.player?.body() ?? null;
   for (const r of H.save.reqs) {

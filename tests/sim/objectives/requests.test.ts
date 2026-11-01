@@ -89,13 +89,16 @@ describe('requests as objectives', () => {
     o.obj.poll(true); // the next look at the state (in play: the conversation ends, or the slow poll)
     expect(reqObjs(o).find((x) => x.title === record(o, a).summary)?.state).toBe('expired');
 
+    // run until the offer lapses (its window follows the request pacing), then look while it is still listed
     const b = o.adv.happenings.offerRequest('fetch');
-    o.sim.advanceDays(7);
+    for (let i = 0; i < 28 && record(o, b).state === 'offered'; i++) o.sim.advanceDays(0.25);
+    o.obj.poll(true);
     expect(record(o, b).state).toBe('expired');
     expect(reqObjs(o).find((x) => x.title === record(o, b).summary)?.state).toBe('expired');
 
     const c = offerAndAccept(o, 'fetch');
-    o.sim.advanceDays(9);
+    for (let i = 0; i < 36 && record(o, c).state === 'accepted'; i++) o.sim.advanceDays(0.25);
+    o.obj.poll(true);
     expect(record(o, c).state).toBe('failed');
     expect(reqObjs(o).find((x) => x.title === record(o, c).summary)?.state).toBe('failed');
   });

@@ -12,6 +12,16 @@ import { ageYears, type Person } from './state';
 
 export const PERK_LEVELS = [5, 10, 15, 20] as const;
 
+/**
+ * Growth by the bout. The tables of the work actions (experience and stat points per bout) were struck when a game day was
+ * a minute of play and a player could fit about four bouts into it. A day is now ten minutes and holds about ten times as
+ * many bouts, so each bout's growth is scaled back: a bout is half a game hour of the hero's work, who learns about twice
+ * as fast per game hour as a capable adult (≈ 1.9 experience a game hour for an NPC, `XP_PER_YEAR`). A youth who practises
+ * most days still reaches STR 10 and Archery 3 (the archers' test) at 14 or 15.
+ */
+export const XP_SCALE = 0.25;
+export const TRAIN_SCALE = 0.5;
+
 /** Adds XP (scaled by intellect and Quick learner). Emits `skillLevel` per level gained; returns levels gained. */
 export function gainSkill(ctx: SimContext, p: Person, skill: SkillId, baseXp: number): number {
   if (baseXp <= 0 || p.death) return 0;
@@ -58,7 +68,8 @@ export function trainStat(ctx: SimContext, p: Person, stat: StatId, amount: numb
   const gain = Math.min(gap, amount * hungry * Math.min(1, 0.25 + gap / 3));
   p.statBonus ??= {};
   p.statBonus[stat] = Math.round(((p.statBonus[stat] ?? 0) + gain) * 1000) / 1000;
-  p.trained[stat] = Math.round(Math.min(ceiling, p.trained[stat] + gain) * 100) / 100;
+  // three decimals: a bout of practice adds a few thousandths, which two decimals would round away
+  p.trained[stat] = Math.round(Math.min(ceiling, p.trained[stat] + gain) * 1000) / 1000;
   ctx.state.touch(p);
   return p.trained[stat];
 }
