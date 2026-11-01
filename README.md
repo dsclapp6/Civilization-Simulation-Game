@@ -31,26 +31,34 @@ are fine; the *quality* setting (low / medium / high) trades shadows and view di
 
 ## How it plays
 
-You walk the village in third person. The prompt at the bottom names what **E** does; hold **E** for every option on the
-thing in front of you. A day is a minute, a season four days, a year sixteen: speed it up with **2** and **3** while
-you wait, slow down when you work or fight.
+You walk the village in third person with a **free cursor**. Point at a person, a door, a strip or a tree and a label
+says what it is and what a click will do; **click** to walk there and do it (or stand close and press **E**; hold **E** for
+every option). Hold the **right button** and drag to turn the camera. What you are meant to be doing is written in the
+top left corner (the *tracker*), shown by a gold marker in the world, the compass ribbon and the minimap; **Y** asks
+"what now?" and **O** opens the journal. A day lasts ten minutes, a season four days, a year sixteen: speed it up with
+**2** and **3** while you wait, slow down when you work or fight. When you sleep, the day is written up.
 
-![The prompt names the action](docs/game/prompt.png)
+![Tracker, compass, minimap and the tooltip that follows the cursor](docs/game/clarity-hover-person.png)
 
 | Key / mouse | Action |
 |---|---|
 | **W A S D**, **Shift**, **X**, **Space** | Move, sprint, slow walk, dodge roll |
-| **E** (tap / hold) | The default action / the action wheel |
-| **Left / right button** | Strike / guard; with a bow: loose / draw and aim |
+| **Left click** | Walk to the thing under the cursor and do its default action (any movement key stops you) |
+| **Right button** (hold, drag) | Turn the camera; the cursor comes back where it was |
+| **E** (tap / hold) | The default action on what you face / the action wheel |
+| **G** | Draw or put away your weapon; while it is drawn (or in a fight) the mouse looks: left strikes, right guards, bow: draw and aim |
 | **F**, **Q** | Mount a horse, stop the work in hand |
 | **1 2 3**, **P** | Speed 1×, 3×, 8×; pause |
+| **Y**, **O**, **N** | What now? card, the journal (tasks, today, people, places), minimap on or off |
 | **Tab I H J M L Z** | Character, inventory, family and House, ledger, map and travel, chronicle, sleep or wait |
 | **R B T K C** | Requests and news, wounds, House techniques, realm and politics, command and army |
-| **F1**, **Esc** | Help and controls, close a page / pause menu |
+| **F1**, **Esc** | Help and controls; Esc leaves mouse-look, else closes a page, else the pause menu |
 
 The same list, and how to play, is in the game (**F1** or the pause menu) and in [docs/PLAYING.md](docs/PLAYING.md). In
-your first minutes small hint cards under your name suggest what to do next (help the household, earn coin, train,
-choose a field at fourteen); they can be dismissed or switched off in the settings.
+your first minutes a scene-setting card and a short tour of home, strip and church lead into a first day of tasks
+(meet your family, fetch water, help on the strip, sleep at home), and a few small hint cards teach the controls; they
+can be dismissed or switched off in the settings. The old scheme (the mouse always turns the camera) is the setting
+*Always use mouse-look*.
 
 ### What is in it
 
@@ -102,6 +110,7 @@ Chromium (software GL, so they are slow) and write screenshots under `docs/`.
 | `tools/politics.ts` | wars, changes of power and politics' cost per year |
 | `tools/worldmap.ts` | renders a continent to PNG |
 | `node tools/game-shots.mjs` | screenshots of the real game (village, street, prompt, map, travel, fights, panels…) into `docs/game/` |
+| `node tools/game-clarity-shots.mjs` | screenshots of the clarity pass (tracker, compass, minimap, "What now?", banner, cursor tooltips, journal, day summary, intro and tour) into `docs/game/clarity-*.png`; `--size=1920x1080`, `--real` for the real objectives module |
 | `node tools/game-flow.mjs` | clicks and types through a whole session (run start, hotkeys, pages, notices, a journey, death, save and continue) and checks what the game reports |
 | `tools/render-shots.mjs`, `gallery-shots.mjs`, `chars-shots.mjs`, `village-shots.mjs`, `ui-shots.mjs`, `combat-shots.mjs`, `military-shots.mjs`, `politics-shots.mjs`, `advancement-shots.mjs` | per-module screenshot sets |
 

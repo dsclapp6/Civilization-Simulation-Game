@@ -138,6 +138,15 @@ const ICONS = {
   target: `<circle cx="12" cy="12" r="7.6"/><circle cx="12" cy="12" r="2.4"/><path d="M12 2.4v4M12 17.6v4M2.4 12h4M17.6 12h4"/>`,
   help: `<circle cx="12" cy="12" r="9"/><path d="M9.4 9.4a2.7 2.7 0 1 1 3.8 2.4c-.8.5-1.2 1-1.2 2M12 17v.2"/>`,
   eye_off: `<path d="M3 3l18 18M10.4 6c.5-.1 1-.2 1.6-.2 6 0 9.6 6.2 9.6 6.2s-1.2 2.2-3.4 4M6.6 7.8C3.9 9.4 2.4 12 2.4 12s3.6 6.4 9.6 6.4c1.4 0 2.6-.3 3.7-.8"/>`,
+  // --- clarity pass
+  mouse_l: `<rect x="6.6" y="3.2" width="10.8" height="17.6" rx="5.4"/><path d="M6.6 10.2h10.8M12 3.2v7"/><path d="M6.9 9.9V8.6a5.1 5.1 0 0 1 5.1-5.1v6.4z"${F}/>`,
+  mouse_r: `<rect x="6.6" y="3.2" width="10.8" height="17.6" rx="5.4"/><path d="M6.6 10.2h10.8M12 3.2v7"/><path d="M17.1 9.9V8.6A5.1 5.1 0 0 0 12 3.5v6.4z"${F}/>`,
+  compass: `<circle cx="12" cy="12" r="9"/><path d="M15.8 8.2 13.6 13.6 8.2 15.8 10.4 10.4z"/><circle cx="12" cy="12" r=".9"${F}/>`,
+  exclaim: `<path d="M12 4.2v10"/><circle cx="12" cy="18.6" r="1.3"${F}/>`,
+  circle_o: `<circle cx="12" cy="12" r="6.4"/>`,
+  sound: `<path d="M4.6 9.6h3.4l4.4-3.8v12.4L8 14.4H4.6z"/><path d="M15.4 9.2a4 4 0 0 1 0 5.6M17.8 6.8a7.4 7.4 0 0 1 0 10.4"/>`,
+  sound_off: `<path d="M4.6 9.6h3.4l4.4-3.8v12.4L8 14.4H4.6z"/><path d="M16 9.6l4.4 4.8M20.4 9.6 16 14.4"/>`,
+  sunrise: `<path d="M3 17.4h18M6.6 17.4a5.4 5.4 0 0 1 10.8 0M12 5.4v3.2M5.4 8.6l2 2M18.6 8.6l-2 2"/>`,
 } as const;
 
 export type IconName = keyof typeof ICONS;

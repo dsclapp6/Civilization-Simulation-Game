@@ -1,0 +1,238 @@
+/* Clarity pass: the objective tracker, "What now?", the compass ribbon, the minimap, edge arrows, the settlement
+   banner, the cursor tooltip and the click destination. Parchment and ink like the rest; gold marks what to do. */
+
+/* ---- the columns that hold the plates, so the cards stack instead of being placed by hand ---- */
+.mu-hud > .mu-hud-left { left: 18px; top: 18px; width: 292px; display: flex; flex-direction: column; gap: 9px; pointer-events: none; }
+.mu-hud > .mu-hud-right { right: 18px; top: 18px; width: 290px; display: flex; flex-direction: column; gap: 9px; pointer-events: none; }
+.mu-hud-left > .mu-hud-player { left: 0; top: 0; width: 100%; }
+.mu-hud-right > .mu-hud-clock { right: 0; top: 0; width: 100%; }
+.mu-hud-left > .mu-guide { left: 0; top: 0; width: 100%; }
+.mu-hud-left > *, .mu-hud-right > * { flex: none; }
+
+/* ---- the objective tracker ---- */
+.mu-tracker { width: 100%; padding: 8px 13px 9px; pointer-events: auto; box-shadow: 0 0 0 1px #1f1309, 0 0 0 2px rgba(214, 170, 70, 0.95), 0 0 0 3px #1f1309, 0 6px 18px rgba(0, 0, 0, 0.45), inset 0 0 18px rgba(120, 78, 22, 0.26); }
+.mu-tracker-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; font-variant: small-caps; letter-spacing: 0.09em; font-weight: 700; color: var(--gold); }
+.mu-tracker-src { display: inline-flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mu-tracker-pips { display: inline-flex; align-items: center; flex: none; pointer-events: auto; }
+.mu-tracker-pips i { display: inline-block; width: 9px; height: 9px; margin-left: 4px; border-radius: 50%; border: 1px solid var(--edge); background: rgba(255, 250, 232, 0.55); }
+.mu-tracker-pips i.done { background: var(--green); border-color: #1d3d1c; }
+.mu-tracker-pips i.now { background: var(--gold-hi); border-color: #6b4a06; box-shadow: 0 0 0 2px rgba(236, 189, 66, 0.4); }
+.mu-tracker-body { cursor: pointer; }
+.mu-tracker-title { font-weight: 700; font-size: 16.5px; line-height: 1.2; margin: 3px 0 5px; }
+.mu-tracker-step { display: flex; align-items: flex-start; gap: 4px; font-size: 14px; line-height: 1.3; color: var(--ink); }
+.mu-tracker-mark { flex: none; color: var(--gold); margin-top: 1px; }
+.mu-tracker-hint { font-size: 12.5px; font-style: italic; color: var(--ink-3); margin: 2px 0 0 18px; line-height: 1.3; }
+.mu-tracker-prog { display: flex; align-items: center; gap: 8px; margin: 6px 0 0 18px; }
+.mu-tracker-prog .mu-bar { flex: 1; }
+.mu-tracker-prog-text { font-size: 12px; font-weight: 700; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mu-tracker-where { display: flex; align-items: center; gap: 6px; margin: 7px 0 0; padding-top: 6px; border-top: 1px solid var(--rule-soft); font-size: 12.5px; color: var(--ink-2); font-weight: 700; }
+.mu-tracker-arrow { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: rgba(26, 17, 9, 0.88); color: var(--gold-hi); flex: none; transition: transform 0.12s linear; }
+.mu-tracker-reward { font-size: 12px; color: var(--ink-3); margin-top: 4px; }
+.mu-tracker-empty { font-size: 13.5px; line-height: 1.4; color: var(--ink-2); padding: 2px 0 0; }
+.mu-tracker-foot { display: flex; gap: 6px; margin-top: 8px; }
+.mu-tracker-foot .mu-btn { flex: 1; min-height: 26px; padding: 2px 8px 3px; font-size: 13px; }
+.mu-tracker-foot .mu-key { height: 18px; min-width: 18px; font-size: 11px; margin-left: 2px; }
+.mu-tracker.flash-added, .mu-tracker.flash-done { animation: mu-tracker-flash 1.4s ease-out; }
+.mu-tracker.flash-progress { animation: mu-tracker-pulse 0.9s ease-out; }
+@keyframes mu-tracker-flash { 0% { box-shadow: 0 0 0 2px #fff0b0, 0 0 0 6px rgba(242, 193, 78, 0.9), 0 0 28px rgba(242, 193, 78, 0.9); transform: scale(1.03); } 100% { transform: none; } }
+@keyframes mu-tracker-pulse { 0% { box-shadow: 0 0 0 1px #1f1309, 0 0 0 4px rgba(242, 193, 78, 0.75), 0 0 16px rgba(242, 193, 78, 0.6); } }
+
+/* ---- "What now?" ---- */
+.mu-whatnow { width: 100%; padding: 8px 12px 9px; pointer-events: auto; animation: mu-slide-up 0.18s var(--ease) both; box-shadow: 0 0 0 1px #1f1309, 0 0 0 2px rgba(110, 138, 196, 0.9), 0 0 0 3px #1f1309, 0 6px 18px rgba(0, 0, 0, 0.45), inset 0 0 18px rgba(120, 78, 22, 0.26); }
+.mu-whatnow-head { display: flex; align-items: center; gap: 7px; font-size: 16px; color: var(--lapis); }
+.mu-whatnow-head .mu-x.small { width: 22px; height: 22px; }
+.mu-whatnow-list { display: flex; flex-direction: column; gap: 4px; margin: 7px 0 6px; }
+.mu-whatnow-row { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; text-align: left; cursor: pointer; border: 1px solid var(--rule-soft); border-radius: 3px; background: rgba(255, 250, 232, 0.5); }
+.mu-whatnow-row:hover { background: rgba(255, 244, 205, 0.9); border-color: #8a6410; }
+.mu-whatnow-row.first { border-color: var(--rule); background: linear-gradient(180deg, rgba(251, 231, 160, 0.55), rgba(255, 244, 210, 0.4)); }
+.mu-whatnow-n { flex: none; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; font-size: 12px; font-weight: 700; color: #fff4d6; background: var(--lapis); }
+.mu-whatnow-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; line-height: 1.28; }
+.mu-whatnow-where { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ink-3); }
+.mu-whatnow-go { flex: none; font-size: 12px; font-weight: 700; color: var(--lapis); text-decoration: underline; text-decoration-color: rgba(29, 65, 143, 0.4); }
+.mu-whatnow-foot { display: flex; align-items: center; gap: 8px; }
+
+/* ---- the compass ribbon ---- */
+.mu-hud > .mu-compass { left: 50%; top: 10px; transform: translateX(-50%); width: min(520px, calc(100% - 680px)); height: 64px; pointer-events: none; }
+.mu-compass { background: var(--paper); border-radius: 3px; box-shadow: 0 0 0 1px #1f1309, 0 0 0 2px rgba(172, 130, 58, 0.85), 0 0 0 3px #1f1309, 0 5px 14px rgba(0, 0, 0, 0.45), inset 0 0 14px rgba(120, 78, 22, 0.26); opacity: 0.95; overflow: hidden; }
+.mu-compass-ticks { position: absolute; left: 0; bottom: 0; display: block; }
+.mu-compass-notch { position: absolute; left: 50%; bottom: 0; width: 0; height: 0; margin-left: -5px; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 7px solid var(--vermilion); filter: drop-shadow(0 -1px 0 rgba(255, 244, 205, 0.8)); }
+.mu-compass-marks { position: absolute; inset: 0; }
+.mu-compass-mark { position: absolute; top: 3px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 0; pointer-events: auto; }
+.mu-compass-ico { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: rgba(26, 17, 9, 0.9); color: var(--c, #f2c14e); box-shadow: 0 0 0 1px rgba(255, 244, 205, 0.55); }
+.mu-compass-dist { font-size: 10.5px; line-height: 1.1; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; text-shadow: 0 0 3px rgba(255, 244, 205, 0.9); }
+.mu-compass-mark.primary .mu-compass-ico { width: 26px; height: 26px; box-shadow: 0 0 0 2px #fff0b0, 0 0 10px rgba(242, 193, 78, 0.95); animation: mu-throb 1.6s ease-in-out infinite; }
+.mu-compass-mark.primary { top: 1px; }
+.mu-compass-mark.edge .mu-compass-ico { opacity: 0.85; }
+.mu-compass-mark.edge[data-side='-1'] .mu-compass-ico::before { content: '‹'; position: absolute; margin-left: -18px; color: var(--vermilion); font-size: 18px; font-weight: 700; }
+.mu-compass-mark.edge[data-side='1'] .mu-compass-ico::after { content: '›'; position: absolute; margin-left: 18px; color: var(--vermilion); font-size: 18px; font-weight: 700; }
+
+/* ---- the minimap ---- */
+.mu-minimap { width: 100%; padding: 6px 12px 8px; pointer-events: auto; }
+.mu-minimap-head { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 13px; font-weight: 700; font-variant: small-caps; letter-spacing: 0.06em; color: var(--ink); }
+.mu-minimap-head svg { color: var(--vermilion); }
+.mu-minimap-place { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mu-minimap-btn { width: 20px; height: 20px; display: grid; place-items: center; border: 1px solid var(--rule); border-radius: 3px; background: rgba(255, 250, 232, 0.6); color: var(--ink-2); cursor: pointer; padding: 0; }
+.mu-minimap-btn:hover { background: #fff4d0; border-color: #8a6410; color: var(--ink); }
+.mu-minimap-frame { position: relative; border-radius: 3px; overflow: hidden; box-shadow: 0 0 0 1px #3a2815, 0 0 0 2px rgba(172, 130, 58, 0.7); line-height: 0; }
+.mu-minimap-canvas { display: block; cursor: pointer; }
+.mu-minimap-shade { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 18px rgba(100, 66, 20, 0.5); }
+.mu-minimap-caption { margin-top: 5px; font-size: 11px; color: var(--ink-3); letter-spacing: 0.02em; display: flex; gap: 8px; align-items: center; }
+.mu-minimap-caption i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 3px; vertical-align: -0.05em; border: 1px solid rgba(42, 27, 15, 0.7); }
+
+/* ---- arrows on the screen edge ---- */
+.mu-hud > .mu-edge { inset: 0; pointer-events: none; }
+.mu-edge-item { position: absolute; left: 0; top: 0; width: 0; height: 0; color: var(--c, #f2c14e); }
+.mu-edge-arrow { position: absolute; left: -14px; top: -14px; width: 28px; height: 28px; display: block; filter: drop-shadow(0 0 5px rgba(0, 0, 0, 0.8)) drop-shadow(0 0 8px var(--c, #f2c14e)); animation: mu-edge-bob 1.4s ease-in-out infinite; }
+.mu-edge-arrow svg { display: block; }
+.mu-edge-label { position: absolute; white-space: nowrap; font-size: 12.5px; font-weight: 700; color: var(--cream); padding: 2px 9px 3px; border-radius: 11px; background: rgba(26, 17, 9, 0.82); box-shadow: 0 0 0 1px rgba(236, 189, 66, 0.5); text-shadow: 0 1px 2px #000; }
+.mu-edge-item[data-h='left'] .mu-edge-label { left: 22px; top: -11px; }
+.mu-edge-item[data-h='right'] .mu-edge-label { right: 22px; top: -11px; }
+.mu-edge-item[data-v='top'] .mu-edge-label { top: 18px; left: -40px; right: auto; }
+.mu-edge-item[data-v='bottom'] .mu-edge-label { top: -38px; left: -40px; right: auto; }
+@keyframes mu-edge-bob { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+/* ---- the settlement banner ---- */
+.mu-hud > .mu-banner { left: 50%; top: 84px; transform: translateX(-50%); display: none; align-items: center; gap: 14px; padding: 10px 28px 11px 20px; background: var(--paper); border-radius: 3px; box-shadow: 0 0 0 1px #1f1309, 0 0 0 3px rgba(214, 170, 70, 0.95), 0 0 0 4px #1f1309, 0 10px 26px rgba(0, 0, 0, 0.55), inset 0 0 22px rgba(120, 78, 22, 0.3); pointer-events: none; max-width: min(640px, calc(100% - 40px)); }
+.mu-banner.on { display: flex; animation: mu-banner 6s ease both; }
+.mu-banner-orn { color: var(--gold); display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; border: 1px solid #6b4a06; background: var(--gold-leaf); flex: none; }
+.mu-banner-orn svg { color: #3a2506; }
+.mu-banner-name { font-size: 28px; line-height: 1.05; font-weight: 700; font-variant: small-caps; letter-spacing: 0.14em; color: #6f4f0b; background: var(--gold-ink); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 1px 0 rgba(255, 244, 205, 0.55)); padding-bottom: 2px; }
+.mu-banner-sub { font-size: 14.5px; font-style: italic; color: var(--ink-2); margin-top: 1px; }
+@keyframes mu-banner { 0% { opacity: 0; transform: translate(-50%, -12px); } 7% { opacity: 1; transform: translate(-50%, 0); } 84% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -4px); } }
+
+/* ---- the tooltip that follows the free cursor ---- */
+.mu-hud > .mu-hover { left: 0; top: 0; min-width: 150px; max-width: 320px; padding: 7px 11px 8px; background: linear-gradient(180deg, #fbf1d6, #ecd8a4); border: 1px solid #3a2815; border-radius: 3px; box-shadow: 0 0 0 1px rgba(172, 130, 58, 0.7), 0 6px 16px rgba(0, 0, 0, 0.5); pointer-events: none; will-change: transform; }
+.mu-hover-head { display: flex; align-items: center; gap: 8px; }
+.mu-hover-ico { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: rgba(26, 17, 9, 0.88); color: var(--gold-hi); }
+.mu-hover-names { flex: 1; min-width: 0; }
+.mu-hover-name { font-weight: 700; font-size: 15px; line-height: 1.2; }
+.mu-hover-sub { font-size: 12.5px; font-style: italic; color: var(--ink-3); line-height: 1.2; }
+.mu-hover-dist { flex: none; align-self: flex-start; font-size: 11.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.mu-hover-act { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 7px; margin-top: 6px; padding-top: 5px; border-top: 1px solid var(--rule-soft); font-size: 13.5px; }
+.mu-hover-act b { color: #4d3306; letter-spacing: 0.02em; }
+.mu-hover-mouse { align-self: center; color: var(--gold); margin-right: -2px; }
+.mu-hover-note { font-size: 12.5px; color: var(--ink-3); }
+.mu-hover.off .mu-hover-act b { color: var(--ink-3); }
+.mu-hover.off .mu-hover-note { color: var(--vermilion); font-style: italic; }
+.mu-hover.bare { min-width: 0; padding: 5px 10px 6px; }
+.mu-hover.bare .mu-hover-head { display: none; }
+.mu-hover.bare .mu-hover-act { margin: 0; padding: 0; border: none; }
+.mu-hover.kin .mu-hover-name { color: #7a5206; }
+.mu-hover.household .mu-hover-name { color: #8a5a10; }
+.mu-hover.friend .mu-hover-name { color: var(--green); }
+.mu-hover.foe .mu-hover-name { color: var(--vermilion); }
+.mu-hover.lord .mu-hover-name { color: #5a3d8a; }
+
+/* ---- where a click-to-act walk is going ---- */
+.mu-hud > .mu-dest { left: 0; top: 0; width: 0; height: 0; pointer-events: none; will-change: transform; }
+.mu-dest-ring { position: absolute; left: -17px; top: -9px; width: 34px; height: 18px; border-radius: 50%; border: 2px solid rgba(255, 244, 205, 0.95); box-shadow: 0 0 0 1px rgba(20, 12, 4, 0.8), 0 0 12px rgba(242, 193, 78, 0.8); animation: mu-dest 1.2s ease-out infinite; }
+.mu-dest-tag { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-size: 12.5px; font-weight: 700; color: var(--cream); padding: 1px 9px 2px; border-radius: 11px; background: rgba(26, 17, 9, 0.8); text-shadow: 0 1px 2px #000; }
+@keyframes mu-dest { 0% { transform: scale(0.7); opacity: 1; } 100% { transform: scale(1.35); opacity: 0.25; } }
+
+/* ---- the drawn-weapon chip ---- */
+.mu-hud > .mu-hud-drawn { left: 50%; bottom: 196px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 9px; padding: 4px 16px 5px 12px; border-radius: 16px; background: rgba(22, 13, 6, 0.84); color: var(--cream); font-size: 13.5px; white-space: nowrap; box-shadow: 0 0 0 1px rgba(236, 189, 66, 0.5); text-shadow: 0 1px 2px #000; pointer-events: none; }
+.mu-hud-drawn svg { color: var(--gold-hi); }
+.mu-hud-drawn b { color: var(--gold-hi); }
+.mu-hud-drawn.free { box-shadow: 0 0 0 1px rgba(242, 100, 76, 0.8), 0 0 14px rgba(242, 100, 76, 0.45); animation: mu-pulse 1.6s ease-in-out infinite; }
+.mu-hud-drawn .mu-dim { color: #cdb98d; }
+.mu-hud-drawn .mu-key { height: 18px; min-width: 18px; font-size: 11px; }
+
+/* ---- toasts make room for the banner; the day type under the date; the dock gains the journal button ---- */
+.mu-hud > .mu-toasts { transition: top 0.3s var(--ease); top: 76px; }
+.mu-hud.with-banner > .mu-toasts { top: 150px; }
+.mu-hud-daytype { margin-top: 5px; font-size: 12.5px; font-style: italic; color: var(--ink-2); line-height: 1.3; pointer-events: none; }
+.mu-hud > .mu-dock { width: 312px; }
+.mu-hud > .mu-dock.compact { width: auto; }
+
+/* ---- the journal ---- */
+.mu-journal-win .mu-win-body { display: flex; flex-direction: column; overflow: hidden; }
+.mu-journal-body { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.mu-journal-split { display: grid; grid-template-columns: 340px minmax(0, 1fr); flex: 1 1 auto; min-height: 0; }
+.mu-journal-list { border-right: 1px solid var(--rule-soft); padding: 4px 12px 14px 22px; min-height: 0; }
+.mu-journal-detail { padding: 16px 26px 20px; min-height: 0; }
+.mu-journal-empty { flex: 1; display: grid; place-items: center; }
+.mu-jhead { display: flex; align-items: center; gap: 6px; margin: 12px 0 4px; font-size: 12.5px; font-variant: small-caps; letter-spacing: 0.09em; font-weight: 700; color: var(--gold); }
+.mu-jhead.wide { margin: 14px 0 4px; font-size: 14px; padding-bottom: 2px; border-bottom: 1px solid var(--rule-soft); }
+.mu-jrow { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 8px; margin-bottom: 3px; text-align: left; cursor: pointer; border: 1px solid transparent; border-radius: 3px; background: transparent; color: var(--ink); }
+.mu-jrow:hover { background: rgba(255, 244, 205, 0.7); border-color: var(--rule-soft); }
+.mu-jrow.sel { background: var(--lapis-wash); border-color: var(--lapis); }
+.mu-jrow.done { opacity: 0.7; }
+.mu-jrow-ico { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: rgba(26, 17, 9, 0.88); color: var(--gold-hi); }
+.mu-jrow.done .mu-jrow-ico { background: var(--green); color: #f4f0dc; }
+.mu-jrow-main { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.mu-jrow-title { font-weight: 700; font-size: 15px; }
+.mu-jrow-sub { font-size: 12px; color: var(--ink-3); }
+.mu-jrow-bar { flex: none; width: 46px; }
+.mu-jdetail-src { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-variant: small-caps; letter-spacing: 0.09em; font-weight: 700; color: var(--gold); }
+.mu-jdetail-title { font-size: 24px; line-height: 1.15; font-weight: 700; margin: 4px 0 6px; }
+.mu-jdetail-why { font-style: italic; color: var(--ink-2); font-size: 15px; line-height: 1.45; margin-bottom: 12px; }
+.mu-jsteps { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.mu-jstep { display: flex; gap: 8px; padding: 7px 10px; border-radius: 3px; border: 1px solid transparent; }
+.mu-jstep.now { background: linear-gradient(180deg, rgba(251, 231, 160, 0.55), rgba(255, 244, 210, 0.35)); border-color: var(--rule); }
+.mu-jstep.done { color: var(--ink-3); }
+.mu-jstep.done .mu-jstep-text { text-decoration: line-through; text-decoration-color: rgba(88, 58, 24, 0.5); }
+.mu-jstep-mark { flex: none; margin-top: 1px; color: var(--gold); }
+.mu-jstep.done .mu-jstep-mark { color: var(--green); }
+.mu-jstep.todo .mu-jstep-mark { color: var(--ink-3); }
+.mu-jstep-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.mu-jstep-text { font-size: 15.5px; line-height: 1.3; font-weight: 700; }
+.mu-jstep.done .mu-jstep-text, .mu-jstep.todo .mu-jstep-text { font-weight: 400; }
+.mu-jstep-hint { font-size: 13.5px; font-style: italic; color: var(--ink-2); }
+.mu-jstep-where { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--ink-3); }
+.mu-jdetail-reward { display: flex; align-items: center; gap: 6px; margin-top: 12px; font-size: 14px; color: var(--ink-2); }
+.mu-jdetail-reward svg { color: var(--gold); }
+.mu-journal-pin { display: flex; align-items: center; gap: 7px; padding: 6px 24px; border-top: 1px solid var(--rule-soft); background: rgba(127, 208, 216, 0.16); font-size: 13.5px; flex: none; }
+.mu-journal-people { padding: 4px 28px 18px; min-height: 0; flex: 1 1 auto; }
+.mu-prow { display: flex; align-items: center; gap: 12px; padding: 7px 4px; border-bottom: 1px solid var(--rule-soft); }
+.mu-prow.found { background: linear-gradient(90deg, rgba(242, 193, 78, 0.28), rgba(242, 193, 78, 0.04)); box-shadow: inset 3px 0 0 var(--gold, #c79a25); }
+.mu-prow-ico { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: rgba(26, 17, 9, 0.88); color: var(--gold-hi); }
+.mu-prow-main { flex: 1; min-width: 0; }
+.mu-prow-name { font-size: 15.5px; }
+.mu-prow-sub { font-size: 13px; color: var(--ink-3); }
+.mu-journal-today { padding: 16px 28px 22px; min-height: 0; flex: 1 1 auto; }
+.mu-today-hero { padding: 6px 0 14px; border-bottom: 1px solid var(--rule); margin-bottom: 14px; }
+.mu-today-date { font-size: 12.5px; font-variant: small-caps; letter-spacing: 0.1em; font-weight: 700; color: var(--gold); }
+.mu-today-head { font-size: 26px; line-height: 1.15; font-weight: 700; margin: 3px 0 6px; }
+.mu-today-blurb { font-size: 15.5px; line-height: 1.5; color: var(--ink-2); max-width: 760px; }
+.mu-today-sun { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 13.5px; color: var(--ink-2); }
+.mu-today-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.mu-today-card h4 { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; font-size: 15px; }
+.mu-today-card h4 svg { color: var(--gold); }
+.mu-today-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px dotted var(--rule-soft); font-size: 14.5px; }
+.mu-today-row.col { flex-direction: column; align-items: stretch; gap: 2px; }
+.mu-today-row:last-child { border-bottom: none; }
+
+/* ---- the day summary ---- */
+.mu-day-win .mu-win-body { padding-top: 10px; }
+.mu-day-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 24px; }
+.mu-day-sec h4 { display: flex; align-items: center; gap: 6px; font-size: 14px; font-variant: small-caps; letter-spacing: 0.08em; color: var(--gold); margin: 0 0 5px; padding-bottom: 2px; border-bottom: 1px solid var(--rule-soft); }
+.mu-day-sec.gold { grid-column: 1 / -1; padding: 8px 12px 9px; border: 1px solid var(--rule); border-radius: 3px; background: linear-gradient(180deg, rgba(251, 231, 160, 0.5), rgba(255, 244, 210, 0.3)); }
+.mu-day-line { display: flex; align-items: flex-start; gap: 7px; padding: 2px 0; font-size: 14.5px; line-height: 1.35; }
+.mu-day-line svg { flex: none; margin-top: 3px; color: var(--ink-3); }
+.mu-day-line.good svg { color: var(--green); }
+.mu-day-line.gain { color: #5a4004; font-weight: 700; }
+.mu-day-line.gain svg { color: var(--gold); }
+.mu-day-line.loss svg { color: var(--vermilion); }
+.mu-day-empty { display: flex; flex-direction: column; gap: 14px; }
+
+/* ---- the intro card and the camera tour ---- */
+.mu-intro-win { max-width: 640px; }
+.mu-intro-text p { font-size: 17px; line-height: 1.55; }
+.mu-intro-keys { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--rule-soft); }
+.mu-intro-key { display: flex; align-items: center; gap: 5px; font-size: 14px; color: var(--ink-2); }
+.mu-intro-key svg { color: var(--gold); }
+.mu-intro-note { margin-top: 10px; }
+.mu-hud.dimmed { opacity: 0; }
+.mu-tour { position: absolute; inset: 0; pointer-events: auto; cursor: pointer; }
+.mu-tour-label { position: absolute; left: 0; top: 0; margin: -14px 0 0 0; display: inline-flex; align-items: center; gap: 6px; padding: 4px 14px 5px 10px; font-size: 18px; font-weight: 700; color: var(--cream); background: rgba(26, 17, 9, 0.86); border-radius: 18px; box-shadow: 0 0 0 1.5px rgba(236, 189, 66, 0.8), 0 4px 14px rgba(0, 0, 0, 0.5); opacity: 0; transition: opacity 0.4s; white-space: nowrap; translate: -50% -100%; }
+.mu-tour-label.on { opacity: 1; }
+.mu-tour-label svg { color: var(--gold-hi); }
+.mu-tour-caption { position: absolute; left: 50%; bottom: 56px; transform: translateX(-50%); width: min(560px, calc(100% - 60px)); padding: 10px 20px 12px; text-align: center; background: var(--paper); border-radius: 3px; box-shadow: 0 0 0 1px #1f1309, 0 0 0 3px rgba(214, 170, 70, 0.95), 0 0 0 4px #1f1309, 0 10px 26px rgba(0, 0, 0, 0.55); animation: mu-slide-up 0.3s var(--ease) both; }
+.mu-tour-cap-name { font-size: 22px; font-weight: 700; font-variant: small-caps; letter-spacing: 0.08em; color: #6f4f0b; }
+.mu-tour-cap-text { font-size: 15.5px; font-style: italic; color: var(--ink-2); margin-top: 2px; }
+.mu-tour-skip { position: absolute; right: 24px; bottom: 22px; pointer-events: auto; }
+
+/* ---- a few narrower-window adjustments ---- */
+@media (max-width: 1100px) {
+  .mu-hud > .mu-compass { width: min(420px, calc(100% - 640px)); }
+}

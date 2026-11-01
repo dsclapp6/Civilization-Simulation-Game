@@ -13,6 +13,7 @@ import { installEconomy } from '../../sim/economy';
 import { installSocial } from '../../sim/social';
 import { installPlayer } from '../../player';
 import { MockEconomy } from './mockEconomy';
+import { MockObjectives } from './mockObjectives';
 import { MockPlayer } from './mockPlayer';
 import { MockSocial } from './mockSocial';
 
@@ -25,6 +26,7 @@ export interface MockGame extends GameServices {
   economy: MockEconomy;
   social: MockSocial;
   player: MockPlayer;
+  objectives: MockObjectives;
 }
 
 function makeZone(sim: Simulation): ZoneApi {
@@ -63,7 +65,7 @@ export function makeGame(sim: Simulation): MockGame {
   const economy = new MockEconomy(sim);
   const zone = makeZone(sim);
   const player = new MockPlayer(sim, social, zone);
-  return { sim, economy, social, zone, player };
+  return { sim, economy, social, zone, player, objectives: new MockObjectives(sim, zone) };
 }
 
 let worldCache: WorldModel | null = null;

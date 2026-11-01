@@ -119,3 +119,107 @@ export function mouseLook(dx: number, dy: number, sensitivity: number, invertY: 
   const k = 0.0022 * sensitivity;
   return { yaw: -dx * k, pitch: dy * k * (invertY ? -1 : 1) };
 }
+
+// ---------------------------------------------------------------------------------------------------
+// The mouse (CLARITY §5): a free cursor by default, the right button turns the camera while held, a left click
+// walks to the thing and acts; with the weapon drawn (or the old "always mouse-look" scheme) the mouse looks and
+// the buttons strike and guard. The click that takes the mouse never strikes.
+// ---------------------------------------------------------------------------------------------------
+
+export interface MouseCtx {
+  /** In the game with the street camera and no panel holding the focus. */
+  active: boolean;
+  /** Mouse-look mode: the weapon is drawn, or the player chose "always mouse-look". */
+  combat: boolean;
+  /** The pointer is locked right now. */
+  locked: boolean;
+  /** The event started on the 3D view, not on an interface plate. */
+  onView: boolean;
+}
+
+export interface MouseOut {
+  /** Ask the browser to lock the pointer (the mouse is taken for looking). */
+  lock: boolean;
+  /** Give the pointer back (the right button went up). */
+  unlock: boolean;
+  /** A left click on the world at this client position (walk there and act). */
+  click: { x: number; y: number } | null;
+}
+
+/** A press this far (pixels of travel) or this long (s) is a drag or a hold, not a click. */
+export const CLICK_SLOP = 8;
+export const CLICK_SECONDS = 0.7;
+
+export class MouseModes {
+  /** Left and right buttons as the combat module sees them (only in mouse-look mode, with the pointer locked). */
+  attack = false;
+  block = false;
+  /** The right button is down in free mode: moving the mouse turns the camera. */
+  lookHeld = false;
+  private left: { x: number; y: number; moved: number; t: number } | null = null;
+  private readonly out: MouseOut = { lock: false, unlock: false, click: null };
+
+  private fresh(): MouseOut {
+    const o = this.out;
+    o.lock = false; o.unlock = false; o.click = null;
+    return o;
+  }
+
+  down(button: number, x: number, y: number, c: MouseCtx, now: number): MouseOut {
+    const o = this.fresh();
+    if (!c.active || !c.onView) return o;
+    if (button === 0) {
+      if (c.combat) {
+        if (!c.locked) o.lock = true; // the click that takes the mouse is not a blow
+        else this.attack = true;
+      } else this.left = { x, y, moved: 0, t: now };
+    } else if (button === 2) {
+      if (c.combat) {
+        if (!c.locked) o.lock = true;
+        else this.block = true;
+      } else {
+        this.lookHeld = true;
+        o.lock = true;
+      }
+    }
+    return o;
+  }
+
+  up(button: number, x: number, y: number, c: MouseCtx, now: number): MouseOut {
+    const o = this.fresh();
+    if (button === 0) {
+      this.attack = false;
+      const l = this.left;
+      this.left = null;
+      if (l && c.active && c.onView && !c.combat && l.moved <= CLICK_SLOP && now - l.t <= CLICK_SECONDS && !this.lookHeld) o.click = { x, y };
+    } else if (button === 2) {
+      this.block = false;
+      if (this.lookHeld) {
+        this.lookHeld = false;
+        if (c.locked && !c.combat) o.unlock = true;
+      }
+    }
+    return o;
+  }
+
+  /** Mouse travel (pixels) while a left press is pending: too much and it is a drag, not a click. */
+  travel(dx: number, dy: number): void {
+    if (this.left) this.left.moved += Math.abs(dx) + Math.abs(dy);
+  }
+
+  /** Does moving the mouse turn the camera now? */
+  orbiting(c: MouseCtx): boolean { return c.active && (c.locked || this.lookHeld); }
+
+  /** The window lost the focus, a panel opened, the weapon went away: forget every button. */
+  clear(): void {
+    this.attack = false; this.block = false; this.lookHeld = false; this.left = null;
+  }
+}
+
+/** What Esc does with the mouse: leave mouse-look first (it never opens the menu), then the interface's own rules. */
+export function escapeFor(s: { locked: boolean; lookHeld: boolean; msSinceLockLost: number }): 'leave-look' | 'ignore' | 'ui' {
+  if (s.locked || s.lookHeld) return 'leave-look';
+  // the browser took the pointer back for this very key press and the key event came along too
+  if (s.msSinceLockLost < 250) return 'ignore';
+  return 'ui';
+}

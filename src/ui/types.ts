@@ -38,10 +38,15 @@ export interface Settings {
   pauseInMenus?: boolean;
   /** First-minutes hints (wave 4). Default true. */
   hints?: boolean;
+  /** Clarity pass: the old scheme where the mouse always turns the camera (left button strikes, right guards). Default false. */
+  alwaysLook?: boolean;
+  /** Clarity pass: the corner minimap (N). Default true. */
+  minimap?: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   quality: 'medium', mouseSensitivity: 1, invertY: false, volume: 0.7, labels: true, uiScale: 1, pauseInMenus: true, hints: true,
+  alwaysLook: false, minimap: true,
 };
 
 /** Renderer controls the UI may use (map panel, settings). */
@@ -53,6 +58,13 @@ export interface UiRendererControls {
   project(x: number, y: number, z: number): { x: number; y: number } | null;
   /** World point under a screen position (map clicks), or null. */
   screenToGround(x: number, y: number): { x: number; z: number } | null;
+  // ---- clarity pass (optional so the gallery's fake and old tests need not implement them) ----
+  /** Which way the camera faces (radians, 0 = +z): the compass and the edge arrows. */
+  cameraYaw?(): number;
+  /** The camera's current mode. */
+  cameraMode?(): 'follow' | 'map' | 'free' | 'cinematic';
+  /** Puts the camera somewhere for a cut-scene (switches to 'free'); `setCameraMode('follow')` brings it back. */
+  setCameraPose?(position: { x: number; y: number; z: number }, lookAt: { x: number; y: number; z: number }, seconds?: number): void;
 }
 
 /** The app side of the UI: lifecycle and meta state. */
@@ -69,6 +81,13 @@ export interface UiHost {
   settings(): Settings;
   setSettings(change: Partial<Settings>): void;
   renderer(): UiRendererControls | null;
+  /**
+   * Esc: if the mouse is looking (pointer lock), give it back and say so (true). Esc never opens the menu for that
+   * press; with the mouse already free it returns false and the UI closes its top page or shows the menu.
+   */
+  releaseMouseLook?(): boolean;
+  /** Is the mouse looking (pointer locked) right now? The HUD tells a drawn weapon with a free cursor from one with the mouse taken. */
+  mouseLooking?(): boolean;
 }
 
 export type UiScreen = 'menu' | 'loading' | 'game';
@@ -103,6 +122,12 @@ export interface GameUIExt extends GameUI {
   showBirth(): void;
   /** Shows one hint of the first-minutes guide now (tools and tests). */
   showHint?(id: string): boolean;
+  /** Opens or closes the "What now?" card (Y) (tools and tests). */
+  toggleWhatNow?(): void;
+  /** Shows the settlement banner for where the player stands now (tools and tests). */
+  showBanner?(): void;
+  /** The UI's own notes for tools and tests: the pinned place, the open cards. */
+  debugState?(): { pin: { x: number; z: number; label: string } | null; whatNowOpen: boolean; tracker: string };
 }
 
 /** Optional economy members the UI uses when the economy provides them. */

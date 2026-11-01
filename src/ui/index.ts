@@ -5,6 +5,7 @@ import './style/theme.css';
 import './style/hud.css';
 import './style/screens.css';
 import './style/panels.css';
+import './style/clarity.css';
 
 export const createUI: CreateUI = (root, host): GameUIExt => createUiApp(root, host);
 

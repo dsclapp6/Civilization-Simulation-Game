@@ -20,6 +20,7 @@ import { PauseController } from '../core/pause';
 import { effectiveScale } from '../core/scale';
 import { panelForKey, type PanelRequest } from '../core/requests';
 import { PanelStack } from '../core/stack';
+import { PinStore } from '../core/pins';
 import {
   noticeForBattle, noticeForCall, noticeForHappening, noticeForRaid, noticeForRequest, noticeForSiege, noticeForWar, type NoticeCtx,
 } from '../core/notices';
@@ -33,6 +34,7 @@ import { MenuLayer, type MenuView } from '../screens/menu';
 import type { GameServices, GameUIExt, UiHost, UiScreen } from '../types';
 import type { ConfirmOptions, PanelCtx, PanelRecord, UiHooks, UiPanel } from './panel';
 import { Tooltips } from './tooltips';
+import { SoundDirector } from '../audio/director';
 
 interface Bound { game: GameServices; offs: Array<() => void>; pause: PauseController }
 
@@ -60,6 +62,12 @@ export class UiApp implements GameUIExt {
   private readonly stack: PanelStack<UiPanel>;
   private readonly records = new Map<UiPanel, PanelRecord>();
   private readonly offs: Array<() => void> = [];
+  private readonly pins = new PinStore();
+  private readonly sound: SoundDirector;
+  /** After the birth reveal of a new run comes the intro card (CLARITY §6). */
+  private introPending = false;
+  /** A day summary is waiting for the player to wake up. */
+  private summaryDay: number | null = null;
 
   private readonly hooks: UiHooks = {
     quitToMenu: () => { void this.leaveToMenu(); },
@@ -100,6 +108,9 @@ export class UiApp implements GameUIExt {
       say: (kind, text) => this.say(kind, text),
       placeName: (id) => this.placeName(id),
       onEncounter: () => this.onEncounter(),
+      pins: this.pins,
+      scale: () => this.scale,
+      nameOf: (id) => this.nameOf(id),
     });
     this.menu = new MenuLayer({
       host,
@@ -119,6 +130,7 @@ export class UiApp implements GameUIExt {
     this.root.append(goldDefs(), this.menu.el, this.loading.el, this.hudLayer, this.panelLayer, this.tipLayer);
     parent.appendChild(this.root);
     this.tooltips = new Tooltips(this.root, this.tipLayer);
+    this.sound = new SoundDirector(host, this.root);
 
     const onKey = (e: KeyboardEvent): void => this.onKeyDown(e);
     window.addEventListener('keydown', onKey, true);
@@ -150,6 +162,7 @@ export class UiApp implements GameUIExt {
     }
     const sim = this.bound!.game.sim;
     if (sim.state.run.phase === 'alive') this.guardedHud();
+    try { this.sound.update(this.clock); } catch (err) { console.error('sound failed', err); }
     for (const p of [...this.stack.all()]) {
       try { p.tick?.(this.clock); } catch (err) {
         console.error(`panel "${p.id}" failed while updating; closing it`, err);
@@ -224,6 +237,7 @@ export class UiApp implements GameUIExt {
   dispose(): void {
     this.unbind();
     this.tooltips.dispose();
+    this.sound.dispose();
     for (const off of this.offs) off();
     this.root.remove();
   }
@@ -256,6 +270,14 @@ export class UiApp implements GameUIExt {
   /** Dev and screenshot hook: shows one hint of the first-minutes guide now. */
   showHint(id: string): boolean { return this.guide.force(id); }
 
+  toggleWhatNow(): void { this.hud.whatNow.toggle(); }
+
+  showBanner(): void { this.hud.announce(); }
+
+  debugState(): { pin: { x: number; z: number; label: string } | null; whatNowOpen: boolean; tracker: string } {
+    return { pin: this.pins.get(), whatNowOpen: this.hud.whatNow.isOpen(), tracker: this.hud.tracker.el.textContent ?? '' };
+  }
+
   closePanel(id: string): void { this.stack.close(id); }
   isOpen(id: string): boolean { return this.stack.has(id); }
   openPanels(): string[] { return this.stack.all().map((p) => p.id); }
@@ -281,6 +303,8 @@ export class UiApp implements GameUIExt {
     this.hud.setVisible(true);
     if (this.pendingBirth) {
       this.pendingBirth = false;
+      this.introPending = true;
+      this.hud.suppressBanner = true;
       this.openPanel({ panel: 'birth' });
     }
     this.lastChronicle = g.sim.state.chronicle[g.sim.state.chronicle.length - 1] ?? null;
@@ -361,7 +385,11 @@ export class UiApp implements GameUIExt {
       on('raid', (e) => this.notice(noticeForRaid(e, this.noticeCtx()))),
       on('battle', (e) => this.notice(noticeForBattle(e, this.noticeCtx()))),
       on('happening', (e) => this.notice(noticeForHappening(e, this.noticeCtx()))),
+      on('objective', (e) => this.onObjective(e)),
+      on('dayEnd', (e) => this.onDayEnd(e)),
+      on('skip', (e) => { if (e.phase !== 'start' && this.summaryDay !== null) this.showSummarySoon(true); }),
     );
+    this.sound.bind(game);
     this.seenChronicle.clear();
     this.hud.reset();
     this.guide.reset(sim.state.seed);
@@ -369,6 +397,8 @@ export class UiApp implements GameUIExt {
 
   private unbind(): void {
     const b = this.bound;
+    this.sound.bind(null);
+    this.summaryDay = null;
     if (!b) { this.stack.clear(); return; }
     // close the panels while still bound so a pause the UI is holding is released with them
     this.stack.clear();
@@ -490,6 +520,35 @@ export class UiApp implements GameUIExt {
     for (let k = fresh.length - 1; k >= 0; k--) this.feedChronicle(fresh[k]);
   }
 
+  // ---------------------------------------------------------------------------------- objectives and the day
+
+  /** A task was added, moved on or finished: say so, and draw the eye to the tracker. */
+  private onObjective(e: SimEvents['objective']): void {
+    this.hud.tracker.flash(e.phase === 'added' ? 'added' : e.phase === 'progress' ? 'progress' : 'done');
+    if (e.phase === 'added') this.toasts.push({ tone: 'lapis', icon: 'flag', title: 'A new task', text: e.title, ttl: 6, key: `obj-${e.id}` }, this.clock);
+    else if (e.phase === 'done') this.toasts.push({ tone: 'gold', icon: 'check', title: 'Task done', text: e.title, ttl: 6, key: `obj-${e.id}` }, this.clock);
+    else if (e.phase === 'failed' || e.phase === 'expired') this.toasts.push({ tone: 'vermilion', icon: 'warning', title: e.phase === 'failed' ? 'Task failed' : 'Task lapsed', text: e.title, ttl: 6, key: `obj-${e.id}` }, this.clock);
+  }
+
+  /** The player's day closed: show the summary when they wake (a skip of time is on), or offer it if they are up at midnight. */
+  private onDayEnd(e: SimEvents['dayEnd']): void {
+    this.summaryDay = e.day;
+    const g = this.bound?.game;
+    // asleep (a skip of time is on): the card waits for the waking. Up at midnight: a note you may open, never a page that
+    // stops the world in the middle of whatever you are doing.
+    if (g && !g.sim.view.clock().skipping) this.showSummarySoon(false);
+  }
+
+  private showSummarySoon(asWoken: boolean): void {
+    const day = this.summaryDay;
+    if (day === null || !this.bound) return;
+    this.summaryDay = null;
+    const g = this.bound.game;
+    if (!g.objectives?.daySummary(day)) return;
+    if (asWoken && this.screen === 'game' && !this.stack.top()) this.openPanel({ panel: 'daysummary', day });
+    else this.toasts.push({ tone: 'gold', icon: 'sunrise', title: 'A day is done', text: 'See what it brought.', ttl: 12, key: 'daysummary', action: { label: 'Read it', request: { panel: 'daysummary', day } } }, this.clock);
+  }
+
   // ---------------------------------------------------------------------------------- panels
 
   private makeCtx(holder: { panel: UiPanel | null; cleanups: Array<() => void> }): PanelCtx {
@@ -513,6 +572,8 @@ export class UiApp implements GameUIExt {
       placeName: (id) => this.placeName(id),
       describe: (key, qty) => g.economy.describe(key, qty),
       toLocal: (p) => { const s = this.scale || 1; return { x: p.x / s, y: p.y / s }; },
+      pins: this.pins,
+      nav: this.hud.nav,
     };
   }
 
@@ -536,6 +597,10 @@ export class UiApp implements GameUIExt {
         const cur = social.current();
         if (cur) social.end(cur.id);
       });
+    }
+    if (p.id === 'birth' && this.introPending && this.bound) {
+      this.introPending = false;
+      queueMicrotask(() => { if (this.bound && !this.stack.top()) this.openPanel({ panel: 'intro' }); });
     }
     const rec = this.records.get(p);
     this.records.delete(p);
@@ -609,6 +674,7 @@ export class UiApp implements GameUIExt {
       r.height = `${100 / s}%`;
     }
     this.tooltips.setScale(s);
+    this.hud.resized();
   }
 
   // ---------------------------------------------------------------------------------- keyboard
@@ -639,6 +705,13 @@ export class UiApp implements GameUIExt {
       // screens (pause, death, birth…) and conversations own the keyboard
       if (top && (top.group === 'screen' || top.group === 'dialogue' || top.group === 'trade' || top.escape === 'ignore')) return false;
       if (this.bound?.game.sim.state.run.phase !== 'alive') return false;
+      // the minimap and the "What now?" card are parts of the HUD, not pages
+      if (intent.panel === 'minimap') { this.host.setSettings({ minimap: this.host.settings().minimap === false }); return true; }
+      if (intent.panel === 'whatNow') {
+        if (top) return false;
+        this.hud.whatNow.toggle();
+        return true;
+      }
       this.togglePanelKey(intent.panel);
       return true;
     }
@@ -672,6 +745,8 @@ export class UiApp implements GameUIExt {
     const now = performance.now();
     if (now - this.lastEscapeAt < ESCAPE_DEBOUNCE_MS) return true;
     this.lastEscapeAt = now;
+    // while the mouse is looking, Esc gives it back and does nothing more with that press (it never opens the menu for it)
+    if (this.host.releaseMouseLook?.()) return true;
     const g = this.bound.game;
     if (g.sim.view.clock().skipping) { g.sim.dispatch({ type: 'cancelSkip' }); return true; }
     const top = this.stack.top();
@@ -680,6 +755,7 @@ export class UiApp implements GameUIExt {
       this.stack.escape();
       return true;
     }
+    if (this.hud.whatNow.isOpen()) { this.hud.whatNow.close(); return true; }
     if (g.sim.state.run.phase !== 'alive') return true;
     this.openPanel({ panel: 'pause' });
     return true;
