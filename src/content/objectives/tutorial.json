@@ -4,8 +4,8 @@
     "farm": ["meet", "work", "errand", "trade", "night"],
     "craft": ["meet", "work", "errand", "trade", "night"],
     "merchant": ["meet", "trade", "errand", "night"],
-    "noble": ["meet", "chapel", "lessons", "practice", "night"],
-    "baron": ["meet", "steward", "chapel", "folk", "night"]
+    "noble": ["meet", "chapel", "lessons", "errand", "trade", "night"],
+    "baron": ["meet", "steward", "folk", "errand", "trade", "night"]
   },
   "text": {
     "meet.title": "Meet your family",
@@ -56,6 +56,8 @@
     "errand.do.text": "Run an errand for {nbDesc}",
     "errand.do.hint": "Walk up to {nb}, hold E to open the action wheel, and choose 'Run an errand'.",
     "errand.reward": "A penny or two, and {nb}'s thanks",
+    "noble:errand.why": "A page learns the household by carrying its messages. {nb} has something to be taken across the way, and a coin for the trouble.",
+    "baron:errand.why": "An heir who has never carried a message does not know what a message costs. {nb} has one, and a coin for the trouble.",
 
     "trade.title": "Buy or sell something",
     "trade.title.merchant": "Mind the stall",
@@ -66,6 +68,8 @@
     "trade.do.text": "Trade at {shopDesc}",
     "trade.do.hint": "Press E and choose Trade. Sell the bread or ale in your pack, or buy something: either counts.",
     "trade.reward": "A little trade skill",
+    "noble:trade.why": "A lord who never bought or sold anything is cheated by every steward. See what {shop} gives for the bread and ale in your pack, or asks for its own.",
+    "baron:trade.why": "A lord who never bought or sold anything is cheated by every steward. See what {shop} gives for the bread and ale in your pack, or asks for its own.",
 
     "chapel.title": "Prayers at the chapel",
     "chapel.why": "A household of quality begins and ends its day at church, and the priest notes who is missing.",
@@ -83,12 +87,6 @@
     "lessons.talk.hint": "Press E to talk, then 'Ask a favour' and ask for lessons in letters.",
     "lessons.reward": "The priest's good opinion",
 
-    "practice.title": "Try your strength",
-    "practice.why": "A page learns to wrestle and to shoot before he learns to ride.",
-    "practice.go.text": "Find {peerDesc}",
-    "practice.do.text": "Wrestle with {peerDesc}",
-    "practice.do.hint": "Walk up to {peer}, hold E for the action wheel and choose 'Wrestle'. A friendly bout builds strength and agility.",
-    "practice.reward": "Strength, agility and a sparring partner",
 
     "steward.title": "Meet the steward",
     "steward.why": "A baron's heir must know who keeps the accounts, and the steward knows where every penny goes.",

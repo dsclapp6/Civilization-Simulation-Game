@@ -104,17 +104,6 @@ export function residentWith(O: Obj, me: Person, careers: readonly string[]): Pe
 export function priestOf(O: Obj, me: Person): Person | undefined { return residentWith(O, me, ['priest', 'monk', 'prior', 'abbot', 'bishop']); }
 export function stewardOf(O: Obj, me: Person): Person | undefined { return residentWith(O, me, ['steward', 'bailiff', 'clerk']); }
 
-/** Someone to wrestle with: the registry must list `social.wrestle` as doable. */
-export function peerFor(O: Obj, me: Person): Person | undefined {
-  const h = homeXZ(O, me);
-  const skip = new Set<number>([me.id]);
-  for (const p of adultsNear(O, me.settlement, h.x, h.z, 9, 24, skip)) {
-    if (O.age(p) > 45 || p.sex !== me.sex) continue;
-    if (enabledOption(O, me, { kind: 'person', id: p.id }, /^social\.wrestle/)) return p;
-  }
-  return undefined;
-}
-
 export interface Trader {
   /** What to call it in a sentence ("the market hall", "Wat's smithy", "Agnes the alewife"). */
   phrase: string;

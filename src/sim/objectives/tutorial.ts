@@ -14,7 +14,7 @@ import { CHAINS, T, cap, type Vars } from './data';
 import {
   buildingPhrase, buildingTarget, churchOf, describePerson, doorXZ, personTarget, placeTarget, stripCentre, stripPhrase, stripTarget,
 } from './places';
-import { boardFor, enabledOption, headOf, meetPerson, neighbourFor, peerFor, priestOf, stewardOf, traderFor } from './roles';
+import { boardFor, enabledOption, headOf, meetPerson, neighbourFor, priestOf, stewardOf, traderFor } from './roles';
 import type { ObjectiveTarget } from './types';
 
 const CHAIN_OF: Record<BirthClass, string> = {
@@ -204,17 +204,6 @@ function stageLessons(c: Ctx): Built {
   }], { vars, pay: { opinion: 2, skill: 'letters', xp: 8 } });
 }
 
-function stagePractice(c: Ctx): Built {
-  const { O, me } = c;
-  const peer = peerFor(O, me);
-  if (!peer) return null;
-  const vars: Vars = { ...c.vars, peer: peer.first, peerDesc: describePerson(O, peer) };
-  return make(c, 'practice', [{
-    text: T('tutorial', 'practice.do.text', vars, c.cls), hint: T('tutorial', 'practice.do.hint', vars, c.cls), target: personTarget(O, peer, describePerson(O, peer)),
-    m: { k: 'act', ids: ['social.wrestle'], at: { kind: 'person', id: peer.id }, need: 1 },
-  }], { vars, pay: { skill: 'melee', xp: 8 } });
-}
-
 function stageSteward(c: Ctx): Built {
   const { O, me } = c;
   const st = stewardOf(O, me);
@@ -257,7 +246,7 @@ function stageNight(c: Ctx): Built {
 }
 
 const STAGES: Record<string, (c: Ctx) => Built> = {
-  meet: stageMeet, work: stageWork, errand: stageErrand, trade: stageTrade, chapel: stageChapel, lessons: stageLessons, practice: stagePractice,
+  meet: stageMeet, work: stageWork, errand: stageErrand, trade: stageTrade, chapel: stageChapel, lessons: stageLessons,
   steward: stageSteward, folk: stageFolk, night: stageNight,
 };
 
