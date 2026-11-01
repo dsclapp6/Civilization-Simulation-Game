@@ -277,6 +277,19 @@ export class WoundBook {
     return clamp(pen, 0, 0.9);
   }
 
+  /**
+   * How freely the person moves, 0.45..1: a hurt leg slows, so do serious wounds anywhere and low health
+   * (a man at a tenth of his strength limps along; the same for the player and for everyone in a fight).
+   */
+  mobility(p: Person): number {
+    let m = 1 - this.limbPenalty(p.id, 'legs') * 0.55;
+    const hp = clamp(p.health.hp, 0, 1);
+    if (hp < 0.6) m *= 0.6 + 0.4 * (hp / 0.6);
+    const r = this.ext().hurt[p.id];
+    if (r) for (const w of r.wounds) if (w.severity >= 0.6) { m *= 0.9; break; }
+    return Math.max(0.45, m);
+  }
+
   // ---- inflicting ----
 
   /** Records a shaped wound on a person. Returns what became of them. */

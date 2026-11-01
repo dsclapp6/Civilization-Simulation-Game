@@ -118,7 +118,7 @@ export function applyBlow(a: Arena, att: Fighter | null, v: Fighter, b: Blow): B
   v.lastBlow = 0;
   const asleep = v.st === S.Down;
   // ---- the horse takes it ----
-  if (v.isPlayer && v.mounted && v.mountHp > 0 && b.melee && !asleep && rng.next() < 0.28) {
+  if (v.mounted && v.mountHp > 0 && b.melee && !asleep && rng.next() < 0.28) {
     a.horseStruck(v, b.dmg * 0.9, b.fromX, b.fromZ);
     return { ...none, outcome: 'stopped' };
   }

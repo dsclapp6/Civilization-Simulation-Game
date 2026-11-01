@@ -6,7 +6,7 @@ import type { AnimalKind } from '../core/domain';
 import type { AnimState, HeldItem } from '../core/view';
 import type { Person, PersonId } from '../sim/state';
 import type { Gear } from './gear';
-import { WEAPONS, type AttackDef, type AttackKey } from './weapons';
+import { WEAPONS, type AttackDef, type AttackKey, type WeaponDef } from './weapons';
 
 /** States of the body. */
 export const S = {
@@ -144,6 +144,10 @@ export class Fighter {
   mounted = false;
   mountHp = 0;
   unhorse = false;
+  /** An NPC rider's own weapon, taken up again when the lance is spent. */
+  sidearm: WeaponDef | null = null;
+  /** Seconds an NPC rider still wheels away after a pass with the lance. */
+  wheel = 0;
 
   // ---- tallies ----
   hitsLanded = 0;

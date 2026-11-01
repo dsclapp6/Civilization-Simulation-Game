@@ -235,6 +235,7 @@ export class Arena {
         f.side = si; f.fight = fight.id; f.faction = s.faction;
         side.members.push(f);
         if (f.isPlayer) fight.playerIn = true;
+        else if (s.mounted?.includes(pid)) this.mountUp(f);
       }
       for (const aid of s.animals ?? []) {
         const an = env.zone?.animals().find((a) => a.id === aid);
@@ -261,6 +262,29 @@ export class Arena {
     for (const s of fight.sides) for (const f of s.members) { f.target = null; f.cooldown = 0.3 + (hash3(f.key, fight.id) % 100) / 100; }
     env.fightsChanged();
     return fight.id;
+  }
+
+  /** An NPC rider: a destrier under him, a lance in his hand (his own weapon stays at the saddle for when it is spent). */
+  private mountUp(f: Fighter): void {
+    f.mounted = true;
+    f.mountHp = 110;
+    f.radius = 0.55;
+    f.sidearm = f.gear.weapon.mounted ? WEAPONS.sword : f.gear.weapon;
+    if (!f.gear.weapon.mounted && !f.gear.rangedMain) f.gear.weapon = WEAPONS.lance;
+    f.preferRanged = false;
+  }
+
+  /** The rider is out of the saddle (horse down, or the fight over): back on his feet with what he carries. */
+  dismount(f: Fighter): void {
+    if (!f.mounted) return;
+    f.mounted = false;
+    f.mountHp = 0;
+    f.radius = f.person && ageYears(f.person, this.absDay) < 12 ? 0.24 : 0.32;
+    if (f.gear.weapon.mounted && f.sidearm) f.gear.weapon = f.sidearm;
+    f.wheel = 0;
+    if (f.st === S.Charge) this.toIdle(f);
+    const a = f.person ? this.env.zone?.agent(f.personId) : null;
+    if (a) a.draw.mount = undefined;
   }
 
   private addFighter(f: Fighter): void {
@@ -459,6 +483,7 @@ export class Arena {
   /** Knocked down: falls, lies, may rise again later if not dying. */
   fall(f: Fighter): void {
     if (f.st === S.Down || f.st === S.Dead) return;
+    if (f.mounted && !f.isPlayer) this.dismount(f); // unhorsed
     f.set(S.Down, 'fall', 1.3);
     f.riseAt = f.person ? 3 + (this.rng.next() * 4) : 99;
     f.downT = 0;
@@ -696,8 +721,8 @@ export class Arena {
       f.hitsLanded++;
       if (!r.killed && mult > 1.2 && this.rng.next() < 0.7) this.fall(e);
       if (this.rng.next() < 0.4) {
-        f.gear.weapon = WEAPONS.sword;
-        this.env.notify('info', 'Your lance shatters on the blow.', f.personId);
+        f.gear.weapon = f.sidearm ?? WEAPONS.sword;
+        if (f.isPlayer) this.env.notify('info', 'Your lance shatters on the blow.', f.personId);
       }
     }
   }
@@ -710,7 +735,8 @@ export class Arena {
     if (rider.mountHp <= 0) {
       rider.unhorse = true;
       rider.mounted = false;
-      this.env.notify('danger', 'Your horse goes down and throws you!', rider.personId);
+      if (rider.isPlayer) this.env.notify('danger', 'Your horse goes down and throws you!', rider.personId);
+      else this.dismount(rider);
       // the fall hurts: a blunt blow to a limb or the back
       const p = rider.person;
       if (p) {
@@ -762,8 +788,7 @@ export class Arena {
   mobility(f: Fighter): number {
     let m = clamp(1 + 0.02 * (f.agi - 10), 0.85, 1.12);
     if (f.person) {
-      m *= 1 - this.env.book.limbPenalty(f.personId, 'legs') * 0.55;
-      if (f.person.health.hp < 0.5) m *= 0.88;
+      m *= this.env.book.mobility(f.person);
       m *= clamp(1 - f.gear.worn * 0.004, 0.7, 1);
     } else if (f.beastMax > 0 && f.beastHp < f.beastMax * 0.4) m *= 0.8;
     if (f.stamina < 5) m *= 0.8;
@@ -852,10 +877,47 @@ export class Arena {
       if (cy < foot - 0.05 || cy > top + 0.08) continue;
       if (t < bestT) { bestT = t; victim = f; hitY = cy; }
     }
-    if (!victim) return false;
+    if (!victim) return this.bystanderHit(s, x0, z0, y0, dx, dy, dz, len2);
     const shooter = this.byKey.get(s.shooter) ?? null;
     s.x = x0 + dx * bestT; s.y = hitY; s.z = z0 + dz * bestT;
     return arrowStrike(this, s, shooter, victim, hitY);
+  }
+
+  /** A stray arrow: anyone standing in its path who is not fighting is hit (bystanders, children, the shooter's own side). */
+  private bystanderHit(s: import('./projectiles').Shot, x0: number, z0: number, y0: number, dx: number, dy: number, dz: number, len2: number): boolean {
+    const zone = this.env.zone;
+    if (!zone) return false;
+    const state = this.env.ctx.state;
+    let best: { a: ZoneAgent; t: number; cy: number; p: Person } | null = null;
+    for (const a of zone.agents()) {
+      if (!a.visible || a.personId === s.shooter || this.byKey.has(a.personId)) continue;
+      const t = len2 > 1e-9 ? clamp(((a.x - x0) * dx + (a.z - z0) * dz) / len2, 0, 1) : 0;
+      const cx = x0 + dx * t, cz = z0 + dz * t;
+      if ((cx - a.x) * (cx - a.x) + (cz - a.z) * (cz - a.z) > 0.4 * 0.4) continue;
+      const p = state.persons.get(a.personId);
+      if (!p || p.death) continue;
+      const cy = y0 + dy * t;
+      const height = ageYears(p, this.absDay) < 12 ? 1.1 : 1.7;
+      if (cy < a.y - 0.05 || cy > a.y + height + 0.08) continue;
+      if (!best || t < best.t) best = { a, t, cy, p };
+    }
+    if (!best) return false;
+    const { a, t, cy, p } = best;
+    s.x = x0 + dx * t; s.y = cy; s.z = z0 + dz * t;
+    const rel = (cy - a.y) / (ageYears(p, this.absDay) < 12 ? 1.1 : 1.7);
+    const where: HitLocation = rel > 0.86 ? 'head' : rel > 0.5 ? 'torso' : this.rng.next() < 0.5 ? 'leg_l' : 'leg_r';
+    const flown = Math.hypot(s.x - s.x0, s.z - s.z0);
+    const fall = clamp(1 - 0.45 * (flown / s.range) * (flown / s.range), 0.4, 1);
+    const maxHp = maxHpOf(p);
+    this.env.book.inflict(p, shapeWound(this.rng, where, 'arrow', s.dmg * fall * (0.92 + 0.16 * this.rng.next()), maxHp), 'a stray arrow', 'violence');
+    this.env.fx.add('blood', s.x, s.y, s.z, 0.8);
+    const shooter = this.byKey.get(s.shooter);
+    if (shooter?.isPlayer) {
+      this.env.notify('warn', `Your arrow strikes ${fullName(p)}, who was only standing by!`, shooter.personId);
+      this.env.social?.adjustOpinion(p.id, shooter.personId, -30, 'shot me');
+      if (shooter.person) { shooter.person.rep.honour = Math.max(-100, shooter.person.rep.honour - 6); state.touch(shooter.person); }
+    }
+    return true;
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -940,6 +1002,7 @@ export class Arena {
     for (const side of fight.sides) for (const f of side.members) {
       if (f.st === S.Down && f.person && !f.person.death && !f.isPlayer && (f.summonedByUs || !this.env.zone?.agent(f.personId))) this.addCorpse(f);
       f.fight = 0;
+      if (f.mounted && !f.isPlayer) this.dismount(f);
       if (f.isPlayer) { f.target = null; if (f.st !== S.Dead && f.st !== S.Down) this.toIdle(f); continue; }
       this.free(f);
       if (!f.isAnimal || f.st === S.Dead) { /* keep the fighter record until swept */ }
@@ -1010,11 +1073,28 @@ export class Arena {
     d.moveSpeed = f.st === S.Idle || f.st === S.Block || f.st === S.Recover || f.st === S.Draw || f.st === S.Aim ? f.speed : 0;
     const h = f.hands();
     d.mainHand = h.main; d.offHand = h.off;
+    if (f.mounted) this.writeRider(f, d);
     d.aimPitch = f.st === S.Aim || f.st === S.Draw || f.st === S.Shoot ? f.pitch : undefined;
     d.lookYaw = 0;
     d.highlight = 0;
     d.carry = 'none';
     d.back = f.gear.ranged && !f.rangedOut() ? 'quiver' : 'none';
+  }
+
+  /** A rider on a destrier: the horse is drawn under him and the rider's pose follows its gait. */
+  private writeRider(f: Fighter, d: CharacterDrawItem): void {
+    const charging = f.st === S.Charge;
+    const sp = f.speed;
+    const gait = charging || sp > 6.5 ? 'gallop' : sp > 2.6 ? 'trot' : sp > 0.15 ? 'walk' : 'idle';
+    const m = d.mount ?? (d.mount = { coat: hash3(f.key, 41) % 6, anim: gait, animTime: 0 });
+    m.anim = gait;
+    m.animTime = f.animT;
+    // the rider rides unless he is in a blow of his own (a sidearm swing keeps its clip)
+    if (f.st === S.Idle || f.st === S.Recover || f.st === S.Block || f.st === S.Charge) {
+      d.anim = charging ? 'ride_charge' : gait === 'gallop' ? 'ride_gallop' : gait === 'trot' ? 'ride_trot' : gait === 'walk' ? 'ride_walk' : 'ride_idle';
+      d.animTime = f.animT;
+    }
+    d.moveSpeed = sp;
   }
 
   private writeBeast(f: Fighter, an: ZoneAnimal, _dt: number): void {

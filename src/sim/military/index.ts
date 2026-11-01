@@ -209,6 +209,16 @@ export function installMilitary(sim: Simulation, deps: Wave3Deps): MilitaryRunti
     },
   };
   void toView; void nearestSettlementId; void ageYears; void setRank; void dist; void UNIT_CHAR;
+  // A detail fight cannot resume after a load (it lived in the arena): its battle is settled by the macro model at once, with the
+  // player's own place in the line spared as it was in the fight.
+  for (const rec of M.data.battles) {
+    if (rec.fight === 0) continue;
+    rec.fight = 0;
+    rec.detailA = rec.detailA.filter((id) => id === M.playerId);
+    rec.detailD = rec.detailD.filter((id) => id === M.playerId);
+    rec.clock = 0;
+    M.touch();
+  }
   sim.services.military = api;
   return api;
 }

@@ -355,7 +355,8 @@ export class PlayerPort implements PlayerCombatPort {
       case S.Dodge: scale = 1; break;
       default: scale = hostile && fr.speed < 4 && !fr.mounted ? 0.62 : 1;
     }
-    scale *= 1 - this.arena.env.book.limbPenalty(fr.person, 'legs') * 0.5;
+    const me = this.arena.env.ctx.state.persons.get(fr.person);
+    if (me) scale *= this.arena.env.book.mobility(me);
     out.moveScale = scale;
     out.noSprint = stt === S.Windup || stt === S.Recover || stt === S.Block || stt === S.Aim || stt === S.Draw || stt === S.Shoot || stt === S.Reload;
     out.aiming = this.aimingNow && (stt === S.Aim || stt === S.Draw || stt === S.Shoot);

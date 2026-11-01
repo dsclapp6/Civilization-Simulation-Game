@@ -460,9 +460,12 @@ function beginDetail(M: Mil, rec: BattleRec, a: Army, d: Army, mine: Army): void
   // the line forms around the player
   const body = M.playerApi?.body();
   const at = body ? { x: body.x, z: body.z } : { x: rec.x, z: rec.z };
+  // knights and sergeants ride into the line (their charge is the arena's)
+  const riders = new Set<PersonId>();
+  for (const fs of [fa, fd]) fs.people.forEach((p, i) => { if (p.id !== pid && (fs.kinds[i] === 'knight' || fs.kinds[i] === 'sergeant')) riders.add(p.id); });
   const sides: FightSide[] = [
-    { faction: `house:${a.house}`, people: rec.detailA.slice() },
-    { faction: `house:${d.house}`, people: rec.detailD.slice() },
+    { faction: `house:${a.house}`, people: rec.detailA.slice(), mounted: rec.detailA.filter((id) => riders.has(id)) },
+    { faction: `house:${d.house}`, people: rec.detailD.slice(), mounted: rec.detailD.filter((id) => riders.has(id)) },
   ];
   rec.fight = combat.engage(sides, { at, yieldAllowed: true, reason: 'battle' });
   M.notify(`Battle is joined at ${M.placeName(rec.settlement)}! ${M.houseName(a.house)} against ${M.houseName(d.house)}.`, 'danger', pid);
