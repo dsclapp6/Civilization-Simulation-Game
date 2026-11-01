@@ -18,6 +18,8 @@ export const DEFAULT_LABEL_RANGE = 20;
 export const MARK_RANGE = 75;
 /** The hovered/targeted person is labelled up to this far (m). */
 const FOCUS_RANGE = 160;
+/** Spoken lines carry this far at least (m). */
+const SPEECH_RANGE = 22;
 /** Second line only within this distance (or for the focused person). */
 const SUB_RANGE = 14;
 
@@ -101,7 +103,7 @@ export function layoutPlates(
     const d = Math.hypot(it.x - cam.x, it.y + 1.6 - cam.y, it.z - cam.z);
     const focus = it.highlight === 1 || it.highlight === 2 || it.id === focusId;
     const speech = isSpeech(it.label);
-    const range = Math.max(it.labelRange ?? DEFAULT_LABEL_RANGE, speech ? 18 : 0);
+    const range = Math.max(it.labelRange ?? DEFAULT_LABEL_RANGE, speech ? SPEECH_RANGE : 0);
     const text = focus ? d < FOCUS_RANGE : d < range;
     const markOk = !!it.mark && d < MARK_RANGE;
     if (!text && !markOk) continue;
@@ -228,7 +230,7 @@ export class Nameplates {
       const k = plateScale(l.d, l.focus).toFixed(2);
       if (p.scale !== k) { p.inner.style.transform = `scale(${k})`; p.scale = k; }
       // fade in over the last few metres of the range
-      const range = l.focus ? FOCUS_RANGE : l.mode === 'mark' ? MARK_RANGE : Math.max(it.labelRange ?? DEFAULT_LABEL_RANGE, l.speech ? 18 : 0);
+      const range = l.focus ? FOCUS_RANGE : l.mode === 'mark' ? MARK_RANGE : Math.max(it.labelRange ?? DEFAULT_LABEL_RANGE, l.speech ? SPEECH_RANGE : 0);
       const op = Math.max(0.15, Math.min(1, (range - l.d) / 5)).toFixed(2);
       if (p.opacity !== op) { p.obj.element.style.opacity = op; p.opacity = op; }
     }

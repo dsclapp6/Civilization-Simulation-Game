@@ -61,6 +61,8 @@ export interface RenderStats {
   /** CPU ms this frame for props + beacons + floaters + nameplates + hover, and for the floaters alone. */
   feedbackMs?: number;
   floaterMs?: number;
+  /** CPU ms of the DOM label overlay (nameplates, beacon label, map labels). */
+  labelMs?: number;
 }
 
 export interface GroundPoint { x: number; y: number; z: number }

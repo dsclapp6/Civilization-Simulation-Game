@@ -424,7 +424,7 @@ const CLARITY_PRESETS: Record<string, PresetDef> = {
       place(crowd.find((it) => it.id === 101), -3.2, 7);
       place(crowd.find((it) => it.id === 104), 3.6, 9.5);
       const speaker = crowd.find((it) => it.id === 107);
-      place(speaker, 0.8, 12);
+      place(speaker, 1.6, 6.5);
       if (speaker) { speaker.label = 'Fine weather for the harvest, God be thanked.'; speaker.sublabel = undefined; speaker.anim = 'talk'; }
       c.r.setCameraMode('follow');
       faceCamera(c, s.yaw);
@@ -457,8 +457,8 @@ const CLARITY_PRESETS: Record<string, PresetDef> = {
       put('logs', 2.4, -9, 8, 0.2); put('stump', 5.0, -8.6);
       const mid = row(3.2, -3);
       c.v.teleportAvatar(mid.x + Math.sin(yaw) * 30, mid.z + Math.cos(yaw) * 30, yaw);
-      const camX = mid.x + Math.sin(yaw) * 13, camZ = mid.z + Math.cos(yaw) * 13;
-      return { pos: { x: camX, y: g(c.w, camX, camZ) + 5.5, z: camZ }, look: { x: mid.x, y: g(c.w, mid.x, mid.z) + 0.4, z: mid.z } };
+      const camX = mid.x + Math.sin(yaw) * 16, camZ = mid.z + Math.cos(yaw) * 16;
+      return { pos: { x: camX, y: g(c.w, camX, camZ) + 6.5, z: camZ }, look: { x: mid.x, y: g(c.w, mid.x, mid.z) + 0.2, z: mid.z } };
     },
   },
   /** Hover outlines: a cottage's footprint frame (the cursor is on it). */
@@ -773,6 +773,30 @@ export function start(root: AppRoot): void {
       out.metres = Math.round(frames * speed / 60);
       tms.sort((a, b) => a - b);
       out.p95TerrainMs = tms[Math.floor(tms.length * 0.95)];
+      return out;
+    },
+    /** Clarity-pass feedback cost over `frames` frames of the current scene, floaters spawning twice a second. */
+    feedbackBench: (frames = 40) => {
+      const out = { frames, feedbackMs: 0, maxFeedbackMs: 0, floaterMs: 0, maxFloaterMs: 0, labelMs: 0, maxLabelMs: 0, cpuMs: 0, drawCalls: 0, floaters: 0, plates: 0, props: 0, beacons: 0 };
+      const texts = ['+3 sheaves', 'Farming +6', '+1d', '♥ +3', 'Farming 3!'];
+      for (let i = 0; i < frames; i++) {
+        if (i % 30 === 0) {
+          const a = view.avatar;
+          view.floatText({ x: a.x, y: a.y + 1.7, z: a.z, text: texts[(i / 30) % texts.length], tone: 'gain' });
+          view.floatText({ x: a.x, y: a.y + 1.7, z: a.z, text: texts[(i / 30 + 1) % texts.length], tone: 'skill' });
+        }
+        view.step(1 / 60, null);
+        const t0 = performance.now();
+        renderer.render(view, 1 / 60);
+        out.cpuMs += (performance.now() - t0) / frames;
+        const s = renderer.stats();
+        out.feedbackMs += (s.feedbackMs ?? 0) / frames; out.maxFeedbackMs = Math.max(out.maxFeedbackMs, s.feedbackMs ?? 0);
+        out.floaterMs += (s.floaterMs ?? 0) / frames; out.maxFloaterMs = Math.max(out.maxFloaterMs, s.floaterMs ?? 0);
+        out.labelMs += (s.labelMs ?? 0) / frames; out.maxLabelMs = Math.max(out.maxLabelMs, s.labelMs ?? 0);
+        out.drawCalls = Math.max(out.drawCalls, s.drawCalls);
+        out.floaters = Math.max(out.floaters, s.floaters ?? 0); out.plates = Math.max(out.plates, s.nameplates ?? 0);
+        out.props = s.worldProps ?? 0; out.beacons = Math.max(out.beacons, s.beacons ?? 0);
+      }
       return out;
     },
     timeFrames: (n = 10) => {

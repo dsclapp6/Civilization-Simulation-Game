@@ -159,6 +159,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
   let terrainMs = 0;
   let feedbackMs = 0;
   let floaterMs = 0;
+  let labelMs = 0;
   let lastChars: readonly CharacterDrawItem[] = [];
   let lastAnimals: readonly AnimalDrawItem[] = [];
   let width = 1, height = 1;
@@ -377,7 +378,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
       renderer.render(floaters.scene, camera);
       renderer.autoClear = true;
     }
-    if (showLabels) labelRenderer.render(overlayScene, camera);
+    if (showLabels) { const tl = performance.now(); labelRenderer.render(overlayScene, camera); labelMs = performance.now() - tl; }
 
     const ms = performance.now() - t0;
     frameMsAvg = frameMsAvg * 0.9 + ms * 0.1;
@@ -573,6 +574,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
         nameplates: plates.shown,
         workingStrips: fields.workingStrips,
         feedbackMs,
+        labelMs,
         floaterMs,
       };
     },

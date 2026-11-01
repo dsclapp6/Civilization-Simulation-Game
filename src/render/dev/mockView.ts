@@ -35,7 +35,7 @@ const PLATES: { sub: string; tone: LabelTone; range: number; mark?: 'quest' | 't
   { sub: 'your sister', tone: 'kin', range: 40, mark: 'track' },
   { sub: "your father's servant", tone: 'household', range: 40 },
   { sub: 'friend · carter', tone: 'friend', range: 15 },
-  { sub: 'the reeve', tone: 'stranger', range: 15, mark: 'quest' },
+  { sub: 'the reeve', tone: 'stranger', range: 40, mark: 'quest' },
   { sub: 'the parish priest', tone: 'clergy', range: 15 },
   { sub: 'rival · thatcher', tone: 'rival', range: 15 },
   { sub: 'baker', tone: 'stranger', range: 15 },
