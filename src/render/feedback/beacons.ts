@@ -204,7 +204,7 @@ export class BeaconLayer {
     this.shaftMat.uniforms.uPixelAngle.value = (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) / Math.max(1, viewportHeight);
     const cp = camera.position;
     let n = 0;
-    let primary: { m: WorldMarker; y: number; d: number; a: number } | null = null;
+    let primary: { m: WorldMarker; y: number; d: number; a: number; arrive: number } | null = null;
     this.primaryAlpha = 0;
     // primary first so it always gets a slot
     const list = show ? markers : [];
@@ -222,7 +222,7 @@ export class BeaconLayer {
         const isP = !!mk.primary;
         const alpha = (isP ? 0.95 : 0.4) * arrive * near;
         if (alpha < 0.01) continue;
-        if (isP) { primary = { m: mk, y: ground + lift, d: camD, a: alpha }; this.primaryAlpha = alpha; }
+        if (isP) { primary = { m: mk, y: ground + lift, d: camD, a: alpha, arrive }; this.primaryAlpha = alpha; }
         this.c.setHex(mk.color);
         // shaft
         this.sBase.setXYZ(n, mk.x, ground + (isP ? 0 : lift), mk.z);
@@ -256,7 +256,7 @@ export class BeaconLayer {
 
     // label over the primary gem: what and how far
     if (this.label) {
-      const show2 = !!primary && primary.d > 6 && primary.a > 0.15;
+      const show2 = !!primary && primary.d > 6 && primary.arrive > 0.1;
       this.label.visible = show2;
       if (show2 && primary) {
         this.label.position.set(primary.m.x, primary.y + 0.3, primary.m.z);
@@ -266,7 +266,7 @@ export class BeaconLayer {
         if (name !== this.lastLabel && this.labelName) { this.labelName.textContent = name; this.lastLabel = name; }
         if (dist !== this.lastDist && this.labelDist) { this.labelDist.textContent = dist; this.lastDist = dist; }
         const el = this.label.element;
-        const op = Math.min(1, primary.a * 1.3).toFixed(2);
+        const op = Math.min(1, primary.arrive).toFixed(2);
         if (el.style.opacity !== op) el.style.opacity = op;
       }
     }

@@ -42,12 +42,12 @@ const CSS = `
 .mil-plate-in{display:flex;flex-direction:column;align-items:center;transform-origin:50% 100%;
  font-family:Georgia,"Palatino Linotype","Book Antiqua","Times New Roman",serif;
  text-shadow:0 1px 1px rgba(0,0,0,.95),0 0 3px rgba(0,0,0,.85),0 0 8px rgba(0,0,0,.5);}
-.mil-plate-name{font-weight:700;font-size:14px;line-height:15px;letter-spacing:.04em;font-variant:small-caps;color:var(--tone,#d8d0c0);}
-.mil-plate-sub{font-style:italic;font-size:11.5px;line-height:13px;color:#efe6d2;opacity:.9;letter-spacing:.01em;}
+.mil-plate-name{font-weight:700;font-size:15px;line-height:16px;letter-spacing:.04em;font-variant:small-caps;color:var(--tone,#d8d0c0);}
+.mil-plate-sub{font-style:italic;font-size:12px;line-height:14px;color:#efe6d2;opacity:.9;letter-spacing:.01em;}
 .mil-plate.speech .mil-plate-name{font-variant:normal;font-style:italic;font-weight:600;font-size:13px;letter-spacing:.01em;color:#fbf3df;
  background:rgba(24,17,10,.62);border:1px solid rgba(232,206,150,.38);border-radius:7px;padding:2px 8px 3px;max-width:300px;white-space:normal;text-align:center;}
 .mil-plate.focus .mil-plate-in{background:rgba(22,15,8,.5);border:1px solid color-mix(in srgb,var(--tone,#d8d0c0) 55%,transparent);border-radius:4px;padding:2px 8px 3px;}
-.mil-plate.focus .mil-plate-name{font-size:15px;}
+.mil-plate.focus .mil-plate-name{font-size:16px;}
 .mil-plate-mark{display:none;width:15px;height:15px;margin-bottom:4px;transform:rotate(45deg);border-radius:2px;
  box-shadow:0 0 0 1px rgba(30,18,6,.9),0 0 7px rgba(0,0,0,.6);}
 .mil-plate-mark>span{display:block;transform:rotate(-45deg);font:700 12px/15px Georgia,serif;text-align:center;text-shadow:none;}

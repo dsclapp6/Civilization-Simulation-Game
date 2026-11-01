@@ -46,25 +46,23 @@ export interface HoverSources {
   buildingObject?: (id: number) => THREE.Object3D | null;
 }
 
-const RIM_VERT = /* glsl */`
-varying vec3 vN;
-varying vec3 vV;
+// The building's own model drawn again a little larger, back faces only: a bright line round its silhouette
+// (the model itself hides the rest). Grown about the footprint centre so the line keeps an even width.
+const HULL_VERT = /* glsl */`
+uniform vec3 uCenter;
+uniform vec3 uGrow;
+uniform float uBaseY;
 void main() {
-  vN = normalize(normalMatrix * normal);
-  vec4 mv = modelViewMatrix * vec4(position, 1.0);
-  vV = -mv.xyz;
-  gl_Position = projectionMatrix * mv;
+  vec3 p = position;
+  p.x = uCenter.x + (p.x - uCenter.x) * uGrow.x;
+  p.z = uCenter.z + (p.z - uCenter.z) * uGrow.z;
+  p.y = uBaseY + (p.y - uBaseY) * uGrow.y;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }`;
-const RIM_FRAG = /* glsl */`
+const HULL_FRAG = /* glsl */`
 uniform vec3 uColor;
 uniform float uAlpha;
-varying vec3 vN;
-varying vec3 vV;
-void main() {
-  float f = 1.0 - abs(dot(normalize(vN), normalize(vV)));
-  float a = (0.07 + 0.6 * f * f) * uAlpha;
-  gl_FragColor = vec4(uColor * a, 1.0);
-}`;
+void main() { gl_FragColor = vec4(uColor, uAlpha); }`;
 
 export class HoverLayer {
   readonly root = new THREE.Group();
@@ -84,7 +82,8 @@ export class HoverLayer {
   constructor(private readonly src: HoverSources) {
     this.root.name = 'hover';
     const uniforms = { uColor: { value: new THREE.Color(0xfff0c4) }, uAlpha: { value: 0.9 } };
-    const base = { vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: false, fog: false, toneMapped: false };
+    // double-sided: the ribbon's winding follows the loop's orientation, which differs between sources
+    const base = { vertexShader: VERT, fragmentShader: FRAG, transparent: true, depthWrite: false, fog: false, toneMapped: false, side: THREE.DoubleSide };
     this.mat = new THREE.ShaderMaterial({ ...base, uniforms, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -16 });
     this.xray = new THREE.ShaderMaterial({ ...base, uniforms: { uColor: uniforms.uColor, uAlpha: { value: 0.3 } }, depthTest: false });
     this.mesh = new THREE.Mesh(this.geo, this.mat);
@@ -93,32 +92,45 @@ export class HoverLayer {
     this.mesh.renderOrder = 6;
     this.ghost.renderOrder = 4;
     this.rimMat = new THREE.ShaderMaterial({
-      vertexShader: RIM_VERT, fragmentShader: RIM_FRAG, uniforms: { uColor: { value: new THREE.Color(0xffd98a) }, uAlpha: { value: 0.8 } },
-      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, depthFunc: THREE.LessEqualDepth,
-      polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2, fog: false, toneMapped: false,
+      vertexShader: HULL_VERT, fragmentShader: HULL_FRAG,
+      uniforms: {
+        uColor: { value: new THREE.Color(0xffe6a0) }, uAlpha: { value: 0.95 },
+        uCenter: { value: new THREE.Vector3() }, uGrow: { value: new THREE.Vector3(1, 1, 1) }, uBaseY: { value: 0 },
+      },
+      side: THREE.BackSide, transparent: true, depthWrite: false, fog: false, toneMapped: false,
     });
-    this.rim.name = 'hover-rim';
+    this.rim.name = 'hover-outline';
     this.root.add(this.ghost, this.mesh, this.rim);
   }
 
-  /** A soft glow over the hovered building's own model (sharing its geometry, placed where it stands). */
+  private readonly hullBox = new THREE.Box3();
+  private hullSize = new THREE.Vector3(1, 1, 1);
+  private readonly hullPos = new THREE.Vector3();
+
+  /** A bright line round the hovered building's silhouette (its own model, grown a little, back faces). */
   private buildRim(obj: THREE.Object3D | null): void {
     this.rim.clear();
     this.rimSource = obj;
     this.rim.visible = !!obj;
     if (!obj) return;
     obj.updateMatrixWorld(true);
-    for (const c of obj.children) {
-      const m = c as THREE.Mesh;
-      if (!m.isMesh || (m.name !== 'body' && m.name !== 'windows')) continue;
-      const o = new THREE.Mesh(m.geometry, this.rimMat);
-      o.matrixAutoUpdate = false;
-      o.matrix.copy(m.matrixWorld);
-      o.matrixWorld.copy(m.matrixWorld);
-      o.frustumCulled = false;
-      o.renderOrder = 6;
-      this.rim.add(o);
-    }
+    const body = obj.children.find((c) => (c as THREE.Mesh).isMesh && c.name === 'body') as THREE.Mesh | undefined;
+    if (!body) return;
+    const g = body.geometry;
+    if (!g.boundingBox) g.computeBoundingBox();
+    this.hullBox.copy(g.boundingBox!);
+    const u = this.rimMat.uniforms;
+    this.hullBox.getCenter(u.uCenter.value as THREE.Vector3);
+    u.uBaseY.value = this.hullBox.min.y;
+    this.hullBox.getSize(this.hullSize);
+    this.hullPos.setFromMatrixPosition(body.matrixWorld);
+    const o = new THREE.Mesh(g, this.rimMat);
+    o.matrixAutoUpdate = false;
+    o.matrix.copy(body.matrixWorld);
+    o.matrixWorld.copy(body.matrixWorld);
+    o.frustumCulled = false;
+    o.renderOrder = 6;
+    this.rim.add(o);
   }
 
   set(target: HoverTarget | null): void {
@@ -201,17 +213,24 @@ export class HoverLayer {
     this.geo.computeBoundingSphere();
   }
 
-  update(dt: number): void {
+  update(dt: number, camera?: THREE.Camera): void {
     if (!this.mesh.visible) return;
     this.time += dt;
     const pulse = Math.sin(this.time * 4.2);
     this.mat.uniforms.uAlpha.value = 0.8 + 0.16 * pulse;
-    this.rimMat.uniforms.uAlpha.value = 0.75 + 0.2 * pulse;
+    this.rimMat.uniforms.uAlpha.value = 0.82 + 0.15 * pulse;
     // the building swapped its model (detail level): follow it
     const t = this.target;
     if (t && t.kind === 'building' && t.id !== undefined && this.src.buildingObject) {
       const obj = this.src.buildingObject(t.id);
       if (obj !== this.rimSource) this.buildRim(obj);
+    }
+    if (this.rim.children.length && camera) {
+      // an outline about 2–3 px wide whatever the distance
+      const d = camera.position.distanceTo(this.hullPos);
+      const th = Math.max(0.06, d * 0.0042);
+      const s = this.hullSize;
+      (this.rimMat.uniforms.uGrow.value as THREE.Vector3).set(1 + (2 * th) / Math.max(0.5, s.x), 1 + th / Math.max(0.5, s.y), 1 + (2 * th) / Math.max(0.5, s.z));
     }
   }
 

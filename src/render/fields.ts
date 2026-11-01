@@ -90,7 +90,7 @@ const CROP_RIPE: Record<CropKind, number> = {
   cabbage: 0x7aae74, onions: 0x93a46e, leeks: 0x6f9f68, turnips: 0x6f9a48, fallow: 0x8a9a52,
 };
 /** Result looks shared by the CPU (strip states) and the shader (tasks' done side) so a finished task never jumps. */
-const HARVESTED = 0xc8b07a, STUBBLE = 0xb59f6c, SWATH = 0xe2c272, SOWN_TINT = 0x6f9a3e, MOWN = 0xa6b866, WINDROW = 0xc8bf72;
+const HARVESTED = 0xbea468, STUBBLE = 0xb2985f, SWATH = 0xd9b35a, SOWN_TINT = 0x6f9a3e, MOWN = 0xa6b866, WINDROW = 0xc8bf72;
 const PLOUGHED_K = 0.78, HARROWED_K = 0.88, SOWN_K = 0.84;
 
 function lerpHex(a: number, b: number, t: number, out: THREE.Color): THREE.Color {

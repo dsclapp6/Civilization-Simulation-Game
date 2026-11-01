@@ -108,8 +108,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     buildingObject: (id) => buildings.assetObject(id),
   });
   let hoverKey = '';
-  let hoverStripsVer = -1;
-  const occRay = new THREE.Ray();
+  let hoverStripsVer = -1;  const occRay = new THREE.Ray();
   plates.occluded = (from, to) => {
     const d = from.distanceTo(to);
     occRay.origin.copy(from);
@@ -358,7 +357,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     floaterMs = performance.now() - tfl;
     plates.update(streetView ? chars : [], camera, width, height, showLabels && mapBlend < 0.3);
     if (hoverKey && sv !== hoverStripsVer) { hoverStripsVer = sv; hover.refresh(); }
-    hover.update(dt);
+    hover.update(dt, camera);
     feedbackMs = performance.now() - tf;
     precip.update(camera, dt, time, weather.rain, weather.snow, weather.windX, weather.windZ, 0.25 + 0.75 * atmo.day, renderer.getPixelRatio() * height / 1080, above);
     mapLabels.update(camera.position.y, heightAt, mapBlend > 0.02 ? view.mapMarkers() : [], mapBlend);

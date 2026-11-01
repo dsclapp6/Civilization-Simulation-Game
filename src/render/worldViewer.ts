@@ -7,6 +7,7 @@ import { DAYS_PER_SEASON, DAYS_PER_YEAR, type Season } from '../core/time';
 import * as THREE from 'three';
 import { sunDirection, timeForSunElevation } from './sky/atmosphere';
 import type { Plot, Settlement, WorldModel } from '../world/types';
+import type { CharacterDrawItem } from '../core/view';
 import { BUILDINGS } from '../content/types';
 import { createRenderer } from './renderer';
 import type { GameRenderer, QualityLevel } from './types';
@@ -344,7 +345,14 @@ const CLARITY_PRESETS: Record<string, PresetDef> = {
       c.v.teleportAvatar(t.x - 1.6, t.z + 1.2, Math.atan2(lx - t.x, lz - t.z));
       c.v.holdAnim = 'work_axe';
       c.v.avatar.mainHand = 'axe';
-      return bestView(c, (t.x + lx) / 2, (t.z + lz) / 2, 10, 3.4, 0.4, { sunBehind: 0.8 });
+      // the sun behind the camera, a little to one side, so the fresh cut and the log ends catch the light
+      const mx = (t.x + lx) / 2, mz = (t.z + lz) / 2;
+      for (const da of [0.45, -0.45, 0.9, -0.9, 0]) {
+        const a = Math.atan2(c.sunX, c.sunZ) + da;
+        const x = mx + Math.sin(a) * 10, z = mz + Math.cos(a) * 10;
+        if (clearOfTrees(c.w, x, z, 4)) return { pos: { x, y: g(c.w, x, z) + 3.6, z }, look: { x: mx, y: g(c.w, mx, mz) + 0.5, z: mz } };
+      }
+      return bestView(c, mx, mz, 10, 3.4, 0.4, { sunBehind: 0.8 });
     },
     after: (c) => {
       const a = c.v.avatar;
@@ -403,17 +411,28 @@ const CLARITY_PRESETS: Record<string, PresetDef> = {
       const church = firstPlot(c.w, v, ['church', 'chapel']) ?? c.w.plots[v.plots[0]];
       const s = streetNear(c.w, v, church);
       c.v.teleportAvatar(s.x, s.z, s.yaw);
-      const fx = s.x + Math.sin(s.yaw) * 11, fz = s.z + Math.cos(s.yaw) * 11;
-      const crowd = c.v.gather(fx, fz, 10, 24);
-      const speaker = crowd[7];
+      const fx = s.x + Math.sin(s.yaw) * 9, fz = s.z + Math.cos(s.yaw) * 9;
+      const crowd = c.v.gather(fx, fz, 7.5, 26);
+      // the ones whose plates matter in front, at known spots: sister (tracked), the reeve (request), the speaker
+      const place = (it: CharacterDrawItem | undefined, side: number, ahead: number) => {
+        if (!it) return;
+        const rx = Math.cos(s.yaw), rz = -Math.sin(s.yaw);
+        it.x = s.x + Math.sin(s.yaw) * ahead + rx * side; it.z = s.z + Math.cos(s.yaw) * ahead + rz * side;
+        it.y = c.w.heightAt(it.x, it.z);
+        it.yaw = s.yaw + Math.PI + (side > 0 ? -0.5 : 0.5);
+      };
+      place(crowd.find((it) => it.id === 101), -3.2, 7);
+      place(crowd.find((it) => it.id === 104), 3.6, 9.5);
+      const speaker = crowd.find((it) => it.id === 107);
+      place(speaker, 0.8, 12);
       if (speaker) { speaker.label = 'Fine weather for the harvest, God be thanked.'; speaker.sublabel = undefined; speaker.anim = 'talk'; }
       c.r.setCameraMode('follow');
       faceCamera(c, s.yaw);
       return 'follow';
     },
     after: (c) => {
-      const crowd = c.v.characters().filter((it) => it.id >= 100 && it.id < 200 && it.id !== 103 && it.id !== 104);
-      const target = crowd.sort((a, b) => Math.hypot(a.x - c.v.avatar.x, a.z - c.v.avatar.z) - Math.hypot(b.x - c.v.avatar.x, b.z - c.v.avatar.z))[3];
+      const crowd = c.v.characters().filter((it) => it.id >= 108 && it.id < 200);
+      const target = crowd.sort((a, b) => Math.hypot(a.x - c.v.avatar.x, a.z - c.v.avatar.z) - Math.hypot(b.x - c.v.avatar.x, b.z - c.v.avatar.z))[2];
       if (target) c.r.setHover?.({ kind: 'person', id: target.id });
       return 0;
     },
@@ -447,12 +466,18 @@ const CLARITY_PRESETS: Record<string, PresetDef> = {
     season: 1, day: 2, time: 0.56, weather: 'clear',
     camera: (c) => {
       const v = homeVillage(c);
-      const home = firstPlot(c.w, v, ['cottage', 'longhouse', 'hovel']) ?? c.w.plots[v.plots[0]];
-      const s = streetNear(c.w, v, home);
-      c.v.teleportAvatar(s.x, s.z, Math.atan2(home.x - s.x, home.z - s.z));
+      // a finished cottage near the street, the avatar a dozen metres off its door
+      const done = new Set(c.v.buildings().filter((b) => b.construction >= 1).map((b) => b.id));
+      const homes = plotsOf(c.w, v).filter((p) => (p.kind === 'cottage' || p.kind === 'longhouse') && done.has(p.id));
+      const home = homes[1] ?? homes[0] ?? c.w.plots[v.plots[0]];
+      const fx = Math.sin(home.rot), fz = Math.cos(home.rot);
+      const dd = BUILDINGS[home.kind].d / 2 + 11;
+      const ax = home.x + fx * dd + fz * 4, az = home.z + fz * dd - fx * 4;
+      const yaw = Math.atan2(home.x - ax, home.z - az);
+      c.v.teleportAvatar(ax, az, yaw);
       c.r.setHover?.({ kind: 'building', id: home.id });
       c.r.setCameraMode('follow');
-      faceCamera(c, Math.atan2(home.x - s.x, home.z - s.z));
+      faceCamera(c, yaw);
       return 'follow';
     },
   },
