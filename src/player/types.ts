@@ -3,14 +3,16 @@
 // input arrives as an InputState captured by the app (src/app/input.ts, DOM); no three.js here.
 import type { P2 } from '../core/math';
 import type { InteractCandidate } from '../agents/types';
-import type { ActionOption, ActionOutcome } from '../sim/actions';
+import type { LabelTone } from '../core/view';
+import type { ActionOption, ActionOutcome, TargetRef } from '../sim/actions';
 import type { PersonId } from '../sim/state';
 
 /**
  * Who handles which key (SPEC §22). `input` keys are read by the input layer (src/app/input.ts,
  * owned with the player controller) and ignored while `ui.capturesInput()`; `ui` keys are handled
- * by the UI's own listener. Mouse: move = orbit camera (pointer lock), wheel = zoom (far out = map),
- * LMB attack/use, RMB block/aim (combat arrives in wave 3).
+ * by the UI's own listener. Mouse (clarity pass, CLARITY §5): a free cursor — hover shows what a click does,
+ * LMB walks to the thing and acts, hold RMB and drag to turn the camera (pointer lock only while held),
+ * wheel = zoom (far out = map). With the weapon drawn (G, or a fight) the mouse looks: LMB attack, RMB block/aim.
  */
 export const KEYMAP = {
   input: {
@@ -26,8 +28,8 @@ export const KEYMAP = {
     family: 'KeyH', chronicle: 'KeyL', rest: 'KeyZ',
     /** Wave 4 (UI): realm and politics, House techniques, the requests journal, wounds, help and controls. */
     politics: 'KeyK', techs: 'KeyT', requests: 'KeyR', wounds: 'KeyB', help: 'F1',
-    /** Clarity pass: the journal (objectives, today, people you know) and the minimap toggle. */
-    journal: 'KeyO', minimap: 'KeyN',
+    /** Clarity pass: the journal (objectives, today, people you know), the minimap toggle and the "What now?" card. */
+    journal: 'KeyO', minimap: 'KeyN', whatNow: 'KeyY',
   },
 } as const;
 
@@ -51,6 +53,8 @@ export interface InputState {
   mount: boolean;
   dodge: boolean;
   cancel: boolean;
+  /** Clarity pass, edge-triggered: draw / sheathe the weapon (G). */
+  weapon?: boolean;
   // held
   attack: boolean;
   block: boolean;
@@ -120,6 +124,11 @@ export interface PlayerHud {
   following?: string | null;
   /** What the body is doing in a fight (wave 4: the HUD's reticle, hit flash and "you are down" state); absent without the combat module. */
   combat?: PlayerCombatHud;
+  // ---- clarity pass ----
+  /** The weapon is drawn (G, or a fight began): the mouse looks and the buttons strike/guard. */
+  drawn?: boolean;
+  /** Click-to-act in progress: where the body is walking to and what it will do there. */
+  going?: { label: string; action: string | null; x: number; z: number } | null;
 }
 
 /** The fighting state the HUD shows. */
@@ -172,8 +181,87 @@ export interface PlayerApi {
   mountHorse?(): Result;
   dismount?(): Result;
   mounted?(): boolean;
+  // ---- clarity pass (optional so UI mocks and old tests need not implement them) ----
+  /** Click-to-act: walk to the target along the navigation paths and do its default action there. Any movement key cancels. */
+  goTo?(order: GoOrder): Result;
+  cancelGoTo?(): void;
+  /** Weapon drawn? (G toggles; a fight draws it by itself; sheathing returns the free cursor.) */
+  drawn?(): boolean;
+  setDrawn?(on: boolean): void;
+  /** The mouse over the world (client pixels), ~10 Hz while the cursor is free. */
+  pointerMove?(x: number, y: number): void;
+  /** A left click on the world: walks to what is under the cursor and acts. */
+  pointerClick?(x: number, y: number): Result;
+  /** The cursor left the view, or the mouse took over the camera. */
+  pointerLeave?(): void;
+  /** What is under the cursor now (a stable object, mutated in place), or null. */
+  hover?(): HoverInfo | null;
   /** Test and dev hooks (the dev overlay, screenshots, unit tests). */
   debug?: PlayerDebug;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Clarity pass: the mouse (CLARITY §5). A free cursor shows what is under it and what a click does; a click walks
+// there along the navigation paths and acts. The renderer is reached through a tiny port so this stays three-free.
+// ---------------------------------------------------------------------------------------------
+
+/** What a cursor over the world looks like: a system cursor image per kind (src/ui/core/cursors.ts). */
+export type CursorKind = 'default' | 'walk' | 'talk' | 'work' | 'trade' | 'enter' | 'attack' | 'use';
+
+/** A building, strip, tree or common the 3D view may outline while the mouse is over it (renderer: optional `setHover`). */
+export interface HoverMark {
+  kind: 'building' | 'strip' | 'parcel' | 'scatter';
+  id: number;
+  /** World position of the thing (trees and rocks: their trunk). */
+  x?: number;
+  z?: number;
+}
+
+/** A ray through the camera, world coordinates; `d*` is a unit vector. */
+export interface PickRay { x: number; y: number; z: number; dx: number; dy: number; dz: number }
+
+/** The renderer as the pointer sees it (src/app/session.ts builds it from the real one). Screen positions are client pixels. */
+export interface PickPort {
+  pick(x: number, y: number): { type: 'character' | 'animal' | 'building' | 'ground' | 'none'; id?: number; point?: { x: number; y: number; z: number } };
+  ray(x: number, y: number): PickRay | null;
+  /** Outline this thing in the 3D view (null clears it). Optional: the renderer may not support it. */
+  setHover?(target: HoverMark | null): void;
+}
+
+/** What the cursor is over and what a click will do (shown as a tooltip card, drives the cursor image). */
+export interface HoverInfo {
+  target: TargetRef;
+  /** "Your family's east strip", "Wat Smith". */
+  label: string;
+  /** Second line: "barley, ripe", "your father · farmer". */
+  sublabel: string;
+  tone?: LabelTone;
+  /** The default action's label ("Reap"), or null when a click only walks there (or nothing can be done). */
+  action: string | null;
+  /** "+3 sheaves · Farming" for the default action, or why it cannot be done. */
+  preview: string;
+  enabled: boolean;
+  /** Category of the default action, for the icon. */
+  category: string;
+  cursor: CursorKind;
+  /** Metres from the body to the thing. */
+  distance: number;
+  /** Pointer position (client pixels) at the last update. */
+  x: number;
+  y: number;
+  /** Bumps whenever any of the above changes. */
+  version: number;
+}
+
+/** A click-to-act order: walk to the target (following the navigation paths) and do something there. */
+export interface GoOrder {
+  target: TargetRef;
+  /** The clicked spot (strips and common land: stand there; people and animals: where they were). */
+  x: number;
+  z: number;
+  label: string;
+  /** Id of one of the options listed for the target; default: the best enabled one on arrival. */
+  optionId?: string;
 }
 
 export interface PlayerDebug {

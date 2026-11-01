@@ -9,7 +9,7 @@ import type {
   AnimState, CarryLook, CharacterDrawItem, HeldItem, MapMarker, MountLook, PlayerView, ViewMode,
 } from '../core/view';
 import { sameTarget, type ActionOption, type ActionOutcome, type ActiveAction, type TargetRef } from '../sim/actions';
-import type { EconomyApi } from '../sim/economy/types';
+import { parseItemKey, type EconomyApi } from '../sim/economy/types';
 import type { SimEvents } from '../sim/events';
 import { MAX_FRAME_DT, type Simulation } from '../sim/sim';
 import { skillOf, gainSkill } from '../sim/skills';
@@ -28,12 +28,14 @@ import {
   type EncounterData, type EncounterEnv,
 } from './encounters';
 import { Interaction, SCAN_INTERVAL } from './interaction';
+import { CLICK_WALK_RANGE, PointerController } from './pointer';
 import { footAnim, rideAnim, maxStamina, workEffort, turnToward } from './movement';
 import { PROVIDER_ID, createPlayerProvider, type ProviderHost } from './providers';
 import { planRoute } from './route';
 import { ARRIVED_SECONDS, Journey, journeyPace } from './travel';
 import {
-  EMPTY_INPUT, type EncounterKind, type InputState, type PlayerApi, type PlayerDebug, type PlayerHud, type Result, type TravelState,
+  EMPTY_INPUT, type EncounterKind, type GoOrder, type HoverInfo, type InputState, type PickPort, type PlayerApi, type PlayerDebug, type PlayerHud,
+  type Result, type TravelState,
 } from './types';
 
 export interface PlayerDeps {
@@ -42,6 +44,8 @@ export interface PlayerDeps {
   social: SocialApi;
   /** The renderer's camera mode; `'map'` tells the sim the strategic map is open (the zone goes quiet). */
   cameraMode?: () => string;
+  /** The renderer's picking (clarity pass): lets the free cursor point at things and a click walk there and act. */
+  pick?: PickPort;
 }
 
 const EXT_KEY = 'player';
@@ -65,6 +69,26 @@ interface PlayerExt {
 
 const BENCH_KINDS: ReadonlySet<string> = new Set(['alehouse', 'tavern', 'inn', 'church', 'chapel', 'great_hall', 'market_hall', 'manor_house', 'guildhall']);
 
+/** A click-to-act order being carried out: the walk and, on arrival, the act. */
+interface GoState {
+  order: GoOrder;
+  /** How close to get before acting (m). */
+  stop: number;
+  /** Range of the chosen action (m), to accept a path that ends a little short. */
+  range: number;
+  path: P2[] | null;
+  index: number;
+  repath: number;
+  /** Seconds of the walk, and the progress check. */
+  age: number;
+  check: number;
+  lastD: number;
+  stuck: number;
+  fails: number;
+  /** For the HUD. */
+  action: string | null;
+}
+
 export class PlayerController implements PlayerApi {
   readonly debug: PlayerDebug;
 
@@ -87,6 +111,21 @@ export class PlayerController implements PlayerApi {
   private edgeMount = false;
   private edgeDodge = false;
   private edgeCancel = false;
+  private edgeWeapon = false;
+
+  // ---- the mouse (clarity pass): click-to-act and the drawn weapon ----
+  private readonly pointer: PointerController | null;
+  private go: GoState | null = null;
+  private readonly goInput: InputState = { ...EMPTY_INPUT };
+  private readonly goingHud: NonNullable<PlayerHud['going']> = { label: '', action: null, x: 0, z: 0 };
+  private drawnWeapon = false;
+  /** The weapon came out by itself because a fight began (it goes back when the fight is over). */
+  private autoDrawn = false;
+  /** Sheathed by hand in the middle of a fight: it stays away until that fight ends. */
+  private sheathedInFight = false;
+  private fightQuiet = 0;
+  private heldWeapon: HeldItem = 'none';
+  private weaponName = '';
 
   // ---- combat (wave 3, src/combat): the port is looked up lazily, the module may be absent ----
   private readonly cframe: PlayerCombatFrame = {
@@ -172,6 +211,14 @@ export class PlayerController implements PlayerApi {
     this.social = deps.social;
     this.world = sim.world;
     this.cameraModeFn = deps.cameraMode ?? (() => 'follow');
+    this.pointer = deps.pick
+      ? new PointerController({
+        sim, zone: deps.zone, social: deps.social, personId: () => this.personId,
+        active: () => !this.dead && !this.drawnWeapon && this.journey === null && this.encounterChoicesCache.length === 0 && this.cameraModeFn() === 'follow',
+        body: () => (this.dead ? null : this.avatar),
+        goTo: (order) => this.goTo(order),
+      }, deps.pick)
+      : null;
 
     // placeholders until `attach` creates the real ones
     this.avatar = createBody(0, 0, 0, 0, 10);
@@ -237,6 +284,9 @@ export class PlayerController implements PlayerApi {
     this.encounterChoicesCache = [];
     this.hostileEncounter = false;
     this.followId = null;
+    this.go = null;
+    this.drawnWeapon = false; this.autoDrawn = false; this.sheathedInFight = false; this.fightQuiet = 0;
+    this.pointer?.leave();
     if (!p) return;
     this.refreshTraits(p);
     const spot = this.spawnSpot(p, how, ext);
@@ -329,6 +379,7 @@ export class PlayerController implements PlayerApi {
     if (input.mount) this.edgeMount = true;
     if (input.dodge) this.edgeDodge = true;
     if (input.cancel) this.edgeCancel = true;
+    if (input.weapon) this.edgeWeapon = true;
   }
 
   hud(): PlayerHud | null {
@@ -366,6 +417,8 @@ export class PlayerController implements PlayerApi {
     h.gait = b.sitting ? 'sit' : b.gait;
     h.following = this.followId ? this.nameOf(this.followId) : null;
     h.combat = this.combat() ? this.hudCombat : undefined;
+    h.drawn = this.drawnWeapon;
+    h.going = this.go ? this.goHud(this.go) : null;
     return h;
   }
 
@@ -444,6 +497,11 @@ export class PlayerController implements PlayerApi {
     return conv;
   }
 
+  pointerMove(x: number, y: number): void { this.pointer?.move(x, y); }
+  pointerClick(x: number, y: number): Result { return this.pointer ? this.pointer.click(x, y) : { ok: false }; }
+  pointerLeave(): void { this.pointer?.leave(); }
+  hover(): HoverInfo | null { return this.pointer ? this.pointer.hover() : null; }
+
   // ---- map travel ----
 
   travelTo(settlement: number): Result {
@@ -475,6 +533,9 @@ export class PlayerController implements PlayerApi {
     sim.actions.cancel(this.personId, 'cancelled');
     this.avatar.sitting = false;
     this.followId = null;
+    this.go = null;
+    this.drawnWeapon = false; this.autoDrawn = false;
+    this.pointer?.leave();
     this.interaction.clear(this.zone);
     const from = this.world.nearestSettlement(this.avatar.x, this.avatar.z).id;
     const j = new Journey(plan, from, settlement);
@@ -570,8 +631,8 @@ export class PlayerController implements PlayerApi {
     const b = this.avatar;
 
     // ---- latched key edges ----
-    const eInteract = this.edgeInteract, eMount = this.edgeMount, eDodge = this.edgeDodge, eCancel = this.edgeCancel;
-    this.edgeInteract = this.edgeMount = this.edgeDodge = this.edgeCancel = false;
+    const eInteract = this.edgeInteract, eMount = this.edgeMount, eDodge = this.edgeDodge, eCancel = this.edgeCancel, eWeapon = this.edgeWeapon;
+    this.edgeInteract = this.edgeMount = this.edgeDodge = this.edgeCancel = this.edgeWeapon = false;
 
     this.traitT += dt;
     if (this.traitT >= TRAIT_INTERVAL) { this.traitT = 0; this.refreshTraits(p); }
@@ -594,6 +655,10 @@ export class PlayerController implements PlayerApi {
     const input = this.input;
     const wantsMove = Math.hypot(input.forward, input.right) > 0.2;
 
+    // ---- the weapon (G; a fight draws it by itself) and the click-to-act walk, which any key of the player's ends ----
+    this.stepWeapon(eWeapon, dt);
+    if (this.go && (wantsMove || eInteract || eCancel || eMount || eDodge || talking || pending || this.drawnWeapon)) this.go = null;
+
     // ---- the action in progress ----
     let active = this.sim.actions.active(this.personId);
     if (active && !pending) {
@@ -610,6 +675,7 @@ export class PlayerController implements PlayerApi {
     }
     active = this.sim.actions.active(this.personId);
     const working = active !== null && active.option.seconds > 0;
+    if (working && this.go) this.go = null;
 
     // ---- the body ----
     const wasLocked = b.lock;
@@ -620,7 +686,7 @@ export class PlayerController implements PlayerApi {
     if (this.followId !== null && !frozen) {
       if (wantsMove) this.followId = null;
       else driver = this.followDriver(dt) ?? input;
-    }
+    } else if (this.go && !frozen) driver = this.goDriver(dt) ?? input;
     const env: BodyEnv = {
       nav: this.zone.nav, traits: this.traits, frozen, effort: working && active ? workEffort(active.option.anim) : 0,
       dodge: eDodge && !frozen,
@@ -885,6 +951,211 @@ export class PlayerController implements PlayerApi {
     f.sprint = d > 24;
     f.walk = d < 5 && a.speed < 1.8;
     return f;
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Click to act (CLARITY §5): walk to what was clicked along the navigation paths, then do its default action
+  // ---------------------------------------------------------------------------------------------
+
+  goTo(order: GoOrder): Result {
+    const p = this.person();
+    if (this.dead || !p) return { ok: false, reason: 'You cannot do that now.' };
+    if (this.journey || this.encounterChoicesCache.length > 0) return { ok: false, reason: 'Settle things on the road first.' };
+    if (p.flags.captive) { this.notify('warn', 'You are a prisoner.'); return { ok: false, reason: 'You are a prisoner.' }; }
+    if (this.avatar.lock) return { ok: false, reason: 'Wait a moment.' };
+    if (this.drawnWeapon) return { ok: false, reason: 'Put your weapon away first (G).' };
+    const t = order.target;
+    if (t.kind === 'self') return { ok: false };
+    const b = this.avatar;
+    const d = dist(b.x, b.z, order.x, order.z);
+    if (d > CLICK_WALK_RANGE) {
+      const why = 'That is too far to walk to by clicking: follow the road, or open the map (M).';
+      this.notify('warn', why);
+      return { ok: false, reason: why };
+    }
+    let option: ActionOption | null = null;
+    if (t.kind !== 'ground') {
+      const list = this.sim.actions.list(this.personId, t);
+      option = (order.optionId ? list.find((o) => o.id === order.optionId) : undefined) ?? list.find((o) => o.enabled) ?? null;
+      // nothing can be done there: say why now instead of walking up to find out
+      if (!option && list.length > 0) {
+        const why = list[0].reason ?? 'You cannot do that now.';
+        this.notify('warn', why);
+        return { ok: false, reason: why };
+      }
+    }
+    this.sim.actions.cancel(this.personId, 'cancelled');
+    b.sitting = false;
+    this.followId = null;
+    this.faceYaw = null;
+    this.go = {
+      order: { target: t, x: order.x, z: order.z, label: order.label, optionId: order.optionId },
+      stop: goStop(t, option ? option.range : 3), range: option ? option.range : 0.5,
+      path: null, index: 1, repath: 0, age: 0, check: 1, lastD: d, stuck: 0, fails: 0, action: option ? option.label : null,
+    };
+    this.interaction.invalidate();
+    return { ok: true };
+  }
+
+  cancelGoTo(): void { this.go = null; }
+
+  private goHud(g: GoState): NonNullable<PlayerHud['going']> {
+    const o = this.goingHud;
+    const pos = this.goPosition(g.order);
+    o.label = g.order.label; o.action = g.action;
+    o.x = pos ? pos.x : g.order.x; o.z = pos ? pos.z : g.order.z;
+    return o;
+  }
+
+  private readonly goPos: P2 = { x: 0, z: 0 };
+
+  /** Where the thing clicked is now (people walk about). */
+  private goPosition(o: GoOrder): P2 | null {
+    const t = o.target;
+    const out = this.goPos;
+    switch (t.kind) {
+      case 'person': { const a = this.zone.agent(t.id); if (!a) return null; out.x = a.x; out.z = a.z; return out; }
+      case 'animal': { const a = this.zone.animals().find((x) => x.id === t.id); if (!a) return null; out.x = a.x; out.z = a.z; return out; }
+      case 'building': {
+        const door = this.zone.nav.doorOf(t.id);
+        if (door) { out.x = door.x; out.z = door.z; return out; }
+        const b = this.sim.state.buildings.get(t.id);
+        if (!b) return null;
+        const dp = doorPoint(b, 1.6);
+        out.x = dp.x; out.z = dp.z;
+        return out;
+      }
+      default: out.x = o.x; out.z = o.z; return out;
+    }
+  }
+
+  private endGo(message?: string): void {
+    this.go = null;
+    if (message) this.notify('warn', message);
+  }
+
+  /** Walks the body towards the order; when close enough, does the thing. Returns a synthetic input, or null when the order ended. */
+  private goDriver(dt: number): InputState | null {
+    const g = this.go;
+    if (!g) return null;
+    const b = this.avatar;
+    const pos = this.goPosition(g.order);
+    if (!pos) { this.endGo('They are no longer there.'); return null; }
+    const d = dist(b.x, b.z, pos.x, pos.z);
+    g.age += dt;
+    if (d <= g.stop) { this.arriveGo(); return null; }
+    if (g.age > 90) { this.endGo('You give up the walk.'); return null; }
+    // progress check once a second: blocked by something the path did not know about → look for another way, then give up
+    g.check -= dt;
+    if (g.check <= 0) {
+      g.check = 1;
+      if (g.lastD - d < 0.3) g.stuck++; else g.stuck = 0;
+      g.lastD = d;
+      if (g.stuck >= 2) {
+        g.stuck = 0; g.fails++; g.path = null;
+        if (g.fails >= 3) {
+          // as close as the way allows: if that is near enough to act, act
+          if (d <= Math.max(g.stop + 1.5, g.range)) { this.arriveGo(); return null; }
+          this.endGo('You cannot get there.');
+          return null;
+        }
+      }
+    }
+    const f = this.goInput;
+    f.forward = 0; f.right = 0; f.sprint = false; f.walk = false; f.cameraYaw = b.yaw;
+    g.repath -= dt;
+    let tx = pos.x, tz = pos.z;
+    if (d > 3.5 || g.fails > 0) {
+      if (g.repath <= 0 || !g.path) {
+        g.repath = g.order.target.kind === 'person' || g.order.target.kind === 'animal' ? 0.8 : 4;
+        g.path = this.zone.nav.findPath({ x: b.x, z: b.z }, { x: pos.x, z: pos.z }, Math.min(500, d * 1.8 + 40));
+        g.index = 1;
+        if (!g.path) { this.endGo('You cannot find a way there.'); return null; }
+      }
+      const path = g.path;
+      if (path) {
+        while (g.index < path.length - 1 && dist(b.x, b.z, path[g.index].x, path[g.index].z) < 1.1) g.index++;
+        const w = path[Math.min(g.index, path.length - 1)];
+        tx = w.x; tz = w.z;
+        // the path ended short of the target (it is round a wall or inside a trunk): near enough to act?
+        if (g.index >= path.length - 1 && dist(b.x, b.z, tx, tz) < 0.9 && d > g.stop) {
+          if (d <= Math.max(g.stop + 1.8, g.range)) { this.arriveGo(); return null; }
+          this.endGo('You cannot get any closer.');
+          return null;
+        }
+      }
+    }
+    f.forward = 1;
+    f.cameraYaw = yawTo(b.x, b.z, tx, tz);
+    f.sprint = d > 40 && !b.stamina.exhausted && b.stamina.value > b.stamina.max * 0.5;
+    return f;
+  }
+
+  private arriveGo(): void {
+    const g = this.go;
+    this.go = null;
+    if (!g) return;
+    const t = g.order.target;
+    if (t.kind === 'ground') return;
+    this.interaction.invalidate();
+    this.scanT = SCAN_INTERVAL;
+    const list = this.sim.actions.list(this.personId, t);
+    const opt = (g.order.optionId ? list.find((o) => o.id === g.order.optionId) : undefined) ?? list.find((o) => o.enabled);
+    if (!opt) {
+      if (list.length > 0) this.notify('warn', list[0].reason ?? 'You cannot do that now.');
+      return;
+    }
+    const r = this.perform(opt);
+    if (!r.ok && r.message) this.notify('warn', r.message);
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // The weapon: G draws and sheathes; a fight draws it by itself and puts it away again when it is over
+  // ---------------------------------------------------------------------------------------------
+
+  drawn(): boolean { return this.drawnWeapon; }
+
+  setDrawn(on: boolean): void {
+    if (this.dead || on === this.drawnWeapon || this.journey?.state.phase === 'travelling') return;
+    const fighting = (this.sim.services.combat?.fightOf?.(this.personId) ?? 0) > 0;
+    this.drawnWeapon = on;
+    this.autoDrawn = false;
+    this.fightQuiet = 0;
+    if (on) {
+      this.sheathedInFight = false;
+      this.go = null;
+      this.followId = null;
+      this.avatar.sitting = false;
+      const a = this.sim.actions.active(this.personId);
+      if (a && a.option.seconds > 0) this.sim.actions.cancel(this.personId, 'cancelled');
+      this.pointer?.leave();
+      this.notify('info', this.weaponName ? `You draw your ${this.weaponName}.` : 'You raise your fists.');
+    } else {
+      if (fighting) this.sheathedInFight = true;
+      this.notify('info', this.weaponName ? 'You put your weapon away.' : 'You lower your fists.');
+    }
+  }
+
+  private stepWeapon(toggle: boolean, dt: number): void {
+    if (toggle) this.setDrawn(!this.drawnWeapon);
+    const fighting = (this.sim.services.combat?.fightOf?.(this.personId) ?? 0) > 0;
+    if (fighting) {
+      this.fightQuiet = 0;
+      if (!this.drawnWeapon && !this.sheathedInFight) {
+        this.drawnWeapon = true;
+        this.autoDrawn = true;
+        this.go = null;
+        this.followId = null;
+        this.pointer?.leave();
+        this.notify('danger', 'Steel is out. The mouse looks about now; G puts your weapon away.');
+      }
+    } else {
+      this.sheathedInFight = false;
+      if (this.drawnWeapon && this.autoDrawn) {
+        this.fightQuiet += dt;
+        if (this.fightQuiet > 4 && !this.combatPose?.engaged) { this.drawnWeapon = false; this.autoDrawn = false; }
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -1255,6 +1526,9 @@ export class PlayerController implements PlayerApi {
     this.dead = true;
     this.deadFor = 0;
     this.followId = null;
+    this.go = null;
+    this.drawnWeapon = false; this.autoDrawn = false;
+    this.pointer?.leave();
     this.avatar.speed = 0;
     this.avatar.sitting = false;
     this.interaction.clear(this.zone);
@@ -1310,6 +1584,7 @@ export class PlayerController implements PlayerApi {
     }
     this.lookT += dt;
     if (this.lookT > 1) { this.lookT = 0; this.refreshLook(); }
+    this.pointer?.tick(dt);
     this.syncDraw(this.dead || this.journey?.state.phase === 'travelling' ? 1 : alpha, dt);
   }
 
@@ -1424,6 +1699,7 @@ export class PlayerController implements PlayerApi {
       if (cp.mainHand !== null) main = cp.mainHand;
       if (cp.offHand !== null) off = cp.offHand;
     }
+    if (this.drawnWeapon && !working && main === 'none' && !this.dead) main = this.heldWeapon;
     d.aimPitch = cp !== null && cp.aimPitch !== null ? cp.aimPitch : undefined;
     d.mainHand = main; d.offHand = off; d.carry = carry;
     // a heavy load shows as a pack on the back
@@ -1526,6 +1802,12 @@ export class PlayerController implements PlayerApi {
     const inv = this.economy.inventory(p.id);
     t.weight = inv.weight;
     t.capacity = inv.capacity;
+    // the weapon that comes out on G (a tool in the hand slot stays a tool)
+    const main = inv.equipment.main;
+    const good = main ? this.economy.good(parseItemKey(main).good) : undefined;
+    const armed = !!good && good.category === 'weapon';
+    this.heldWeapon = armed && good.held ? good.held : 'none';
+    this.weaponName = armed && main ? this.economy.describe(main).replace(/^an? /, '') : '';
     const max = maxStamina(p.trained.end);
     const s = this.avatar.stamina;
     if (max !== s.max) { s.value = s.max > 0 ? s.value * (max / s.max) : max; s.max = max; }
@@ -1556,6 +1838,18 @@ export class PlayerController implements PlayerApi {
     for (const off of this.offs) off();
     this.offs.length = 0;
     this.zone.detachPlayer();
+  }
+}
+
+/** How close to get before acting on a clicked thing (m). */
+function goStop(t: TargetRef, range: number): number {
+  switch (t.kind) {
+    case 'ground': return 0.6;
+    case 'person': case 'animal': return clamp(range * 0.7, 1.2, 2.2);
+    case 'building': return 1.3;
+    case 'strip': case 'parcel': return 0.8;
+    case 'scatter': return 2.0;
+    default: return 1.2;
   }
 }
 
