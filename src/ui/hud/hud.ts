@@ -17,6 +17,7 @@ import type { GameServices, UiHost } from '../types';
 import { bar, button, chip, keycap, type BarHandle } from '../components/widgets';
 import { settlementCard } from '../../sim/api';
 import { fullName } from '../../sim/state';
+import { arrivedAt, showPlace } from '../core/finder';
 import type { PinStore } from '../core/pins';
 import { Dial } from './dial';
 import type { Toasts } from './toasts';
@@ -183,6 +184,7 @@ export class Hud {
   private lastSpeedKey = '';
   private lastFlagsKey = '';
   private lastSlow = -10;
+  private lastArrival = -10;
   private lastFeedSig = '';
   private lastPlace = '';
   private lastPerkCount = -1;
@@ -199,7 +201,7 @@ export class Hud {
       openJournal: () => deps.open({ panel: 'journal' }), whatNow: () => this.whatNow.toggle(),
     });
     this.whatNow = new WhatNow({
-      game: () => deps.game(), nav: this.nav, pin: (x, z, label) => deps.pins.set({ x, z, label }), say: (text) => deps.say('info', text),
+      game: () => deps.game(), nav: this.nav, show: (spot) => { showPlace(deps.game(), deps.pins, spot); }, say: (text) => deps.say('info', text),
       openJournal: () => deps.open({ panel: 'journal' }),
     });
     this.minimap = new Minimap({ game: () => deps.game(), nav: this.nav, openMap: () => deps.open({ panel: 'map' }) });
@@ -442,7 +444,11 @@ export class Hud {
   private updateGuidance(game: GameServices, hud: ReturnType<GameServices['player']['hud']>, now: number): void {
     const nav = this.nav;
     nav.update(game, this.deps.host, this.deps.pins);
-    if (this.deps.pins.arrive(nav.x, nav.z)) this.deps.say('info', 'You have arrived.');
+    if (now - this.lastArrival >= 0.25) {
+      this.lastArrival = now;
+      const arrived = arrivedAt(game, this.deps.pins, nav.x, nav.z);
+      if (arrived) this.deps.say('info', arrived);
+    }
     const showGuides = nav.street && !!hud && !hud.travel;
     this.compass.setVisible(showGuides);
     if (showGuides) this.compass.update(nav);

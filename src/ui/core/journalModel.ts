@@ -11,6 +11,7 @@ import { settlementCard } from '../../sim/api';
 import { clockText, dueText, relativeDay } from './format';
 import type { IconName } from './icons';
 import { where } from './nav';
+import type { ObjectiveTarget } from '../../sim/objectives/types';
 import type { GameServices } from '../types';
 
 // ---------------------------------------------------------------------------------------------
@@ -190,7 +191,11 @@ export function peopleRows(game: GameServices, meId: PersonId, limit = 60): Pers
 // Places
 // ---------------------------------------------------------------------------------------------
 
-export interface PlaceRow { id: string; name: string; sub: string; icon: IconName; x: number; z: number; group: 'yours' | 'village' }
+export interface PlaceRow {
+  id: string; name: string; sub: string; icon: IconName; x: number; z: number; group: 'yours' | 'village';
+  /** What the objectives module calls it, when the row came from it (what "Find" hands back to `trackPlace`). */
+  target?: ObjectiveTarget;
+}
 
 const PLACE_KINDS: ReadonlyArray<{ kinds: readonly BuildingKind[]; name: string; icon: IconName }> = [
   { kinds: ['church', 'abbey_church', 'cathedral', 'chapel'], name: 'The church', icon: 'church' },
@@ -207,7 +212,40 @@ const PLACE_KINDS: ReadonlyArray<{ kinds: readonly BuildingKind[]; name: string;
   { kinds: ['tithe_barn'], name: 'The tithe barn', icon: 'box' },
 ];
 
+const HOUSES: ReadonlySet<BuildingKind> = new Set<BuildingKind>(['hovel', 'cottage', 'longhouse', 'townhouse']);
+
+/** The page's row for a place the objectives module listed (its names, so the journal and the tracker agree). */
+function rowOfTarget(game: GameServices, t: ObjectiveTarget): PlaceRow {
+  const st = game.sim.state;
+  let ico: IconName = 'pin';
+  let sub = '';
+  if (t.kind === 'building') {
+    const b = st.buildings.get(t.id);
+    if (b) {
+      ico = HOUSES.has(b.kind) ? 'home' : PLACE_KINDS.find((d) => d.kinds.includes(b.kind))?.icon ?? 'pin';
+      const town = game.sim.world.settlements.find((q) => q.id === b.settlement)?.name ?? '';
+      sub = `${BUILDINGS[b.kind]?.name ?? 'Building'}${town ? `, ${town}` : ''}`;
+    }
+  } else if (t.kind === 'strip') {
+    const s = st.strips.get(t.id);
+    ico = 'farming';
+    sub = !s ? 'A strip of the open field' : s.crop === 'fallow' ? 'Lying fallow' : `${s.crop}, ${STRIP_WORDS[s.state] ?? s.state}`;
+  } else if (t.kind === 'settlement') {
+    ico = 'market';
+    sub = 'A place to trade';
+  }
+  const yours = /^your\b/i.test(t.label) || /\(your work\)$/i.test(t.label);
+  return { id: `${t.kind}${t.id}`, name: t.label, sub, icon: ico, x: t.x, z: t.z, group: yours ? 'yours' : 'village', target: t };
+}
+
+/** Places worth knowing: the objectives module's list when it has one (nearest first, home leading), else our own. */
 export function placeRows(game: GameServices, meId: PersonId): PlaceRow[] {
+  const listed = game.objectives?.places?.();
+  if (listed && listed.length) return listed.map((t) => rowOfTarget(game, t));
+  return ownPlaceRows(game, meId);
+}
+
+function ownPlaceRows(game: GameServices, meId: PersonId): PlaceRow[] {
   const sim = game.sim;
   const st = sim.state;
   const me = st.persons.get(meId);

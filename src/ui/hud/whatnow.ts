@@ -7,6 +7,7 @@ import { icon } from '../core/icons';
 import { suggestionSignature } from '../core/objectiveModel';
 import { where } from '../core/nav';
 import { button } from '../components/widgets';
+import type { Spot } from '../core/finder';
 import type { Suggestion } from '../../sim/objectives/types';
 import type { GameServices } from '../types';
 import type { NavState } from './navstate';
@@ -14,8 +15,8 @@ import type { NavState } from './navstate';
 export interface WhatNowDeps {
   game(): GameServices | null;
   nav: NavState;
-  /** Put a pin on a place (compass, minimap, screen edge). */
-  pin(x: number, z: number, label: string): void;
+  /** Mark a place (compass, minimap, screen edge, and a beacon in the world when the objectives module can). */
+  show(spot: Spot): void;
   say(text: string): void;
   openJournal(): void;
 }
@@ -93,8 +94,10 @@ export class WhatNow {
       h('span.mu-whatnow-text', null, h('span', null, s.text), dist ? h('span.mu-whatnow-where', null, icon('pin', 12), dist) : null),
       t || s.objective !== undefined ? h('span.mu-whatnow-go', null, 'Show me') : null);
     el.addEventListener('click', () => {
-      if (s.objective !== undefined) game?.objectives?.track(s.objective);
-      if (t) this.deps.pin(t.x, t.z, t.label || s.text);
+      const api = game?.objectives;
+      // a task is tracked (its marker follows its steps); anything else with a place on it is marked there
+      if (s.objective !== undefined) api?.track(s.objective);
+      if (t && (s.objective === undefined || !api?.trackPlace)) this.deps.show({ ...t, label: t.label || s.text });
       this.deps.say(t ? `Showing the way: ${t.label || s.text}.` : s.text);
       this.close();
     });

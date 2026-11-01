@@ -66,10 +66,13 @@ export function introModel(game: GameServices): IntroModel | null {
   const whose = parent ? `your ${rel}’s` : head && head.id === me.id ? 'your own' : 'your family’s';
   const wake = `You wake in ${whose} ${homeWord} in ${where}.`;
 
-  const paragraphs = [`${SEASON_NAMES[d.season]}. ${wake} ${SEASON_LINES[d.season]}`];
+  // the objectives module words the first line itself ("…the barley must go in"), from what the household needs
+  const given = game.objectives?.intro?.();
+  const paragraphs = [given ? given : `${SEASON_NAMES[d.season]}. ${wake} ${SEASON_LINES[d.season]}`];
   const why = game.objectives?.tracked()?.why;
   const classLine = CLASS_LINES[st.run.birthClass];
-  paragraphs.push([classLine, why].filter(Boolean).join(' '));
+  const placeLine = given && card ? `${card.name} is ${/^[aeiou]/i.test(card.kind) ? 'an' : 'a'} ${card.kind}${card.county || card.kingdom ? ` in ${card.county || card.kingdom}` : ''}.` : '';
+  paragraphs.push([placeLine, classLine, why].filter(Boolean).join(' '));
   paragraphs.push('Look about you. Whatever there is to do is written in the top left corner of the screen, and a gold marker shows you where.');
 
   const spots: TourSpot[] = [];

@@ -208,9 +208,9 @@ export interface PlayerApi {
 /** What a cursor over the world looks like: a system cursor image per kind (src/ui/core/cursors.ts). */
 export type CursorKind = 'default' | 'walk' | 'talk' | 'work' | 'trade' | 'enter' | 'attack' | 'use';
 
-/** A building, strip, tree, common or loose pile the 3D view may outline while the mouse is over it (renderer: optional `setHover`). */
+/** What the 3D view may outline while the mouse is over it (renderer `setHover`, which takes the sim's TargetRef kinds: others are ignored). */
 export interface HoverMark {
-  kind: 'building' | 'strip' | 'parcel' | 'scatter' | 'item';
+  kind: 'building' | 'strip' | 'parcel' | 'scatter' | 'item' | 'person' | 'animal';
   id: number;
   /** World position of the thing (trees and rocks: their trunk). */
   x?: number;

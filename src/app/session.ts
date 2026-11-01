@@ -130,8 +130,8 @@ export function makePickPort(renderer: GameRenderer): PickPort {
       ray.dx = r.direction.x; ray.dy = r.direction.y; ray.dz = r.direction.z;
       return ray;
     },
-    // the renderer's outline API is optional (the contract only promises `setHover(target | null)`)
-    setHover: (mark: HoverMark | null) => (renderer as unknown as { setHover?: (t: HoverMark | null) => void }).setHover?.(mark),
+    // the renderer's outline API is optional (`GameRenderer.setHover`); a TargetRef-shaped mark goes through as it is
+    setHover: renderer.setHover ? (mark: HoverMark | null) => renderer.setHover?.(mark) : undefined,
   };
 }
 

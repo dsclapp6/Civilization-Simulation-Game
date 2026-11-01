@@ -286,7 +286,8 @@ export class PointerController {
     if (cur && (!want || want.kind !== cur.kind || want.id !== cur.id)) this.setRing(cur, 0);
     if (want) this.setRing(want, 1);
     this.ring = want;
-    const wm = f?.mark ?? null;
+    // people and animals are ringed through the renderer too (its nameplate then stays on them)
+    const wm: HoverMark | null = f?.mark ?? (f?.ring ? { kind: f.ring.kind, id: f.ring.id } : null);
     const cm = this.mark;
     if ((wm === null) !== (cm === null) || (wm && cm && (wm.kind !== cm.kind || wm.id !== cm.id))) {
       this.port.setHover?.(wm);
