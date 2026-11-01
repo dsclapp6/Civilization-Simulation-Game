@@ -36,6 +36,8 @@ export interface DangerSample {
   winter: boolean;
   holyDay: boolean;
   leg: LegKind;
+  /** Change to the trouble on the road from the House's techniques (advancement `road.risk`: letters of credit leave less to rob; negative = safer). */
+  risk?: number;
 }
 
 const DIFFICULTY_RATE: Record<Difficulty, number> = { squire: 0.7, knight: 1, lord: 1.25, king: 1.6 };
@@ -51,12 +53,13 @@ export function encounterRate(s: DangerSample, difficulty: Difficulty): number {
   if (s.border) r *= 1.4;
   if (s.night) r *= 1.7;
   if (s.nearSettlement) r *= 0.12;
+  if (s.risk && (s.leg === 'highway' || s.leg === 'road')) r *= Math.max(0.4, 1 + s.risk);
   return r * DIFFICULTY_RATE[difficulty] * LEG_RATE[s.leg];
 }
 
 export function encounterWeights(s: DangerSample, difficulty: Difficulty): Array<[EncounterKind, number]> {
   const onRoad = s.leg === 'highway' || s.leg === 'road';
-  const bandits = (0.5 + 1.5 * s.forest) * (s.wild ? 1.3 : 1) * (s.night ? 1.8 : 1) * DIFFICULTY_BANDITS[difficulty] * (onRoad ? 0.9 : 1.1);
+  const bandits = (0.5 + 1.5 * s.forest) * (s.wild ? 1.3 : 1) * (s.night ? 1.8 : 1) * DIFFICULTY_BANDITS[difficulty] * (onRoad ? 0.9 : 1.1) * (onRoad ? Math.max(0.4, 1 + (s.risk ?? 0)) : 1);
   const wolfCountry = s.forest > 0.15 || s.wild;
   const wolves = wolfCountry ? 0.7 * (0.3 + s.forest) * (s.winter ? 3 : 0.7) * (s.night ? 1.8 : 0.6) * DIFFICULTY_WOLVES[difficulty] : 0.04;
   return [

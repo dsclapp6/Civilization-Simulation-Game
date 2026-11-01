@@ -22,13 +22,17 @@ export interface SystemHooks {
   yearly: Array<Hook<YearInfo>>;
 }
 
+const ECON_SHARDS = 12;
+
 export function registerSystems(E: Econ, sched: Scheduler, hooks: SystemHooks): () => void {
   const offs: Array<() => void> = [];
   offs.push(sched.register({
-    name: 'econ.settlements', phase: 'hourly', order: 40,
-    run: (_ctx: SimContext, info: HourInfo) => {
-      // a big settlement's day runs in slices over consecutive hours (slice k at slot + k), so no frame carries a whole city
+    name: 'econ.settlements', phase: 'hourly', order: 40, shards: ECON_SHARDS,
+    run: (_ctx: SimContext, info: HourInfo, shard = 0) => {
+      // a big settlement's day runs in slices over consecutive hours (slice k at slot + k), and the hour's settlements
+      // in shards, so no frame carries more than a few of them
       for (const s of E.world.settlements) {
+        if (s.id % ECON_SHARDS !== shard) continue;
         const parts = partsOf(s);
         const k = (info.hour - slotOf(s.id) + 24) % 24;
         if (k < parts) settlementDay(E, s, k, parts);

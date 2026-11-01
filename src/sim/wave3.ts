@@ -38,6 +38,8 @@ export interface FightSide {
   people: PersonId[];
   /** Summoned animals fighting on this side (wolves). */
   animals?: number[];
+  /** People of this side who fight from the saddle (knights and sergeants of a battle): they charge with the lance. */
+  mounted?: PersonId[];
 }
 
 export interface FightResult {

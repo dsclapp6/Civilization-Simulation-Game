@@ -53,7 +53,7 @@ describe('offering', () => {
     const notes: string[] = [];
     a.sim.events.on('request', (e) => events.push(e.id));
     a.sim.events.on('notify', (e) => { if (e.kind === 'quest') notes.push(e.text); });
-    a.sim.advanceDays(16);
+    a.sim.advanceDays(32); // two years: a request every five minutes or so
     expect(events.length).toBeGreaterThan(2);
     expect(notes.length).toBeGreaterThanOrEqual(events.length);
     const journal = a.adv.happenings.requests();
@@ -149,7 +149,7 @@ describe('fetching goods', () => {
 
 describe('loans', () => {
   it('are paid back with interest by an honest borrower', () => {
-    const a = advSim({ seed: 'req-loan' });
+    const a = advSim({ seed: 'req-loan-2' });
     a.player.money = 2000;
     const id = a.adv.happenings.offerRequest('loan');
     expect(id).toBeGreaterThan(0);

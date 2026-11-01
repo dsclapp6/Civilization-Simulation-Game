@@ -273,6 +273,21 @@ export class Econ {
   private bonusHour = -1;
   private readonly bonusMemo = new Map<string, number>();
 
+  /** The regent who holds the manor, abbey, barony or town of a minor lord, with his household. */
+  guardianOf(settlement: number): { person: Person; household: Household | undefined } | null {
+    const st = this.state;
+    const t = st.titleFor('manor', settlement) ?? st.titleFor('abbey', settlement) ?? st.titleFor('barony', settlement) ?? st.titleFor('town', settlement);
+    if (!t || !t.regent) return null;
+    const person = st.persons.get(t.regent);
+    if (!person || person.death) return null;
+    return { person, household: st.households.get(person.household) };
+  }
+
+  /** A technique effect the person's House commands (0 without the advancement module). */
+  guardBonus(person: Person, key: string): number {
+    return this.sim.services.advancement?.bonus?.(person.house, key) ?? 0;
+  }
+
   /** Market (settlement id) a settlement trades with, or −1. */
   marketFor(settlement: number): number { return this.marketOf.get(settlement) ?? -1; }
 

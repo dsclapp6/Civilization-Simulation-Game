@@ -223,6 +223,8 @@ export function installCombat(sim: Simulation, deps: Wave3Deps): CombatModule {
     dispose: () => { for (const off of offs.splice(0)) off(); },
   };
   sim.services.combat = api;
+  // a game saved in the middle of a fight loads with the fight gone: its action time must not stay on
+  if (sim.state.clock.actionTime) sim.dispatch({ type: 'setActionTime', on: false });
 
   // ---- systems ----
   const offs: Array<() => void> = [];

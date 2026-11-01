@@ -6,7 +6,7 @@
     "lord": { "plague": 1.5, "famine": 1.5, "disaster": 1.4, "bandits": 1.5, "revolt": 1.3, "requests": 1 },
     "king": { "plague": 2.4, "famine": 2.2, "disaster": 2, "bandits": 3, "revolt": 2, "requests": 1 }
   },
-  "rates": { "plague": 0.1, "drought": 0.2, "flood": 0.3, "fire": 3, "bandits": 3.5, "winter": 0.4, "tournament": 1, "progress": 1 },
+  "rates": { "plague": 0.1, "drought": 0.2, "flood": 0.3, "fire": 2.2, "bandits": 3, "winter": 0.4, "tournament": 1, "progress": 1 },
   "calendar": { "midsummer": 6, "harvest": 9, "christmas": 12, "fair": 5, "tournament": 6, "progress": 9, "yearEnd": 15 },
   "famine": { "start": 0.78, "end": 0.92 },
   "plague": { "duration": [6, 10], "infect": 0.04, "recover": 0.3, "spread": 0.4 },
@@ -83,8 +83,8 @@
   },
   "requests": {
     "maxOpen": 4,
-    "minGapDays": 1.2,
-    "dailyChance": 0.45,
+    "minGapDays": 2.5,
+    "dailyChance": 0.15,
     "offerDays": 4,
     "weights": { "fetch": 3, "loan": 1.4, "work": 3, "message": 1.6, "lost_animal": 1.3, "watch": 0.5, "godparent": 0.5, "marriage": 0.25 },
     "fetch": {

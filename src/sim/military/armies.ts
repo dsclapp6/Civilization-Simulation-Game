@@ -97,7 +97,7 @@ export function raise(M: Mil, house: HouseId, reason: string, opts: RaiseOptions
     taken.add(p.id);
     const sk = M.settlementById.get(p.settlement)?.kind;
     const town = sk === 'town' || sk === 'city';
-    const kind = unitKindOf(M, p, { levy, town, crossbows: M.advancement ? M.advancement.houseHas(hh, 'crossbows') : true });
+    const kind = unitKindOf(M, p, { levy, town, crossbows: M.advancement ? M.advancement.houseHas(hh, 'crossbows') : true, house: hh });
     picks.push({ p, kind, from });
   };
 

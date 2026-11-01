@@ -642,7 +642,7 @@ const TASK_ANIM: Record<string, { anim: WorkSpot['anim']; held: WorkSpot['mainHa
 
 export function workSpot(E: Econ, personId: PersonId, absDay: number): WorkSpot | null {
   const p = E.person(personId);
-  if (!p || p.death) return null;
+  if (!p || p.death || p.flags.captive) return null;
   const age = ageYears(p, absDay);
   if (age < 7 || isHolyDay(absDay)) return null;
   const part = dayPart(absDay);

@@ -171,6 +171,12 @@ export class ActionRegistry {
       }
       for (let i = from; i < out.length; i++) out[i].provider = p.id;
     }
+    // a prisoner does not work, trade, manage or travel until he is ransomed
+    if (this.ctx.state.persons.get(actor)?.flags.captive) {
+      for (const o of out) {
+        if (o.enabled && (o.category === 'work' || o.category === 'trade' || o.category === 'manage' || o.category === 'travel')) { o.enabled = false; o.reason = 'You are a prisoner.'; }
+      }
+    }
     return out
       .map((o, i) => ({ o, i }))
       .sort((a, b) => Number(b.o.enabled) - Number(a.o.enabled) || b.o.priority - a.o.priority || a.i - b.i)

@@ -35,9 +35,10 @@ export function installAdvancement(sim: Simulation, deps: Wave3Deps): Advancemen
   const offs: Array<() => void> = [];
   // the yearly pass of each settlement runs on its own day and hour
   offs.push(sim.registerSystem({
-    name: 'tech.settlements', phase: 'hourly', order: 60,
-    run: (_ctx, info) => {
+    name: 'tech.settlements', phase: 'hourly', order: 60, shards: 8,
+    run: (_ctx, info, shard = 0) => {
       for (const s of sim.world.settlements) {
+        if (s.id % 8 !== shard) continue;
         if (info.day % DAYS_PER_YEAR !== s.id % DAYS_PER_YEAR) continue;
         const part = (info.hour - ((s.id * 5) % 24) + 24) % 24;
         if (part < 3) settlementYear(A, s, part as 0 | 1 | 2);

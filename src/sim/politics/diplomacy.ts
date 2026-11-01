@@ -73,6 +73,11 @@ export class Diplomacy {
         p = 0.5 + pw.honourable * 0.2;
         break;
     }
+    // the skills of the treaty-makers (advancement): truces and alliances written down, heralds under safe-conduct
+    if (kind === 'truce') p += 0.12 * c.techBonus(from, 'diplomacy.truce') + 0.06 * c.techBonus(to, 'diplomacy.truce');
+    else if (kind === 'alliance') p += 0.12 * c.techBonus(from, 'diplomacy.alliance') + 0.06 * c.techBonus(to, 'diplomacy.alliance');
+    else if (kind === 'peace') p += 0.1 * (c.techBonus(from, 'diplomacy.truce') + c.techBonus(to, 'diplomacy.truce'));
+    if (kind !== 'peace' && kind !== 'submit') p += 0.05 * c.techBonus(from, 'diplomacy.contact');
     // the same player is never the AI's friend by default: threats count, but nothing is gifted
     return clamp(p, 0, 0.95);
   }

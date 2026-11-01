@@ -357,7 +357,9 @@ export class CourtshipEngine {
     const brideHh = core.state.households.get(brideHead.household);
     const expected = this.expectedDowry(man);
     const affordable = brideHh ? Math.floor(brideHh.purse * 0.35) : 0;
-    const offered = Math.min(expected * 1.25, affordable);
+    // marriage pacts (advancement `marriage.dowry`): a dowry and dower drawn up in a contract count for more at the table
+    const pact = core.sim.services.advancement?.bonus?.(brideHead.house, 'marriage.dowry') ?? 0;
+    const offered = Math.min(expected * 1.25, affordable) * (1 + pact);
     const greedy = decider.traits.includes('greedy') ? 1.6 : 1;
     const ambitious = decider.traits.includes('ambitious') ? 1.6 : decider.traits.includes('content') ? 0.6 : 1;
     const wardUp = ward.rankTier - partner.rankTier; // > 0: the partner's family gains rank

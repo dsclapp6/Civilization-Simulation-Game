@@ -1,7 +1,7 @@
 // Headless run of the whole simulation with every gameplay module installed (no zone/player):
 // population, food, conflict and happenings per year, plus per-system cost. From 20 years on it also prints a summary
 // per decade (population min/max, prosperity, famine, revolts, wars, battles, sieges, raids) and the drift per year.
-//   npx tsx tools/fullsim.ts --years 10 [--seed millennia] [--difficulty knight] [--preset tiny|small|large] [--quiet] [--keep-player] [--wall] [--sections]
+//   npx tsx tools/fullsim.ts --years 10 [--seed millennia] [--difficulty knight] [--preset tiny|small|large] [--quiet] [--keep-player] [--cpu] [--sections]
 import { performance } from 'node:perf_hooks';
 import type { Difficulty } from '../src/core/domain';
 import { installCombat } from '../src/combat';
@@ -60,9 +60,19 @@ if (!process.argv.includes('--keep-player')) {
 }
 sim.scheduler.profiling = true;
 const sections = process.argv.includes('--sections');
+// --spikes <ms>: every profiled call over the threshold, with the game hour/day it ran in (to see which slice is heavy)
+const spikeMs = process.argv.includes('--spikes') ? Number(arg('spikes', '6')) : 0;
+const spikes: Array<{ name: string; ms: number; hour: number; day: number }> = [];
+if (spikeMs > 0) sim.scheduler.onCall = (name, ms) => {
+  if (ms >= spikeMs && process.argv.includes('--trace-spikes')) console.log(`SPIKE ${name} ${ms.toFixed(1)}`);
+  if (ms >= spikeMs) spikes.push({ name, ms, hour: Math.floor(((sim.absDay % 1) + 1e-6) * 24), day: Math.floor(sim.absDay) });
+};
 if (sections) militaryContext(sim).timings = {};
-// CPU time of this process, not wall time: the machine is shared and the wall clock counts the others' work too
-if (!process.argv.includes('--wall')) sim.scheduler.clock = () => { const u = process.cpuUsage(); return (u.user + u.system) / 1000; };
+// Wall time by default (a quiet machine); --cpu uses this thread's CPU time instead (4 ms resolution here, and a shared machine's other work is not counted)
+if (process.argv.includes('--cpu')) {
+  const cpu = (process as unknown as { threadCpuUsage?: () => NodeJS.CpuUsage }).threadCpuUsage?.bind(process) ?? process.cpuUsage.bind(process);
+  sim.scheduler.clock = () => { const u = cpu(); return (u.user + u.system) / 1000; };
+}
 const living = (): number => { let n = 0; for (const p of sim.state.persons.values()) if (!p.death) n++; return n; };
 const prosperity = (): number => {
   let s = 0, n = 0;
@@ -96,8 +106,16 @@ for (let y = 1; y <= years; y++) {
 }
 console.log('\ntotals:', Object.entries(tally).sort().map(([k, v]) => `${k}=${v}`).join('  '));
 const prof = [...sim.scheduler.profile.entries()].sort((a, b) => b[1].maxMs - a[1].maxMs).slice(0, 14);
-console.log(`\nslowest systems (CPU ms per call; "slow" = calls over ${SLOW_MS} ms):`);
+console.log(`\nslowest systems (ms per call; "slow" = calls over ${SLOW_MS} ms):`);
 for (const [name, p] of prof) console.log(`  ${name.padEnd(28)} max ${p.maxMs.toFixed(1).padStart(6)}  avg ${(p.totalMs / Math.max(1, p.calls)).toFixed(3)}  slow ${String(p.slow).padStart(4)}  calls ${p.calls}`);
+if (spikeMs > 0) {
+  const by = new Map<string, { n: number; max: number }>();
+  const warm = Number(arg('warm', '3')) * 16; // the first years run cold (JIT), and a browser warms up in the first minutes too
+  console.log(`by game year: ${[...new Set(spikes.map((x) => Math.floor(x.day / 16)))].map((y) => `${y + 1}:${spikes.filter((x) => Math.floor(x.day / 16) === y).length}`).join(' ')} (listing below: after year ${warm / 16})`);
+  for (const sp of spikes.filter((x) => x.day >= warm)) { const k = `${sp.name} @${String(sp.hour).padStart(2)}h`; const e = by.get(k) ?? { n: 0, max: 0 }; e.n++; e.max = Math.max(e.max, sp.ms); by.set(k, e); }
+  console.log(`\ncalls over ${spikeMs} ms: ${spikes.length}; by system and game hour:`);
+  for (const [k, v] of [...by.entries()].sort((a, b) => b[1].n - a[1].n).slice(0, 30)) console.log(`  ${k.padEnd(34)} n ${String(v.n).padStart(4)}  max ${v.max.toFixed(1)}`);
+}
 let totalMs = 0;
 for (const p of sim.scheduler.profile.values()) totalMs += p.totalMs;
 const perHour = totalMs / (years * 16 * 24);

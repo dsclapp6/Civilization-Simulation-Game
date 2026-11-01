@@ -125,7 +125,7 @@ function thresholds(M: Mil): Thresholds {
 }
 
 /** What kind of fighting man this person is when he takes the field. */
-export function unitKindOf(M: Mil, p: Person, ctx: { levy: boolean; town?: boolean; crossbows?: boolean }): UnitKind {
+export function unitKindOf(M: Mil, p: Person, ctx: { levy: boolean; town?: boolean; crossbows?: boolean; house?: HouseId }): UnitKind {
   const hired = M.data.hired[p.id];
   if (hired) return hired.k === 'a' ? 'archer' : hired.k === 'x' ? 'crossbow' : hired.k === 'm' ? 'man_at_arms' : 'mercenary';
   if (p.career === 'knight' || p.career === 'squire' || (p.rankTier >= 5 && p.estate === 'noble')) return p.career === 'squire' ? 'man_at_arms' : 'knight';
@@ -138,6 +138,8 @@ export function unitKindOf(M: Mil, p: Person, ctx: { levy: boolean; town?: boole
   if (hasArmour(p) && p.trained.str >= th.maa.str && p.trained.end >= th.maa.end && skillLevel(p.skills.melee) >= th.maa.melee) return 'man_at_arms';
   if (ctx.town && ctx.crossbows && p.rankTier >= 2 && p.career !== 'labourer' && (p.id % 3 !== 0)) return 'crossbow';
   if (p.trained.str >= th.archer.str && skillLevel(p.skills.archery) >= th.archer.archery && (hasBow(p) || p.career === 'yeoman' || p.career === 'woodward')) return 'archer';
+  // drilled longbow country (advancement `levy.archers`): that share of the levy shoots instead of carrying a spear
+  if (ctx.house && ctx.levy && p.id % 100 < 100 * M.techBonus(ctx.house, 'levy.archers') && skillLevel(p.skills.archery) >= 1) return 'archer';
   return 'levy';
 }
 

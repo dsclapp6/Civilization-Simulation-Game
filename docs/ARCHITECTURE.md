@@ -107,6 +107,9 @@ ui      = createUI(root.ui, host)                     // src/ui (reads GameServi
 - Inside `sim.step`: fixed sub-steps of `SIM_DT` (1/20 s) × speed for detailed agents;
   the calendar advances by `realDt × speed × calendarRate / DAY_SECONDS` days. Hourly, daily,
   seasonal and yearly hooks fire from the calendar (macro systems run on them).
+- A heavy calendar system declares `shards: N` (sim/scheduler.ts) and its `run(ctx, info, shard)` is called N times in order; the
+  live game's hook budget may pause between two shards, so no frame carries more than a few ms of one system
+  (`npx tsx tools/fullsim.ts --years 10 --spikes 6` lists the calls over a threshold). Headless runs execute the shards back to back.
 - Speeds 1×/3×/8×, pause, action time (`ACTION_TIME_FACTOR`), sleep/wait skips (advance the
   calendar quickly with detailed agents frozen or teleported to schedule positions).
 - The renderer interpolates nothing itself: the sim exposes current positions each frame

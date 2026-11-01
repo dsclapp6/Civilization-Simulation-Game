@@ -3,8 +3,9 @@
 // holders of titles).
 import type { RankTier } from '../../core/domain';
 import { ancestorIds, familyOf } from '../kin';
+import { createPerson } from '../people';
 import { continentPct } from '../score';
-import { setRank } from '../succession';
+import { pickHome, setRank } from '../succession';
 import { ageYears, fullName, TITLE_RANK, type HouseId, type Person, type PersonId, type Title, type TitleId } from '../state';
 import type { PoliticsCore } from './core';
 import type { Claim } from './types';
@@ -54,7 +55,7 @@ export function transferTitle(core: PoliticsCore, t: Title, to: Person, why: str
     if (old.house && old.house !== to.house) core.save.deposed[String(t.id)] = [old.house, Math.floor(core.day) + 5 * 16];
     delete core.save.oaths[String(t.id)];
   }
-  if (opts.rehome) rehome(core, t, to);
+  if (opts.rehome) { rehome(core, t, to); installCastellan(core, t, to); }
   const tier = tierOf(t);
   if (tier > to.rankTier) setRank(core.sim, to, tier);
   if (to.sex === 'm' && to.career !== 'lord' && to.career !== 'knight') to.career = tier >= 6 ? 'lord' : 'knight';
@@ -73,6 +74,40 @@ export function transferTitle(core: PoliticsCore, t: Title, to: Person, why: str
   if (mine || tier >= 6) core.log('title', text, old ? [to.id, old.id] : [to.id]);
   refreshScore(core);
   core.sim.requestSave('title moved');
+}
+
+/**
+ * A conquered seat (a manor, town or barony) is not run from the winner's own hall far away: unless a man of his House already
+ * lives there, a knight of the winning House takes the keys with a household of his own in the best house of the place.
+ */
+function installCastellan(core: PoliticsCore, t: Title, to: Person): void {
+  if (t.kind !== 'manor' && t.kind !== 'town' && t.kind !== 'barony') return;
+  const state = core.state;
+  const seat = core.settlementById.get(t.place);
+  if (!seat || !to.house) return;
+  if (to.settlement === seat.id && !to.death) return;
+  for (const r of state.residentList(seat.id)) {
+    if (r.house === to.house && !r.death && r.sex === 'm' && r.estate === 'noble' && ageYears(r, core.day) >= 18 && !r.flags.captive) return;
+  }
+  const rng = core.rng('castellan');
+  const house = state.houses.get(to.house);
+  const hh = state.addHousehold({
+    id: state.households.alloc(), kind: 'family', head: 0, members: [], home: -1, settlement: seat.id, purse: 0, stores: {},
+  });
+  const tier = Math.max(4, TITLE_RANK[t.kind] - 1) as RankTier;
+  const castellan = createPerson(state, rng, {
+    culture: seat.culture, sex: 'm', age: rng.range(25, 42), day: Math.floor(core.day), settlement: seat.id, settlementName: seat.name, household: hh,
+    house: to.house, career: 'knight', stage: 2, tier, estate: 'noble', noble: true, houseName: house?.name,
+  });
+  state.setHouse(castellan, to.house);
+  state.setHead(hh, castellan);
+  const home = pickHome(state, rng, seat.id, ['manor_house', 'keep_stone', 'motte', 'great_hall']);
+  if (home) state.setHome(hh, home.id);
+  hh.purse = 400 * tier;
+  castellan.offices.push({ office: 'castellan', place: seat.id, since: Math.round(core.day) });
+  state.touch(castellan);
+  core.sim.events.emit('office', { person: castellan.id, office: 'castellan', place: seat.id, gained: true });
+  if (to.house === state.run.houseId || tier >= 6) core.log('title', `${fullName(castellan)} holds ${seat.name} as castellan for ${fullName(to)}.`, [castellan.id, to.id]);
 }
 
 /** A conquered title is held from the conqueror's own higher title (or from no one), not from the old liege. */

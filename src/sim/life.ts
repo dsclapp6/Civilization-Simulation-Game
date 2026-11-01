@@ -18,6 +18,7 @@ import {
 import { refreshStrips } from './farming';
 import { foundHouse, youthCareer } from './family';
 import { familyOf, isCloseKin } from './kin';
+import { gainSkill } from './skills';
 import { createNewborn, createPerson, learnFactor, refreshTrained, xpForLevel, XP_PER_YEAR } from './people';
 import type { Scheduler } from './scheduler';
 import {
@@ -48,27 +49,30 @@ const AGE = DAYS_PER_YEAR;
 // ---------------------------------------------------------------------------------------------
 
 export function registerLifeSystems(sched: Scheduler): void {
-  sched.register({ name: 'life.settlements', phase: 'hourly', order: 10, run: (ctx, info) => lifeHourly(ctx, info) });
+  sched.register({ name: 'life.settlements', phase: 'hourly', order: 10, shards: LIFE_SHARDS, run: (ctx, info, shard = 0) => lifeHourly(ctx, info, shard) });
   sched.register({ name: 'life.fields', phase: 'daily', order: 20, run: (ctx, info) => { refreshStrips(ctx.state, info.absDay); } });
   sched.register({ name: 'life.year', phase: 'yearly', order: 10, run: (ctx, info) => lifeYearly(ctx, info) });
 }
 
-function lifeHourly(ctx: SimContext, info: HourInfo): void {
+const LIFE_SHARDS = 12;
+
+function lifeHourly(ctx: SimContext, info: HourInfo, shard: number): void {
   const { world } = ctx;
   const hour = info.hour;
   const day = info.day;
   const now = info.absDay;
   for (const s of world.settlements) {
+    if (s.id % LIFE_SHARDS !== shard) continue;
     // a big settlement's day runs in slices over consecutive hours (slice k at its hour + k): no frame carries a whole city
     const parts = lifeParts(s);
     const k = (hour - (s.id % 24) + 24) % 24;
     if (k < parts) settlementTick(ctx, s, day, now, k, parts);
   }
-  if (hour === 12) {
+  if (hour === 12 && shard === 0) {
     for (const k of world.kingdoms) if ((day + k.id) % 4 === 0) nobleMatchmaking(ctx, k.id, now);
   }
   // yearly bookkeeping that walks the whole state runs on a quiet day of its own, not at New Year
-  if (hour === 3 && day % AGE === 9) {
+  if (hour === 3 && day % AGE === 9 && shard === LIFE_SHARDS - 1) {
     pruneDead(ctx, now);
     ctx.score.yearly(world);
   }
@@ -301,6 +305,12 @@ function onBirthday(ctx: SimContext, rng: Rng, p: Person, age: number, now: numb
       const mult = [1, 0.45, 0.25];
       for (let i = 0; i < def.skills.length && i < 3; i++) sk[def.skills[i]] += Math.round(XP_PER_YEAR * lf * mult[i]);
     }
+  }
+
+  // schooling: where the village keeps a school and a clerk (advancement `literacy`) some children learn their letters each year
+  if (age >= 6 && age <= 15 && p.career === 'child') {
+    const lit = ctx.services?.advancement?.settlementBonus?.(p.settlement, 'literacy') ?? 0;
+    if (lit > 0 && rng.chance(Math.min(0.9, lit * 2))) gainSkill(ctx, p, 'letters', 35);
   }
 
   if (!p.flags.player) {

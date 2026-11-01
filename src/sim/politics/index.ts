@@ -12,7 +12,7 @@ import { Ai } from './ai';
 import { PoliticsCore, YEAR } from './core';
 import { Diplomacy } from './diplomacy';
 import { Management } from './management';
-import { Offices } from './offices';
+import { Offices, OFFICE_BUCKETS } from './offices';
 import { Realms } from './realm';
 import { claimsOfHouse, claimsOnTitle } from './titles';
 import { politicsActions, politicsTopics } from './talk';
@@ -69,20 +69,21 @@ export function installPolitics(sim: Simulation, deps: Pick<Wave3Deps, 'economy'
   }));
   // the Houses think and the posts are reviewed a little each hour, so no frame carries the whole day
   offs.push(sim.registerSystem({
-    name: 'politics.hourly', phase: 'hourly', order: 70,
-    run: (_ctx, info) => {
-      ai.hourly(info.hourIndex);
-      offices.hourly(info.hour);
+    name: 'politics.hourly', phase: 'hourly', order: 70, shards: OFFICE_BUCKETS + 1,
+    run: (_ctx, info, shard = 0) => {
+      // shard 0 finds who is due (and refreshes the snapshot), the others work through it a stage at a time
+      if (shard === 0) { ai.hourlyBegin(info.hourIndex); offices.hourlyBegin(info.hour); return; }
+      ai.hourlyStage();
+      offices.hourlyStage(shard - 1);
     },
   }));
   offs.push(sim.registerSystem({
-    name: 'politics.seasonal', phase: 'seasonal', order: 70,
-    run: () => {
-      core.invalidate();
-      unrest.bandsSeasonal();
-      realms.coalitionsSeasonal();
-      manage.seasonal();
-      decayTies(core);
+    name: 'politics.seasonal', phase: 'seasonal', order: 70, shards: 4,
+    run: (_ctx, _info, shard = 0) => {
+      if (shard === 0) { core.invalidate(); unrest.bandsSeasonal(); }
+      else if (shard === 1) realms.coalitionsSeasonal();
+      else if (shard === 2) manage.seasonal();
+      else decayTies(core);
     },
   }));
   offs.push(sim.registerSystem({
