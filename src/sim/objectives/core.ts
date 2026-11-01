@@ -7,6 +7,7 @@ import type { Rng } from '../../core/rng';
 import { daylight, toDate } from '../../core/time';
 import type { Settlement, WorldModel } from '../../world/types';
 import type { Simulation } from '../sim';
+import { formatMoney } from '../money';
 import { gainSkill } from '../skills';
 import { ageYears, fullName, type GameState, type Person, type PersonId } from '../state';
 import type { Wave3Deps } from '../wave3deps';
@@ -339,6 +340,7 @@ export class Obj {
         this.state.touch(p);
         paid = can;
         this.save.log.inc += can;
+        this.notify(`${giver?.first ?? 'The household'} gives you ${formatMoney(can)} for your trouble.`, 'gain', giver?.id);
       }
     }
     if (pay.opinion && giver && giver.id !== p.id) this.deps.social.adjustOpinion(giver.id, p.id, pay.opinion, 'helped');

@@ -17,6 +17,7 @@ describe('a dear one gravely ill', () => {
     const mother = o.sim.state.persons.get(me.mother)!;
     expect(mother && !mother.death).toBe(true);
     mother.health.conditions.push({ id: 'fever', since: o.sim.absDay, until: o.sim.absDay + 6, severity: 0.2, fatal: true });
+    mother.health.hp = 0.6;
     o.sim.state.touch(mother);
     o.sim.advanceHours(1);
     const ill = story(o).find((x) => /gravely ill/.test(x.title))!;
@@ -42,6 +43,7 @@ describe('a dear one gravely ill', () => {
     const me = playerOf(o.sim);
     const father = o.sim.state.persons.get(me.father)!;
     father.health.conditions.push({ id: 'flux', since: o.sim.absDay, until: o.sim.absDay + 4, severity: 0.2, fatal: true });
+    father.health.hp = 0.6;
     o.sim.state.touch(father);
     o.sim.advanceHours(1);
     const ill = story(o)[0];
@@ -54,16 +56,47 @@ describe('a dear one gravely ill', () => {
   it('lapses when they die', () => {
     const o = settled();
     const me = playerOf(o.sim);
-    const sibling = o.sim.state.households.get(me.household)!.members.map((id) => o.sim.state.persons.get(id)!).find((p) => p.id !== me.id && !p.death);
-    expect(sibling).toBeTruthy();
-    sibling!.health.conditions.push({ id: 'fever', since: o.sim.absDay, until: o.sim.absDay + 4, severity: 0.2, fatal: true });
-    o.sim.state.touch(sibling!);
+    const father = o.sim.state.persons.get(me.father)!;
+    father.health.conditions.push({ id: 'fever', since: o.sim.absDay, until: o.sim.absDay + 4, severity: 0.2, fatal: true });
+    father.health.hp = 0.5;
+    o.sim.state.touch(father);
     o.sim.advanceHours(1);
     const ill = story(o)[0];
     expect(ill).toBeTruthy();
-    sibling!.death = { day: Math.floor(o.sim.absDay), cause: 'illness' };
+    father.death = { day: Math.floor(o.sim.absDay), cause: 'illness' };
     o.sim.advanceHours(1);
     expect(o.obj.list().find((x) => x.id === ill.id)?.state).toBe('expired');
+  });
+
+  it('is not made for a fever that has only just begun, or for a distant cousin', () => {
+    const o = settled();
+    const me = playerOf(o.sim);
+    const mother = o.sim.state.persons.get(me.mother)!;
+    mother.health.conditions.push({ id: 'fever', since: o.sim.absDay, until: o.sim.absDay + 6, severity: 0.2, fatal: true });
+    mother.health.hp = 0.95; // not yet grave
+    o.sim.state.touch(mother);
+    o.sim.advanceHours(1);
+    expect(story(o).filter((x) => /gravely ill/.test(x.title))).toHaveLength(0);
+    mother.health.hp = 0.6; // now it is
+    o.sim.advanceHours(1);
+    expect(story(o).filter((x) => /gravely ill/.test(x.title))).toHaveLength(1);
+  });
+
+  it('for a baby is seen at home, since a baby cannot be talked to', () => {
+    const o = settled();
+    const me = playerOf(o.sim);
+    const hh = o.sim.state.households.get(me.household)!;
+    const baby = o.sim.state.persons.get(hh.members.find((id) => id !== me.id)!)!;
+    baby.birthDay = Math.round(o.sim.absDay - 8); // half a year old
+    me.children.push(baby.id); // (the player's own child, for the test)
+    baby.health.conditions.push({ id: 'fever', since: o.sim.absDay, until: o.sim.absDay + 5, severity: 0.2, fatal: true });
+    baby.health.hp = 0.5;
+    o.sim.state.touch(baby);
+    o.sim.advanceHours(1);
+    const ill = story(o).find((x) => x.title === `${baby.first} is gravely ill`)!;
+    expect(ill, active(o).map((x) => x.title).join(', ')).toBeTruthy();
+    expect(recOf(o, ill.id).steps[0].m.k).toBe('reach');
+    expect(ill.steps[0].target?.label).toBe('Your home');
   });
 });
 

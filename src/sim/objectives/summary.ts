@@ -92,7 +92,7 @@ export function logAction(O: Obj, e: Extract<ActionEvent, { type: 'completed' }>
   for (const g of e.outcome.gains ?? []) {
     if (!g.amount || g.amount <= 0) continue;
     if (g.ref === 'money') log.inc += g.amount;
-    else if (!g.ref || !NOT_GOODS.has(g.ref)) log.goods[g.label] = Math.round(((log.goods[g.label] ?? 0) + g.amount) * 100) / 100;
+    else if (g.ref && !NOT_GOODS.has(g.ref) && O.deps.economy.good(g.ref.split('#')[0])) log.goods[g.label] = Math.round(((log.goods[g.label] ?? 0) + g.amount) * 100) / 100;
   }
   O.touch();
 }
@@ -141,7 +141,7 @@ function householdLines(O: Obj, me: Person): string[] {
     if (bagQty(hh.stores, 'firewood') < units * (winter ? 4 : 2)) out.push(T('text', 'sum.household.wood'));
     for (const id of hh.members) {
       const m = O.state.persons.get(id);
-      if (m && !m.death && m.health.conditions.some((c) => c.fatal)) out.push(T('text', 'sum.household.ill', { name: m.first }));
+      if (m && !m.death && m.health.conditions.some((c) => c.fatal) && m.health.hp < 0.75) out.push(T('text', 'sum.household.ill', { name: m.first }));
     }
     // debts and dues that are near
     const now = O.day;

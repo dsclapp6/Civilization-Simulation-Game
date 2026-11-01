@@ -68,6 +68,7 @@ describe('dawn chores', () => {
     const hh = o.sim.state.households.get(me.household)!;
     const op0 = o.social.opinion(head.id, me.id);
     const purse0 = hh.purse;
+    const money0 = me.money;
     const notes: string[] = [];
     o.sim.events.on('notify', (e) => notes.push(`${e.kind}:${e.text}`));
     const before = active(o, 'chore').map((c) => c.title);
@@ -78,6 +79,9 @@ describe('dawn chores', () => {
     expect(o.social.opinion(head.id, me.id)).toBeGreaterThan(op0);
     expect(hh.purse).toBeLessThanOrEqual(purse0);
     expect(notes.some((n) => n.startsWith('social:') && n.includes(head.first))).toBe(true);
+    // the coin comes out of the household purse into the player's, and the player is told
+    expect(me.money).toBeGreaterThanOrEqual(money0);
+    if (me.money > money0) expect(notes.some((n) => n.startsWith('gain:') && n.includes(head.first) && /gives you/.test(n))).toBe(true);
     // the finished chores are kept in the list for a while, as done
     expect(o.obj.list().filter((x) => x.source === 'chore' && x.state === 'done').length).toBe(before.length);
   });

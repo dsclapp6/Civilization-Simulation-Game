@@ -9,13 +9,14 @@ import { buildingPhrase, buildingTarget, churchOf, describePerson, personTarget,
 import { enabledOption } from './roles';
 import { militaryOf } from './sources';
 
-const sick = (p: Person): boolean => p.health.conditions.some((c) => c.fatal);
+/** Gravely ill: a fatal sickness that has taken hold (the body has lost a quarter of its strength). */
+const sick = (p: Person): boolean => p.health.conditions.some((c) => c.fatal) && p.health.hp < 0.75;
 
-/** Kin the player would sit with: spouse, parents, children, and the rest of the household. */
+/** Kin the player would sit with: spouse, parents, children, and the head of the household. */
 function dearOnes(O: Obj, me: Person): Person[] {
   const ids = new Set<number>([me.spouse, me.father, me.mother, ...me.children]);
   const hh = O.state.households.get(me.household);
-  if (hh) for (const id of hh.members) ids.add(id);
+  if (hh) ids.add(hh.head);
   const out: Person[] = [];
   for (const id of ids) {
     if (!id || id === me.id) continue;
@@ -39,9 +40,12 @@ export function storyHourly(O: Obj): void {
     if (p.settlement !== me.settlement && O.age(p) >= 14 && p.household !== me.household) continue;
     const vars: Vars = { name: p.first };
     const church = churchOf(O, me);
-    const steps: NewObjective['steps'] = [
-      { text: T('text', 'story.ill.visit', vars), hint: T('text', 'story.ill.visit.hint', vars), target: personTarget(O, p, describePerson(O, p)), m: { k: 'talk', who: p.id } },
-    ];
+    // a baby cannot be talked to: it is seen at home
+    const home = homeOf(O, me);
+    const door = home ? buildingTarget(O, home, 'Your home') : undefined;
+    const steps: NewObjective['steps'] = O.age(p) < 3 && door
+      ? [{ text: T('text', 'story.ill.visit', vars), hint: T('text', 'story.ill.visit.hint', vars), target: door, m: { k: 'reach', x: door.x, z: door.z, r: 12 } }]
+      : [{ text: T('text', 'story.ill.visit', vars), hint: T('text', 'story.ill.visit.hint', vars), target: personTarget(O, p, describePerson(O, p)), m: { k: 'talk', who: p.id } }];
     if (church && enabledOption(O, me, { kind: 'building', id: church.id }, /^social\.(pray|mass)/)) {
       steps.push({
         text: T('text', 'story.ill.pray', { ...vars, church: buildingPhrase(O, church) }), hint: T('text', 'story.ill.pray.hint'), target: buildingTarget(O, church),
