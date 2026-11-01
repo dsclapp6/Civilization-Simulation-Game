@@ -4,7 +4,7 @@ import { KEYMAP } from '../../player/types';
 
 export type PanelKey =
   | 'character' | 'inventory' | 'ledger' | 'map' | 'command' | 'family' | 'chronicle' | 'rest'
-  | 'politics' | 'techs' | 'requests' | 'wounds' | 'help';
+  | 'politics' | 'techs' | 'requests' | 'wounds' | 'help' | 'journal' | 'minimap' | 'whatNow';
 
 export type KeyIntent =
   | { type: 'toggle'; panel: PanelKey }
@@ -36,6 +36,9 @@ const TOGGLES: ReadonlyArray<readonly [string, PanelKey]> = [
   [KEYMAP.ui.requests, 'requests'],
   [KEYMAP.ui.wounds, 'wounds'],
   [KEYMAP.ui.help, 'help'],
+  [KEYMAP.ui.journal, 'journal'],
+  [KEYMAP.ui.minimap, 'minimap'],
+  [KEYMAP.ui.whatNow, 'whatNow'],
 ];
 
 export function keyIntent(code: string, state: KeyState): KeyIntent | null {

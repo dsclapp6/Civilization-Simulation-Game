@@ -14,6 +14,7 @@ export interface ConfirmOptions {
 }
 
 export type FamilyTab = 'tree' | 'household' | 'house';
+export type JournalTab = 'objectives' | 'today' | 'people' | 'places';
 export type LedgerTab = 'holdings' | 'household' | 'obligations' | 'property' | 'ledger' | 'authority';
 
 export type InternalRequest =
@@ -29,6 +30,10 @@ export type InternalRequest =
   | { panel: 'gameover'; summary?: SimEvents['gameOver'] }
   | { panel: 'encounter' }
   | { panel: 'help'; tab?: 'controls' | 'basics' | 'combat' | 'realm' }
+  /** Clarity pass: the journal (objectives, today, people you know, places), the day summary card and the scene-setting intro. */
+  | { panel: 'journal'; tab?: JournalTab }
+  | { panel: 'daysummary'; day?: number }
+  | { panel: 'intro' }
   | { panel: 'confirm'; options: ConfirmOptions };
 
 export type PanelRequest = UiRequest | InternalRequest;
@@ -50,6 +55,7 @@ export interface DockEntry {
 
 /** The hotkey-toggled panels, in the order of the HUD dock: the book of the self, then the realm. */
 export const DOCK_ENTRIES: readonly DockEntry[] = [
+  { id: 'journal', label: 'Journal: tasks, the day, people, places', key: 'O', panelId: 'journal', request: { panel: 'journal' }, group: 'core' },
   { id: 'character', label: 'Character', key: 'Tab', panelId: 'character', request: { panel: 'character' }, group: 'core' },
   { id: 'inventory', label: 'Inventory', key: 'I', panelId: 'inventory', request: { panel: 'inventory' }, group: 'core' },
   { id: 'family', label: 'Family & House', key: 'H', panelId: 'family', request: { panel: 'family' }, group: 'core' },
@@ -76,6 +82,7 @@ export function panelForKey(key: string, has: (needs: DockNeeds) => boolean): { 
       return e && (!e.needs || has(e.needs)) ? { request: e.request, panelId: e.panelId } : null;
     }
     case 'help': return { request: { panel: 'help' }, panelId: 'help' };
+    case 'journal': return { request: { panel: 'journal' }, panelId: 'journal' };
     default: return null;
   }
 }

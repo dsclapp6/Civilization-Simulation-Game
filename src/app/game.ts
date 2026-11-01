@@ -14,6 +14,7 @@ import { MemorySaveStore } from '../sim/save-memory';
 import { IdbSaveStore } from '../sim/save-idb';
 import { loadProfile, type SaveStore } from '../sim/save';
 import { createUI } from '../ui';
+import { cursorCss } from '../ui/core/cursors';
 import type { GameUI } from '../ui/types';
 import { DebugOverlay, emptyTimings, type FrameTimings } from './debug';
 import { AppHost } from './host';
@@ -98,8 +99,17 @@ export async function start(root: AppRoot): Promise<void> {
       const r = g.sim.dispatch({ type: 'togglePause' });
       if (!r.ok) g.sim.events.emit('notify', { kind: 'warn', text: commandRefusal(r.reason) });
     },
-    escape: () => { ui.onEscape(); },
+    drawn: () => !!host.session?.services.player.drawn?.(),
+    toggleWeapon: () => { const p = host.session?.services.player; p?.setDrawn?.(!p.drawn?.()); },
+    pointerMove: (x, y) => host.session?.services.player.pointerMove?.(x, y),
+    pointerLeave: () => host.session?.services.player.pointerLeave?.(),
+    pointerClick: (x, y) => { host.session?.services.player.pointerClick?.(x, y); },
+    cursor: () => {
+      const hov = host.session?.services.player.hover?.();
+      return hov ? cursorCss(hov.cursor) : '';
+    },
   }, root.viewport);
+  host.input = input;
 
   // ---- the loop ----
   let last = 0;

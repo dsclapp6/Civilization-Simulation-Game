@@ -15,9 +15,21 @@ import { DOCK_ENTRIES, type DockEntry, type PanelRequest } from '../core/request
 import { dockBadges, hasModule } from '../core/modules';
 import type { GameServices, UiHost } from '../types';
 import { bar, button, chip, keycap, type BarHandle } from '../components/widgets';
+import { settlementCard } from '../../sim/api';
+import { fullName } from '../../sim/state';
+import type { PinStore } from '../core/pins';
 import { Dial } from './dial';
 import type { Toasts } from './toasts';
 import type { Guide } from './guide';
+import { Banner } from './banner';
+import { Compass } from './compass';
+import { Destination } from './destination';
+import { EdgeArrows } from './edgearrows';
+import { HoverCard } from './hover';
+import { Minimap } from './minimap';
+import { NavState } from './navstate';
+import { Tracker } from './tracker';
+import { WhatNow } from './whatnow';
 
 export interface HudDeps {
   game(): GameServices | null;
@@ -31,6 +43,12 @@ export interface HudDeps {
   placeName(id: number): string;
   /** The journey just ran into an encounter. */
   onEncounter?(): void;
+  // ---- clarity pass ----
+  /** Places the player asked to be shown (the journal's Find, "What now?"). */
+  pins: PinStore;
+  /** Screen pixels per interface pixel (the interface scale setting). */
+  scale(): number;
+  nameOf(id: number): string;
 }
 
 const NEED_ICON: Record<NeedView['id'], IconName> = { hunger: 'bread', rest: 'moon_z', warmth: 'flame', mood: 'face' };
@@ -38,6 +56,24 @@ const SPEEDS: readonly Speed[] = [1, 3, 8];
 
 export class Hud {
   readonly el = h('div.mu-hud');
+
+  // clarity pass: the stacked columns and the guidance pieces (CLARITY §2, §3, §5)
+  readonly nav = new NavState();
+  private readonly leftCol = h('div.mu-hud-left');
+  private readonly rightCol = h('div.mu-hud-right');
+  readonly tracker: Tracker;
+  readonly whatNow: WhatNow;
+  private readonly compass = new Compass();
+  private readonly minimap: Minimap;
+  private readonly edge = new EdgeArrows();
+  readonly banner = new Banner();
+  private readonly hoverCard = new HoverCard();
+  private readonly dest = new Destination();
+  private readonly dayTypeEl = h('div.mu-hud-daytype');
+  private lastSettlementId = -2;
+  private clockNow = 0;
+  /** The first settlement of a new run is announced by the intro card, not the banner. */
+  suppressBanner = false;
 
   // player plate
   private readonly plate = h('div.mu-hud-player.mu-plate');
@@ -153,6 +189,15 @@ export class Hud {
   private needScratch: NeedView[] = [];
 
   constructor(private readonly deps: HudDeps) {
+    this.tracker = new Tracker({
+      game: () => deps.game(), nav: this.nav, nameOf: (id) => deps.nameOf(id),
+      openJournal: () => deps.open({ panel: 'journal' }), whatNow: () => this.whatNow.toggle(),
+    });
+    this.whatNow = new WhatNow({
+      game: () => deps.game(), nav: this.nav, pin: (x, z, label) => deps.pins.set({ x, z, label }), say: (text) => deps.say('info', text),
+      openJournal: () => deps.open({ panel: 'journal' }),
+    });
+    this.minimap = new Minimap({ game: () => deps.game(), nav: this.nav, openMap: () => deps.open({ panel: 'map' }) });
     this.buildPlate();
     this.buildClock();
     this.buildCenter();
@@ -164,9 +209,12 @@ export class Hud {
         button('Wake up', { onClick: () => this.cancelSkip(), icon: 'sun', variant: 'primary' }),
         h('div.mu-dim.mu-small', null, keycap('Esc', true), ' also wakes you')),
     );
+    this.leftCol.append(this.plate, this.tracker.el, this.whatNow.el, this.deps.guide.el);
+    this.rightCol.append(this.clockPlate, this.minimap.el);
     this.el.append(
-      this.plate, this.clockPlate, this.dangerEl, this.deps.toasts.el, this.travelEl, this.gainsEl, this.actionEl, this.promptEl,
-      this.deps.guide.el, this.feedEl, this.dockEl, this.savedEl, this.reticle, this.hitFlash, this.downEl, this.combatChip, this.sleepEl,
+      this.leftCol, this.rightCol, this.compass.el, this.banner.el, this.dangerEl, this.deps.toasts.el, this.travelEl, this.edge.el, this.dest.el,
+      this.gainsEl, this.actionEl, this.promptEl, this.feedEl, this.dockEl, this.savedEl, this.reticle, this.hitFlash, this.downEl, this.combatChip,
+      this.hoverCard.el, this.sleepEl,
     );
     this.downEl.append(h('div.mu-hud-down-card', null, icon('skull', 30), h('div.mu-hud-down-title', null, 'You are down'), this.downText));
   }
@@ -204,15 +252,18 @@ export class Hud {
       return b;
     };
     this.pauseBtn.addEventListener('click', () => this.togglePause());
+    this.clockPlate.addEventListener('click', (e) => { if (!(e.target as Element).closest('button')) this.deps.open({ panel: 'journal', tab: 'today' }); });
+    this.clockPlate.classList.add('mu-click');
     this.clockPlate.append(
       h('div.mu-hud-clockrow', null,
         this.dial.el,
-        h('div.mu-hud-when', null,
+        h('div.mu-hud-when', { tip: 'A day lasts ten minutes at normal speed. Four days make a season, sixteen a year. Click for today in the journal.' },
           this.dateEl,
           h('div.mu-hud-timerow', null, this.timeEl, this.partEl),
         ),
       ),
       this.flagsEl,
+      this.dayTypeEl,
       this.placeEl,
       h('div.mu-hud-speeds', null, this.pauseBtn, mkSpeed('1×', 'Normal speed (1)', 1), mkSpeed('3×', 'Fast (2)', 3), mkSpeed('8×', 'Fastest (3)', 8)),
       this.badgesEl,
@@ -347,6 +398,10 @@ export class Hud {
     this.lastSpeedKey = '';
     this.lastSlow = -10;
     this.lastPlace = '';
+    this.lastSettlementId = -2;
+    this.banner.hide();
+    this.whatNow.close();
+    this.hoverCard.hide();
     this.sleepOn(false);
   }
 
@@ -367,6 +422,8 @@ export class Hud {
     this.updateCombat(game, hud);
     this.updateOverlays(clock, hud);
     this.updateFeed(now);
+    this.clockNow = now;
+    this.updateGuidance(game, hud, now);
     this.deps.guide.update(now);
     if (this.savedUntil && now > this.savedUntil) { this.savedUntil = 0; this.savedEl.classList.remove('on'); }
 
@@ -375,6 +432,32 @@ export class Hud {
       this.updateSlow(game);
     }
   }
+
+  /** The compass, the minimap, the tracker, the screen-edge arrows, the destination ring and the cursor's tooltip. */
+  private updateGuidance(game: GameServices, hud: ReturnType<GameServices['player']['hud']>, now: number): void {
+    const nav = this.nav;
+    nav.update(game, this.deps.host, this.deps.pins);
+    if (this.deps.pins.arrive(nav.x, nav.z)) this.deps.say('info', 'You have arrived.');
+    const showGuides = nav.street && !!hud && !hud.travel;
+    this.compass.setVisible(showGuides);
+    if (showGuides) this.compass.update(nav);
+    const showMap = nav.street && !!hud && this.deps.host.settings().minimap !== false;
+    this.minimap.setVisible(showMap);
+    if (showMap) this.minimap.update(now);
+    this.tracker.update(now);
+    this.whatNow.update(now);
+    const scale = this.deps.scale() || 1;
+    if (showGuides) this.edge.update(nav, this.deps.host, scale);
+    this.edge.el.classList.toggle('mu-hide', !showGuides);
+    this.dest.update(game, this.deps.host, scale);
+    const hov = game.player.hover?.() ?? null;
+    this.hoverCard.update(hov, now, hov ? hov.x / scale : 0, hov ? hov.y / scale : 0, window.innerWidth / scale, window.innerHeight / scale);
+    this.el.classList.toggle('with-banner', this.banner.isOn(now));
+    this.banner.update(now);
+  }
+
+  /** The window or the interface scale changed. */
+  resized(): void { this.compass.resize(); }
 
   private updateClock(clock: ReturnType<GameServices['sim']['view']['clock']>, _now: number): void {
     const minute = minuteOfDay(clock.dayFraction);
@@ -607,15 +690,34 @@ export class Hud {
       }
     }
     const flags = dayFlags(sim.absDay, marketId);
-    const fkey = `${flags.holy}${flags.market}${flags.dayOfWeek}`;
+    const placeWord = marketId !== null ? this.deps.placeName(marketId) : '';
+    const fkey = `${flags.holy}${flags.market}${flags.dayOfWeek}|${placeWord}`;
     if (fkey !== this.lastFlagsKey) {
       this.lastFlagsKey = fkey;
       replace(this.flagsEl,
         h('span.mu-hud-dow', null, `Day ${flags.dayOfWeek} of 4`),
         flags.holy ? chip('Holy day', 'gold', 'cross_holy', 'A holy day: church, then games and archery practice at the butts.') : null,
         flags.market ? chip('Market day', 'lapis', 'market', 'The stalls are full today.') : null,
-        !flags.holy ? h('span.mu-dim.mu-tiny', null, flags.daysToHoly === 1 ? 'holy day tomorrow' : `holy day in ${flags.daysToHoly} days`) : null,
       );
+      // what kind of day it is, in words (CLARITY §3: the clock explains the day)
+      const type = flags.holy
+        ? 'Holy day: everyone goes to Mass in the morning; afterwards men and youths practise at the butts.'
+        : flags.market
+          ? `Market day${placeWord ? ` at ${placeWord}` : ''}: the stalls are open, a good day to buy and sell.`
+          : `A working day. The holy day ${flags.daysToHoly === 1 ? 'is tomorrow' : `is in ${flags.daysToHoly} days`}.`;
+      this.dayTypeEl.textContent = type;
+    }
+    // announce a settlement when you walk into it
+    const nav = this.nav;
+    if (nav.settlementId !== this.lastSettlementId) {
+      const prev = this.lastSettlementId;
+      this.lastSettlementId = nav.settlementId;
+      if (nav.settlementId >= 0 && !(this.suppressBanner && prev === -2)) {
+        const c = settlementCard(sim, nav.settlementId);
+        const lord = c && c.lord ? sim.state.persons.get(c.lord) : undefined;
+        if (c) this.banner.show({ name: c.name, kind: c.kind, county: c.county, kingdom: c.kingdom, lord: lord ? fullName(lord) : '' }, this.clockNow);
+      }
+      this.suppressBanner = false;
     }
     // perk badge
     const perks = game.economy.perkChoices(id).length;
@@ -647,6 +749,7 @@ function stateLabel(state: string, winded: boolean): string {
 
 function dockIcon(d: DockEntry): IconName {
   switch (d.id) {
+    case 'journal': return 'compass';
     case 'character': return 'user';
     case 'inventory': return 'bag';
     case 'family': return 'tree';

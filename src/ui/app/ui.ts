@@ -20,6 +20,7 @@ import { PauseController } from '../core/pause';
 import { effectiveScale } from '../core/scale';
 import { panelForKey, type PanelRequest } from '../core/requests';
 import { PanelStack } from '../core/stack';
+import { PinStore } from '../core/pins';
 import {
   noticeForBattle, noticeForCall, noticeForHappening, noticeForRaid, noticeForRequest, noticeForSiege, noticeForWar, type NoticeCtx,
 } from '../core/notices';
@@ -60,6 +61,7 @@ export class UiApp implements GameUIExt {
   private readonly stack: PanelStack<UiPanel>;
   private readonly records = new Map<UiPanel, PanelRecord>();
   private readonly offs: Array<() => void> = [];
+  private readonly pins = new PinStore();
 
   private readonly hooks: UiHooks = {
     quitToMenu: () => { void this.leaveToMenu(); },
@@ -100,6 +102,9 @@ export class UiApp implements GameUIExt {
       say: (kind, text) => this.say(kind, text),
       placeName: (id) => this.placeName(id),
       onEncounter: () => this.onEncounter(),
+      pins: this.pins,
+      scale: () => this.scale,
+      nameOf: (id) => this.nameOf(id),
     });
     this.menu = new MenuLayer({
       host,
@@ -255,6 +260,12 @@ export class UiApp implements GameUIExt {
 
   /** Dev and screenshot hook: shows one hint of the first-minutes guide now. */
   showHint(id: string): boolean { return this.guide.force(id); }
+
+  toggleWhatNow(): void { this.hud.whatNow.toggle(); }
+
+  debugState(): { pin: { x: number; z: number; label: string } | null; whatNowOpen: boolean; tracker: string } {
+    return { pin: this.pins.get(), whatNowOpen: this.hud.whatNow.isOpen(), tracker: this.hud.tracker.el.textContent ?? '' };
+  }
 
   closePanel(id: string): void { this.stack.close(id); }
   isOpen(id: string): boolean { return this.stack.has(id); }
@@ -513,6 +524,8 @@ export class UiApp implements GameUIExt {
       placeName: (id) => this.placeName(id),
       describe: (key, qty) => g.economy.describe(key, qty),
       toLocal: (p) => { const s = this.scale || 1; return { x: p.x / s, y: p.y / s }; },
+      pins: this.pins,
+      nav: this.hud.nav,
     };
   }
 
@@ -609,6 +622,7 @@ export class UiApp implements GameUIExt {
       r.height = `${100 / s}%`;
     }
     this.tooltips.setScale(s);
+    this.hud.resized();
   }
 
   // ---------------------------------------------------------------------------------- keyboard
@@ -639,6 +653,13 @@ export class UiApp implements GameUIExt {
       // screens (pause, death, birth…) and conversations own the keyboard
       if (top && (top.group === 'screen' || top.group === 'dialogue' || top.group === 'trade' || top.escape === 'ignore')) return false;
       if (this.bound?.game.sim.state.run.phase !== 'alive') return false;
+      // the minimap and the "What now?" card are parts of the HUD, not pages
+      if (intent.panel === 'minimap') { this.host.setSettings({ minimap: this.host.settings().minimap === false }); return true; }
+      if (intent.panel === 'whatNow') {
+        if (top) return false;
+        this.hud.whatNow.toggle();
+        return true;
+      }
       this.togglePanelKey(intent.panel);
       return true;
     }
@@ -672,6 +693,8 @@ export class UiApp implements GameUIExt {
     const now = performance.now();
     if (now - this.lastEscapeAt < ESCAPE_DEBOUNCE_MS) return true;
     this.lastEscapeAt = now;
+    // while the mouse is looking, Esc gives it back and does nothing more with that press (it never opens the menu for it)
+    if (this.host.releaseMouseLook?.()) return true;
     const g = this.bound.game;
     if (g.sim.view.clock().skipping) { g.sim.dispatch({ type: 'cancelSkip' }); return true; }
     const top = this.stack.top();
@@ -680,6 +703,7 @@ export class UiApp implements GameUIExt {
       this.stack.escape();
       return true;
     }
+    if (this.hud.whatNow.isOpen()) { this.hud.whatNow.close(); return true; }
     if (g.sim.state.run.phase !== 'alive') return true;
     this.openPanel({ panel: 'pause' });
     return true;

@@ -13,6 +13,8 @@ import type { KeyIntent } from '../core/keys';
 import type { ConfirmOptions, PanelRequest } from '../core/requests';
 export type { ConfirmOptions };
 import type { StackPanel } from '../core/stack';
+import type { PinStore } from '../core/pins';
+import type { NavState } from '../hud/navstate';
 
 export interface UiPanel extends StackPanel {
   /** The element appended to the panel layer (usually a `.mu-modal`). */
@@ -62,6 +64,11 @@ export interface PanelCtx {
   toLocal(p: { x: number; y: number }): { x: number; y: number };
   /** Display wording for an item key and quantity ("3 gallons of ale", "a good sickle"). */
   describe(key: string, qty?: number): string;
+  // ---- clarity pass ----
+  /** The place the HUD points at ("Find" in the journal); cleared on arrival. */
+  readonly pins: PinStore;
+  /** Where the body and the camera are, and the places the HUD points at (refreshed every frame by the HUD). */
+  readonly nav: NavState;
 }
 
 /** Controller actions panels can trigger (leaving the game, starting over). */

@@ -7,6 +7,7 @@ import type { ZoneApi } from '../agents/types';
 import { createAssetLibrary, type MillenniaAssetLibrary } from '../assets/library';
 import { wrapAngle } from '../core/math';
 import { installPlayer } from '../player';
+import type { HoverMark, PickPort, PickRay } from '../player/types';
 import { createRenderer } from '../render/renderer';
 import type { GameRenderer } from '../render/types';
 import type { UiRequest } from '../sim/actions';
@@ -20,6 +21,7 @@ import { installAdvancement } from '../sim/advancement';
 import { installObjectives } from '../sim/objectives';
 import type { GameServices, QualitySetting, UiRendererControls } from '../ui/types';
 import { wrapWithDevZone } from './devZone';
+import { MockObjectives } from '../ui/dev/mockObjectives';
 
 /** Where the time of getting a run on screen went (ms). */
 export interface LoadTimings { assets: number; renderer: number; modules: number; settle: number }
@@ -42,6 +44,8 @@ export interface SessionOptions {
   preserveDrawingBuffer: boolean;
   /** Stand-in villagers and a horse (`?devzone=1`). */
   devZone: boolean;
+  /** The UI's stand-in for the objectives module (`?fakeobjectives=1`): a tutorial chain with real places, for looking at the HUD. */
+  fakeObjectives?: boolean;
   /** `ui` events of the simulation (panels the game asks for) go here. */
   forwardUi(req: UiRequest): void;
   /** Loading screen progress; the promise lets the browser paint between the heavy steps. */
@@ -63,7 +67,7 @@ export async function buildSession(sim: Simulation, o: SessionOptions): Promise<
   const economy = installEconomy(sim, { social });
   let zone: ZoneApi = installAgents(sim, { economy, social });
   if (o.devZone) zone = wrapWithDevZone(sim, zone);
-  const player = installPlayer(sim, { zone, economy, social, cameraMode: () => renderer.getCameraMode() });
+  const player = installPlayer(sim, { zone, economy, social, cameraMode: () => renderer.getCameraMode(), pick: makePickPort(renderer) });
   // spread each game hour's calendar work over frames so an hour boundary never stalls one frame
   sim.hookBudgetMs = 4;
   // wave 3: they find each other through sim.services (sim/wave3.ts)
@@ -73,7 +77,7 @@ export async function buildSession(sim: Simulation, o: SessionOptions): Promise<
   installCombat(sim, w3);
   installAdvancement(sim, w3);
   // clarity pass: what to do now, markers, day summaries
-  const objectives = installObjectives(sim, w3);
+  const objectives = o.fakeObjectives ? new MockObjectives(sim, zone) : installObjectives(sim, w3);
   // the camera looks where the character faces: at the start, and after taking over someone else
   const alignCamera = (): void => {
     const b = player.body();
@@ -106,12 +110,40 @@ export async function buildSession(sim: Simulation, o: SessionOptions): Promise<
   };
 }
 
+/**
+ * The renderer as the pointer sees it (src/player/pointer.ts): what is under a screen position, the camera ray
+ * through it, and — when the renderer can — an outline for a building, strip or tree the mouse is over.
+ */
+export function makePickPort(renderer: GameRenderer): PickPort {
+  const raycaster = new THREE.Raycaster();
+  const ndc = new THREE.Vector2();
+  const ray: PickRay = { x: 0, y: 0, z: 0, dx: 0, dy: 0, dz: 1 };
+  return {
+    pick: (x, y) => renderer.pick(x, y),
+    ray(x, y) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return null;
+      ndc.set(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
+      raycaster.setFromCamera(ndc, renderer.getCamera());
+      const r = raycaster.ray;
+      ray.x = r.origin.x; ray.y = r.origin.y; ray.z = r.origin.z;
+      ray.dx = r.direction.x; ray.dy = r.direction.y; ray.dz = r.direction.z;
+      return ray;
+    },
+    // the renderer's outline API is optional (the contract only promises `setHover(target | null)`)
+    setHover: (mark: HoverMark | null) => (renderer as unknown as { setHover?: (t: HoverMark | null) => void }).setHover?.(mark),
+  };
+}
+
 /** What the UI may do with the camera and the screen (map panel, settings). */
 export function makeControls(renderer: GameRenderer): UiRendererControls {
   const v = new THREE.Vector3();
   return {
     setQuality: (q) => renderer.setQuality(q),
     setCameraMode: (mode) => renderer.setCameraMode(mode),
+    cameraYaw: () => renderer.getCameraYaw(),
+    cameraMode: () => renderer.getCameraMode(),
+    setCameraPose: (position, lookAt, seconds) => renderer.setCameraPose(position, lookAt, seconds ?? 0),
     focusMap: (x, z, altitude) => renderer.focusMap(x, z, altitude),
     project(x, y, z) {
       const cam = renderer.getCamera();
