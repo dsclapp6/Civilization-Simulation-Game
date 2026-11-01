@@ -242,6 +242,17 @@ describe('nameplates', () => {
     expect(none.length).toBe(0);
   });
 
+  it('lifts a spoken line clear of the plate in front of it rather than dropping it', () => {
+    const chars = [
+      person(1, 0, 8, { highlight: 1 }),
+      person(2, 0.3, 9, { label: 'Fine weather for the harvest, God be thanked.' }),
+    ];
+    const out = layoutPlates(chars, cam, -1, project, null);
+    const speech = out.find((o) => o.it.id === 2);
+    expect(speech?.speech).toBe(true);
+    expect(speech!.dy).toBeLessThan(0);
+  });
+
   it('tells a spoken line from a name', () => {
     expect(isSpeech('Wat Atwood')).toBe(false);
     expect(isSpeech('Sir Hugh of Dromore')).toBe(false);

@@ -91,7 +91,7 @@ const CROP_RIPE: Record<CropKind, number> = {
 };
 /** Result looks shared by the CPU (strip states) and the shader (tasks' done side) so a finished task never jumps. */
 const HARVESTED = 0xbea468, STUBBLE = 0xb2985f, SWATH = 0xd9b35a, SOWN_TINT = 0x6f9a3e, MOWN = 0xa6b866, WINDROW = 0xc8bf72;
-const PLOUGHED_K = 0.78, HARROWED_K = 0.88, SOWN_K = 0.84;
+const PLOUGHED_K = 0.78, HARROWED_K = 0.88, SOWN_K = 0.95;
 
 function lerpHex(a: number, b: number, t: number, out: THREE.Color): THREE.Color {
   const ca = new THREE.Color(a), cb = new THREE.Color(b);
@@ -129,7 +129,7 @@ void doneLook(float task, float vary, inout vec3 col, inout float fur, inout flo
   if (task < 0.5) return;
   if (task < 1.5) { col = uFieldCol * ${PLOUGHED_K.toFixed(2)} * vary; fur = 0.85; rows = 0.0; pat = 0.0; }
   else if (task < 2.5) { col = uFieldCol * ${HARROWED_K.toFixed(2)} * vary; fur = 0.3; rows = 0.0; pat = ${PAT_TILTH}.0; }
-  else if (task < 3.5) { col = uSownCol * vary; fur = 0.55; rows = 0.35; pat = 0.0; }
+  else if (task < 3.5) { col = uSownCol * vary; fur = 0.22; rows = 0.85; pat = 0.0; }
   else if (task < 4.5) { pat = 0.0; }
   else if (task < 5.5) { col = uHarvCol * vary; fur = 0.25; rows = 0.4; pat = ${PAT_SWATHES}.0; }
   else if (task < 6.5) { col = uMownCol * vary; fur = 0.05; rows = 0.0; pat = 2.0; }
@@ -396,7 +396,7 @@ float mlAA = 0.0;
         if (g.harrowed) { c.copy(field).multiplyScalar(HARROWED_K); furrow = 0.3; pattern = PAT_TILTH; }
         else { c.copy(field).multiplyScalar(PLOUGHED_K); furrow = 0.85; }
         break;
-      case 'sown': c.copy(field).multiplyScalar(SOWN_K).lerp(this.tmpC.setHex(SOWN_TINT), 0.1); furrow = 0.55; rows = 0.35; break;
+      case 'sown': c.copy(field).multiplyScalar(SOWN_K).lerp(this.tmpC.setHex(SOWN_TINT), 0.1); furrow = 0.22; rows = 0.85; break;
       case 'growing': {
         const t = clamp(g.growth, 0, 1);
         c.copy(field).multiplyScalar(0.85).lerp(lerpHex(CROP_GREEN[g.crop], CROP_RIPE[g.crop], Math.max(0, t - 0.6) * 1.6, this.tmpC), 0.3 + t * 0.65);

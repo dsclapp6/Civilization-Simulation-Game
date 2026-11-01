@@ -91,12 +91,15 @@ export function isSpeech(label: string): boolean {
 
 interface Cand { it: CharacterDrawItem; d: number; pri: number; text: boolean; sub: boolean; focus: boolean; speech: boolean; sx: number; sy: number }
 
+/** One plate to show: whose, which form, and a lift in px (a spoken line clearing a plate in front). */
+export interface PlateLayout { it: CharacterDrawItem; mode: 'full' | 'name' | 'mark'; focus: boolean; speech: boolean; d: number; dy: number }
+
 /** Plate choice for one frame (pure; exported for tests). `project` returns CSS px or null when off screen. */
 export function layoutPlates(
   chars: readonly CharacterDrawItem[], cam: { x: number; y: number; z: number }, focusId: number,
   project: (x: number, y: number, z: number) => { x: number; y: number } | null,
   occluded: ((it: CharacterDrawItem, h: number) => boolean) | null, max = MAX_PLATES,
-): { it: CharacterDrawItem; mode: 'full' | 'name' | 'mark'; focus: boolean; speech: boolean; d: number }[] {
+): PlateLayout[] {
   const cands: Cand[] = [];
   for (const it of chars) {
     if (it.highlight === 3 || !it.label) continue;
@@ -113,8 +116,14 @@ export function layoutPlates(
   }
   cands.sort((a, b) => b.pri - a.pri);
   const boxes: { x0: number; y0: number; x1: number; y1: number }[] = [];
-  const out: { it: CharacterDrawItem; mode: 'full' | 'name' | 'mark'; focus: boolean; speech: boolean; d: number }[] = [];
+  const out: PlateLayout[] = [];
   const hit = (x0: number, y0: number, x1: number, y1: number) => boxes.some((b) => x0 < b.x1 && x1 > b.x0 && y0 < b.y1 && y1 > b.y0);
+  /** Top of the highest box overlapping a span (to lift a spoken line clear of it). */
+  const topOf = (x0: number, y0: number, x1: number, y1: number) => {
+    let top = Infinity;
+    for (const b of boxes) if (x0 < b.x1 && x1 > b.x0 && y0 < b.y1 && y1 > b.y0) top = Math.min(top, b.y0);
+    return top;
+  };
   // names first (best first), then marks for whoever is left: a far mark never pushes a near name out
   const later: Cand[] = [];
   for (let pass = 0; pass < 2; pass++) {
@@ -138,10 +147,17 @@ export function layoutPlates(
       for (const mode of tries) {
         const w = mode === 'mark' ? 18 * k : Math.max(nameW, mode === 'full' ? subW : 0);
         const hh = mode === 'mark' ? markH : markH + (15 * lines + (mode === 'full' ? 13 : 0)) * k + 4;
-        const x0 = c.sx - w / 2, x1 = c.sx + w / 2, y1 = c.sy, y0 = c.sy - hh;
-        if (!c.focus && hit(x0, y0, x1, y1)) continue;
-        boxes.push({ x0, y0, x1, y1 });
-        out.push({ it, mode, focus: c.focus, speech: c.speech, d: c.d });
+        const x0 = c.sx - w / 2, x1 = c.sx + w / 2;
+        let y1 = c.sy, dy = 0;
+        if (!c.focus && hit(x0, y1 - hh, x1, y1)) {
+          // a spoken line steps up over what is in the way (twice at most); names give way instead
+          if (!c.speech) continue;
+          for (let k2 = 0; k2 < 2 && hit(x0, y1 - hh, x1, y1); k2++) y1 = topOf(x0, y1 - hh, x1, y1) - 3;
+          if (hit(x0, y1 - hh, x1, y1) || c.sy - y1 > 90) continue;
+          dy = y1 - c.sy;
+        }
+        boxes.push({ x0, y0: y1 - hh, x1, y1 });
+        out.push({ it, mode, focus: c.focus, speech: c.speech, d: c.d, dy });
         placed = true;
         break;
       }
@@ -241,7 +257,8 @@ export class Nameplates {
       const tone = TONE_COLORS[it.labelTone ?? 'stranger'] ?? TONE_COLORS.stranger;
       if (p.tone !== tone) { p.obj.element.style.setProperty('--tone', tone); p.tone = tone; }
       const k = plateScale(l.d, l.focus).toFixed(2);
-      if (p.scale !== k) { p.inner.style.transform = `scale(${k})`; p.scale = k; }
+      const tf = l.dy ? `translateY(${Math.round(l.dy)}px) scale(${k})` : `scale(${k})`;
+      if (p.scale !== tf) { p.inner.style.transform = tf; p.scale = tf; }
       // fade in over the last few metres of the range
       const range = l.focus ? FOCUS_RANGE : l.mode === 'mark' ? MARK_RANGE : Math.max(it.labelRange ?? DEFAULT_LABEL_RANGE, l.speech ? SPEECH_RANGE : 0);
       const op = Math.max(0.15, Math.min(1, (range - l.d) / 5)).toFixed(2);
