@@ -272,6 +272,8 @@ export function senseOf(A: Ai, unit: AiUnit): Sense | null {
       if (e[5] !== house) continue;
       const v = construction.site(e[0]);
       if (!v || v.status === 'done' || v.status === 'cancelled') continue;
+      // a work that has stood still at its last step for months is not one he is waiting on any more
+      if (A.deadSite(e[0], v.progress)) continue;
       open.push(v);
       perPlace.set(v.settlement, (perPlace.get(v.settlement) ?? 0) + 1);
     }

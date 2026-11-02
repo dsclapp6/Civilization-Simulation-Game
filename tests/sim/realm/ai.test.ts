@@ -8,7 +8,7 @@ import { outpostAct, outpostChoose } from '../../../src/sim/realm/aiOutpost';
 import { researchLimit, researchPicks, researchRound } from '../../../src/sim/realm/aiResearch';
 import { fortWanted, loadPlace, type Sense } from '../../../src/sim/realm/aiSense';
 import { orderRound } from '../../../src/sim/realm/aiTrade';
-import { adjustWorks, cancelStalled, chooseUpgrade, commitUpgrade, homeCap, wantsFor, worksAct, worksChoose, yearCap } from '../../../src/sim/realm/aiWorks';
+import { adjustWorks, cancelStalled, chooseUpgrade, commitUpgrade, homeCap, trackWorks, wantsFor, worksAct, worksChoose, yearCap } from '../../../src/sim/realm/aiWorks';
 import { tidyOrders } from '../../../src/sim/realm/aiSupply';
 import { addTradeOrder, tradeDaily } from '../../../src/sim/realm/trade';
 import { addBuilding, setDay, youths } from './helpers';
@@ -591,5 +591,41 @@ describe('the AI rulers: mending, improving, labour, orders, the accolade', () =
     expect(S.payer!.id).toBe(king.household);
     expect(round(w, S)).toBeGreaterThanOrEqual(0);
     for (const site of w.cons.sites()) expect(site.household).toBe(king.household);
+  });
+
+  it('stop counting a work that stands still at its last step, so that a ruler whose works stick can go on building', () => {
+    const w = aiWorld({ seed: SEED });
+    const r = aRuler(w, 'manor', 2);
+    const rich = { purse: 80000, eager: true, goods: { planks: 900, straw: 900, nails: 300, timber: 300, stone: 300, iron: 40 } };
+    // two works staked out
+    expect(round(w, sense(w, r.id, rich))).toBe(1);
+    w.ai.rec(w.ai.sense(r.id)!.house).no = {};
+    expect(round(w, sense(w, r.id, rich))).toBe(1);
+    const S = sense(w, r.id, { eager: true });
+    expect(S.open.length).toBe(2);
+    expect(S.places[0].open).toBe(2);
+    // a work that moves is noted as it goes; the day is kept only when it has moved
+    trackWorks(w.ai, S);
+    const ids = w.ai.data.s.map((e) => e[0]);
+    for (const id of ids) expect(w.ai.data.g[String(id)]).toBeTruthy();
+    // both now stand at 99.9 percent, and have for most of a year (the builder cannot pay the last sliver's fee)
+    const C = w.R.construction as unknown as { site(id: number): Record<string, unknown> | null };
+    const real = C.site.bind(C);
+    C.site = (id: number) => { const v = real(id); return v && ids.includes(id) ? { ...v, progress: 0.999 } : v; };
+    for (const id of ids) w.ai.data.g[String(id)] = [0.999, Math.floor(w.sim.absDay) - 14];
+    const after = sense(w, r.id, { eager: true });
+    expect(after.open.length).toBe(0);
+    expect(after.places[0].open).toBe(0);
+    // so the works he has stuck do not stop him from building on (the year's share is a thing apart)
+    w.ai.rec(after.house).no = {};
+    w.ai.rec(after.house).yr = [w.ai.yearIndex, 0, 0];
+    expect(round(w, sense(w, r.id, rich))).toBe(1);
+    // a work that is still moving is not dead, however long ago it began
+    const live = sense(w, r.id);
+    for (const id of ids) w.ai.data.g[String(id)] = [0.5, Math.floor(w.sim.absDay) - 40];
+    expect(sense(w, r.id).open.length).toBe(live.open.length + ids.length);
+    // and the books forget a work that is finished or given up
+    w.sim.events.emit('construction', { phase: 'done', site: ids[0], building: 0, settlement: 0, kind: 'barn', work: 'build', house: after.house });
+    expect(w.ai.data.g[String(ids[0])]).toBeUndefined();
   });
 });

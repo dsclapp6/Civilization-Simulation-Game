@@ -86,9 +86,11 @@ export interface AiSave {
   s: Array<[number, number, string, string, number, number]>;
   /** Research the rulers started: project ids. */
   r: number[];
+  /** How far each open work had got when it last moved: site -> [progress, day it last moved]. */
+  g: Record<string, [number, number]>;
 }
 
-export function emptyAiSave(): AiSave { return { v: 1, h: {}, y: {}, s: [], r: [] }; }
+export function emptyAiSave(): AiSave { return { v: 1, h: {}, y: {}, s: [], r: [], g: {} }; }
 
 /** The module's surface for tests, tools and the dev pages. */
 export interface RealmAi {
@@ -237,7 +239,7 @@ export class Ai implements RealmAi {
       r.yr[1]++;
       if (work === 'build' && (kind === 'cottage' || kind === 'hovel' || kind === 'longhouse' || kind === 'townhouse')) r.yr[2]++;
     }
-    if (this.data.s.length > 400) this.data.s.splice(0, this.data.s.length - 400);
+    if (this.data.s.length > 400) for (const old of this.data.s.splice(0, this.data.s.length - 400)) delete this.data.g[String(old[0])];
     const y = this.year();
     y.placed++;
     if (work === 'build') {
@@ -255,7 +257,23 @@ export class Ai implements RealmAi {
     return e ? this.day - e[1] : 0;
   }
 
+  /** Notes how far a work has got (the day is kept only when it has moved). */
+  watch(site: number, progress: number): void {
+    const k = String(site);
+    const m = this.data.g[k];
+    if (m && Math.abs(progress - m[0]) <= 0.0005) return;
+    this.data.g[k] = [Math.round(progress * 10000) / 10000, Math.floor(this.day)];
+    this.touch();
+  }
+
+  /** Has the work stood still at its last step for so long that it is no longer counted among the open ones? */
+  deadSite(site: number, progress: number): boolean {
+    const m = this.data.g[String(site)];
+    return !!m && progress >= 0.9 && Math.abs(progress - m[0]) <= 0.0005 && this.day - m[1] >= AI.deadDays;
+  }
+
   siteGone(site: number, how: 'done' | 'cancelled'): void {
+    delete this.data.g[String(site)];
     const i = this.data.s.findIndex((x) => x[0] === site);
     if (i < 0) return;
     this.data.s.splice(i, 1);

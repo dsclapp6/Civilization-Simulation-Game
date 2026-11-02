@@ -351,6 +351,17 @@ export function cancelStalled(A: Ai, S: Sense): number {
   return n;
 }
 
+/** Notes how far the House's works have got (so that one that stands still at its last step is told from one that is working). */
+export function trackWorks(A: Ai, S: Sense): void {
+  const C = A.R.construction;
+  if (!C) return;
+  for (const e of A.data.s) {
+    if (e[5] !== S.house) continue;
+    const v = C.site(e[0]);
+    if (v && v.status !== 'done' && v.status !== 'cancelled') A.watch(e[0], v.progress);
+  }
+}
+
 /** The share of the manor's week-work sent to the lord's works follows whether there are any. */
 export function adjustWorks(A: Ai, S: Sense): void {
   for (const p of S.places) {

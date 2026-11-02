@@ -22,6 +22,12 @@ export const AI = {
   minFunds: 120,
   /** Days a work may stand still (no materials to be had, no hands) before its ruler gives it up. */
   stallDays: 16,
+  /**
+   * Days a work at its last step (90% done or more) may make no progress before the ruler stops counting it among his open works.
+   * (The builder cannot pay the last sliver's fee on some works - `putIn` reads a fee rounded to nothing as unpaid - and they stand at
+   * 99.9% for ever; a ruler whose few open places were all taken by such works would build nothing more.)
+   */
+  deadDays: 12,
   /** The dear materials (timber, stone, iron, planks, bricks) are not bought at more than this many times their usual price, and need this margin over the market's stock. */
   dearPrice: 2.6,
   supplyMargin: 1.35,

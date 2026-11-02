@@ -5,7 +5,7 @@
 // cheap. Orders are given once and left to the steward (they run daily in the realm's own system).
 import type { CropKind } from '../../core/domain';
 import { hash01 } from '../../core/math';
-import { adjustWorks, warmUp } from './aiWorks';
+import { adjustWorks, trackWorks, warmUp } from './aiWorks';
 import { tidyOrders } from './aiSupply';
 import { held, refreshFunds, type Place, type Sense } from './aiSense';
 import type { Ai } from './ai';
@@ -87,6 +87,7 @@ export function orderRound(A: Ai, S: Sense): void {
 
 /** The first stage of a round: the labour for the works, the fields, the orders, and the look at the markets the works will want. */
 export function bookkeeping(A: Ai, S: Sense): void {
+  trackWorks(A, S);
   warmUp(A, S);
   adjustWorks(A, S);
   cropRound(A, S);
