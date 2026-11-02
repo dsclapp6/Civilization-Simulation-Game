@@ -115,8 +115,13 @@ export class GhostLayer {
   private readonly linePos = new Float32Array(MAX_LINE * 2 * 3);
   private readonly lineAcross = new Float32Array(MAX_LINE * 2);
   private readonly lineAlong = new Float32Array(MAX_LINE * 2);
+  /** Fill triangles (two rings of a fan over the footprint) and the ground under the outline and the inner ring. */
+  private readonly fillPos = new Float32Array(MAX_LINE * 9 * 3);
+  private readonly outerY = new Float32Array(MAX_LINE);
+  private readonly innerY = new Float32Array(MAX_LINE);
   private ghost: BuildGhost | null = null;
   private footKey = '';
+  private readonly pts: { x: number; z: number }[] = [];
   private time = 0;
   private cultureCache = { x: NaN, z: NaN, c: 'anglo' as CultureId };
   /** Models asked of the library so far (tests: not every frame). */
@@ -147,6 +152,8 @@ export class GhostLayer {
       uniforms: { uColor: { value: OK_COLOR.clone() }, uBad: { value: 0 } },
     });
     this.line = new THREE.Mesh(this.lineGeo, this.lineMat);
+    this.fillGeo.setAttribute('position', new THREE.BufferAttribute(this.fillPos, 3).setUsage(THREE.DynamicDrawUsage));
+    this.fillGeo.setDrawRange(0, 0);
     this.fill = new THREE.Mesh(this.fillGeo, this.fillMat);
     for (const m of [this.line, this.fill]) { m.frustumCulled = false; m.renderOrder = 6; }
     this.fill.renderOrder = 5;
@@ -233,17 +240,22 @@ export class GhostLayer {
     });
   }
 
-  /** Outline ribbon (closed) and fill over the footprint, draped on the ground; skipped if unchanged. */
+  /**
+   * Outline ribbon (closed) and fill over the footprint, draped on the ground; skipped if unchanged. The ghost follows
+   * the pointer, so this runs most frames while placing: one ground sample per outline point (the ribbon's two edges and
+   * the fill's rim share it) and one at the middle, into preallocated buffers.
+   */
   private drape(poly: ReadonlyArray<{ x: number; z: number }>): void {
     let key = '';
     for (const p of poly) key += `${p.x.toFixed(2)},${p.z.toFixed(2)};`;
     if (key === this.footKey) return;
     this.footKey = key;
-    // resample the loop every ~1.5 m so it follows the ground
-    const pts: { x: number; z: number }[] = [];
+    // resample the loop every ~2.5 m so it follows the ground (a footprint's ground is smooth at that scale)
+    const pts = this.pts;
+    pts.length = 0;
     for (let i = 0; i < poly.length; i++) {
       const a = poly[i], b = poly[(i + 1) % poly.length];
-      const n = Math.max(1, Math.min(24, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 1.5)));
+      const n = Math.max(1, Math.min(24, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 2.5)));
       for (let k = 0; k < n; k++) pts.push({ x: a.x + ((b.x - a.x) * k) / n, z: a.z + ((b.z - a.z) * k) / n });
     }
     const n = Math.min(MAX_LINE - 1, pts.length);
@@ -251,6 +263,8 @@ export class GhostLayer {
     for (let i = 0; i < n; i++) { const a = pts[i], b = pts[(i + 1) % n]; area += a.x * b.z - b.x * a.z; }
     const sgn = area >= 0 ? 1 : -1;
     const width = 0.7;
+    const oy = this.outerY, iy = this.innerY;
+    for (let i = 0; i < n; i++) oy[i] = this.heightAt(pts[i].x, pts[i].z);
     let along = 0;
     for (let i = 0; i <= n; i++) {
       const p = pts[i % n], prev = pts[(i - 1 + n) % n], next = pts[(i + 1) % n];
@@ -259,35 +273,38 @@ export class GhostLayer {
       tx /= tl; tz /= tl;
       const nx = tz * sgn, nz = -tx * sgn;
       if (i > 0) along += Math.hypot(p.x - pts[(i - 1) % n].x, p.z - pts[(i - 1) % n].z);
-      for (let s = 0; s < 2; s++) {
-        const o = (s - 0.5) * width;
-        const x = p.x + nx * o, z = p.z + nz * o;
-        const j = (i * 2 + s) * 3;
-        this.linePos[j] = x; this.linePos[j + 1] = this.heightAt(x, z) + 0.12; this.linePos[j + 2] = z;
-        this.lineAcross[i * 2 + s] = s;
-        this.lineAlong[i * 2 + s] = along;
+      for (let k = 0; k < 2; k++) {
+        const o = (k - 0.5) * width;
+        const j = (i * 2 + k) * 3;
+        this.linePos[j] = p.x + nx * o; this.linePos[j + 1] = oy[i % n] + 0.12; this.linePos[j + 2] = p.z + nz * o;
+        this.lineAcross[i * 2 + k] = k;
+        this.lineAlong[i * 2 + k] = along;
       }
     }
     this.lineGeo.setDrawRange(0, n * 6);
     for (const k of ['position', 'aAcross', 'aAlong']) (this.lineGeo.getAttribute(k) as THREE.BufferAttribute).needsUpdate = true;
-    this.lineGeo.computeBoundingSphere();
-    // fill: a fan over the footprint (convex) with each edge subdivided, draped
+    // fill: a fan over the footprint (convex) in two rings, the rim on the outline's samples
     let cx = 0, cz = 0;
     for (const p of poly) { cx += p.x; cz += p.z; }
     cx /= poly.length; cz /= poly.length;
-    const pos: number[] = [];
-    const ring = (t: number) => pts.slice(0, n).map((p) => ({ x: cx + (p.x - cx) * t, z: cz + (p.z - cz) * t }));
-    const rings = [ring(0), ring(0.5), ring(1)];
-    const y = (p: { x: number; z: number }) => this.heightAt(p.x, p.z) + 0.1;
-    for (let r = 0; r < 2; r++) {
-      for (let i = 0; i < n; i++) {
-        const a = rings[r][i], b = rings[r][(i + 1) % n], c2 = rings[r + 1][i], d = rings[r + 1][(i + 1) % n];
-        pos.push(a.x, y(a), a.z, c2.x, y(c2), c2.z, d.x, y(d), d.z);
-        if (r > 0) pos.push(a.x, y(a), a.z, d.x, y(d), d.z, b.x, y(b), b.z);
-      }
+    const cy = this.heightAt(cx, cz) + 0.1;
+    // the inner ring halfway between the middle and the rim (a footprint is a few metres: the ground is near enough
+    // planar over it; lifted a touch so a hollow does not swallow it)
+    for (let i = 0; i < n; i++) iy[i] = (cy + oy[i] + 0.1) / 2 + 0.04;
+    const f = this.fillPos;
+    let o = 0;
+    const put = (x: number, y: number, z: number) => { f[o++] = x; f[o++] = y; f[o++] = z; };
+    for (let i = 0; i < n; i++) {
+      const i1 = (i + 1) % n, a = pts[i], b = pts[i1];
+      const ax = (cx + a.x) / 2, az = (cz + a.z) / 2, bx = (cx + b.x) / 2, bz = (cz + b.z) / 2;
+      // centre → inner ring, then inner ring → rim (two triangles)
+      put(cx, cy, cz); put(ax, iy[i], az); put(bx, iy[i1], bz);
+      put(ax, iy[i], az); put(a.x, oy[i] + 0.1, a.z); put(b.x, oy[i1] + 0.1, b.z);
+      put(ax, iy[i], az); put(b.x, oy[i1] + 0.1, b.z); put(bx, iy[i1], bz);
     }
-    this.fillGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    this.fillGeo.computeBoundingSphere();
+    this.fillGeo.setDrawRange(0, n * 9);
+    (this.fillGeo.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
+    // (no bounds to refresh: neither mesh is frustum-culled)
   }
 
   dispose(): void {
