@@ -94,3 +94,23 @@ describe('the seat grows into a castle', () => {
     expect(near('tower')).toBeGreaterThan(0);
   });
 });
+
+describe('libraries, stables and farms', () => {
+  it('a stable comes stocked with horses; a library is a place for research', () => {
+    const { o, con, me, view, hh, realm } = lordSim('lordtest');
+    const s = view.settlements[0];
+    const horses0 = hh.stores.horse ?? 0;
+    const spot = con.suggestSpot(me.id, 'stable', s)!;
+    const r = con.place(me.id, 'stable', spot.x, spot.z, spot.rot);
+    expect(r.ok, r.reason).toBe(true);
+    const b = o.sim.state.buildings.get(con.site(r.site!)!.building)!;
+    for (let d = 0; d < 40 && b.construction < 1; d++) o.sim.advanceDays(1);
+    expect(hh.stores.horse ?? 0).toBe(horses0 + 3);
+    expect(con.catalogue(me.id, s).find((c) => c.kind === 'library')).toBeTruthy();
+    const lib = con.suggestSpot(me.id, 'library', s)!;
+    const lr = con.place(me.id, 'library', lib.x, lib.z, lib.rot);
+    const lb = o.sim.state.buildings.get(con.site(lr.site!)!.building)!;
+    for (let d = 0; d < 80 && lb.construction < 1; d++) o.sim.advanceDays(1);
+    expect(realm.researchOptions(me.id).some((op) => op.places.includes(lb.id))).toBe(true);
+  });
+});

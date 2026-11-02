@@ -58,13 +58,24 @@ const CATEGORY: Readonly<Record<string, BuildCategory>> = {
   watermill: 'food', windmill: 'food', bakehouse: 'food', brewhouse: 'food', slaughterhouse: 'food', alehouse: 'food', tavern: 'food',
   smithy: 'craft', carpenter: 'craft', sawpit: 'craft', tannery: 'craft', weaver: 'craft', fulling_mill: 'craft', kiln: 'craft', charcoal_mound: 'craft', bloomery: 'craft',
   quarry: 'resource', clay_pit: 'resource', salt_pan: 'resource', lumber_camp: 'resource', mine: 'resource', dock: 'resource',
-  market_stall: 'civic', market_cross: 'civic', market_hall: 'civic', guildhall: 'civic', warehouse: 'civic', well: 'civic', stocks: 'civic', gaol: 'civic', gallows: 'civic', school: 'civic', infirmary: 'civic',
+  library: 'civic', market_stall: 'civic', market_cross: 'civic', market_hall: 'civic', guildhall: 'civic', warehouse: 'civic', well: 'civic', stocks: 'civic', gaol: 'civic', gallows: 'civic', school: 'civic', infirmary: 'civic',
   chapel: 'religion', church: 'religion',
   palisade: 'defence', wall: 'defence', tower: 'defence', gatehouse: 'defence', motte: 'defence', keep_stone: 'defence', great_hall: 'defence',
   barracks: 'military', archery_butts: 'military', training_yard: 'military',
 };
 
+/** A stable or a farm building comes stocked: the beasts are bought with it and live in the payer's yard. */
+export const STOCK: Readonly<Partial<Record<BuildingKind, Readonly<Record<string, number>>>>> = {
+  stable: { horse: 3 }, cowshed: { cow: 4, ox: 2 }, sheepfold: { sheep: 20 }, pigsty: { pig: 5 }, henhouse: { chicken: 12 },
+};
+
 const DOES: Readonly<Record<string, string>> = {
+  library: 'Books and a quiet room: any technique can be worked out here, and faster (research)',
+  stable: 'Stalls for horses: comes with three horses, for riding and for knights and sergeants',
+  cowshed: 'A byre: comes with four cows and a yoke of oxen',
+  sheepfold: 'A fold: comes with twenty sheep (wool, mutton)',
+  pigsty: 'A sty: comes with five pigs',
+  henhouse: 'Comes with a dozen hens (eggs)',
   manor_house: 'The lord’s hall and seat; each level adds chambers, a solar and stone',
   keep_stone: 'A stone keep: the heart of a castle, the last refuge in a siege',
   tower: 'A wall tower: archers command the approaches',
@@ -182,6 +193,7 @@ export function installConstruction(sim: Simulation, deps: Wave3Deps): Construct
     const labour = Math.max(1, Math.round(area * (stone ? 0.45 : 0.12) * k));
     let pence = labour * 2; // hired hands, a day's wage each
     for (const [g, n] of Object.entries(goods)) pence += n * price(g);
+    if (step === 1) for (const [g, n] of Object.entries(STOCK[kind] ?? {})) pence += n * price(g);
     return { goods, labour, pence: Math.round(pence) };
   };
   const treasury = (hh: HouseholdId): number => st.households.get(hh)?.purse ?? 0;
@@ -373,7 +385,16 @@ export function installConstruction(sim: Simulation, deps: Wave3Deps): Construct
     const b = st.buildings.get(s.building);
     s.status = 'done';
     if (b) {
-      if (s.work === 'build') b.construction = 1;
+      if (s.work === 'build') {
+        b.construction = 1;
+        // the beasts come home to it
+        const stock = STOCK[b.kind];
+        const hh = st.households.get(s.household);
+        if (stock && hh) {
+          for (const [g, n] of Object.entries(stock)) hh.stores[g] = (hh.stores[g] ?? 0) + n;
+          st.touchHousehold(hh);
+        }
+      }
       else if (s.work === 'upgrade') b.level = Math.min(BUILDINGS[b.kind].maxLevel, s.toLevel ?? b.level + 1);
       else if (s.work === 'rebuild' && s.toKind) { b.kind = s.toKind; b.level = 1; }
       else if (s.work === 'repair') b.damage = 0;

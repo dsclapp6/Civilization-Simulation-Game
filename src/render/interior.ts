@@ -32,7 +32,7 @@ const STYLE: Partial<Record<BuildingKind, Style>> = {
   hovel: 'home', cottage: 'home', longhouse: 'home', townhouse: 'home',
   manor_house: 'hall', great_hall: 'hall', keep_stone: 'hall',
   smithy: 'smithy', bloomery: 'smithy',
-  carpenter: 'workshop', weaver: 'workshop', tannery: 'workshop', bakehouse: 'workshop', brewhouse: 'workshop', school: 'workshop', guildhall: 'hall',
+  carpenter: 'workshop', weaver: 'workshop', tannery: 'workshop', bakehouse: 'workshop', brewhouse: 'workshop', school: 'workshop', library: 'workshop', guildhall: 'hall',
   church: 'church', chapel: 'church', abbey_church: 'church', cathedral: 'church', infirmary: 'church',
   alehouse: 'tavern', tavern: 'tavern',
   barn: 'barn', tithe_barn: 'barn', granary: 'barn', stable: 'barn', cowshed: 'barn', warehouse: 'barn',

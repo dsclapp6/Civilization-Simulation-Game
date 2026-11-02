@@ -28,4 +28,6 @@ export const RECIPES: Record<BuildingKind, Recipe> = {
   // civilization pass: stand-ins until their own models are made (wave B, src/assets)
   slaughterhouse: (c, d) => tannery(c, d), clay_pit: (c, d) => quarry(c, d), salt_pan: (c, d) => quarry(c, d),
   lumber_camp: (c, d) => sawpit(c, d), gaol: (c, d) => granary(c, d),
+  // the library: a stone hall of books (the guildhall's frame until it has a model of its own)
+  library: (c, d) => guildhall(c, d),
 };
