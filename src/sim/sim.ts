@@ -17,6 +17,7 @@ import type { SimContext } from './context';
 import type { SimEvents } from './events';
 import { newProfile, type Profile } from './legacy';
 import { registerLifeSystems } from './life';
+import { createLiveAsProvider } from './liveas';
 import { abandonRun, attachRunHandlers, canSwitchTo, eligibleSwitchTargets, newRun, switchTo, type RunStart } from './run';
 import { RunSaver, loadProfile, loadRun, saveProfile, type SaveStore, type SaverOptions } from './save';
 import { hashState, warmUpSerializer } from './serialize';
@@ -404,6 +405,7 @@ export class Simulation implements SimContext {
       if (s) this.events.emit('skip', { phase: 'cancel', kind: s.kind, label: s.label });
       return ok();
     });
+    this.actions.register(createLiveAsProvider(this));
     this.registerCommand('switchCharacter', (c) => (switchTo(this, c.personId) ? ok() : no('that person cannot be taken over (dead, or already you)')));
     this.registerCommand('fightAs', (c) => {
       const lord = this.state.run.liege || this.state.run.playerId;

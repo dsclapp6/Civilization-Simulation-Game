@@ -32,6 +32,8 @@ export const KEYMAP = {
     journal: 'KeyO', minimap: 'KeyN', whatNow: 'KeyY',
     /** The ruler's seat: lands, purse, fields, research, men, trade orders, rivals (docs/CIV.md §6). */
     ruler: 'KeyU',
+    /** The People page: everyone of your town, and Live as on each. */
+    people: 'KeyV',
   },
 } as const;
 

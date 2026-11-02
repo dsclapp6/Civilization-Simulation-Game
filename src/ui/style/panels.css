@@ -367,3 +367,11 @@
 .mu-help-text p { font-size: 15.5px; line-height: 1.55; margin: 0 0 9px; }
 .mu-help-text section { margin-bottom: 8px; }
 @media (max-width: 900px) { .mu-help-controls { column-count: 1; } }
+
+/* ---- the People page (V) ---- */
+.mu-people { display: flex; flex-direction: column; gap: 2px; }
+.mu-people-head { margin: 10px 0 4px; font-variant: small-caps; letter-spacing: 0.08em; font-weight: 700; color: var(--gold); }
+.mu-people-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 6px; border-radius: 3px; }
+.mu-people-row:hover { background: rgba(255, 244, 205, 0.55); }
+.mu-people-row.me { background: rgba(214, 170, 70, 0.18); }
+.mu-people-who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -78,6 +78,7 @@ export const CONTROL_GROUPS: readonly ControlGroup[] = [
       { keys: [k(K.ui.requests)], what: 'Requests and news: favours people have asked of you.' },
       { keys: [k(K.ui.wounds)], what: 'Wounds: what the blows left, and bind them.' },
       { keys: [k(K.ui.techs)], what: 'House techniques: what your House knows.' },
+      { keys: [k(K.ui.people)], what: 'People of your town (or any other): live as anyone, the ruler and his knights included. Also in the action wheel (hold E) on a person.' },
       { keys: [k(K.ui.ruler)], what: 'The ruler’s seat: your lands and purse, the crop of each field, labour for your works, research, raising and knighting men (and fighting as one of your knights), trade orders, rivals.' },
       { keys: [k(K.ui.politics)], what: 'Realm and politics: Houses, wars, claims, offices.' },
       { keys: [k(K.ui.command)], what: 'Command and army (the household page of the ledger when you have no troops).' },

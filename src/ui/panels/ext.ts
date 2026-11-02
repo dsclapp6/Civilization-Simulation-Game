@@ -6,4 +6,5 @@ import './combat';
 import './advancement';
 import './military';
 import './ruler';
+import './people';
 export {};
