@@ -46,6 +46,22 @@ export interface TechLearn {
   player?: { actions?: string[]; study?: string[]; need: number };
 }
 
+/**
+ * What researching the technique costs (docs/CIV.md §6.4, src/sim/realm): each branch has its own currencies - Economy:
+ * timber, planks, stone, bricks and coin; Military: iron and coin (horses for destriers, stone for keeps and walls); Kinship &
+ * Diplomacy: coin and gifts (cloth, ale); Knowledge & Belief: vellum, candles and coin.
+ */
+export interface TechResearch {
+  /** Goods (good id → amount) taken from the House's stores, or bought. */
+  goods: Record<string, number>;
+  /** Coin in pence. */
+  pence: number;
+  /** Days of a capable researcher's work (a game year is 16 days). */
+  days: number;
+  /** Building kinds the work can be done in (a smithy, a school, a training yard…). */
+  place: string[];
+}
+
 export interface TechDef {
   id: string;
   branch: BranchId;
@@ -62,6 +78,8 @@ export interface TechDef {
   learn: TechLearn;
   teach: { skill?: SkillId; min?: number; fee: number };
   effects: Record<string, number>;
+  /** Civilization pass: the price of researching it (see `TechResearch`); absent = it can only be learned, not commissioned. */
+  research?: TechResearch;
 }
 
 export type TechState = 'undiscovered' | 'known' | 'preserved' | 'lost';

@@ -299,7 +299,7 @@ export class Adv {
       this.sim.events.emit('tech', { house: p.house, tech, person: p.id });
     }
     if (mine) {
-      const how = via === 'practice' ? 'by long practice' : via === 'taught' ? 'from a master' : via === 'books' ? 'from the books' : via === 'inherited' ? 'from the family papers' : '';
+      const how = via === 'practice' ? 'by long practice' : via === 'taught' ? 'from a master' : via === 'books' ? 'from the books' : via === 'inherited' ? 'from the family papers' : via === 'research' ? 'through your House\'s research' : '';
       if (p.id === run.playerId) {
         this.sim.events.emit('notify', { kind: 'gain', text: `You have learned ${def.name}${how ? ` ${how}` : ''}.`, person: p.id });
         this.state.log(day, 'tech', `${fullName(p)} learned ${def.name}.`, [p.id]);

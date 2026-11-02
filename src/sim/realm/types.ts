@@ -31,6 +31,28 @@ export interface RealmView {
   prosperity: number;
   /** Fighting weight (military `strength`). */
   strength: number;
+  // ---- additive (A3) ----
+  /** In what capacity the person rules: holder of a title, regent for a minor, steward of the holder, or reeve of a village. */
+  role?: RealmRole;
+  /** The settlement the realm is run from (the seat of its highest title). */
+  seat?: number;
+  /** Settlements of the realm with a market (trade orders and procurement go there). */
+  markets?: readonly number[];
+}
+
+/** How a person comes to rule (docs/REALM.md): the title's holder, the regent of a minor holder, the holder's steward, a village's reeve. */
+export type RealmRole = 'holder' | 'regent' | 'steward' | 'reeve';
+
+/** One thing a person rules, title by title (`RealmApi.rules`). */
+export interface RealmRule {
+  role: RealmRole;
+  title: TitleId;
+  /** The settlement the title is held from (a county's seat, a kingdom's capital). */
+  place: number;
+  /** The title's holder (who the ruler acts for when he is a regent or steward). */
+  holder: PersonId;
+  /** True when the holder cannot act (a child, a captive, dead) so that the regent or steward really rules. */
+  acting: boolean;
 }
 
 /** One line of a technique's price in its branch's currencies (docs/CIV.md §6.4). */
@@ -52,6 +74,16 @@ export interface ResearchOption {
   places: readonly number[];
   ok: boolean;
   reason?: string;
+  // ---- additive (A3) ----
+  /** The researchers who only qualify as clerks, clergy or masters (they work at half pace); the rest of `researchers` qualify outright. */
+  slow?: readonly PersonId[];
+  /** Goods the stores lack (good → amount) and what buying them at the nearest market would cost now (pence); `startResearch(..., { buy: true })` does so. */
+  short?: Readonly<Record<string, number>>;
+  buyCost?: number;
+  /** Everything else is in order and the treasury can pay both the work and the goods: `startResearch(..., { buy: true })` will do it. */
+  buyable?: boolean;
+  /** Days the work should take with the best researcher at the best place. */
+  days?: number;
 }
 
 export interface ResearchProject {
@@ -67,6 +99,15 @@ export interface ResearchProject {
   eta: number;
   state: 'active' | 'stalled' | 'done' | 'abandoned';
   note?: string;
+  // ---- additive (A3) ----
+  started?: number;
+  /** Progress per day at the last daily step. */
+  rate?: number;
+  /** Goods still to come from the stores or the market (good → amount). */
+  needs?: Readonly<Record<string, number>>;
+  /** The settlement of the place, and what the work cost (pence). */
+  settlement?: number;
+  paid?: number;
 }
 
 export interface RecruitOption {
@@ -80,6 +121,15 @@ export interface RecruitOption {
   available: number;
   ok: boolean;
   reason?: string;
+  // ---- additive (A3) ----
+  /** Per man: pence to buy the gear the stores lack (smiths and saddlers at their prices) when the stores hold none of it. */
+  buy?: number;
+  /** How many men the stores can equip now. */
+  equipped?: number;
+  /** The technique the House must command, if any. */
+  tech?: string;
+  /** How many the treasury can pay for now (fee, gear bought, a month's upkeep), at most `available`. */
+  affordable?: number;
 }
 
 export interface TradeOrder {
@@ -93,6 +143,15 @@ export interface TradeOrder {
   keep: number;
   /** Total moved so far. */
   done: number;
+  // ---- additive (A3) ----
+  /** Pence earned (sell) or paid (buy) so far. */
+  money?: number;
+  /** What the last attempt did ("Sold 40 at 3d", "The price is below your limit", "No market"). */
+  note?: string;
+  /** Day of the last attempt (−1 = none yet). */
+  last?: number;
+  /** Bought goods still on the road (they count towards `keep`). */
+  transit?: number;
 }
 
 export type NewsKind = 'built' | 'founded' | 'research' | 'recruited' | 'army' | 'war' | 'peace' | 'fell' | 'grew' | 'famine' | 'other';
@@ -121,6 +180,13 @@ export interface RivalView {
   stance: string;
   /** 0..1 */
   threat: number;
+  // ---- additive (A3) ----
+  /** The House's head and seat, and how many settlements it rules. */
+  head?: PersonId;
+  seat?: number;
+  settlements?: number;
+  /** Their ruler's treasury in pence is not shown; the share of the continent's fighting weight they hold, 0..1. */
+  share?: number;
 }
 
 export interface RealmApi {
@@ -131,7 +197,8 @@ export interface RealmApi {
   view(person: PersonId): RealmView | null;
 
   researchOptions(person: PersonId): ResearchOption[];
-  startResearch(person: PersonId, tech: string, researcher: PersonId, building: number): Result & { project?: number };
+  /** `opts.buy`: buy the goods the stores lack at the building's market (they arrive after the carting delay; the project waits for them). */
+  startResearch(person: PersonId, tech: string, researcher: PersonId, building: number, opts?: { buy?: boolean }): Result & { project?: number };
   stopResearch(person: PersonId, project: number): Result;
   projects(house?: HouseId): readonly ResearchProject[];
 
@@ -140,7 +207,12 @@ export interface RealmApi {
   /** Knight one of your men (or yourself by your liege's leave): the accolade. */
   dub(person: PersonId, candidate: PersonId): Result;
 
+  /**
+   * The crop named for each field's NEXT sowing (winter corn in autumn, a spring crop in spring), or 'fallow' where none is named
+   * and the usual rotation decides. The economy reads it when it sows.
+   */
   cropPlan(settlement: number): Readonly<Record<0 | 1 | 2, CropKind | 'fallow'>>;
+  /** Names a crop for a field: a winter crop is sown in autumn, a spring crop in spring (the field's own turn); 'fallow' clears the plan. */
   setCropPlan(person: PersonId, settlement: number, field: 0 | 1 | 2, crop: CropKind): Result;
   /** Share 0..1 of the manor's week-work sent to the lord's works (construction sites) instead of the demesne. */
   worksShare(settlement: number): number;
@@ -154,4 +226,45 @@ export interface RealmApi {
   rivals(person: PersonId): RivalView[];
   /** Bumps on any change the ruler UI shows. */
   version(): number;
+
+  // ---- additive (A3); optional so that fakes in other modules' tests need not implement them ----
+  /** What the person rules, title by title, and in what capacity (empty = nothing). */
+  rules?(person: PersonId): RealmRule[];
+  /** The men raised through `recruit` who still serve (optionally in one settlement), with their wage. */
+  troops?(person: PersonId, settlement?: number): RealmTroop[];
+  /** Sends one of them home: the wage stops. */
+  discharge?(person: PersonId, man: PersonId): Result;
+  /** The three fields of a settlement: this year's role, the crop planned (if any) and the crops that may be chosen. */
+  cropPlanView?(settlement: number): CropPlanLine[];
+  /** The treasury's year in lines (rents and dues, sales, wages, research, troops, purchases…): what `view().income/spending` are made of. */
+  accounts?(person: PersonId): AccountLine[];
 }
+
+/** A man raised by the realm: where he serves, as what and at what wage. */
+export interface RealmTroop {
+  person: PersonId;
+  kind: UnitKind;
+  settlement: number;
+  /** The household his wage is paid into (the garrison household; a knight's own). */
+  household: HouseholdId;
+  since: number;
+  /** Pence a day from the treasury. */
+  wage: number;
+}
+
+export interface CropPlanLine {
+  field: 0 | 1 | 2;
+  /** What the field does this year: winter corn (harvested), a spring crop, or fallow (sown with next year's winter corn in autumn). */
+  role: 'winter' | 'spring' | 'fallow';
+  /** The field's next sowing: winter corn in autumn, or a spring crop in spring. */
+  next: 'winter' | 'spring';
+  /** The crop planned for that next sowing ('fallow' = none named: the usual rotation decides). This is what `cropPlan` returns for the field. */
+  planned: CropKind | 'fallow';
+  /** The plan for each kind of sowing ('fallow' = none named). */
+  winter: CropKind | 'fallow';
+  spring: CropKind | 'fallow';
+  /** Crops that may be named for each kind of sowing. */
+  options: { winter: readonly CropKind[]; spring: readonly CropKind[] };
+}
+
+export interface AccountLine { label: string; pence: number }

@@ -15,7 +15,7 @@ import { canLearn, libraryLost, onDeath, practice, settlementYear } from './lear
 import { listenToActions, studyProvider, teach, techTopics } from './topics';
 import type { AdvancementRuntime, TechState, TechView } from './types';
 
-export type { AdvancementRuntime, BranchDef, BranchId, TechDef, TechView, TechState } from './types';
+export type { AdvancementRuntime, BranchDef, BranchId, TechDef, TechResearch, TechView, TechState } from './types';
 export { TECHS, BRANCHES } from './data';
 
 export type AdvancementInstall = AdvancementRuntime & { happenings: HappeningsInstall; adv: Adv };
