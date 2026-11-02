@@ -4,7 +4,7 @@ import { smoothstep as _smoothstep } from '../core/noise';
 import { pointInPolygon, hash01 } from '../core/math';
 import {
   Biome as _Biome, Ground as _Ground, SEA_LEVEL, WORLD_SIZE,
-  type BiomeId, type County, type GroundId, type Kingdom, type MacroGrid, type ScatterItem, type Settlement, type WorldModel,
+  type BiomeId, type County, type Deposit, type GroundId, type Kingdom, type MacroGrid, type ScatterItem, type Settlement, type WorldModel,
 } from './types';
 import * as G from './grid';
 import type { GenState } from './state';
@@ -55,6 +55,8 @@ export class World implements WorldModel {
   readonly diagnostics: Readonly<Record<string, number>>;
   /** Hedgerow segments x0,z0,x1,z1 (flattened) around furlongs. */
   readonly hedges: readonly number[];
+  /** Ore, stone, clay, salt and precious-metal deposits (src/world/deposits.ts). */
+  readonly deposits: readonly Deposit[];
 
   readonly tm: TerrainModel;
   readonly s: GenState;
@@ -77,7 +79,7 @@ export class World implements WorldModel {
   private fRoadKind = 0;
   private fFlags = 0;
 
-  constructor(s: GenState, tm: TerrainModel, ctx: LayoutCtx) {
+  constructor(s: GenState, tm: TerrainModel, ctx: LayoutCtx, deposits: readonly Deposit[] = []) {
     this.s = s; this.tm = tm;
     this.seed = s.seed;
     this.seedNum = (hash01(s.seed.length, s.seed.charCodeAt(0) | 0, s.seed.charCodeAt(s.seed.length - 1) | 0) * 4294967296) >>> 0;
@@ -90,6 +92,7 @@ export class World implements WorldModel {
     this.plots = s.plots; this.strips = s.strips; this.parcels = s.parcels;
     this.timings = s.timings;
     this.hedges = s.hedges;
+    this.deposits = deposits;
     this.diagnostics = ctx.diag;
     this.homeKingdom = Math.max(0, s.kingdoms.findIndex((k, i) => k.culture === 'anglo' && i === this.centralKingdom()));
 

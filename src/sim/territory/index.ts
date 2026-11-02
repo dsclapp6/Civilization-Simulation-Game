@@ -1,22 +1,22 @@
 // Territory (civilization pass, docs/CIV.md §4, §7): who owns the land, who may be where, what the land holds.
-// PLACEHOLDER — the contract's shape with "everything is wild, nothing is forbidden"; replaced by Builder A1.
+// `installTerritory(sim, deps)` builds the land's geometry from the world, registers `sim.services.territory` and listens to
+// the events that move titles and wars. Nothing here runs per step; every query is a pure function of the world, the state
+// and the day (see docs/world/RESOURCES.md, "Territory").
 import type { Simulation } from '../sim';
 import type { Wave3Deps } from '../wave3deps';
-import type { LandInfo, ResourceProfile, TerritoryApi } from './types';
+import { Territory } from './territory';
+import type { TerritoryRuntime } from './types';
 
-export function installTerritory(sim: Simulation, _deps: Wave3Deps): TerritoryApi {
-  const wild = (): LandInfo => ({ kind: 'wild', settlement: -1, house: 0, title: 0, household: 0, strip: -1, parcel: -1, building: -1 });
-  const api: TerritoryApi = {
-    landAt: () => wild(),
-    trespass: () => ({ level: 'none', land: wild(), reason: '' }),
-    settlementOf: (x, z) => sim.world.settlementAt(x, z)?.id ?? -1,
-    landsRadius: () => 2500,
-    resources: (settlement): ResourceProfile => ({ settlement, deposits: [], forest: 0, fertility: 0, coast: false, river: false, yields: [] }),
-    deposits: () => sim.world.deposits ?? [],
-    depositsNear: () => [],
-    depositAt: () => null,
-    version: () => 0,
-  };
+export type {
+  LandInfo, LandKind, LandOwner, OutpostLand, ResourceProfile, TerritoryApi, TerritoryRuntime, TrespassCause, TrespassCheck, TrespassLevel,
+} from './types';
+export { TERRITORY } from './config';
+export { inPolygon, traceOutline, type OutlineOptions } from './outline';
+export { Territory };
+
+export function installTerritory(sim: Simulation, deps: Wave3Deps): TerritoryRuntime {
+  (sim.services.territory as Partial<TerritoryRuntime> | undefined)?.dispose?.();
+  const api = new Territory(sim, deps);
   sim.services.territory = api;
   return api;
 }

@@ -1,10 +1,13 @@
 // Entry point: generateWorld(seed, opts) -> WorldModel. Deterministic, pure TypeScript.
 import { Rng } from '../core/rng';
 import { generateBiomes } from './biomes';
+import { generateDeposits } from './deposits';
 import { generateHydrology } from './hydrology';
+import { LandsIndex } from './lands';
 import { generateLayouts } from './layout/index';
 import { generateRoads } from './roads';
 import { generateSites } from './siting';
+import { CELL, N } from './grid';
 import { newState, type GenOptions } from './state';
 import { generateTerrain } from './terrain';
 import { TerrainModel } from './terrainmodel';
@@ -38,7 +41,8 @@ export function buildWorld(seed: string, opts: WorldGenOptions = {}): World {
   generateRoads(s); phase('roads');
   const tm = new TerrainModel(s); phase('terrainmodel');
   const { ctx } = generateLayouts(s, tm); phase('layouts+fields');
-  const world = new World(s, tm, ctx);
+  const deposits = generateDeposits(s, tm, ctx, new LandsIndex(s.settlements, { biome: s.biome, res: N, cell: CELL })); phase('deposits');
+  const world = new World(s, tm, ctx, deposits);
   phase('index');
   s.timings['phase.total'] = now() - t0;
   return world;
