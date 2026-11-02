@@ -42,6 +42,8 @@ export const CFG = {
   battleRate: 0.115,
   /** Armies stop to fight a detail battle at most this long (simulated seconds). */
   detailSeconds: 480,
+  /** A storm has the walls to reach: it is given longer (simulated seconds). */
+  stormSeconds: 780,
   detailMax: 60,
 
   /** Siege model (days). */

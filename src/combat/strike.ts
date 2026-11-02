@@ -3,10 +3,33 @@
 import { angleDiff, clamp, yawTo } from '../core/math';
 import type { HitLocation, WoundKind } from '../sim/wave3';
 import { gap, type Arena } from './arena';
-import { S, normAngle, type Fighter } from './fighter';
+import { R, S, normAngle, type Fighter } from './fighter';
 import { ballisticPitch, type Shot } from './projectiles';
-import { absorb, rollLocation, shapeWound, type LocationOpts } from './wounds';
+import { absorb, rollLocation, shapeWound, type LocationOpts, type Shaped } from './wounds';
 import { ATTACK_KEYS, DAMAGE_QUALITY } from './weapons';
+
+/** How much further a rider's arm reaches than a man's on foot (m), and how high the saddle is above the ground: arrows below it hit the horse. */
+const MOUNT_REACH = 0.45;
+export const SADDLE = 1.25;
+/** How hard a man who is taking a prisoner hits, against the same man killing. */
+const SUBDUE_FORCE = 0.55;
+/** A prisoner is left with at least this share of his strength: the blow that would kill him only fells him. */
+const SPARE_HP = 0.14;
+
+/** The wound of a blow struck to take a man alive: it may fell him, it may not kill him. */
+function spareLife(w: Shaped, v: Fighter): void {
+  const p = v.person;
+  if (!p) return;
+  w.mortal = false;
+  const room = Math.max(0, p.health.hp - SPARE_HP) * v.maxHp;
+  if (w.damage > room) {
+    const k = w.damage > 0 ? room / w.damage : 0;
+    w.damage = room;
+    w.rate *= k;
+    w.severity = clamp(room / (v.maxHp * 0.9), 0, 1);
+    w.bleeding = w.rate > 0.0004;
+  }
+}
 
 export type BlowOutcome = 'dodged' | 'blocked' | 'parried' | 'missed' | 'hit' | 'stopped';
 
@@ -43,14 +66,16 @@ export function impact(a: Arena, f: Fighter): void {
   const fight = a.fights.get(f.fight);
   if (!atk || !fight) return;
   const w = f.gear.weapon;
-  const reach = w.reach * (f.charge > 1 ? 1 : 1) + 0.2;
+  // from the saddle the arm is higher and longer: a cut reaches further and comes down on the head
+  const reach = w.reach + 0.2 + (f.mounted && !w.mounted ? MOUNT_REACH : 0);
   let best: Fighter | null = null;
   let bestScore = Infinity;
   for (let si = 0; si < fight.sides.length; si++) {
     if (si === f.side) continue;
     for (const e of fight.sides[si].members) {
       if (e.gone || e.st === S.Dead || e.st === S.Yield || e.fled && e.st === S.Gone) continue;
-      if (e.st === S.Down && !(f.isPlayer || f.isAnimal || (f.person?.rep.cruelty ?? 0) > 20)) continue;
+      if (e.onWall !== f.onWall && e.role !== R.Climb) continue; // the wall-walk is out of reach of the ground (a ladder's top excepted)
+      if (e.st === S.Down && (f.subduing || !(f.isPlayer || f.isAnimal || (f.person?.rep.cruelty ?? 0) > 20))) continue;
       const d = gap(f, e);
       if (d > reach) continue;
       const dd = Math.max(0.3, Math.hypot(e.x - f.x, e.z - f.z));
@@ -66,10 +91,12 @@ export function impact(a: Arena, f: Fighter): void {
     f.cooldown += 0.15;
     return;
   }
+  // a rider's blow carries the horse's way: the faster the pace, the harder the stroke (a charge with the point is lanceStrike's)
+  const ride = f.mounted ? 1 + clamp(f.speed * 0.05, 0, 0.3) : 1;
   const dmg = baseDamage(f, atk.dmg, atk.kind === 'bite', a.rng.next());
   const blow: Blow = {
-    kind: atk.kind, dmg: dmg * f.charge, ap: atk.ap, how: f.attackKey, weapon: f.gear.weapon.id, fromX: f.x, fromZ: f.z, melee: true,
-    heightDiff: f.charge > 1 ? 0.9 : 0, accuracy: meleeAccuracy(f),
+    kind: atk.kind, dmg: dmg * f.charge * ride, ap: atk.ap, how: f.attackKey, weapon: f.gear.weapon.id, fromX: f.x, fromZ: f.z, melee: true,
+    heightDiff: (f.charge > 1 ? 0.9 : f.mounted ? 0.7 : 0) - (best.mounted ? 0.7 : 0), accuracy: meleeAccuracy(f),
   };
   const r = applyBlow(a, f, best, blow);
   if (r.outcome === 'hit') { f.hitsLanded++; if (f.isPlayer) a.env.playerHit?.(f, best, false, r.killed); }
@@ -106,8 +133,11 @@ export function meleeAccuracy(f: Fighter): number {
 }
 
 /** Applies one blow to one body. All the rolls come from the combat stream, in a fixed order. */
-export function applyBlow(a: Arena, att: Fighter | null, v: Fighter, b: Blow): BlowResult {
+export function applyBlow(a: Arena, att: Fighter | null, v: Fighter, b0: Blow): BlowResult {
   const env = a.env;
+  // a man taking a prisoner strikes with the flat and the haft: less force, and nothing that kills
+  const subdue = !!att && att.subduing && v.person !== null;
+  const b: Blow = subdue ? { ...b0, dmg: b0.dmg * SUBDUE_FORCE, kind: b0.kind === 'cut' || b0.kind === 'pierce' || b0.kind === 'arrow' ? 'blunt' : b0.kind } : b0;
   const rng = a.rng;
   const fx = env.fx;
   const fight = a.fights.get(v.fight);
@@ -181,7 +211,9 @@ export function applyBlow(a: Arena, att: Fighter | null, v: Fighter, b: Blow): B
     const ab = absorb(rng, v.gear.armour, loc, b.kind, remaining, b.ap);
     deflected = ab.absorbed > 0 && ab.through <= 0.5;
     const shaped = shapeWound(rng, loc, b.kind, ab.through, v.maxHp);
+    if (subdue) spareLife(shaped, v);
     const out = env.book.inflict(v.person, shaped, b.weapon, b.melee ? 'violence' : 'violence');
+    v.mobT = 0; // a wound changes how he moves at once
     damage = shaped.damage;
     hpLost = out.hpLost;
     killed = out.dead;
@@ -316,7 +348,15 @@ export function scatterOf(f: Fighter, kindFactor = 1): number {
 
 /** What an arrow does when its flight finds a body. Returns true: the arrow stops here. */
 export function arrowStrike(a: Arena, s: Shot, shooter: Fighter | null, v: Fighter, hitY: number): boolean {
-  const rel = (hitY - v.y) / Math.max(0.5, v.height);
+  // under the saddle it is the horse that is hit
+  if (v.mounted && v.mountHp > 0 && hitY - v.y < SADDLE) {
+    const flown = Math.hypot(s.x - s.x0, s.z - s.z0);
+    const fall = clamp(1 - 0.45 * (flown / s.range) * (flown / s.range), 0.4, 1);
+    a.horseStruck(v, s.dmg * 0.7 * fall, s.x - s.vx * 0.2, s.z - s.vz * 0.2);
+    if (shooter) shooter.hitsLanded++;
+    return true;
+  }
+  const rel = (hitY - (v.mounted ? v.y + SADDLE : v.y)) / Math.max(0.5, v.height);
   let loc: HitLocation;
   if (v.st === S.Down) loc = rel > 0.35 ? 'torso' : 'leg_l';
   else if (rel > 0.86) loc = 'head';

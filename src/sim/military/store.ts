@@ -10,6 +10,7 @@ import type { Simulation } from '../sim';
 import type { SimEvents } from '../events';
 import { fullName, type GameState, type HouseId, type Person, type PersonId } from '../state';
 import type { AdvancementApi, CombatApi, FightResult, PoliticsApi } from '../wave3';
+import type { AlertSystem } from './alert';
 import type { CareerSystem } from './career';
 import type { ForceCache } from './forces';
 import type { RaidSystem } from './raid';
@@ -59,6 +60,9 @@ export class Mil {
   sieges!: SiegeSystem;
   raids!: RaidSystem;
   career!: CareerSystem;
+  alerts!: AlertSystem;
+  /** Moves whenever something the alert level and the forts depend on changes (armies, battles, sieges, wars): not saved. */
+  alertStamp = 0;
 
   constructor(readonly sim: Simulation, deps: MilDeps) {
     this.state = sim.state;
@@ -89,7 +93,7 @@ export class Mil {
 
   get day(): number { return this.sim.absDay; }
   rng(name = 'military'): Rng { return this.sim.rng(name); }
-  touch(): void { this.state.touchExt(EXT_KEY); }
+  touch(): void { this.alertStamp++; this.state.touchExt(EXT_KEY); }
 
   person(id: PersonId): Person | undefined { return this.state.persons.get(id); }
   alive(id: PersonId): Person | undefined {

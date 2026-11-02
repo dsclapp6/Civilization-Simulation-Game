@@ -14,8 +14,12 @@ export const ACTION_TIME_FACTOR = 1 / 20;
 export const SIM_HZ = 20;
 export const SIM_DT = 1 / SIM_HZ;
 
+/** Civilization pass (CIV §9): the battle's tactical view slows the world to this. The clock's buttons never offer it; only the
+ *  battle HUD sets it (and puts the speed back), and a game loaded at this speed is put back to 1×. */
+export const SLOW_SPEED = 0.25;
+
 /** Allowed speed multipliers. */
-export const SPEEDS = [1, 3, 8] as const;
+export const SPEEDS = [1, 3, 8, SLOW_SPEED] as const;
 export type Speed = (typeof SPEEDS)[number];
 
 /** Fast speeds are refused when a hostile is this close to the player (m). */

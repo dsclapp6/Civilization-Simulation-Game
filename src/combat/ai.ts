@@ -4,10 +4,10 @@
 // Thinking runs every ~0.12 s per fighter; the state machine in arena.tickShared does the timing.
 import { clamp, yawTo } from '../core/math';
 import { gap, type Arena, type Fight } from './arena';
-import { S, normAngle, type Fighter } from './fighter';
+import { D, S, normAngle, type Fighter } from './fighter';
 import { absorbRate } from './aiHelpers';
 import { ballisticPitch } from './projectiles';
-import type { AttackKey } from './weapons';
+import { COUCH_MIN_SPEED, couchable, type AttackKey } from './weapons';
 
 const THINK_PERIOD = 0.11;
 const FLEE_SPEED = 1.0;
@@ -44,6 +44,11 @@ export function think(a: Arena, f: Fighter, dt: number): void {
   if (moraleBreaks(a, f, fight)) return;
   if (f.st === S.Flee) { fleeStep(a, f, fight); return; }
 
+  // ---- the storm: a man with a job (ram, ladder, wall) is the scene's ----
+  if (f.role !== 0 && fight.scene && fight.scene.direct(a, f, fight)) return;
+  // ---- the order of his group (command.ts) ----
+  if (f.dMode !== D.Free || f.dTarget !== null) { if (obey(a, f, fight)) return; }
+
   // ---- who ----
   f.retarget -= THINK_PERIOD;
   if (!f.target || !f.target.active || f.retarget <= 0) {
@@ -69,8 +74,10 @@ function moraleBreaks(a: Arena, f: Fighter, fight: Fight): boolean {
   const limit = f.isAnimal ? 22 : 16;
   if (f.morale > limit) return false;
   const p = f.person;
-  // nobles and wounded men of rank yield rather than run, when yielding is allowed and the foe is a man
-  if (p && fight.yieldAllowed && p.rankTier >= 5 && enemiesArePeople(a, f, fight)) {
+  // nobles and wounded men of rank yield rather than run, when yielding is allowed and the foe is a man; so does anyone
+  // faced with a patrol that is taking prisoners
+  const taken = fight.subdueSide >= 0 && f.side !== fight.subdueSide;
+  if (p && fight.yieldAllowed && (p.rankTier >= 5 || taken) && enemiesArePeople(a, f, fight)) {
     f.yielded = true;
     f.set(S.Yield, 'kneel');
     f.wantSpeed = 0;
@@ -126,11 +133,13 @@ function pickTarget(a: Arena, f: Fighter, fight: Fight): Fighter | null {
   let best: Fighter | null = null;
   let bs = Infinity;
   const mine = fight.sides[f.side].members;
-  const allowDown = f.isAnimal || (f.person?.rep.cruelty ?? 0) > 25;
+  const allowDown = f.isAnimal || (!f.subduing && (f.person?.rep.cruelty ?? 0) > 25);
   for (let si = 0; si < fight.sides.length; si++) {
     if (si === f.side) continue;
     for (const e of fight.sides[si].members) {
       if (e.gone || e.fled || e.st === S.Dead || e.st === S.Yield) continue;
+      // a man on the ground cannot strike a man on the wall-walk (or the other way); bows reach everywhere
+      if (e.onWall !== f.onWall && !(f.preferRanged && f.shotsLeft > 0 && f.gear.ranged)) continue;
       const downed = e.st === S.Down;
       if (downed && !allowDown) continue;
       let s = Math.hypot(e.x - f.x, e.z - f.z) + (downed ? 25 : 0);
@@ -152,7 +161,6 @@ function pickTarget(a: Arena, f: Fighter, fight: Fight): Fighter | null {
 
 /** Speed (m/s) of a destrier at the charge; below `LANCE_MIN` the point has no weight. */
 const LANCE_GALLOP = 9.5;
-const LANCE_MIN = 4.5;
 
 /** A mounted man with a lance: gallop at the foe, strike at the point, wheel away, come round again. True if it took the turn. */
 function lanceThink(a: Arena, f: Fighter, t: Fighter, g: number): boolean {
@@ -166,7 +174,7 @@ function lanceThink(a: Arena, f: Fighter, t: Fighter, g: number): boolean {
   const reach = f.gear.weapon.reach + 0.6;
   if (f.st === S.Idle || f.st === S.Block || f.st === S.Recover) f.set(S.Charge, 'ride_charge', 99);
   const off = Math.abs(normAngle(yawTo(f.x, f.z, t.x, t.z) - f.yaw));
-  if (g <= reach && off < 0.38 && f.speed >= LANCE_MIN) {
+  if (g <= reach && off < 0.38 && f.speed >= COUCH_MIN_SPEED) {
     a.lanceStrike(f, t, f.speed);
     f.wheel = 1.8 + a.rng.next() * 0.8;
     a.toIdle(f);
@@ -178,7 +186,7 @@ function lanceThink(a: Arena, f: Fighter, t: Fighter, g: number): boolean {
 }
 
 function meleeThink(a: Arena, f: Fighter, t: Fighter, g: number, _fight: Fight): void {
-  if (f.mounted && !f.isPlayer && f.gear.weapon.mounted && lanceThink(a, f, t, g)) return;
+  if (f.mounted && !f.isPlayer && couchable(f.gear.weapon) && lanceThink(a, f, t, g)) return;
   const w = f.gear.weapon;
   const reach = w.reach;
   // a man with a bow and a foe on top of him fights with what is at his belt
@@ -281,7 +289,7 @@ function chooseAttack(a: Arena, f: Fighter, t: Fighter, g: number): AttackKey {
 // ---------------------------------------------------------------------------------------------
 
 /** Returns true if the archer used the turn (loosing, drawing, moving to range); false to fight hand to hand. */
-function rangedThink(a: Arena, f: Fighter, t: Fighter, g: number, fight: Fight): boolean {
+function rangedThink(a: Arena, f: Fighter, t: Fighter, g: number, fight: Fight, stand = false): boolean {
   const r = f.gear.ranged!;
   // a man at the archer's throat is fought with the knife
   if (g < 2.6) { if (f.st === S.Aim || f.st === S.Draw) { a.toIdle(f); f.nocked = false; } return false; }
@@ -308,17 +316,19 @@ function rangedThink(a: Arena, f: Fighter, t: Fighter, g: number, fight: Fight):
     else f.wantSpeed = 0;
     return true;
   }
-  if (g < lo) {
+  if (!stand && g < lo) {
     // keep away: back off, sidestepping if a wall is behind
     const away = bearing + Math.PI + (f.key % 2 ? 0.5 : -0.5);
     f.wantX = Math.sin(away); f.wantZ = Math.cos(away); f.wantSpeed = 2.7; f.anim = 'walk';
     return true;
   }
-  if (g > hi) {
+  if (!stand && g > hi) {
     f.wantX = Math.sin(bearing); f.wantZ = Math.cos(bearing); f.wantSpeed = 2.8; f.anim = 'walk';
     return true;
   }
+  if (stand && g > r.range * 0.9) return false;
   if (!lineClear(a, f, t, fight)) {
+    if (stand) { f.wantSpeed = 0; f.wantYaw = bearing; return true; }
     const side = bearing + (Math.PI / 2) * f.strafe;
     f.wantX = Math.sin(side); f.wantZ = Math.cos(side); f.wantSpeed = 2; f.anim = 'walk';
     f.strafeT -= THINK_PERIOD;
@@ -392,4 +402,95 @@ function beastThink(a: Arena, f: Fighter, t: Fighter, g: number, fight: Fight): 
   f.wantX = dx / l; f.wantZ = dz / l;
   f.wantSpeed = 2.9;
   void fight;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Orders (command.ts): a man whose group has an order follows it
+// ---------------------------------------------------------------------------------------------
+
+const CATCH_UP = 3.7;
+const WITHDRAWN = 55;
+
+/** Carries out the order of the man's group. True if it took his turn; false to fight as he would have (with the target it chose). */
+function obey(a: Arena, f: Fighter, fight: Fight): boolean {
+  switch (f.dMode) {
+    case D.Slot: return slotStep(a, f, fight);
+    case D.Retreat: return retreatStep(a, f, fight);
+    default: {
+      // charge or at will: he fights as he would, but at the enemy the order names
+      const t = f.dTarget;
+      if (t && t.active) { f.target = t; f.retarget = 0.9; }
+      return false;
+    }
+  }
+}
+
+/** Walks to the slot, shoots from it, fights off what comes near it and comes back. */
+function slotStep(a: Arena, f: Fighter, fight: Fight): boolean {
+  const sdx = f.dx - f.x, sdz = f.dz - f.z;
+  const sd = Math.hypot(sdx, sdz);
+  const e = a.nearestEnemy(f, fight);
+  const ge = e ? gap(f, e) : Infinity;
+  // archers stand in their line and shoot
+  if (e && f.gk === 1 && f.gear.ranged && f.shotsLeft > 0 && f.preferRanged) {
+    if (rangedThink(a, f, e, ge, fight, true)) return true;
+  }
+  if (e && ge <= f.dEngage && sd <= f.dLeash) {
+    f.target = e; f.retarget = 0.5;
+    return false;
+  }
+  // a shield wall under the bow keeps its shields up as it comes on (half pace, arrows turned aside)
+  if (f.dGuard && f.gear.shield && e && ge < 70 && ge > 8 && f.st === S.Idle && f.stamina > 16 && fight.cmd?.shotAt(f.side)) {
+    f.set(S.Block, 'block');
+    f.guardT = 1;
+    f.guardFor = 0.9;
+    return true;
+  }
+  if (sd > 0.55) {
+    const speed = f.dHurry ? CATCH_UP : Math.min(f.dSpeed * clamp(sd / 1.8, 0.45, 1.5), CATCH_UP);
+    f.wantX = sdx / sd; f.wantZ = sdz / sd;
+    f.wantSpeed = speed;
+    f.wantYaw = sd > 2.5 ? Math.atan2(sdx, sdz) : f.dYaw;
+    f.anim = f.mounted ? (speed > 2.6 ? 'ride_trot' : 'ride_walk') : speed > 2.4 ? 'run' : 'walk';
+    return true;
+  }
+  f.wantSpeed = 0;
+  f.wantYaw = f.dYaw;
+  f.anim = f.mounted ? 'ride_idle' : 'idle';
+  // a shield wall keeps its guard up while the enemy is close
+  if (f.dGuard && e && ge < 7 && f.st === S.Idle && f.stamina > 8 && f.gear.shield) {
+    f.set(S.Block, 'block');
+    f.guardT = 0;
+    f.guardFor = 0.7;
+  }
+  return true;
+}
+
+/** An ordered withdrawal: back to the rally point at the best pace, no morale lost; out of the fight once clear of the enemy. */
+function retreatStep(a: Arena, f: Fighter, fight: Fight): boolean {
+  const e = a.nearestEnemy(f, fight);
+  const dx = f.dx - f.x, dz = f.dz - f.z, d = Math.hypot(dx, dz);
+  if (e) {
+    const ge = gap(f, e);
+    if (ge > WITHDRAWN && d < 6) {
+      // clear away: the man leaves the field (counted among those who got away)
+      f.fled = true;
+      f.st = S.Gone;
+      f.gone = true;
+      return true;
+    }
+    // caught by a man at his back: he turns and fights
+    if (ge < 1.7 && f.st === S.Idle) { f.target = e; return false; }
+  }
+  if (d > 2.5) {
+    f.wantX = dx / d; f.wantZ = dz / d;
+    f.wantSpeed = f.mounted ? 7 : 3.6;
+    f.wantYaw = Math.atan2(dx, dz);
+    f.anim = f.mounted ? 'ride_gallop' : 'run';
+  } else {
+    f.wantSpeed = 0;
+    f.anim = f.mounted ? 'ride_idle' : 'idle';
+    if (e) f.wantYaw = yawTo(f.x, f.z, e.x, e.z);
+  }
+  return true;
 }

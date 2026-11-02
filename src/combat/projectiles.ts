@@ -11,7 +11,7 @@ const BODY_STUCK_LIFE = 25;
 
 export interface Shot {
   id: number;
-  kind: 'arrow' | 'bolt';
+  kind: 'arrow' | 'bolt' | 'stone';
   x: number; y: number; z: number;
   vx: number; vy: number; vz: number;
   /** Fighter key of the shooter (not hit in the first instants). */
@@ -29,11 +29,15 @@ export interface Shot {
   /** Where it left the string (range falloff). */
   x0: number; z0: number;
   range: number;
+  /** A stone from an engine: heavy enough that the air does not slow it. */
+  noDrag?: boolean;
 }
 
 export class Projectiles {
   readonly flying: Shot[] = [];
   readonly landed: Shot[] = [];
+  /** Called when a stone from an engine comes down (the storm's walls take the blow). */
+  onLand: ((s: Shot) => void) | null = null;
   private seq = 1;
   private readonly drawPool = new Map<number, ProjectileDrawItem>();
   private readonly viewList: ProjectileDrawItem[] = [];
@@ -53,7 +57,7 @@ export class Projectiles {
       const x0 = s.x, y0 = s.y, z0 = s.z;
       // a little drag: a long shot arrives slower than it left
       const sp = Math.hypot(s.vx, s.vy, s.vz);
-      const drag = 1 - Math.min(0.5, 0.0009 * sp * dt * 3);
+      const drag = s.noDrag ? 1 : 1 - Math.min(0.5, 0.0009 * sp * dt * 3);
       s.vx *= drag; s.vz *= drag; s.vy = s.vy * drag - GRAVITY * dt;
       s.x += s.vx * dt; s.y += s.vy * dt; s.z += s.vz * dt;
       if (test(s, x0, y0, z0, s.x, s.y, s.z)) { this.land(i, true); continue; }
@@ -73,6 +77,7 @@ export class Projectiles {
   land(index: number, inBody: boolean): void {
     const s = this.flying[index];
     this.flying.splice(index, 1);
+    if (s.kind === 'stone') { this.onLand?.(s); this.drawPool.delete(s.id); return; }
     s.stuck = true;
     s.inBody = inBody;
     s.stuckAge = 0;

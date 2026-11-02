@@ -109,7 +109,9 @@ export function captiveView(M: Mil, rec: CaptiveRec): CaptiveView {
   return { person: rec.person, name: M.name(rec.person), captor: rec.captor, holder: rec.holder, ransom: rec.ransom, since: rec.since, place: rec.place };
 }
 
-function release(M: Mil, rec: CaptiveRec, why: 'paid' | 'let go' | 'dead'): void {
+type ReleaseWhy = 'paid' | 'let go' | 'dead' | 'escaped' | 'pardoned' | 'served';
+
+function release(M: Mil, rec: CaptiveRec, why: ReleaseWhy): void {
   const i = M.data.captives.indexOf(rec);
   if (i >= 0) M.data.captives.splice(i, 1);
   const p = M.person(rec.person);
@@ -123,8 +125,43 @@ function release(M: Mil, rec: CaptiveRec, why: 'paid' | 'let go' | 'dead'): void
     adjustOpinion(p, rec.captor, -6);
     M.state.touch(p);
   }
-  if (p.id === M.playerId) M.notify(why === 'paid' ? 'Your ransom is paid. You are free to go.' : 'Your captors let you go.', 'gain', p.id);
-  else if (p.house === M.state.run.houseId) M.notify(`${M.name(p.id)} is free again.`, 'gain', p.id);
+  if (p.id === M.playerId) {
+    M.notify(why === 'paid' ? 'Your ransom is paid. You are free to go.'
+      : why === 'escaped' ? 'You are out and away. You are free, and hunted.'
+        : why === 'served' ? 'Your sentence is served. You are free to go.'
+          : why === 'pardoned' ? 'You are pardoned and set free.' : 'Your captors let you go.', 'gain', p.id);
+  } else if (p.house === M.state.run.houseId) M.notify(`${M.name(p.id)} is free again.`, 'gain', p.id);
+}
+
+/**
+ * Someone taken outside a battle (a patrol, the watch, the sheriff) is held by the captor's House for ransom, fine or sentence
+ * (the law module keeps the gaol; the ransom right is the military's, as for prisoners of war). Refuses the dead, the already
+ * held and a captor who is not alive; `captor` 0 means "the lord's men" (held by the settlement's lord).
+ */
+export function holdCaptive(M: Mil, captiveId: PersonId, captorId: PersonId, opts?: { settlement?: number; reason?: string }): Result {
+  const p = M.alive(captiveId);
+  if (!p) return { ok: false, reason: 'There is no one to take' };
+  if (p.flags.captive || captiveOf(M, captiveId)) return { ok: false, reason: `${M.name(captiveId)} is already a prisoner` };
+  const captor = captorId ? M.alive(captorId) : undefined;
+  if (captorId && !captor) return { ok: false, reason: 'The captor is dead' };
+  const place = opts?.settlement ?? captor?.settlement ?? p.settlement;
+  const rec = takeCaptive(M, p, captorId, opts?.reason ?? 'taken', place);
+  if (!rec) return { ok: false, reason: `${M.name(captiveId)} cannot be taken` };
+  // the lord's men with no name: the place's lord holds him
+  if (!rec.holder) rec.holder = M.realm.holderOf(place) || rec.holder;
+  // a prisoner taken in a fight is bound up by his captors: left to bleed he would not live to be ransomed
+  if (M.combat?.tend && captor) M.combat.tend(captor.id, p.id);
+  return { ok: true };
+}
+
+/** A captive goes free (escaped, pardoned, sentence served, ransom paid). A person the military does not hold is just unflagged. */
+export function freeCaptive(M: Mil, captiveId: PersonId, why: 'escaped' | 'pardoned' | 'served' | 'ransomed'): void {
+  const rec = captiveOf(M, captiveId);
+  if (rec) { release(M, rec, why === 'ransomed' ? 'paid' : why); return; }
+  const p = M.person(captiveId);
+  if (!p || p.death || !p.flags.captive) return;
+  delete p.flags.captive;
+  M.state.touch(p);
 }
 
 /** What the captive's people can raise: his purse, the household's, and half the head of House's. */

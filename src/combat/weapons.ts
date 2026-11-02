@@ -85,6 +85,13 @@ export const RANGED: Readonly<Record<string, RangedDef>> = indexed<RangedDef>(ra
 export const ARMOUR: Readonly<Record<string, ArmourDef>> = indexed<ArmourDef>(raw.armour);
 
 export const DAMAGE_QUALITY: readonly number[] = [0.85, 1, 1.06, 1.12, 1.2];
+
+/** A rider must be at least this fast (m/s) for a couched point to carry his weight: a canter (6) or a gallop (10), never a trot (3.5). */
+export const COUCH_MIN_SPEED = 4.5;
+/** Weapons a rider tucks under his arm for the charge: the lance, and a spear (a lighter blow). */
+export function couchable(w: WeaponDef): boolean { return w.mounted === true || w.id === 'spear'; }
+/** What the weight of a couched spear is worth against a lance's. */
+export function couchWeight(w: WeaponDef): number { return w.mounted === true ? 1 : 0.7; }
 export const ABSORB_QUALITY: readonly number[] = [0.7, 1, 1.1, 1.2, 1.35];
 
 export function qualityOf(q: Quality | undefined): Quality { return (q ?? 1) as Quality; }

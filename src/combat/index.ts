@@ -10,7 +10,9 @@ import type { Simulation } from '../sim/sim';
 import { adjustOpinion, ageYears, fullName, type PersonId } from '../sim/state';
 import type { Wave3Deps } from '../sim/wave3deps';
 import type { CombatApi, FightResult, FightSide, HarmResult, Wound } from '../sim/wave3';
+import type { WarCombatApi, WarEngageOpts } from '../sim/military/war';
 import { createCombatProvider, PROVIDER_ID } from './actions';
+import { createWarProvider } from './warActions';
 import { Arena, type ArenaEnv, type Fight, type KitOverride } from './arena';
 import { S, type Fighter } from './fighter';
 import { chainAnimals, chainCharacters, chainFx, chainProjectiles, FxQueue } from './fx';
@@ -21,7 +23,7 @@ import { Projectiles } from './projectiles';
 import type { Services } from './services';
 import { WoundBook } from './wounds';
 
-export interface CombatModule extends CombatApi {
+export interface CombatModule extends WarCombatApi {
   readonly arena: Arena;
   readonly book: WoundBook;
   readonly port: PlayerPort;
@@ -187,12 +189,17 @@ export function installCombat(sim: Simulation, deps: Wave3Deps): CombatModule {
 
   const services: Services = { sim, arena, book, economy, social, zone, player, assault };
   sim.actions.register(createCombatProvider(services));
+  sim.actions.register(createWarProvider(services));
 
   // ---- the API ----
   const listeners = arena.endListeners;
   const api: CombatModule = {
     arena, book, port,
-    engage: (sides: FightSide[], opts) => arena.engage(sides, opts),
+    engage: (sides: FightSide[], opts?: WarEngageOpts) => arena.engage(sides, opts),
+    groups: (side) => arena.groups(side),
+    orderGroup: (group, order) => arena.orderGroup(group, order),
+    siegeStatus: () => arena.siegeStatus(),
+    sideOf: (person) => arena.fighterOf(person)?.side ?? -1,
     isFighting: (person) => arena.inFight(person),
     harm: (person, intensity, cause): HarmResult => {
       const p = sim.state.persons.get(person);
@@ -225,6 +232,8 @@ export function installCombat(sim: Simulation, deps: Wave3Deps): CombatModule {
   sim.services.combat = api;
   // a game saved in the middle of a fight loads with the fight gone: its action time must not stay on
   if (sim.state.clock.actionTime) sim.dispatch({ type: 'setActionTime', on: false });
+  // a game saved in the tactical view's slow motion comes back at normal speed
+  if (sim.state.clock.speed < 1) sim.dispatch({ type: 'setSpeed', speed: 1 });
 
   // ---- systems ----
   const offs: Array<() => void> = [];
@@ -261,6 +270,10 @@ export function installCombat(sim: Simulation, deps: Wave3Deps): CombatModule {
   chainAnimals(sim.view, () => arena.beastCorpseDraws());
   chainFx(sim.view, (into) => fx.drain(into));
   chainProjectiles(sim.view, () => proj.view());
+  // the siege works of a storm (rams, ladders, engines) and the stones that fall on the walls
+  sim.view.setSource('siegeWorks', () => arena.siegeWorkDraws());
+  proj.onLand = (s) => { arena.fights.get(s.fight)?.scene?.stoneLanded(s.x, s.z); };
+  offs.push(() => { sim.view.setSource('siegeWorks', undefined); proj.onLand = null; });
 
   // ---- the world around the fights ----
   const prevHostile = sim.hostileNear;
