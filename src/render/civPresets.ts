@@ -266,6 +266,214 @@ CIV_PRESETS['civ-map-deposits'] = {
   camera: (c) => { c.v.setMode('map'); c.r.setCameraMode('map'); c.r.focusMap(c.v.village.x + 900, c.v.village.z + 600, 6500); return 'map'; },
 };
 
+// ---- construction sites, the new works, led animals, captives, the siege ----
+
+/** A level spot for a building of `kind` near the village, facing the sun's side. */
+function siteFor(c: CivCtx, kind: BuildingKind, from: { x: number; z: number }, minD: number): { x: number; z: number; rot: number } {
+  const def = BUILDINGS[kind];
+  const p = openGround(c, from, Math.max(def.w, def.d) / 2 + 4, minD);
+  return { x: p.x, z: p.z, rot: Math.atan2(c.sunX, c.sunZ) + Math.PI + 0.5 };
+}
+
+/** Local (lx, lz) of a placed building to world. */
+function local(b: { x: number; z: number; rot: number }, lx: number, lz: number): { x: number; z: number } {
+  const c = Math.cos(b.rot), s = Math.sin(b.rot);
+  return { x: b.x + lx * c + lz * s, z: b.z - lx * s + lz * c };
+}
+
+function worker(c: CivCtx, id: number, at: { x: number; z: number }, yaw: number, anim: AnimState, main: CharacterDrawItem['mainHand'] = 'none', carry: CharacterDrawItem['carry'] = 'none'): void {
+  const it = c.v.character(id);
+  if (!it) return;
+  stand(it, c.w, at.x, at.z, yaw, anim);
+  it.mainHand = main; it.offHand = 'none'; it.carry = carry; it.label = undefined; it.mark = undefined;
+}
+
+CIV_PRESETS['civ-site'] = {
+  season: 1, day: 3, time: 0.58, weather: 'clear',
+  camera: (c) => {
+    const v = c.v.village;
+    // a cottage framed up and a stone chapel whose walls are rising, with their materials and their builders
+    const a = siteFor(c, 'cottage', { x: v.x + 60, z: v.z + 40 }, 40);
+    c.v.addBuilding({ kind: 'cottage', level: 2, x: a.x, z: a.z, rot: a.rot, culture: v.culture, seed: 7, settlement: v.id, construction: 0.45, damage: 0, onFire: false, occupied: false });
+    const ch = local(a, 16, -4);
+    const chRot = a.rot;
+    c.v.addBuilding({ kind: 'chapel', level: 1, x: ch.x, z: ch.z, rot: chRot, culture: v.culture, seed: 3, settlement: v.id, construction: 0.56, damage: 0, onFire: false, occupied: false });
+    const pile = (b: { x: number; z: number; rot: number }, kind: string, lx: number, lz: number, count: number) => {
+      const p = local(b, lx, lz);
+      c.v.addProp({ kind, x: p.x, z: p.z, rot: b.rot + Math.PI / 2, scale: 1, count });
+    };
+    pile(a, 'timber_stack', -5.5, 1.6, 4); pile(a, 'plank_pile', -5.5, -0.6, 5); pile(a, 'straw_bundles', 5.6, 1.4, 6);
+    const chb = { ...ch, rot: chRot };
+    pile(chb, 'stone_pile', -6.5, 2.2, 7); pile(chb, 'stone_pile', -6.5, 0, 4); pile(chb, 'timber_stack', 6.5, 1.5, 3);
+    const yaw = a.rot;
+    worker(c, 110, local(a, -2.8, 3.4), yaw + Math.PI, 'work_saw', 'saw');
+    worker(c, 111, local(a, 2.0, 3.2), yaw + Math.PI, 'work_hammer', 'hammer');
+    worker(c, 112, local(a, -5.0, 3.6), yaw + 0.6, 'carry_walk', 'none', 'bundle_wood');
+    worker(c, 113, local(chb, -1.5, 4.0), yaw + Math.PI, 'work_hammer', 'chisel');
+    worker(c, 114, local(chb, 2.5, 4.2), yaw + Math.PI, 'carry_walk', 'none', 'stone');
+    const mid = local(a, 8, 2);
+    return clearView(c.w, mid, yaw + Math.PI, 26, 11, { x: mid.x, z: mid.z, y: g(c.w, mid.x, mid.z) + 2 });
+  },
+};
+
+CIV_PRESETS['civ-works'] = {
+  season: 1, day: 3, time: 0.55, weather: 'clear',
+  camera: (c) => {
+    const v = c.v.village;
+    const s = siteFor(c, 'slaughterhouse', { x: v.x - 50, z: v.z + 60 }, 40);
+    c.v.addBuilding({ kind: 'slaughterhouse', level: 1, x: s.x, z: s.z, rot: s.rot, culture: v.culture, seed: 5, settlement: v.id, construction: 1, damage: 0, onFire: false, occupied: true });
+    const prop = (kind: string, lx: number, lz: number, rot = 0, count?: number) => {
+      const p = local(s, lx, lz);
+      c.v.addProp({ kind, x: p.x, z: p.z, rot: s.rot + rot, scale: 1, count });
+    };
+    prop('carcass_hook', -3.4, 2.35); prop('carcass_hook', -2.65, 2.35); prop('carcass_hook', -1.9, 2.35);
+    prop('meat_joints', -1.6, -3.7); prop('hide_frame', 1.0, -3.8, Math.PI); prop('tallow_pot', -5.2, 0.6);
+    prop('carcass_block', 2.2, 3.9, 0.2);
+    // the butcher at the block with his cleaver; a sheep led in on a halter
+    worker(c, 115, local(s, 1.1, 3.35), s.rot + Math.PI, 'work_hammer', 'cleaver');
+    const beast = c.v.animalsOf('sheep')[0];
+    const leader = c.v.character(116);
+    if (beast && leader) {
+      worker(c, 116, local(s, 4.6, 5.2), s.rot - 0.6, 'walk');
+      leader.moveSpeed = 1.1;
+      const ap = local(s, 5.9, 6.4);
+      c.v.holdAnimal(beast, ap.x, ap.z, s.rot - 0.6, 'walk');
+      beast.moveSpeed = 1.1;
+      beast.ledBy = leader.id;
+    }
+    const mid = local(s, 0, 2);
+    return clearView(c.w, mid, s.rot + Math.PI + 0.35, 13, 4.2, { x: mid.x, z: mid.z, y: g(c.w, mid.x, mid.z) + 1.2 });
+  },
+};
+
+CIV_PRESETS['civ-kiln-clay'] = {
+  season: 1, day: 3, time: 0.6, weather: 'clear',
+  camera: (c) => {
+    const v = c.v.village;
+    const p = siteFor(c, 'clay_pit', { x: v.x + 80, z: v.z - 70 }, 60);
+    c.v.addBuilding({ kind: 'clay_pit', level: 1, x: p.x, z: p.z, rot: p.rot, culture: v.culture, seed: 2, settlement: v.id, construction: 1, damage: 0, onFire: false, occupied: true });
+    const k = local(p, 11, 1);
+    c.v.addBuilding({ kind: 'kiln', level: 1, x: k.x, z: k.z, rot: p.rot, culture: v.culture, seed: 2, settlement: v.id, construction: 1, damage: 0, onFire: false, occupied: true });
+    const kb = { ...k, rot: p.rot };
+    const bp = local(kb, 3.6, 0.4), cp = local(p, 2.4, 4.4);
+    c.v.addProp({ kind: 'brick_stack', x: bp.x, z: bp.z, rot: p.rot + Math.PI / 2, scale: 1, count: 6 });
+    c.v.addProp({ kind: 'clay_heap', x: cp.x, z: cp.z, rot: p.rot, scale: 1, count: 5 });
+    worker(c, 117, local(p, -1.2, 0.5), p.rot + 0.4, 'work_dig', 'spade');
+    worker(c, 118, local(p, 1.6, 2.6), p.rot + Math.PI, 'carry_walk', 'none', 'basket');
+    const mid = local(p, 5, 1);
+    return clearView(c.w, mid, p.rot + Math.PI + 0.5, 24, 10, { x: mid.x, z: mid.z, y: g(c.w, mid.x, mid.z) + 1 });
+  },
+};
+
+CIV_PRESETS['civ-salt-lumber'] = {
+  season: 1, day: 3, time: 0.52, weather: 'clear',
+  camera: (c) => {
+    const v = c.v.village;
+    const p = siteFor(c, 'salt_pan', { x: v.x - 90, z: v.z - 60 }, 60);
+    c.v.addBuilding({ kind: 'salt_pan', level: 1, x: p.x, z: p.z, rot: p.rot, culture: v.culture, seed: 1, settlement: v.id, construction: 1, damage: 0, onFire: false, occupied: true });
+    const sp = local(p, -2.4, 4.9);
+    c.v.addProp({ kind: 'salt_heap', x: sp.x, z: sp.z, rot: p.rot, scale: 1, count: 6 });
+    const l = local(p, -14, -2);
+    c.v.addBuilding({ kind: 'lumber_camp', level: 1, x: l.x, z: l.z, rot: p.rot, culture: v.culture, seed: 1, settlement: v.id, construction: 1, damage: 0, onFire: false, occupied: true });
+    const lb = { ...l, rot: p.rot };
+    const lp = local(lb, 1.2, 5.3);
+    c.v.addProp({ kind: 'log_pile', x: lp.x, z: lp.z, rot: p.rot, scale: 1, count: 6 });
+    worker(c, 119, local(p, 4.2, 4.6), p.rot + Math.PI, 'work_stir', 'ladle');
+    worker(c, 120, local(lb, 0.6, 3.0), p.rot + Math.PI, 'work_saw', 'saw');
+    const mid = local(p, -6, 1);
+    return clearView(c.w, mid, p.rot + Math.PI + 0.4, 26, 11, { x: mid.x, z: mid.z, y: g(c.w, mid.x, mid.z) + 1 });
+  },
+  after: () => 2.0,
+};
+
+CIV_PRESETS['civ-led'] = {
+  season: 1, day: 2, time: 0.6, weather: 'clear',
+  camera: (c) => {
+    const v = c.v.village;
+    const o = openGround(c, { x: v.x + 30, z: v.z - 30 }, 8, 20);
+    const yaw = Math.atan2(c.sunX, c.sunZ) + Math.PI + 0.9;
+    const fx = Math.sin(yaw), fz = Math.cos(yaw), rx = Math.cos(yaw), rz = -Math.sin(yaw);
+    // a villager leading a cow and a sheep on halters
+    worker(c, 121, { x: o.x, z: o.z }, yaw, 'walk');
+    const lead = c.v.character(121);
+    if (lead) lead.moveSpeed = 1.2;
+    const cow = c.v.animalsOf('cow')[0], sheep = c.v.animalsOf('sheep')[1];
+    if (cow) { c.v.holdAnimal(cow, o.x - fx * 2.0 + rx * 0.9, o.z - fz * 2.0 + rz * 0.9, yaw, 'walk'); cow.moveSpeed = 1.2; cow.ledBy = 121; }
+    if (sheep) { c.v.holdAnimal(sheep, o.x - fx * 1.6 - rx * 1.0, o.z - fz * 1.6 - rz * 1.0, yaw, 'walk'); sheep.moveSpeed = 1.2; sheep.ledBy = 121; }
+    // a captive with bound hands led by a man-at-arms, another standing bound
+    worker(c, 122, { x: o.x + rx * 5, z: o.z + rz * 5 }, yaw, 'walk', 'spear');
+    const guard = c.v.character(122);
+    if (guard) guard.moveSpeed = 1.2;
+    worker(c, 123, { x: o.x + rx * 5 - fx * 1.4, z: o.z + rz * 5 - fz * 1.4 }, yaw, 'bound_walk');
+    const cap = c.v.character(123);
+    if (cap) cap.moveSpeed = 1.2;
+    worker(c, 124, { x: o.x + rx * 8 + fx * 1.0, z: o.z + rz * 8 + fz * 1.0 }, yaw + Math.PI, 'bound');
+    const mid = { x: o.x + rx * 3, z: o.z + rz * 3 };
+    return clearView(c.w, mid, yaw + Math.PI * 0.62, 9, 2.6, { x: mid.x, z: mid.z, y: g(c.w, mid.x, mid.z) + 0.9 });
+  },
+};
+
+/** A gatehouse with walls near the village (a walled town or a castle). */
+function gateNear(c: CivCtx): Plot | null {
+  const v = c.v.village;
+  let best: Plot | null = null, bd = Infinity;
+  for (const p of c.w.plots) {
+    if (p.kind !== 'gatehouse') continue;
+    const walls = c.w.plots.filter((q) => q.settlement === p.settlement && q.kind === 'wall' && Math.hypot(q.x - p.x, q.z - p.z) < 30);
+    if (walls.length < 2) continue;
+    const d = Math.hypot(p.x - v.x, p.z - v.z);
+    if (d < bd) { bd = d; best = p; }
+  }
+  return best;
+}
+
+function siegeScene(c: CivCtx, gate: 'shut' | 'broken'): Pose {
+  const gp = gateNear(c);
+  if (!gp) return lookAt(c.w, c.v.village.x, c.v.village.z, 0, 40, 14);
+  const def = BUILDINGS.gatehouse;
+  const out = { x: Math.sin(gp.rot), z: Math.cos(gp.rot) };
+  c.v.setFort({ building: gp.id, gate, breach: 0 });
+  // the ram at the gate, its log swinging, men pushing it
+  const ramAt = { x: gp.x + out.x * (def.d / 2 + 3.3), z: gp.z + out.z * (def.d / 2 + 3.3) };
+  const yawIn = gp.rot + Math.PI;
+  c.v.siegeList.push({ id: 1, kind: 'ram', x: ramAt.x, y: g(c.w, ramAt.x, ramAt.z), z: ramAt.z, yaw: yawIn, swing: gate === 'broken' ? 1 : 0.6, state: 'ok' });
+  const rx = Math.cos(yawIn), rz = -Math.sin(yawIn);
+  [-1.6, 1.6].forEach((sd, i) => {
+    const p = { x: ramAt.x + rx * sd - out.x * 2.2, z: ramAt.z + rz * sd - out.z * 2.2 };
+    worker(c, 125 + i, p, yawIn, 'push');
+  });
+  // ladders against the two nearest wall segments, a man climbing one; a third segment breached
+  const walls = c.w.plots.filter((q) => q.settlement === gp.settlement && q.kind === 'wall').sort((a, b) => Math.hypot(a.x - gp.x, a.z - gp.z) - Math.hypot(b.x - gp.x, b.z - gp.z));
+  walls.slice(0, 2).forEach((w, i) => {
+    const wo = { x: Math.sin(w.rot), z: Math.cos(w.rot) };
+    const foot = { x: w.x + wo.x * (BUILDINGS.wall.d / 2 + 2.4), z: w.z + wo.z * (BUILDINGS.wall.d / 2 + 2.4) };
+    const L = 7.6;
+    c.v.siegeList.push({ id: 10 + i, kind: 'ladder', x: foot.x, y: g(c.w, foot.x, foot.z), z: foot.z, yaw: w.rot + Math.PI, length: L });
+    if (i === 0) {
+      const t = 0.45, up = Math.sin(72 * Math.PI / 180) * L * t, inn = Math.cos(72 * Math.PI / 180) * L * t;
+      worker(c, 127, { x: foot.x - wo.x * inn, z: foot.z - wo.z * inn }, w.rot + Math.PI, 'climb', 'none');
+      const it = c.v.character(127);
+      if (it) { it.y = g(c.w, foot.x, foot.z) + up; it.back = 'shield'; }
+    }
+  });
+  if (walls[2]) c.v.setFort({ building: walls[2].id, breach: gate === 'broken' ? 1 : 0.75 });
+  // mantlets, the engines further out, one mantlet burning
+  const P = (a: number, b: number) => ({ x: gp.x + out.x * a + Math.cos(gp.rot) * b, z: gp.z + out.z * a - Math.sin(gp.rot) * b });
+  ([[14, -6, 'ok'], [15, 5, 'burning'], [13, 12, 'ok']] as [number, number, 'ok' | 'burning'][]).forEach(([a, b, st], i) => {
+    const p = P(a, b);
+    c.v.siegeList.push({ id: 20 + i, kind: 'mantlet', x: p.x, y: g(c.w, p.x, p.z), z: p.z, yaw: yawIn, state: st });
+  });
+  const t = P(46, -10), m = P(36, 14);
+  c.v.siegeList.push({ id: 30, kind: 'trebuchet', x: t.x, y: g(c.w, t.x, t.z), z: t.z, yaw: yawIn, swing: 0.15 });
+  c.v.siegeList.push({ id: 31, kind: 'mangonel', x: m.x, y: g(c.w, m.x, m.z), z: m.z, yaw: yawIn, swing: 0.9 });
+  c.v.siegeAnim = true;
+  const cam = P(30, -14);
+  return { pos: { x: cam.x, y: Math.max(g(c.w, cam.x, cam.z), g(c.w, gp.x, gp.z)) + 13, z: cam.z }, look: { x: gp.x + out.x * 4, y: g(c.w, gp.x, gp.z) + 3.5, z: gp.z + out.z * 4 } };
+}
+
+CIV_PRESETS['civ-siege'] = { season: 1, day: 4, time: 0.5, weather: 'clear', camera: (c) => siegeScene(c, 'shut'), after: () => 0.6 };
+CIV_PRESETS['civ-siege-broken'] = { season: 1, day: 4, time: 0.5, weather: 'clear', camera: (c) => siegeScene(c, 'broken'), after: () => 1.2 };
+
 /** Clears everything a civ preset may have set on the renderer. */
 export function resetCiv(r: GameRenderer): void {
   r.setGhost?.(null);

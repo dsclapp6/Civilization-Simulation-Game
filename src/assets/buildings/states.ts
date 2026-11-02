@@ -191,8 +191,10 @@ export function applyConstruction(src: MeshBuilder, c: number, info: StateInfo, 
   }
   const outline = siteOutline(src, info);
   siteGround(dst, info, c);
-  if (c < 0.14) markingOut(dst, outline, c);
-  if (c >= 0.04 && c < 0.2) trenches(dst, outline, c, seed);
+  // (a well or the stocks get their four pegs and no more)
+  const small = info.w * info.d < 6;
+  if (c < 0.14) markingOut(dst, outline, small ? 1 : c);
+  if (c >= 0.04 && c < 0.2 && !small) trenches(dst, outline, c, seed);
   const wb = src.bounds((t) => src.tLayer[t] === Layer.Wall && src.tMat[t] === Mat.Opaque);
   const wallTop = wb.isEmpty() ? 0 : wb.max.y;
   // how tall the walls stand: up to the eaves where there is a roof (gables and chimneys rise above them)
@@ -242,6 +244,7 @@ function markingOut(dst: MeshBuilder, o: Outline, c: number): void {
     // corner profile: a pair of pegs set out beyond the corner
     const ox = Math.sign(ax - mx) * 0.5, oz = Math.sign(az - mz) * 0.5;
     peg(ax + ox, az, 0.62);
+    if (c >= 1) continue;
     peg(ax, az + oz, 0.62);
     const n = Math.max(1, Math.round(L / 3));
     for (let k = 1; k < n; k++) peg(ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n, 0.42);

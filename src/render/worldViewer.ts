@@ -748,6 +748,7 @@ export function start(root: AppRoot): void {
     view.avatar.mainHand = 'none';
     renderer.setHover?.(null);
     resetCiv(renderer);
+    view.clearCiv();
     view.setSeason(p.season);
     view.setWeather(p.weather);
     view.setSnowCover(p.snowCover ?? null);
