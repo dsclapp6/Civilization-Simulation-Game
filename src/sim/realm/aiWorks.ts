@@ -296,7 +296,7 @@ function commitRepair(A: Ai, S: Sense, p: Place): boolean {
 }
 
 /** The building the ruler would most like to improve at the place (a look at the place's buildings; nothing is asked of the builder). */
-function chooseUpgrade(A: Ai, S: Sense, p: Place): { id: number; kind: BuildingKind } | null {
+export function chooseUpgrade(A: Ai, S: Sense, p: Place): { id: number; kind: BuildingKind } | null {
   const R = A.R;
   if (!R.construction || p.prosperity < 1 || S.allowance < AI.minFunds * 4) return null;
   const list = R.state.buildingsAt.get(p.id) ?? [];
@@ -317,7 +317,7 @@ function chooseUpgrade(A: Ai, S: Sense, p: Place): { id: number; kind: BuildingK
   return best && best.score >= AI.improveScore ? { id: best.id, kind: best.kind } : null;
 }
 
-function commitUpgrade(A: Ai, S: Sense, p: Place, id: number, kind: BuildingKind): boolean {
+export function commitUpgrade(A: Ai, S: Sense, p: Place, id: number, kind: BuildingKind): boolean {
   const C = A.R.construction;
   if (!C) return false;
   const q = C.quote?.(S.ruler, 'upgrade', id);
@@ -366,7 +366,9 @@ export function adjustWorks(A: Ai, S: Sense): void {
 
 /** Works a House may stake out in a game year. */
 export function yearCap(S: Sense): number {
-  const x = (AI.yearBase + AI.yearPerPlace * S.places.length) * YEAR_SHARE[S.class] * S.pace;
+  // a ruler who is afraid raises walls and barracks faster: up to 1.8 times his share at the greatest fear
+  const afraid = 1 + 1.2 * Math.max(0, S.fear - 0.3);
+  const x = (AI.yearBase + AI.yearPerPlace * S.places.length) * YEAR_SHARE[S.class] * S.pace * afraid;
   // the part of a work over the whole ones is a chance in the year, decided by the House's luck of the year
   return Math.floor(x) + (hash01(S.house, S.year, 41) < x - Math.floor(x) ? 1 : 0);
 }

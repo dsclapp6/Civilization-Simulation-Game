@@ -8,9 +8,10 @@ import { outpostAct, outpostChoose } from '../../../src/sim/realm/aiOutpost';
 import { researchLimit, researchPicks, researchRound } from '../../../src/sim/realm/aiResearch';
 import { fortWanted, loadPlace, type Sense } from '../../../src/sim/realm/aiSense';
 import { orderRound } from '../../../src/sim/realm/aiTrade';
-import { cancelStalled, homeCap, wantsFor, worksAct, worksChoose, yearCap } from '../../../src/sim/realm/aiWorks';
-import { tradeDaily } from '../../../src/sim/realm/trade';
-import { setDay, youths } from './helpers';
+import { adjustWorks, cancelStalled, chooseUpgrade, commitUpgrade, homeCap, wantsFor, worksAct, worksChoose, yearCap } from '../../../src/sim/realm/aiWorks';
+import { tidyOrders } from '../../../src/sim/realm/aiSupply';
+import { addTradeOrder, tradeDaily } from '../../../src/sim/realm/trade';
+import { addBuilding, setDay, youths } from './helpers';
 import { addDeposits, aRuler, aiWorld, stockUpHousehold, wildPointNear, type AiWorld } from './aiworld';
 
 const SEED = 'ai-mock';
@@ -440,5 +441,155 @@ describe('the AI rulers: a world of them', () => {
     withAi.sim.advanceDays(48);
     const pop = (w: AiWorld): number => { let n = 0; for (const p of w.sim.state.persons.values()) if (!p.death) n++; return n; };
     expect(pop(withAi)).toBeGreaterThan(pop(control) * 0.93);
+  });
+});
+
+describe('the AI rulers: mending, improving, labour, orders, the accolade', () => {
+  it('mend what is hurt before they build anew, at their own cost', () => {
+    const w = aiWorld({ seed: SEED });
+    const r = aRuler(w, 'manor', 2);
+    const S0 = sense(w, r.id);
+    const place = S0.places[0].id;
+    const b = addBuilding(w.sim, place, 'granary');
+    b.damage = 0.5;
+    w.sim.state.touchBuilding(b);
+    const S = sense(w, r.id, { purse: 40000, eager: true, goods: { planks: 100, timber: 50, nails: 40, straw: 50 } });
+    const purse0 = S.payer!.purse;
+    const what = worksChoose(w.ai, S);
+    expect(what?.kind).toBe('repair');
+    worksAct(w.ai, S, what!);
+    const site = w.cons.sites().find((x) => x.builder === r.id)!;
+    expect(site).toBeTruthy();
+    expect(site.work).toBe('repair');
+    expect(site.building).toBe(b.id);
+    expect(w.ai.table()[0].repairs).toBe(1);
+    expect(S.payer!.purse).toBeLessThanOrEqual(purse0);
+    // a building that is being mended is not hurt any more in his eyes: he does not mend it twice
+    const again = sense(w, r.id, { eager: true });
+    expect(worksChoose(w.ai, again)?.kind).not.toBe('repair');
+  });
+
+  it('improve a building when the place is prosperous and the purse is full, and not when it is not', () => {
+    const w = aiWorld({ seed: SEED });
+    const r = aRuler(w, 'manor', 2);
+    const S0 = sense(w, r.id);
+    const place = S0.places[0].id;
+    addBuilding(w.sim, place, 'church');
+    w.sim.state.settlementState(place)!.prosperity = 1.05;
+    const S = sense(w, r.id, { purse: 80000, eager: true, goods: { planks: 200, timber: 100, nails: 60, stone: 600, iron: 40 } });
+    const p = loadPlace(w.ai, S.places[0]);
+    const up = chooseUpgrade(w.ai, S, p);
+    expect(up, 'an improvement is wanted').toBeTruthy();
+    const purse0 = S.payer!.purse;
+    expect(commitUpgrade(w.ai, S, p, up!.id, up!.kind)).toBe(true);
+    const site = w.cons.sites().find((x) => x.builder === r.id && x.work === 'upgrade')!;
+    expect(site).toBeTruthy();
+    expect(site.building).toBe(up!.id);
+    expect(w.ai.table()[0].upgrades).toBe(1);
+    expect(S.payer!.purse).toBeLessThanOrEqual(purse0);
+
+    // a poor place, or a poor purse, improves nothing
+    const w2 = aiWorld({ seed: SEED });
+    const r2 = aRuler(w2, 'manor', 2);
+    const place2 = sense(w2, r2.id).places[0].id;
+    addBuilding(w2.sim, place2, 'church');
+    w2.sim.state.settlementState(place2)!.prosperity = 0.8;
+    const T = sense(w2, r2.id, { purse: 80000, eager: true });
+    expect(chooseUpgrade(w2.ai, T, loadPlace(w2.ai, T.places[0]))).toBeNull();
+    w2.sim.state.settlementState(place2)!.prosperity = 1.05;
+    const U = sense(w2, r2.id, { purse: 90, eager: true });
+    expect(chooseUpgrade(w2.ai, U, loadPlace(w2.ai, U.places[0]))).toBeNull();
+  });
+
+  it('send the manor\'s week-work to the lord\'s works while there are any, and take it back when there are none', () => {
+    const w = aiWorld({ seed: SEED });
+    const r = aRuler(w, 'manor', 2);
+    const S = sense(w, r.id, { purse: 40000, eager: true, goods: { planks: 400, straw: 600, nails: 200, timber: 100, stone: 100, iron: 20 } });
+    const place = S.places[0].id;
+    adjustWorks(w.ai, S);
+    expect(w.realm.worksShare(place)).toBe(0);
+    expect(round(w, S)).toBe(1);
+    const open = sense(w, r.id);
+    expect(open.places[0].open).toBe(1);
+    adjustWorks(w.ai, open);
+    expect(w.realm.worksShare(place)).toBe(0.5);
+    // the work is cancelled: the share goes back
+    w.cons.cancel(r.id, w.cons.sites().find((x) => x.builder === r.id)!.id);
+    adjustWorks(w.ai, sense(w, r.id));
+    expect(w.realm.worksShare(place)).toBe(0);
+  });
+
+  it('take the buying orders down when the purse is thin, and the stock-up orders when the store holds what they wanted', () => {
+    const w = aiWorld({ seed: SEED });
+    const r = aRuler(w, 'county', 0);
+    const rich = sense(w, r.id, { purse: 600000 });
+    expect(addTradeOrder(w.R, r.id, { settlement: -1, good: 'timber', side: 'buy', limit: 40, keep: 100 }).ok).toBe(true);
+    expect(addTradeOrder(w.R, r.id, { settlement: -1, good: 'wool', side: 'sell', limit: 0, keep: 5 }).ok).toBe(true);
+    // a rich ruler leaves his orders alone
+    orderRound(w.ai, rich);
+    expect(w.realm.tradeOrders(r.id).filter((o) => o.side === 'buy').length).toBe(1);
+    // a thin purse buys nothing: the buying order goes, the selling one stays
+    const poor = sense(w, r.id, { purse: 30 });
+    orderRound(w.ai, poor);
+    expect(w.realm.tradeOrders(r.id).filter((o) => o.side === 'buy').length).toBe(0);
+    expect(w.realm.tradeOrders(r.id).filter((o) => o.side === 'sell').length).toBe(1);
+
+    // an order laid in for a work is taken down once the store holds the stock
+    const S = sense(w, r.id, { purse: 600000 });
+    expect(addTradeOrder(w.R, r.id, { settlement: -1, good: 'stone', side: 'buy', limit: 40, keep: 80 }).ok).toBe(true);
+    w.ai.mark(S.house, 'stock:stone');
+    tidyOrders(w.ai, S);
+    expect(w.realm.tradeOrders(r.id).some((o) => o.good === 'stone')).toBe(true);
+    const stocked = sense(w, r.id, { goods: { stone: 120 } });
+    tidyOrders(w.ai, stocked);
+    expect(w.realm.tradeOrders(r.id).some((o) => o.good === 'stone')).toBe(false);
+  });
+
+  it('knight the worthiest of their men from time to time, at the treasury\'s cost', () => {
+    const w = aiWorld({ seed: SEED });
+    setDay(w.sim, 20.3);
+    const r = aRuler(w, 'kingdom', 0);
+    for (const p of w.ai.sense(r.id)!.places) youths(w.sim, p.id, 12);
+    const kit = { 'longbow#2': 12, arrow: 400, sword: 12, shield: 12, spear: 12, padded_armour: 14, cap_helmet: 12, horse: 4, chainmail: 4 };
+    // a few musters, a week apart, until he has a score of men
+    let S = sense(w, r.id, { purse: 900000, fear: 0.8, goods: kit });
+    for (let i = 0; i < 6 && w.realm.troops!(r.id).length < 4; i++) {
+      w.ai.rec(S.house).at['rec'] = -999;
+      armsRound(w.ai, S);
+      S = sense(w, r.id, { fear: 0.8 });
+    }
+    const men = w.realm.troops!(r.id);
+    expect(men.length).toBeGreaterThanOrEqual(4);
+    // one of them is a seasoned fighter
+    const strong = w.sim.state.persons.get(men[0].person)!;
+    strong.skills.melee = 8 * 8 * 40;
+    strong.health.hp = 1;
+    w.sim.state.touch(strong);
+    const again = sense(w, r.id, { purse: 900000, goods: kit });
+    expect(again.troops.length).toBeGreaterThanOrEqual(4);
+    armsRound(w.ai, again);
+    expect(w.ai.table()[0].knights).toBe(1);
+    expect(w.sim.state.persons.get(strong.id)!.career).toBe('knight');
+    // and not another in the next fortnight
+    armsRound(w.ai, sense(w, r.id));
+    expect(w.ai.table()[0].knights).toBe(1);
+  });
+
+  it('are run by the steward when the lord is held captive, paying from the lord\'s own household', () => {
+    const w = aiWorld({ seed: SEED });
+    const k = aRuler(w, 'kingdom', 0);
+    const king = w.sim.state.persons.get(k.id)!;
+    const capital = w.ai.sense(k.id)!.seat;
+    king.flags.captive = true;
+    w.sim.state.touch(king);
+    w.sim.advanceHours(1);
+    const acting = w.realm.rulerOf(capital);
+    expect(acting).not.toBe(king.id);
+    const S = sense(w, acting, { purse: 400000, eager: true, goods: { planks: 400, straw: 600, nails: 200, timber: 300, stone: 300, iron: 60 } });
+    expect(S.role).toBe('steward');
+    expect(S.house).toBe(king.house);
+    expect(S.payer!.id).toBe(king.household);
+    expect(round(w, S)).toBeGreaterThanOrEqual(0);
+    for (const site of w.cons.sites()) expect(site.household).toBe(king.household);
   });
 });

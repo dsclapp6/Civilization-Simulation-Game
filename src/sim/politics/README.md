@@ -49,6 +49,27 @@ second, ≥ 30% of all strength; threshold and join odds scale with the difficul
 march when they can match it — the player's House included. No catch-up help: on Lord and King the rivals
 start with fuller treasuries (visible, in the SPEC table), and that is all.
 
+### What the rulers' deeds change (`might.ts`)
+
+The AI rulers of `src/sim/realm/ai*.ts` (docs/REALM.md "The AI rulers") raise walls, work out techniques and take men on with the
+player's own calls, and the rival AI weighs the results in a war decision ("they weigh the new strength", SPEC §16). All are pure
+readings of the state, memoised for the hour in the snapshot's `memo`:
+
+* **`might(h)`** (1 .. 1.35): what a House's techniques add to the weight of its men - the longbow, plate, destriers, crossbows, paid
+  retinues and archers (`mightOf`). Multiplies the attacker's and the defender's (and the overlord's) weight in `desire`.
+* **`bulwark(o)`** (1 .. ~2): what a siege of the target's lands would meet - the macro siege's own sum over the walls, towers, keeps
+  and mottes standing in its demesnes (`fortFactor`, the weights of `military/siege.ts`), taken as a mean over the places (the besiegers
+  take them one by one), 35% of the excess, made to count for more by the masonry techniques it commands (`masonryOf`). Multiplies the
+  defender's weight; the besieger's engines (`siegecraftOf`: trebuchet, bombard) multiply the attacker's when the target is walled.
+* **`thin(o)`** (0 .. 1): how short of its people's due a House is in standing men (retinue, garrisons and hired companies as
+  `military.standing` weighs them against 4% of its residents). Adds up to 0.12 to the target's `weakness`.
+* **`outbuilt(h, o)`** (-1 .. 1): `(growth(h) − growth(o)) / 12`, where the growth of a House is what the rulers report through
+  `PoliticsRuntime.setGrowthSource(fn)` (built + ½ techniques + ¼ men raised this game year; 0 and neutral when nobody sets it).
+  Adds 0.1 × it to `desire`: a neighbour that out-builds you grows bold, and one that does not keep up is a prize.
+
+None of this is a bonus the rivals are given: it is what the rulers' deeds (walls, techniques, men) are worth in the same sums the
+military and the siege use. The player's deeds count the same way - a walled, well-armed House is a harder prize for the rivals too.
+
 ## Wars (`wars.ts`)
 
 Legal under realm law (`laws.privateWar` by kingdom; culture default: only the English crown forbids it); a

@@ -29,6 +29,9 @@ export function cropsFor(S: Sense, p: Place, year: number, field: number): { win
 
 export function cropRound(A: Ai, S: Sense): void {
   const R = A.R;
+  // the plan is for the next sowing and the choice follows the soil and the year: once a game year is often enough
+  if (R.day - A.lastAt(S.house, `crops:${S.ruler}`) < 16) return;
+  A.mark(S.house, `crops:${S.ruler}`);
   const year = Math.floor(R.day / 16);
   for (const p of S.places) {
     if (p.kind === 'castle' || p.kind === 'abbey' || p.kind === 'priory' || p.kind === 'nunnery') continue;

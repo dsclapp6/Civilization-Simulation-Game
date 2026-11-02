@@ -10,7 +10,7 @@ export const AI = {
   /** Days (not hours) a thing that did not work is left alone: a place with no room, a technique refused. */
   retryDays: 16,
   /** Most candidate spots one search looks at (each is a `check`, 25-55 us): keeps a round's longest call under a few ms. */
-  searchChecks: 40,
+  searchChecks: 32,
   /** Share of the free funds (above the comfortable purse) a single new work may take, and the share all works under way may owe in all. */
   projectShare: 0.4,
   committedShare: 0.8,

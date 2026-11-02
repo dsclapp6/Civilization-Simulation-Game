@@ -102,8 +102,16 @@ export interface ResearchPick {
   place?: BuildingKind;
 }
 
-/** The techniques the House may take up, best first (rating over price). */
+const picked = new WeakMap<Sense, ResearchPick[]>();
+
+/** The techniques the House may take up, best first (rating over price); worked out once for a look round (the works planner and the research both ask). */
 export function researchPicks(A: Ai, S: Sense): ResearchPick[] {
+  let out = picked.get(S);
+  if (!out) { out = computePicks(A, S); picked.set(S, out); }
+  return out;
+}
+
+function computePicks(A: Ai, S: Sense): ResearchPick[] {
   const R = A.R, rt = R.tech;
   if (!rt) return [];
   const f = factsOf(S);

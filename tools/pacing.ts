@@ -4,15 +4,22 @@
 // fill the gaps between what happenings bring, so this tool measures only the happenings:
 //   - a request from a neighbour about every 5-10 minutes; a disaster, feast or notice near by about every 10-15 (SPEC §21)
 //   - something to improve (a technique within reach) every 15-45 minutes early on
-//   npx tsx tools/pacing.ts [--years 10] [--preset tiny|small|large] [--seed x] [--difficulty knight] [--answer]
+//   npx tsx tools/pacing.ts [--years 10] [--preset tiny|small|large] [--seed x] [--difficulty knight] [--answer] [--ai]
 // `--answer` makes the character say yes to every request (a polite player), to see how the journal fills.
+// `--ai` installs the lands, the builder, the realm and the AI rulers (src/sim/realm/ai*.ts) as well, and reports what the rivals' growth
+// shows near the player (3.5 km): the works finished beside him by year, the walls among them, the realm's news and how often it comes.
 import { DAYS_PER_YEAR, DAY_SECONDS } from '../src/core/time';
 import type { Difficulty } from '../src/core/domain';
 import { installAdvancement } from '../src/sim/advancement';
+import { installConstruction } from '../src/sim/construction';
 import { installEconomy } from '../src/sim/economy';
 import { newProfile } from '../src/sim/legacy';
+import { installMilitary } from '../src/sim/military';
+import { installPolitics } from '../src/sim/politics';
+import { installRealm } from '../src/sim/realm';
 import { Simulation } from '../src/sim/sim';
 import { installSocial } from '../src/sim/social';
+import { installTerritory } from '../src/sim/territory';
 import { createMockWorld } from '../src/sim/testing/mockWorld';
 import { generateWorld } from '../src/world/generate';
 
@@ -35,8 +42,12 @@ const sim = Simulation.newGame({
 });
 const social = installSocial(sim);
 const economy = installEconomy(sim, { social });
-const adv = installAdvancement(sim, { economy, social });
+const deps = { economy, social };
+const withAi = flag('ai');
+if (withAi) { installPolitics(sim, deps); installMilitary(sim, deps); }
+const adv = installAdvancement(sim, deps);
 const hap = adv.happenings;
+const realm = withAi ? (installTerritory(sim, deps), installConstruction(sim, deps), installRealm(sim, deps, { ai: true })) : undefined;
 
 interface Item { day: number; kind: string }
 
@@ -61,6 +72,19 @@ sim.events.on('happening', (e) => {
   if (adv.happenings.hap.relevant(e.settlement, kingdom)) { items.push({ day: sim.absDay, kind: e.kind }); b.notices++; }
 });
 sim.events.on('tech', () => { bucket(sim.absDay).techs++; });
+// what the rivals' growth shows near the player (3.5 km of where the character lives): works finished by year and kind, the realm's news
+const NEAR = 3500;
+const homeOf = (): { x: number; z: number } => { const me = sim.state.persons.get(sim.state.run.playerId); const s = me ? sim.world.settlements.find((q) => q.id === me.settlement) : undefined; return s ?? { x: 0, z: 0 }; };
+const nearHome = (settlement: number): boolean => { const a = homeOf(), b = sim.world.settlements.find((q) => q.id === settlement); return !!b && Math.hypot(a.x - b.x, a.z - b.z) <= NEAR; };
+const grown: Array<Record<string, number>> = [];
+const newsNear: Array<{ day: number; kind: string }> = [];
+sim.events.on('construction', (e) => {
+  if (!withAi || e.phase !== 'done' || e.work !== 'build' || !nearHome(e.settlement)) return;
+  const y = Math.floor(sim.absDay / DAYS_PER_YEAR);
+  while (grown.length <= y) grown.push({});
+  grown[y][e.kind] = (grown[y][e.kind] ?? 0) + 1;
+});
+sim.events.on('news', (e) => { if (withAi && nearHome(e.settlement)) newsNear.push({ day: sim.absDay, kind: e.kind }); });
 sim.events.on('death', () => { bucket(sim.absDay).deaths++; });
 sim.events.on('playerDied', (e) => { if (e.eligible.length) sim.switchTo(e.eligible[0]); });
 
@@ -108,7 +132,22 @@ console.log(`techniques known by someone: ${known}/${techs.length}; preserved in
 for (const b of adv.branches()) {
   console.log(`  ${b.name.padEnd(20)} ${techs.filter((t) => t.branch === b.id).map((t) => `${t.id}:${adv.holders(t.id).length}`).join(' ')}`);
 }
+if (realm?.ai) {
+  console.log('\nthe rivals near the player (3.5 km), works finished by game year (homes are not counted among the notable kinds):');
+  const HOMES = new Set(['hovel', 'cottage', 'longhouse', 'townhouse']);
+  const FORTS = new Set(['palisade', 'wall', 'tower', 'gatehouse', 'motte', 'keep_stone']);
+  grown.forEach((g, i) => {
+    const all = Object.values(g).reduce((a, b) => a + b, 0);
+    const homes = Object.entries(g).filter(([k]) => HOMES.has(k)).reduce((a, [, v]) => a + v, 0);
+    const forts = Object.entries(g).filter(([k]) => FORTS.has(k)).reduce((a, [, v]) => a + v, 0);
+    console.log(`  year ${String(i + 1).padStart(2)}: ${String(all).padStart(3)} works (${homes} homes, ${forts} walls and keeps)  ${Object.entries(g).filter(([k]) => !HOMES.has(k)).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+  });
+  const byKind: Record<string, number> = {};
+  for (const n of newsNear) byKind[n.kind] = (byKind[n.kind] ?? 0) + 1;
+  console.log(`  the realm's news near him: ${newsNear.length} items in ${total} minutes of play (${every(newsNear.length)}): ${JSON.stringify(byKind)}`);
+  console.log(`  the rulers' table: ${JSON.stringify(realm.ai.table().slice(0, years).map((t) => ({ y: t.year, placed: t.placed, done: t.done, walls: t.defence, techs: t.techs, recruits: t.recruits })))}`);
+}
 console.log(`\n${perYear.length} years in ${secs.toFixed(1)} s`);
 for (const [name, p] of sim.scheduler.profile) {
-  if (/^(tech|happenings)\./.test(name)) console.log(`  ${name.padEnd(22)} avg ${(p.totalMs / p.calls).toFixed(3)} ms  max ${p.maxMs.toFixed(2)} ms  calls ${p.calls}`);
+  if (/^(tech|happenings|realm\.ai)\./.test(name) || name === 'realm.ai') console.log(`  ${name.padEnd(22)} avg ${(p.totalMs / p.calls).toFixed(3)} ms  max ${p.maxMs.toFixed(2)} ms  calls ${p.calls}`);
 }
