@@ -5,9 +5,10 @@ import type { BuildingKind } from '../../content/types';
 import type { CultureId, SettlementKind } from '../../core/domain';
 import { dist2, yawTo } from '../../core/math';
 import { Rng } from '../../core/rng';
+import { LandsIndex } from '../../world/lands';
 import {
   Biome, Ground, WORLD_SIZE,
-  type BiomeId, type County, type GroundId, type Kingdom, type LandParcel, type MacroGrid, type Plot, type Road,
+  type BiomeId, type County, type Deposit, type GroundId, type Kingdom, type LandParcel, type MacroGrid, type Plot, type ResourceKind, type Road,
   type RoadGraph, type Settlement, type Strip, type WorldModel,
 } from '../../world/types';
 
@@ -335,12 +336,14 @@ export function createMockWorld(opts: MockWorldOptions = {}): WorldModel {
     }
   }
 
+  const deposits = mockDeposits(seed, settlements, regions);
+
   const world: WorldModel = {
     seed,
     size: WORLD_SIZE,
     macro,
     rivers: [], lakes: [], roads, bridges: [], fords: [], roadGraph,
-    kingdoms, counties, settlements, plots, strips, parcels,
+    kingdoms, counties, settlements, plots, strips, parcels, deposits,
     heightAt: () => 10,
     waterSurfaceAt: () => null,
     biomeAt: (): BiomeId => Biome.Meadow,
@@ -357,4 +360,53 @@ export function createMockWorld(opts: MockWorldOptions = {}): WorldModel {
     countyAt: (x, z) => counties[settlements[nearestIdx(x, z)].county] ?? null,
   };
   return world;
+}
+
+/**
+ * A few deposits so tests of territory, construction and the economy have resources to find: in every kingdom iron, stone and
+ * clay near its villages (inside their lands), salt in every other one, and silver and gold far from any settlement in the
+ * first kingdom (wild, so an outpost can be founded there). A separate RNG stream: the rest of the mock world is unchanged.
+ */
+function mockDeposits(seed: string, settlements: readonly Settlement[], regions: readonly Rect[]): Deposit[] {
+  const rng = new Rng(`mockdeposits:${seed}`);
+  const lands = new LandsIndex(settlements);
+  const out: Deposit[] = [];
+  const free = (x: number, z: number, r: number): boolean => !lands.nearBuiltUp(x, z, 80) && out.every((d) => dist2(d.x, d.z, x, z) > (d.radius + r + 60) ** 2);
+  const add = (kind: ResourceKind, x: number, z: number, radius: number, richness: number): void => {
+    out.push({ id: out.length, kind, x: Math.round(x), z: Math.round(z), radius, richness, settlement: lands.lookup(x, z) });
+  };
+  regions.forEach((rect, k) => {
+    const mine = settlements.filter((s) => s.x >= rect.x0 && s.x < rect.x1 && s.z >= rect.z0 && s.z < rect.z1 && (s.kind === 'village' || s.kind === 'hamlet' || s.kind === 'town'));
+    const near = (kind: ResourceKind, radius: number, richness: number, n: number): void => {
+      for (let i = 0, placed = 0; i < 40 && placed < n && mine.length > 0; i++) {
+        const base = mine[(i + k) % mine.length];
+        const a = rng.range(0, Math.PI * 2), d = rng.range(400, 1000);
+        const x = base.x + Math.cos(a) * d, z = base.z + Math.sin(a) * d;
+        if (x < 200 || z < 200 || x > WORLD_SIZE - 200 || z > WORLD_SIZE - 200 || !free(x, z, radius)) continue;
+        add(kind, x, z, radius, richness);
+        placed++;
+      }
+    };
+    near('iron', 55, 0.7, 2);
+    near('stone', 70, 0.75, 2);
+    near('clay', 58, 0.45, 2);
+    if (k % 2 === 0) near('salt', 72, 0.5, 1);
+  });
+  // precious metals in the first kingdom, as far from any settlement as the region allows
+  const rect = regions[0];
+  const far = (): { x: number; z: number } => {
+    let best = { x: (rect.x0 + rect.x1) / 2, z: (rect.z0 + rect.z1) / 2 }, bd = -1;
+    for (let i = 0; i < 60; i++) {
+      const x = rng.range(rect.x0 + 300, rect.x1 - 300), z = rng.range(rect.z0 + 300, rect.z1 - 300);
+      let d = Infinity;
+      for (const s of settlements) d = Math.min(d, dist2(x, z, s.x, s.z));
+      if (d > bd && free(x, z, 40)) { bd = d; best = { x, z }; }
+    }
+    return best;
+  };
+  let p = far();
+  add('silver', p.x, p.z, 40, 0.8);
+  p = far();
+  add('gold', p.x, p.z, 32, 0.6);
+  return out;
 }

@@ -60,7 +60,14 @@ export class LandsIndex {
       const parent = s.kind === 'castle' && s.parent !== undefined ? index.get(s.parent) : undefined;
       this.holder[i] = parent ? parent.id : s.id;
       this.reach[i] = LAND_RADIUS[parent ? parent.kind : s.kind];
-      this.built[i] = s.radius * BUILT_UP_SLACK;
+      let built = s.radius * BUILT_UP_SLACK;
+      // a walled town ends a little beyond its walls, whatever the farms round it make `radius` out to be
+      if ((s.kind === 'town' || s.kind === 'city') && s.walls && s.walls.length >= 3) {
+        let mean = 0;
+        for (const p of s.walls) mean += Math.hypot(p.x - s.x, p.z - s.z);
+        built = Math.min(built, mean / s.walls.length + 45);
+      }
+      this.built[i] = built;
     });
     const cols = this.cols;
     const counts = new Int32Array(cols * cols + 1);
