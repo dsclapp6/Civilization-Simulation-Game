@@ -219,7 +219,8 @@ function groundReasonFor(C: Construction, rules: KindRules, kind: BuildingKind, 
   if (cliffs >= 2) return 'Too rough: cliffs or bog';
   if (rules.slope < 1) {
     const rise = hMax - hMin;
-    const allowed = Math.min(MAX_RISE, rules.slope * Math.sqrt(def.w * def.w + def.d * def.d));
+    // the run the slope is reckoned over: the footprint's diagonal, between four and ten metres (the plinth hides about 0.8 m)
+    const allowed = Math.min(MAX_RISE, rules.slope * Math.max(4, Math.min(10, Math.sqrt(def.w * def.w + def.d * def.d))));
     if (rise > allowed) return 'Too steep';
   }
   switch (rules.terrain) {

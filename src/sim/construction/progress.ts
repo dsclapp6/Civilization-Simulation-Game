@@ -180,7 +180,7 @@ function supply(C: Construction, rec: SiteRec, payer: Household, ctx?: PlanCtx):
       const cur = rec.transit[g];
       rec.transit[g] = [r3((cur ? cur[0] : 0) + res.got), C.absDay + res.days];
       coming = true;
-      if (!text || !coming) text = `Waiting for ${name}: on the way from ${C.settlementName(res.settlement)} market, ${Math.max(1, res.days)} day${res.days > 1 ? 's' : ''}`;
+      if (!text) text = `Waiting for ${name}: on the way from ${C.settlementName(res.settlement)} market, ${Math.max(1, res.days)} day${res.days > 1 ? 's' : ''}`;
     }
     if (res.got < qty - 0.005) {
       stuck = stuck || res.got <= 0;
@@ -416,8 +416,7 @@ export function putIn(C: Construction, rec: SiteRec, days: number): number {
     if (!payer) return 0;
     const paid = C.spend(payer, fee);
     if (paid < fee - 1e-6) {
-      add = r6(add * (paid / fee));
-      if (paid > 0) { /* what was paid buys that much of the work */ }
+      add = r6(add * (paid / fee)); // what was paid buys that much of the work
       if (add <= 1e-6) {
         rec.note = 'Waiting for the money to pay the masons';
         rec.status = 'waiting';

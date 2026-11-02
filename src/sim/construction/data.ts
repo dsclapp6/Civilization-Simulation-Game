@@ -65,7 +65,7 @@ export const REPAIR = raw.repair;
 export const DEMOLISH_LABOUR = raw.demolishLabour;
 export const OFFICES: Readonly<Record<string, OfficeRule>> = raw.offices;
 
-export const DEFAULT_SLOPE = 0.28;
+export const DEFAULT_SLOPE = 0.16;
 
 export const RULES = new Map<BuildingKind, KindRules>();
 for (const kind of BUILDING_KINDS) {

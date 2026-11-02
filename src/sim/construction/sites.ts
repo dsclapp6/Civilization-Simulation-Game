@@ -1,11 +1,13 @@
 // Sites: staking out a building (or an upgrade, a repair, a pulling-down), the real BuildingState it works on, outposts, cancelling,
 // and the views of all this. Progress itself (materials, labour, completion) is in progress.ts.
 import { BUILDINGS, type BuildingKind } from '../../content/types';
-import { hash3 } from '../../core/math';
+import { hash3, pointInPolygon } from '../../core/math';
+import { CHUNKS_PER_SIDE, CHUNK_SIZE } from '../../world/types';
 import { formatMoney } from '../money';
 import type { BuildingState, Household, PersonId } from '../state';
 import { evaluate, depositAt, nearestHeld, type Standing } from './check';
 import type { Construction } from './core';
+import { footprintCorners } from './geometry';
 import {
   CANCEL_REFUND, DEMOLISH_LABOUR, REPAIR, SALVAGE, costValue, goodsValue, levelCost, maxCrew, maxLevelOf, priceOf, rulesOf, totalCost,
 } from './data';
@@ -85,6 +87,22 @@ export function applyRazed(C: Construction): void {
   }
 }
 
+/** The trees, bushes and stones standing where a building is staked are cleared (the renderer hides what the view calls felled). */
+export function clearGround(C: Construction, b: BuildingState): void {
+  const def = BUILDINGS[b.kind];
+  const poly = footprintCorners(b.x, b.z, def.w + 2.4, def.d + 2.4, b.rot);
+  const reach = Math.sqrt(def.w * def.w + def.d * def.d) / 2 + 2;
+  const c0x = Math.max(0, Math.floor((b.x - reach) / CHUNK_SIZE)), c1x = Math.min(CHUNKS_PER_SIDE - 1, Math.floor((b.x + reach) / CHUNK_SIZE));
+  const c0z = Math.max(0, Math.floor((b.z - reach) / CHUNK_SIZE)), c1z = Math.min(CHUNKS_PER_SIDE - 1, Math.floor((b.z + reach) / CHUNK_SIZE));
+  for (let cz = c0z; cz <= c1z; cz++) {
+    for (let cx = c0x; cx <= c1x; cx++) {
+      for (const it of C.world.scatterInChunk(cx, cz)) {
+        if (pointInPolygon(it.x, it.z, poly)) C.sim.view.markFelled(it.id);
+      }
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Money check at the start
 // ---------------------------------------------------------------------------------------------
@@ -156,7 +174,8 @@ export function placeSite(C: Construction, personId: PersonId, kind: BuildingKin
   let outpost: OutpostRec | undefined = st.outpost;
   if (st.mode === 'found') {
     const dep = rulesOf(kind).terrain === 'deposit' ? depositAt(C, x, z, rulesOf(kind).deposits ?? []) : null;
-    const name = (opts.outpost ?? '').trim() || ev.check.outpost?.name || `${C.settlementName(parent)} outpost`;
+    let name = (opts.outpost ?? '').trim() || ev.check.outpost?.name || `${C.settlementName(parent)} outpost`;
+    for (let n = 2; C.save.outposts.some((o) => o.name === name); n++) name = `${(opts.outpost ?? '').trim() || ev.check.outpost?.name || 'Outpost'} ${n}`;
     outpost = { id: C.save.nextOutpost++, name, settlement: parent, x, z, deposit: dep ? dep.id : -1, founded: C.day, house, founder: personId };
     C.save.outposts.push(outpost);
   }
@@ -169,6 +188,7 @@ export function placeSite(C: Construction, personId: PersonId, kind: BuildingKin
     seed: hash3(Math.round(x * 10), Math.round(z * 10), def.w * 31 + def.d) & 0x3fffffff,
   };
   addBuilding(C, b);
+  clearGround(C, b);
   const rec = newRec(C, {
     building: b, work: 'build', level: 1, payer, house, builder: personId, cost, outpost: outpost?.id,
     occupant: opts.occupant ?? defaultOccupant(st.mode, kind), priority: opts.priority, hired: opts.hired,
@@ -365,7 +385,8 @@ export function closeSite(C: Construction, rec: SiteRec, how: 'cancelled' | 'don
       if (rec.work === 'build') {
         removeBuilding(C, b);
         dropEmptyOutpost(C, rec);
-      } else {
+      } else if (rec.work === 'demolish') {
+        // called off before it came down: it stands again as it was
         b.damage = rec.damage0;
         C.state.touchBuilding(b);
       }

@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS } from '../../../src/content/types';
 import { totalCost } from '../../../src/sim/construction/data';
-import { allMaterials, clearSpot, enrich, houseOf, manorLord, rig, setTime, toDawn, village } from './helpers';
+import { allMaterials, clearSpot, enrich, houseOf, manorLord, openGround, probeVillage, rig, setTime, toDawn, village } from './helpers';
 
 function placeCottage(r: ReturnType<typeof rig>, opts: Parameters<typeof r.cons.place>[5] = {}) {
   const v = village(r.sim);
@@ -100,6 +100,33 @@ describe('a site from stakes to roof', () => {
     r.sim.advanceDays(10);
     expect(r.sim.state.buildings.get(s.building)!.construction).toBe(1);
     expect(r.cons.siteOf(s.building)).toBeNull();
+  });
+});
+
+describe('clearing the ground', () => {
+  it('fells the trees and stones where a building is staked, and only there', () => {
+    const SEED = 'cycle-scatter';
+    const v = probeVillage(SEED);
+    const spot = openGround(v, 250);
+    const cx = Math.floor(spot.x / 64), cz = Math.floor(spot.z / 64);
+    const items = [
+      { id: 1, kind: 'oak' as const, x: spot.x, z: spot.z, scale: 1, rot: 0, variant: 0 },
+      { id: 2, kind: 'rock_small' as const, x: spot.x + 2, z: spot.z + 1, scale: 1, rot: 0, variant: 0 },
+      { id: 3, kind: 'oak' as const, x: spot.x + 30, z: spot.z, scale: 1, rot: 0, variant: 0 },
+      { id: 4, kind: 'bush' as const, x: spot.x - 40, z: spot.z + 12, scale: 1, rot: 0, variant: 0 },
+    ];
+    const r = rig(SEED, { roads: [], scatter: (x, z) => (x === cx && z === cz ? items : []) });
+    const v2 = village(r.sim);
+    const lord = manorLord(r.sim, v2.id);
+    enrich(houseOf(r.sim, lord), allMaterials('hovel', r.cons));
+    const res = r.cons.place(lord.id, 'hovel', spot.x, spot.z, 0);
+    expect(res.ok, res.reason).toBe(true);
+    const felled = r.sim.view.felled();
+    expect(felled.has(1)).toBe(true);
+    expect(felled.has(2)).toBe(true);
+    expect(felled.has(3)).toBe(false);
+    expect(felled.has(4)).toBe(false);
+    expect(r.sim.state.ext['felled']).toEqual(expect.arrayContaining([1, 2]));
   });
 });
 

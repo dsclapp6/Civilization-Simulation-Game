@@ -24,6 +24,7 @@ export interface Shape {
   rivers?: River[];
   deposits?: Deposit[];
   roads?: Road[];
+  scatter?: WorldModel['scatterInChunk'];
 }
 
 /** Where the first village of a seed's tiny continent lies (to shape terrain round it before the simulation exists). */
@@ -63,6 +64,7 @@ export function shapedWorld(seed: string, shape: Shape = {}): WorldModel {
     rivers: shape.rivers ?? w.rivers,
     deposits: shape.deposits ?? w.deposits,
     roads: shape.roads ?? w.roads,
+    scatterInChunk: shape.scatter ?? w.scatterInChunk,
   };
 }
 
