@@ -58,8 +58,10 @@ const SPECS: Readonly<Record<'iron' | 'stone' | 'clay' | 'salt' | 'silver', Kind
  * Half the side (m) of the level working floor cut into the hillside under a deposit's centre, where the ground there is not already
  * level: something can be built on a mountain deposit (a mine is 6 m square, a quarry 16 m), and the clearing shows where it lies.
  */
-const PAD_HALF: Readonly<Partial<Record<ResourceKind, number>>> = { iron: 9, stone: 11, silver: 9, gold: 6 };
-const PAD_BLEND = 6;
+export const PAD_HALF: Readonly<Partial<Record<ResourceKind, number>>> = { iron: 9, stone: 11, silver: 9, gold: 6 };
+export const PAD_BLEND = 6;
+/** How clear of roads and buildings a deposit that gets a floor must be: the floor and its blend must not reach them (a road's surface is not the floor's to change). */
+const padRoom = (kind: ResourceKind): number => { const half = PAD_HALF[kind]; return half ? half + PAD_BLEND + 3 : 0; };
 const GOLD = { kind: 'gold' as const, radius: 30, richness: [0.3, 0.8] as const, spacing: 3200, max: 3, perKingdom: 2 };
 
 /** Biome weights: how well each ground suits a kind (0 = never). */
@@ -204,8 +206,9 @@ export function generateDeposits(s: GenState, tm: TerrainModel, ctx: LayoutCtx, 
     const cellB = biome[G.idxOf(x, z)];
     if (cellB === Biome.Snow || cellB === Biome.Sea || cellB === Biome.Lake) return -1;
     if (lands.nearBuiltUp(x, z, 35)) return -1;
-    if (ctx.roadIdx.clearance(x, z, 16) < 5) return -1;
-    if (ctx.occ.covers(x, z, 9, OCCUPIED)) return -1;
+    const room = padRoom(kind);
+    if (ctx.roadIdx.clearance(x, z, Math.max(5, room) + 1) < Math.max(5, room)) return -1;
+    if (ctx.occ.covers(x, z, Math.max(9, room - PAD_BLEND), OCCUPIED)) return -1;
     if (!tm.isDry(x, z, kind === 'clay' ? 3 : kind === 'salt' ? 2 : 8)) return -1;
     if (kind === 'clay') { const wcl = tm.waterClearance(x, z, 120); if (wcl < 3 || wcl > 80) return -1; }
     if (kind === 'salt' && (G.bilerp(coastDist, x, z) > 260 || tm.baseHeight(x, z) > 12)) return -1;
@@ -391,7 +394,7 @@ function placeGold(
     for (const side of [1, -1]) for (const off of [9, 13, 17]) {
       const x = c.x - c.tz * side * off, z = c.z + c.tx * side * off;
       if (x < 150 || z < 150 || x > WORLD_SIZE - 150 || z > WORLD_SIZE - 150) continue;
-      if (lands.nearBuiltUp(x, z, 35) || ctx.occ.covers(x, z, 9, OCCUPIED) || !tm.isDry(x, z, 4)) continue;
+      if (lands.nearBuiltUp(x, z, 35) || ctx.roadIdx.clearance(x, z, padRoom('gold') + 1) < padRoom('gold') || ctx.occ.covers(x, z, 9, OCCUPIED) || !tm.isDry(x, z, 4)) continue;
       const sl = tm.slopeAt(x, z, 6);
       if (sl > 0.5 || (best && sl >= best.sl)) continue;
       best = { x, z, sl };

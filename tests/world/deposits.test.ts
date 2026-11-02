@@ -2,7 +2,7 @@
 // silver and gold, clear ground, lands, and the rule that a mine or quarry plot sits on a deposit.
 import { describe, expect, it } from 'vitest';
 import { pointInPolygon } from '../../src/core/math';
-import { alignDepositsWithPlots, DEPOSIT_FOR_BUILDING } from '../../src/world/deposits';
+import { alignDepositsWithPlots, DEPOSIT_FOR_BUILDING, PAD_BLEND, PAD_HALF } from '../../src/world/deposits';
 import { obbSignedDist, makeObb } from '../../src/world/geom';
 import { cellOf } from '../../src/world/grid';
 import { LandsIndex } from '../../src/world/lands';
@@ -85,6 +85,19 @@ describe.each(WORLDS)('deposits of %s', (_label, seed, sparse) => {
         lo = Math.min(lo, h); hi = Math.max(hi, h);
       }
       expect(hi - lo, `${d.kind} #${d.id} floor`).toBeLessThan(0.5);
+    }
+  });
+
+  it('keeps a working floor clear of roads and buildings (a road\'s surface is not the floor\'s to change)', () => {
+    for (const d of w.deposits) {
+      const half = PAD_HALF[d.kind];
+      if (!half) continue;
+      expect(distToRoads(w, d.x, d.z), `${d.kind} #${d.id} floor reaches a road`).toBeGreaterThan(half + PAD_BLEND);
+      for (const p of w.plots) {
+        if (Math.abs(p.x - d.x) > 80 || Math.abs(p.z - d.z) > 80) continue;
+        const def = BUILDINGS[p.kind];
+        expect(obbSignedDist(d.x, d.z, makeObb(p.x, p.z, def.w, def.d, p.rot)), `${d.kind} #${d.id} floor reaches a ${p.kind}`).toBeGreaterThan(half + 1);
+      }
     }
   });
 
