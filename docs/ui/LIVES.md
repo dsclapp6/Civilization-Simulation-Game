@@ -52,7 +52,7 @@ controller (or skip it when the UI says so); the call is then a harmless extra f
 **The chooser (`src/ui/panels/chooser.ts`) and the death screen (`panels/death.ts`).** Your family and House first
 (`run.pendingSuccession.eligible` on the death screen, `sim.eligibleSwitchTargets()` for V), then *Near where you fell / Near you*
 (`nearbyPeople`: the zone's agents nearest the body, then the notable residents of the place), then **Anyone alive**: a search box over
-name, place and trade (`PeopleIndex`: a lowercase index built on the first query, a few ms for ten thousand people; names that start with
+name, place and trade (`PeopleIndex`: a lowercase index built on the first query, about 60 ms for the 14,400 people of a ten-year world, then 1 to 20 ms a search on this machine; names that start with
 a word first, then the same place, then rank). One component (`personChooser`) draws all three for both screens. *Carry on as X*; *End the
 run* (confirm) is the only way to end it by choice.
 
