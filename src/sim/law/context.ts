@@ -13,19 +13,10 @@ import type { RealmApi } from '../realm/types';
 import type { TerritoryApi } from '../territory/types';
 import type { SocialApi } from '../social/types';
 import type { EconomyApi } from '../economy/types';
+import { titled } from './names';
 import { LawStore } from './store';
 
-/** "Sir Hugh Mortimer", "Lord Mortimer", "Lady Maud", "Wat Harper": how the law names a person. */
-export function titled(p: Person | undefined | null): string {
-  if (!p) return 'the lord';
-  const by = p.byname || p.first;
-  if (p.career === 'abbot') return p.sex === 'f' ? `Abbess ${p.first}` : `Abbot ${p.first}`;
-  if (p.career === 'prior') return p.sex === 'f' ? `Prioress ${p.first}` : `Prior ${p.first}`;
-  if (p.career === 'bishop') return `Bishop ${p.first}`;
-  if (p.rankTier >= 6) return p.sex === 'f' ? `Lady ${by}` : `Lord ${by}`;
-  if (p.rankTier === 5) return p.sex === 'f' ? `Lady ${p.first}` : `Sir ${p.first}`;
-  return fullName(p);
-}
+export { titled };
 
 /** A man-at-arms' rank in a few words ("knight", "sergeant", "man-at-arms") for the card. */
 export function arm(p: Person): string {

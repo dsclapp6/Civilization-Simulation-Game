@@ -5,4 +5,7 @@ import './politics';
 import './combat';
 import './advancement';
 import './military';
+// civilization pass, wave B: the law (patrols, captivity) and its HUD plaque
+import './law';
+import '../hud/law';
 export {};
