@@ -106,11 +106,12 @@ export function listButchery(E: Econ, p: Person, hh: Household, target: TargetRe
     if (n >= 1 && where.keeps(animal) && (house || beast.home)) {
       offered++;
       const terms = house ? houseFee(E, p, house, animal) : { fee: 0, keeper: undefined };
-      const dead = beast.carcass ? `a ${beast.carcass.replace('_carcass', '')} carcass` : `${round1(beast.meat)} lb of meat`;
+      const fat = conditionOf(E, hh);
+      const dead = `${beast.carcass ? `a ${beast.carcass.replace('_carcass', '')} carcass` : 'the dressed bird'}: a ${beast.kg < 10 ? round1(beast.kg) : Math.round(beast.kg)} kg beast, about ${Math.round(beast.meat * fat)} lb of meat`;
       const o = option({
         id: `stock.slaughter.${animal}`, label: `Slaughter ${a(animal)} ${animal}${terms.fee > 0 ? ` (${pd(terms.fee)})` : ''}`, seconds: secondsFor(beast.work, speedBase, 8, 60), anim: 'work_lift', mainHand: 'dagger',
         priority: 5, repeat: false, steps: stepsOfPlan(beast.carcass ? 'slaughter' : 'wring'),
-        preview: `Makes ${dead}, to joint at the block · you lose a ${animal} from the herd · Husbandry`, ...base, data: { act: 'slaughter', animal, bld: where.building } as ButcherData,
+        preview: `Makes ${dead} · you lose a ${animal} from the herd · Husbandry`, ...base, data: { act: 'slaughter', animal, bld: where.building } as ButcherData,
       });
       if (terms.fee > 0 && !E.canAfford(p, terms.fee)) { o.enabled = false; o.reason = `The slaughterhouse asks ${pd(terms.fee)}`; }
       if (block) { o.enabled = false; o.reason = block; }
