@@ -22,6 +22,8 @@ export const KEYMAP = {
     cancel: 'KeyQ',
     /** Clarity pass: draw / sheathe your weapon (combat mouse-look while drawn). */
     weapon: 'KeyG',
+    /** Fighting from the keyboard alone, while the weapon is drawn: strike (hold for a heavy blow, or to draw a bow), guard. */
+    strike: 'KeyJ', guard: 'KeyK',
   },
   ui: {
     menu: 'Escape', character: 'Tab', inventory: 'KeyI', ledger: 'KeyJ', map: 'KeyM', command: 'KeyC',

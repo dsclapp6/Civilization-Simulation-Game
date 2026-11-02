@@ -18,8 +18,11 @@ const free = { typing: false, ctrl: false, alt: false, meta: false };
 
 describe('hotkeys and the dock', () => {
   it('gives every wave 3 page a key that is not used by anything else', () => {
-    const codes = [...Object.values(KEYMAP.ui), ...Object.values(KEYMAP.input)];
+    // every key does one thing, except strike (J) and guard (K): pages normally, blows while the weapon is drawn
+    const shared = new Set<string>([KEYMAP.input.strike, KEYMAP.input.guard]);
+    const codes = [...Object.values(KEYMAP.ui), ...Object.values(KEYMAP.input).filter((c) => !shared.has(c))];
     expect(new Set(codes).size).toBe(codes.length);
+    for (const c of shared) expect(Object.values(KEYMAP.ui)).toContain(c);
     expect(keyIntent(KEYMAP.ui.politics, free)).toEqual({ type: 'toggle', panel: 'politics' });
     expect(keyIntent(KEYMAP.ui.techs, free)).toEqual({ type: 'toggle', panel: 'techs' });
     expect(keyIntent(KEYMAP.ui.requests, free)).toEqual({ type: 'toggle', panel: 'requests' });

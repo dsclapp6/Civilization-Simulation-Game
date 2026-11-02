@@ -135,7 +135,11 @@ describe('keys', () => {
   });
 
   it('leaves the game keys alone', () => {
+    // strike (J) and guard (K) share their keys with the ledger and the realm page on purpose: the UI yields them
+    // while the weapon is drawn (ui.ts), so they are not game-only keys
+    const shared = new Set<string>([KEYMAP.input.strike, KEYMAP.input.guard]);
     for (const code of Object.values(KEYMAP.input)) {
+      if (shared.has(code)) continue;
       const i = keyIntent(code, free);
       // movement, interact, mount, dodge, pause and speed keys are the input layer's; digits are menu navigation only
       if (!/^Digit[1-3]$/.test(code)) expect(i).toBeNull();

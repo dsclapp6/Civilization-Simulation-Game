@@ -111,6 +111,53 @@ export async function start(root: AppRoot): Promise<void> {
   }, root.viewport);
   host.input = input;
 
+  // ---- the camera follows the way you walk ----
+  // Hold a direction for more than a second and the camera eases round to face it. While the keys stay the same the
+  // way of walking is kept in the world (the frame it began in), so the turning camera never bends the path; new keys
+  // start a new frame. Not while the weapon is drawn (a fight wants a steady camera to sidestep in) or the map is up.
+  let walkFrame: number | null = null;
+  let walkKey = '';
+  let walkFor = 0;
+  const steerCamera = (intent: InputState, dt: number, s: Session): InputState => {
+    const moving = Math.abs(intent.forward) > 0.1 || Math.abs(intent.right) > 0.1;
+    // turning the camera by hand (the mouse looking) steers as before
+    const fighting = !!s.services.player.drawn?.() || s.renderer.getCameraMode() !== 'follow' || s.interior.active || !!host.input?.pointerLocked;
+    if (!moving || fighting) { walkFrame = null; walkKey = ''; walkFor = 0; return intent; }
+    const key = `${Math.sign(intent.forward)}|${Math.sign(intent.right)}`;
+    if (key !== walkKey || walkFrame === null) { walkKey = key; walkFrame = intent.cameraYaw; walkFor = 0; }
+    walkFor += dt;
+    const out = { ...intent, cameraYaw: walkFrame };
+    if (walkFor > 1) {
+      const want = walkFrame + Math.atan2(intent.right, intent.forward);
+      const cur = s.renderer.getCameraYaw();
+      const diff = Math.atan2(Math.sin(want - cur), Math.cos(want - cur));
+      if (Math.abs(diff) > 0.01) s.renderer.orbit(diff * Math.min(1, dt * 2.2), 0);
+    }
+    return out;
+  };
+
+  // ---- fighting from the keyboard: with steel out and the mouse at rest, turn to the nearest foe ----
+  const faceFoe = (dt: number, s: Session): void => {
+    if (!s.services.player.drawn?.() || performance.now() - input.lastMouseMove < 1500) return;
+    const me = s.services.player.body();
+    const arena = (s.sim.services.combat as unknown as { arena?: { fighters: Array<{ personId: number; x: number; z: number; side: number; fight: number; isPlayer: boolean; st: number }> } } | undefined)?.arena;
+    if (!me || !arena) return;
+    const mine = arena.fighters.find((f) => f.isPlayer);
+    if (!mine || !mine.fight) return;
+    let best: { x: number; z: number } | null = null, bd = 14;
+    for (const f of arena.fighters) {
+      // not the downed (7), dead (8), fleeing (9), yielded (10) or gone (15)
+      if (f.fight !== mine.fight || f.side === mine.side || (f.st >= 7 && f.st <= 10) || f.st === 15) continue;
+      const d = Math.hypot(f.x - me.x, f.z - me.z);
+      if (d < bd) { bd = d; best = f; }
+    }
+    if (!best) return;
+    const want = Math.atan2(best.x - me.x, best.z - me.z);
+    const cur = s.renderer.getCameraYaw();
+    const diff = Math.atan2(Math.sin(want - cur), Math.cos(want - cur));
+    if (Math.abs(diff) > 0.02) s.renderer.orbit(diff * Math.min(1, dt * 6), 0);
+  };
+
   // ---- the loop ----
   let last = 0;
   let worstWindow = 0;
@@ -138,7 +185,8 @@ export async function start(root: AppRoot): Promise<void> {
       const g = s.services;
       // the journey is shown on the map: zooming into the street camera mid-journey is not allowed
       if (step && g.player.travel()?.phase === 'travelling' && s.renderer.getCameraMode() !== 'map') s.renderer.setCameraMode('map');
-      const intent = input.read(dt);
+      const intent = steerCamera(input.read(dt), dt, s);
+      faceFoe(dt, s);
       const t1 = performance.now();
       let t2 = t1, t3 = t1;
       if (step) {
