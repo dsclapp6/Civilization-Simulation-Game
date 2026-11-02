@@ -28,6 +28,10 @@ export interface BuildRequirement {
   deposit?: ResourceKind;
   /** Least rank tier of the builder (SPEC §4 tiers) unless they build on their own household's land. */
   rank?: number;
+  /** Additive: for terrain 'deposit', every deposit kind that will do (a mine takes iron, silver or gold); `deposit` is the first. */
+  deposits?: ResourceKind[];
+  /** Additive: most of this building the settlement may hold (absent = no limit). */
+  max?: number;
 }
 
 /** One entry of the builder's catalogue, as it stands for this person here. */
@@ -59,6 +63,23 @@ export interface BuildScope {
   /** Who pays and owns: the builder's household or their House's ruling household. */
   household: HouseholdId;
   house: HouseId;
+  /** Additive: the builder's rank tier. */
+  rank?: number;
+  /** Additive: how the person builds ('head' = for their own household on its land, 'lord' = a title over land, 'steward' = an office on a lord's orders, 'baron' = a baron or greater, 'none'). */
+  role?: 'none' | 'head' | 'steward' | 'lord' | 'baron';
+  /** Additive: settlements where the person only builds for the lord (offices); their money is the lord's household's. */
+  agentFor?: readonly number[];
+}
+
+/** Additive: the options of `place`. */
+export interface PlaceOptions {
+  /** Names the outpost founded when a spot in the wild is built on (a default name is made when absent). */
+  outpost?: string;
+  priority?: number;
+  /** A home: who moves in when it is finished — the builder's household ('builder', the default for a household head building on their own land) or nobody ('vacant': it is let). */
+  occupant?: 'builder' | 'vacant';
+  /** Paid labourers to hire for the site (a number, or 'auto' for as many as the job and the purse allow). */
+  hired?: number | 'auto';
 }
 
 export interface PlacementCheck {
@@ -72,6 +93,10 @@ export interface PlacementCheck {
   settlement: number;
   /** Footprint corners (world m) for the ghost. */
   footprint: P2[];
+  /** Additive: a spot in the wild or in an outpost's land: `id` 0 founds a new outpost (named `name`, a suggestion), else the outpost it joins. */
+  outpost?: { id: number; parent: number; name: string };
+  /** Additive: the building would be a new building or the next level of this one. */
+  cost?: BuildCost;
 }
 
 export type SiteStatus = 'waiting' | 'working' | 'stalled' | 'done' | 'cancelled';
@@ -106,9 +131,25 @@ export interface SiteView {
   outpost?: string;
   /** Order in the builder's queue (lower first). */
   priority: number;
+  /** Additive: the level the building will have when done. */
+  level?: number;
+  /** Additive: who ordered it. */
+  builder?: PersonId;
+  /** Additive: pegs and lines → footings → frame/walls → roof → done (CIV §5). */
+  stage?: 'pegs' | 'footings' | 'frame' | 'roof' | 'done';
+  /** Additive: paid labourers at work today. */
+  hired?: number;
+  /** Additive: the whole job's cost. */
+  cost?: BuildCost;
+  /** Additive: 0..1 share of the materials that have come in. */
+  materials?: number;
 }
 
-export interface OutpostView { id: number; name: string; settlement: number; x: number; z: number; deposit: number; founded: number }
+export interface OutpostView {
+  id: number; name: string; settlement: number; x: number; z: number; deposit: number; founded: number;
+  /** Additive: the House that holds it. */
+  house?: HouseId;
+}
 
 export interface Result { ok: boolean; reason?: string }
 
@@ -120,7 +161,7 @@ export interface ConstructionApi {
   /** Is this a valid site for that building, for this person? (cheap: the ghost calls it every frame). */
   check(person: PersonId, kind: BuildingKind, x: number, z: number, rot: number): PlacementCheck;
   /** Stakes out a site (and an outpost when it lies in the wild and `outpost` names it). */
-  place(person: PersonId, kind: BuildingKind, x: number, z: number, rot: number, opts?: { outpost?: string; priority?: number }): Result & { site?: number };
+  place(person: PersonId, kind: BuildingKind, x: number, z: number, rot: number, opts?: PlaceOptions): Result & { site?: number };
   upgrade(person: PersonId, building: number): Result & { site?: number };
   repair(person: PersonId, building: number): Result & { site?: number };
   demolish(person: PersonId, building: number): Result & { site?: number };
@@ -138,4 +179,12 @@ export interface ConstructionApi {
   workersAt(site: number): readonly PersonId[];
   /** Bumps on any change of sites or outposts (cheap UI refresh). */
   version(): number;
+
+  // ---- additive (construction module); optional so other modules' fakes need not implement them ----
+  /** The site this person works at today (hired, on the household's 'build' task, on week-work or at a bout), or 0. */
+  onSite?(person: PersonId): number;
+  /** Sets how many paid labourers work the site (a number, or 'auto'). The person must be allowed to manage it. */
+  setHired?(person: PersonId, site: number, hired: number | 'auto'): Result;
+  /** May this person cancel, reprioritise or hire for the site? */
+  canManage?(person: PersonId, site: number): boolean;
 }

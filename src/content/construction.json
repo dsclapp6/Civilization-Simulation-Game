@@ -1,0 +1,511 @@
+{
+  "_doc": "Costs and rules of building in play (docs/CIV.md §5, docs/CONSTRUCTION.md). kinds.<id>: cat = the builder catalogue group (home, farm, craft, food, religion, civic, defence, resource, military); rank = least rank tier (SPEC §4) of a builder who raises it on land they have authority over (a title, an office); own = least rank tier of a household head who raises it on their own household's land (0 = not on own land); max = most per settlement (a number, or by settlement kind with default; absent = no limit); tech = a technique the builder's House must command; terrain = river | rise | coast | deposit | forest; deposits = the deposit kinds a terrain \"deposit\" needs; wild = may be raised in the wild (founding a named outpost, or inside one); slope = steepest ground (rise over run, default 0.28); skill = the skill a player builds it with. levels[0] is the cost of raising it new, levels[n] the cost of upgrading it to level n+1: goods = materials by good id, labour = worker-days of an able adult, pence = cash fees (mason, millwright, carting) paid as the work goes. The table of offices says who builds for whom: agent = pays from the lord's household and builds as the lord's steward within `maxRank`; cats = the only building groups the office may order.",
+  "wages": {"labour":2,"skilled":3.5},
+  "workHours": [7,17],
+  "crew": {"perDays":4,"min":2,"max":40},
+  "horizonDays": 8,
+  "salvage": 0.35,
+  "cancelRefund": 0.7,
+  "repair": {"goods":0.6,"labour":0.5,"pence":0.3},
+  "demolishLabour": 0.25,
+  "offices": {"steward":{"agent":true},"bailiff":{"agent":true,"maxRank":4},"castellan":{"agent":true},"reeve":{"agent":true,"cats":["farm","civic","military"],"maxRank":3},"mayor":{"agent":false,"cats":["civic"],"maxRank":4},"alderman":{"agent":false,"cats":["civic"],"maxRank":4}},
+  "kinds": {
+    "hovel": {
+      "cat": "home", "rank": 1, "own": 1, "skill": "carpentry",
+      "does": "A one-room shelter of wattle and thatch for a poor household.",
+      "levels": [
+        { "goods": { "planks": 6, "straw": 14 }, "labour": 2, "pence": 0 }
+      ]
+    },
+    "cottage": {
+      "cat": "home", "rank": 2, "own": 2, "skill": "carpentry",
+      "does": "A timber-framed home for a family; upgrades add a loft, a stone chimney and a brick hearth.",
+      "levels": [
+        { "goods": { "planks": 20, "straw": 30 }, "labour": 8, "pence": 0 },
+        { "goods": { "planks": 14, "straw": 8, "stone": 6, "nails": 8 }, "labour": 5, "pence": 0 },
+        { "goods": { "planks": 16, "brick": 60, "nails": 14, "timber": 2 }, "labour": 8, "pence": 0 }
+      ]
+    },
+    "longhouse": {
+      "cat": "home", "rank": 2, "own": 3, "skill": "carpentry",
+      "does": "A long farmstead with the byre under the same roof, for a well-off farming family.",
+      "levels": [
+        { "goods": { "timber": 5, "planks": 28, "straw": 60, "nails": 12 }, "labour": 14, "pence": 0 },
+        { "goods": { "planks": 14, "straw": 14, "nails": 10 }, "labour": 6, "pence": 0 },
+        { "goods": { "planks": 18, "brick": 90, "nails": 16 }, "labour": 9, "pence": 0 }
+      ]
+    },
+    "townhouse": {
+      "cat": "home", "rank": 3, "own": 3, "skill": "carpentry",
+      "does": "A narrow jettied house on a town street, with a shop front below and rooms above.",
+      "levels": [
+        { "goods": { "timber": 6, "planks": 44, "stone": 12, "nails": 24, "straw": 20 }, "labour": 22, "pence": 0 },
+        { "goods": { "planks": 24, "timber": 3, "nails": 16 }, "labour": 12, "pence": 0 },
+        { "goods": { "brick": 100, "planks": 14, "nails": 14 }, "labour": 14, "pence": 0 }
+      ]
+    },
+    "manor_house": {
+      "cat": "home", "rank": 5, "own": 0, "max": 1, "skill": "carpentry",
+      "does": "The lord's hall-house: where he lives, holds his court and receives his rents.",
+      "levels": [
+        { "goods": { "timber": 18, "planks": 90, "stone": 60, "nails": 60, "straw": 60, "iron": 6 }, "labour": 70, "pence": 100 },
+        { "goods": { "planks": 40, "stone": 40, "brick": 80, "nails": 30 }, "labour": 40, "pence": 60 },
+        { "goods": { "stone": 120, "planks": 40, "nails": 40, "iron": 8 }, "labour": 90, "pence": 120 }
+      ]
+    },
+    "barn": {
+      "cat": "farm", "rank": 2, "own": 2, "skill": "carpentry",
+      "does": "Stores the harvest and gives the household and its beasts a dry roof.",
+      "levels": [
+        { "goods": { "timber": 8, "planks": 24, "straw": 40, "nails": 12 }, "labour": 14, "pence": 0 },
+        { "goods": { "planks": 20, "straw": 20, "nails": 10 }, "labour": 7, "pence": 0 },
+        { "goods": { "timber": 6, "planks": 24, "stone": 10, "nails": 14 }, "labour": 10, "pence": 0 }
+      ]
+    },
+    "tithe_barn": {
+      "cat": "farm", "rank": 4, "own": 0, "max": 1, "skill": "carpentry",
+      "does": "A great barn for the tithe and the lord's share of every harvest.",
+      "levels": [
+        { "goods": { "timber": 20, "planks": 60, "stone": 30, "nails": 30, "straw": 120 }, "labour": 40, "pence": 40 }
+      ]
+    },
+    "granary": {
+      "cat": "farm", "rank": 2, "own": 2, "skill": "carpentry",
+      "does": "A raised store that keeps grain dry and out of the rats' reach.",
+      "levels": [
+        { "goods": { "planks": 18, "timber": 2, "straw": 20, "nails": 8 }, "labour": 6, "pence": 0 },
+        { "goods": { "planks": 12, "stone": 8, "nails": 6 }, "labour": 4, "pence": 0 }
+      ]
+    },
+    "cowshed": {
+      "cat": "farm", "rank": 1, "own": 2, "skill": "carpentry",
+      "does": "Shelters the household's cows and oxen through the winter.",
+      "levels": [
+        { "goods": { "planks": 14, "timber": 3, "straw": 25, "nails": 6 }, "labour": 5, "pence": 0 },
+        { "goods": { "planks": 10, "straw": 10, "nails": 4 }, "labour": 3, "pence": 0 }
+      ]
+    },
+    "stable": {
+      "cat": "farm", "rank": 2, "own": 2, "skill": "carpentry",
+      "does": "Stalls for horses; a stable at home lets a family keep a riding horse or a cart-horse.",
+      "levels": [
+        { "goods": { "timber": 4, "planks": 22, "straw": 24, "nails": 10 }, "labour": 8, "pence": 0 },
+        { "goods": { "planks": 14, "straw": 10, "nails": 8 }, "labour": 5, "pence": 0 },
+        { "goods": { "planks": 14, "stone": 10, "nails": 10 }, "labour": 6, "pence": 0 }
+      ]
+    },
+    "sheepfold": {
+      "cat": "farm", "rank": 1, "own": 1, "skill": "carpentry",
+      "does": "A hurdled pen where the flock is folded by night and shorn in summer.",
+      "levels": [
+        { "goods": { "timber": 6, "planks": 8, "straw": 6 }, "labour": 3, "pence": 0 },
+        { "goods": { "planks": 6, "timber": 3 }, "labour": 2, "pence": 0 }
+      ]
+    },
+    "pigsty": {
+      "cat": "farm", "rank": 1, "own": 1, "skill": "carpentry",
+      "does": "A sty for a sow and her litter; pigs thrive on scraps and acorns.",
+      "levels": [
+        { "goods": { "planks": 8, "straw": 10 }, "labour": 2, "pence": 0 }
+      ]
+    },
+    "henhouse": {
+      "cat": "farm", "rank": 1, "own": 1, "skill": "carpentry",
+      "does": "A small coop: eggs and fowl for the pot.",
+      "levels": [
+        { "goods": { "planks": 4, "straw": 6 }, "labour": 1, "pence": 0 }
+      ]
+    },
+    "dovecote": {
+      "cat": "farm", "rank": 5, "own": 0, "max": 1, "skill": "masonry",
+      "does": "A lord's right: pigeons for the manor's table.",
+      "levels": [
+        { "goods": { "planks": 6, "stone": 24, "straw": 8, "timber": 2 }, "labour": 8, "pence": 0 }
+      ]
+    },
+    "watermill": {
+      "cat": "food", "rank": 4, "own": 3, "max": 2, "tech": "watermill", "terrain": "river", "skill": "carpentry",
+      "does": "Grinds the village's grain on the river; the lord takes his toll.",
+      "levels": [
+        { "goods": { "timber": 16, "planks": 50, "stone": 40, "iron": 12, "nails": 40 }, "labour": 60, "pence": 80 },
+        { "goods": { "planks": 20, "stone": 20, "iron": 8, "nails": 20 }, "labour": 25, "pence": 30 },
+        { "goods": { "stone": 40, "iron": 14, "planks": 20 }, "labour": 40, "pence": 60 }
+      ]
+    },
+    "windmill": {
+      "cat": "food", "rank": 4, "own": 3, "max": 2, "tech": "windmill", "terrain": "rise", "skill": "carpentry",
+      "does": "Grinds grain on a hilltop where the wind is steady.",
+      "levels": [
+        { "goods": { "timber": 24, "planks": 36, "stone": 20, "iron": 14, "nails": 40 }, "labour": 45, "pence": 60 },
+        { "goods": { "timber": 8, "planks": 20, "iron": 8, "nails": 20 }, "labour": 25, "pence": 30 }
+      ]
+    },
+    "smithy": {
+      "cat": "craft", "rank": 3, "own": 3, "max": { "default": 3, "town": 6, "city": 12 }, "skill": "masonry",
+      "does": "A forge and anvil: tools, nails, horseshoes and arms.",
+      "levels": [
+        { "goods": { "timber": 3, "planks": 24, "stone": 6, "iron": 4, "nails": 20 }, "labour": 16, "pence": 0 },
+        { "goods": { "planks": 10, "stone": 10, "iron": 6, "nails": 8 }, "labour": 8, "pence": 0 },
+        { "goods": { "stone": 24, "brick": 80, "iron": 10, "planks": 8 }, "labour": 14, "pence": 0 }
+      ]
+    },
+    "carpenter": {
+      "cat": "craft", "rank": 3, "own": 3, "max": { "default": 3, "town": 6, "city": 12 }, "skill": "carpentry",
+      "does": "A joiner's shop: furniture, carts, barrels and the frames of houses.",
+      "levels": [
+        { "goods": { "timber": 4, "planks": 28, "nails": 20, "straw": 20 }, "labour": 14, "pence": 0 },
+        { "goods": { "planks": 16, "nails": 10 }, "labour": 7, "pence": 0 },
+        { "goods": { "planks": 20, "stone": 8, "nails": 14 }, "labour": 9, "pence": 0 }
+      ]
+    },
+    "sawpit": {
+      "cat": "craft", "rank": 2, "own": 2, "max": 2, "skill": "carpentry",
+      "does": "A pit and frame where two men saw logs into planks.",
+      "levels": [
+        { "goods": { "timber": 8, "planks": 6, "nails": 4 }, "labour": 3, "pence": 0 }
+      ]
+    },
+    "tannery": {
+      "cat": "craft", "rank": 3, "own": 3, "max": { "default": 1, "town": 3, "city": 6 }, "terrain": "river", "skill": "carpentry",
+      "does": "Vats by running water where hides are soaked, scraped and tanned to leather and vellum.",
+      "levels": [
+        { "goods": { "timber": 6, "planks": 20, "stone": 6, "nails": 12 }, "labour": 12, "pence": 20 },
+        { "goods": { "planks": 14, "stone": 12, "nails": 8 }, "labour": 8, "pence": 0 }
+      ]
+    },
+    "weaver": {
+      "cat": "craft", "rank": 3, "own": 3, "max": { "default": 3, "town": 8, "city": 14 }, "skill": "carpentry",
+      "does": "A loom house: wool and flax become cloth and linen.",
+      "levels": [
+        { "goods": { "timber": 4, "planks": 26, "nails": 14, "straw": 20 }, "labour": 12, "pence": 0 },
+        { "goods": { "planks": 14, "nails": 8 }, "labour": 6, "pence": 0 },
+        { "goods": { "planks": 18, "stone": 10, "nails": 10 }, "labour": 8, "pence": 0 }
+      ]
+    },
+    "fulling_mill": {
+      "cat": "craft", "rank": 4, "own": 3, "max": 1, "tech": "fulling_mill", "terrain": "river", "skill": "carpentry",
+      "does": "Water-driven hammers that full woollen cloth: tougher and worth more.",
+      "levels": [
+        { "goods": { "timber": 12, "planks": 36, "stone": 24, "iron": 8, "nails": 24 }, "labour": 36, "pence": 40 },
+        { "goods": { "planks": 18, "stone": 16, "iron": 6 }, "labour": 20, "pence": 20 }
+      ]
+    },
+    "bakehouse": {
+      "cat": "food", "rank": 3, "own": 3, "max": { "default": 1, "town": 4, "city": 8 }, "skill": "masonry",
+      "does": "A big oven: flour becomes the village's bread.",
+      "levels": [
+        { "goods": { "planks": 14, "stone": 16, "nails": 8, "straw": 12 }, "labour": 9, "pence": 0 },
+        { "goods": { "stone": 14, "brick": 60, "planks": 8 }, "labour": 7, "pence": 0 }
+      ]
+    },
+    "brewhouse": {
+      "cat": "food", "rank": 2, "own": 2, "max": { "default": 2, "town": 6, "city": 10 }, "skill": "carpentry",
+      "does": "Mash tun, copper and casks: barley becomes ale.",
+      "levels": [
+        { "goods": { "timber": 3, "planks": 18, "stone": 6, "nails": 10, "straw": 16 }, "labour": 8, "pence": 0 },
+        { "goods": { "planks": 10, "stone": 8, "nails": 6 }, "labour": 5, "pence": 0 }
+      ]
+    },
+    "kiln": {
+      "cat": "craft", "rank": 2, "own": 2, "max": 3, "skill": "masonry",
+      "does": "Fires bricks, tiles and pots from clay and fuel.",
+      "levels": [
+        { "goods": { "stone": 14, "clay": 12, "timber": 2 }, "labour": 4, "pence": 0 }
+      ]
+    },
+    "charcoal_mound": {
+      "cat": "craft", "rank": 1, "own": 1, "wild": true, "skill": "carpentry",
+      "does": "A turf-covered stack where wood slowly burns to charcoal for the smiths.",
+      "levels": [
+        { "goods": { "timber": 2, "straw": 10 }, "labour": 1.5, "pence": 0 }
+      ]
+    },
+    "bloomery": {
+      "cat": "craft", "rank": 3, "own": 3, "max": { "default": 1, "town": 3, "city": 5 }, "skill": "masonry",
+      "does": "A clay furnace where iron ore and charcoal give a bloom of iron.",
+      "levels": [
+        { "goods": { "stone": 20, "clay": 24, "nails": 4, "planks": 6 }, "labour": 12, "pence": 0 },
+        { "goods": { "stone": 16, "brick": 40, "iron": 4 }, "labour": 8, "pence": 0 }
+      ]
+    },
+    "slaughterhouse": {
+      "cat": "craft", "rank": 3, "own": 3, "max": { "default": 1, "town": 3, "city": 5 }, "skill": "carpentry",
+      "does": "A butcher's yard: beasts are killed and cut into meat, hide and tallow.",
+      "levels": [
+        { "goods": { "timber": 3, "planks": 22, "stone": 8, "nails": 12 }, "labour": 10, "pence": 0 },
+        { "goods": { "planks": 10, "stone": 10, "nails": 6 }, "labour": 6, "pence": 0 }
+      ]
+    },
+    "quarry": {
+      "cat": "resource", "rank": 4, "own": 0, "max": 2, "terrain": "deposit", "deposits": ["stone"], "wild": true, "slope": 1, "skill": "masonry",
+      "does": "Cuts building stone from the rock. Needs a stone deposit.",
+      "levels": [
+        { "goods": { "timber": 4, "planks": 6, "nails": 4 }, "labour": 12, "pence": 10 },
+        { "goods": { "timber": 6, "planks": 8, "iron": 6 }, "labour": 14, "pence": 20 }
+      ]
+    },
+    "clay_pit": {
+      "cat": "resource", "rank": 3, "own": 2, "max": 2, "terrain": "deposit", "deposits": ["clay"], "wild": true, "slope": 0.6, "skill": "masonry",
+      "does": "Digs clay for bricks, pots and kilns. Needs a clay bank.",
+      "levels": [
+        { "goods": { "planks": 4, "timber": 2, "nails": 2 }, "labour": 4, "pence": 0 }
+      ]
+    },
+    "salt_pan": {
+      "cat": "resource", "rank": 4, "own": 0, "max": 2, "terrain": "deposit", "deposits": ["salt"], "wild": true, "slope": 0.4, "skill": "carpentry",
+      "does": "Shallow pans where brine is boiled down to salt, which keeps meat and fish.",
+      "levels": [
+        { "goods": { "timber": 6, "planks": 10, "clay": 16, "stone": 8, "nails": 6 }, "labour": 14, "pence": 10 }
+      ]
+    },
+    "lumber_camp": {
+      "cat": "resource", "rank": 3, "own": 0, "max": 3, "terrain": "forest", "wild": true, "slope": 0.5, "skill": "carpentry",
+      "does": "Woodcutters' huts and a drag-road: timber and firewood from the forest.",
+      "levels": [
+        { "goods": { "timber": 3, "planks": 10, "straw": 20, "nails": 6 }, "labour": 6, "pence": 5 }
+      ]
+    },
+    "mine": {
+      "cat": "resource", "rank": 5, "own": 0, "max": 3, "terrain": "deposit", "deposits": ["iron","silver","gold"], "wild": true, "slope": 1, "skill": "carpentry",
+      "does": "Shafts and adits into the hill for iron, silver or gold ore.",
+      "levels": [
+        { "goods": { "timber": 14, "planks": 18, "nails": 10, "iron": 4 }, "labour": 24, "pence": 20 },
+        { "goods": { "timber": 20, "planks": 24, "iron": 8, "nails": 14 }, "labour": 30, "pence": 40 }
+      ]
+    },
+    "dock": {
+      "cat": "resource", "rank": 4, "own": 0, "max": 3, "terrain": "coast", "wild": true, "slope": 1, "skill": "carpentry",
+      "does": "A quay for boats and barges: fish, salt and the trade of the coast and rivers.",
+      "levels": [
+        { "goods": { "timber": 24, "planks": 30, "stone": 10, "nails": 30 }, "labour": 30, "pence": 30 },
+        { "goods": { "timber": 20, "planks": 24, "iron": 8, "nails": 24 }, "labour": 24, "pence": 20 }
+      ]
+    },
+    "alehouse": {
+      "cat": "food", "rank": 2, "own": 2, "max": { "default": 2, "town": 6, "city": 10 }, "skill": "carpentry",
+      "does": "An alewife's house with a bench and a bush over the door: ale, gossip and company.",
+      "levels": [
+        { "goods": { "timber": 3, "planks": 20, "straw": 20, "nails": 8 }, "labour": 9, "pence": 0 },
+        { "goods": { "planks": 12, "stone": 6, "nails": 6 }, "labour": 6, "pence": 0 }
+      ]
+    },
+    "tavern": {
+      "cat": "food", "rank": 3, "own": 3, "max": { "default": 1, "town": 4, "city": 8 }, "skill": "carpentry",
+      "does": "A large inn with a common room, beds for travellers and a stable behind.",
+      "levels": [
+        { "goods": { "timber": 8, "planks": 50, "stone": 12, "nails": 30, "straw": 30 }, "labour": 26, "pence": 0 },
+        { "goods": { "planks": 24, "nails": 16, "stone": 16 }, "labour": 14, "pence": 0 },
+        { "goods": { "planks": 30, "stone": 30, "nails": 20 }, "labour": 20, "pence": 0 }
+      ]
+    },
+    "market_stall": {
+      "cat": "civic", "rank": 2, "own": 2, "skill": "carpentry",
+      "does": "A trestle and awning for selling on market day.",
+      "levels": [
+        { "goods": { "planks": 4, "timber": 1 }, "labour": 1, "pence": 0 }
+      ]
+    },
+    "market_cross": {
+      "cat": "civic", "rank": 4, "own": 0, "max": 1, "skill": "masonry",
+      "does": "A stone cross in the square: where the market is cried and bargains are struck.",
+      "levels": [
+        { "goods": { "stone": 14, "timber": 1 }, "labour": 6, "pence": 0 }
+      ]
+    },
+    "market_hall": {
+      "cat": "civic", "rank": 4, "own": 0, "max": 1, "tech": "market_charter", "skill": "carpentry",
+      "does": "A roofed hall over the market place: more stalls, deeper stocks, tolls for the lord.",
+      "levels": [
+        { "goods": { "timber": 14, "planks": 50, "stone": 20, "nails": 30 }, "labour": 30, "pence": 30 },
+        { "goods": { "planks": 30, "stone": 30, "nails": 16 }, "labour": 20, "pence": 20 }
+      ]
+    },
+    "guildhall": {
+      "cat": "civic", "rank": 4, "own": 0, "max": 1, "tech": "guild_charter", "skill": "masonry",
+      "does": "The meeting house of the crafts: masterpieces are judged and standards kept.",
+      "levels": [
+        { "goods": { "timber": 14, "planks": 60, "stone": 50, "nails": 30 }, "labour": 60, "pence": 60 },
+        { "goods": { "planks": 30, "stone": 40, "nails": 16 }, "labour": 30, "pence": 40 }
+      ]
+    },
+    "warehouse": {
+      "cat": "civic", "rank": 3, "own": 3, "max": { "default": 1, "town": 4, "city": 8 }, "skill": "carpentry",
+      "does": "A merchant's store for bulk goods: wool, grain, timber and salt wait here for the road.",
+      "levels": [
+        { "goods": { "timber": 8, "planks": 40, "stone": 14, "nails": 30 }, "labour": 20, "pence": 0 },
+        { "goods": { "planks": 24, "stone": 20, "nails": 14 }, "labour": 12, "pence": 0 }
+      ]
+    },
+    "chapel": {
+      "cat": "religion", "rank": 4, "own": 0, "max": { "default": 1, "abbey": 2, "castle": 1 }, "skill": "masonry",
+      "does": "A small stone chapel for prayer, baptisms and the dead.",
+      "levels": [
+        { "goods": { "stone": 80, "timber": 6, "planks": 14, "nails": 8 }, "labour": 160, "pence": 40 }
+      ]
+    },
+    "church": {
+      "cat": "religion", "rank": 4, "own": 0, "max": { "default": 1, "town": 3, "city": 6 }, "skill": "masonry",
+      "does": "The parish church: Mass, burials, the priest and the tithe; a tower and bells as it grows.",
+      "levels": [
+        { "goods": { "stone": 400, "timber": 30, "planks": 60, "iron": 10, "nails": 60 }, "labour": 900, "pence": 400 },
+        { "goods": { "stone": 220, "timber": 14, "planks": 40, "iron": 6 }, "labour": 450, "pence": 300 },
+        { "goods": { "stone": 300, "planks": 40, "iron": 20, "nails": 20 }, "labour": 600, "pence": 500 }
+      ]
+    },
+    "abbey_church": {
+      "cat": "religion", "rank": 6, "own": 0, "max": 1, "skill": "masonry",
+      "does": "The great church of the abbey, where the monks sing the hours.",
+      "levels": [
+        { "goods": { "stone": 900, "timber": 60, "planks": 120, "iron": 20, "nails": 100 }, "labour": 2500, "pence": 1200 },
+        { "goods": { "stone": 700, "planks": 100, "iron": 20, "nails": 40 }, "labour": 2000, "pence": 1500 }
+      ]
+    },
+    "cloister": {
+      "cat": "religion", "rank": 6, "own": 0, "max": 1, "skill": "masonry",
+      "does": "Covered walks round a garth: dormitory, chapter house, refectory and scriptorium.",
+      "levels": [
+        { "goods": { "stone": 600, "timber": 40, "planks": 80, "nails": 60 }, "labour": 1500, "pence": 800 },
+        { "goods": { "stone": 500, "planks": 60, "nails": 30 }, "labour": 1200, "pence": 600 }
+      ]
+    },
+    "cathedral": {
+      "cat": "religion", "rank": 6, "own": 0, "max": 1, "tech": "cathedral_school", "skill": "masonry",
+      "does": "The bishop's church: a cathedral school, a great spire and the pride of a whole kingdom.",
+      "levels": [
+        { "goods": { "stone": 2400, "timber": 120, "planks": 200, "iron": 60, "nails": 200 }, "labour": 5000, "pence": 2500 },
+        { "goods": { "stone": 1800, "planks": 140, "iron": 50, "nails": 100 }, "labour": 4000, "pence": 2500 }
+      ]
+    },
+    "infirmary": {
+      "cat": "religion", "rank": 4, "own": 0, "max": 2, "tech": "infirmary_care", "skill": "carpentry",
+      "does": "Beds and a herb garden for the sick: fewer die when plague comes.",
+      "levels": [
+        { "goods": { "timber": 8, "planks": 40, "stone": 40, "nails": 24, "straw": 20 }, "labour": 40, "pence": 20 },
+        { "goods": { "planks": 24, "stone": 40, "nails": 14 }, "labour": 28, "pence": 20 }
+      ]
+    },
+    "well": {
+      "cat": "civic", "rank": 2, "own": 2, "skill": "masonry",
+      "does": "A stone-lined well: clean water, and a place where news is traded.",
+      "levels": [
+        { "goods": { "stone": 6, "timber": 1, "planks": 2 }, "labour": 3, "pence": 0 }
+      ]
+    },
+    "stocks": {
+      "cat": "civic", "rank": 4, "own": 0, "max": 1, "skill": "carpentry",
+      "does": "Wooden stocks in the square: the manor court's shaming punishment.",
+      "levels": [
+        { "goods": { "timber": 2, "iron": 1, "planks": 2 }, "labour": 1, "pence": 0 }
+      ]
+    },
+    "gaol": {
+      "cat": "civic", "rank": 5, "own": 0, "max": 1, "skill": "masonry",
+      "does": "A lock-up of stone with a barred door: where prisoners wait for ransom or judgement.",
+      "levels": [
+        { "goods": { "stone": 40, "timber": 6, "iron": 8, "nails": 10 }, "labour": 30, "pence": 20 }
+      ]
+    },
+    "gallows": {
+      "cat": "civic", "rank": 6, "own": 0, "max": 1, "skill": "carpentry",
+      "does": "The lord's high justice: hanging for robbers, murderers and outlaws.",
+      "levels": [
+        { "goods": { "timber": 4, "iron": 1 }, "labour": 1.5, "pence": 0 }
+      ]
+    },
+    "school": {
+      "cat": "civic", "rank": 4, "own": 0, "max": 2, "tech": "parish_school", "skill": "carpentry",
+      "does": "A schoolroom where the priest teaches letters: more can read and write.",
+      "levels": [
+        { "goods": { "timber": 4, "planks": 24, "stone": 10, "nails": 10, "straw": 16 }, "labour": 14, "pence": 0 },
+        { "goods": { "planks": 14, "stone": 14, "nails": 8 }, "labour": 10, "pence": 10 }
+      ]
+    },
+    "palisade": {
+      "cat": "defence", "rank": 5, "own": 0, "wild": true, "slope": 0.6, "skill": "carpentry",
+      "does": "A run of sharpened logs on an earth bank: stops raiders on foot and shows who holds the land.",
+      "levels": [
+        { "goods": { "timber": 30 }, "labour": 6, "pence": 0 },
+        { "goods": { "stone": 24, "timber": 10 }, "labour": 12, "pence": 0 }
+      ]
+    },
+    "wall": {
+      "cat": "defence", "rank": 5, "own": 0, "tech": "curtain_walls", "slope": 0.6, "skill": "masonry",
+      "does": "A segment of stone curtain wall with a wall-walk: archers hold it against assault.",
+      "levels": [
+        { "goods": { "stone": 160, "timber": 4 }, "labour": 120, "pence": 60 },
+        { "goods": { "stone": 100, "timber": 6, "iron": 4 }, "labour": 80, "pence": 40 }
+      ]
+    },
+    "tower": {
+      "cat": "defence", "rank": 5, "own": 0, "tech": "stone_keep", "wild": true, "slope": 0.6, "skill": "masonry",
+      "does": "A wall tower or watch tower: a fighting platform that covers the walls on both sides.",
+      "levels": [
+        { "goods": { "stone": 120, "timber": 10, "iron": 4, "nails": 10 }, "labour": 90, "pence": 40 },
+        { "goods": { "stone": 80, "timber": 10, "iron": 6 }, "labour": 60, "pence": 40 }
+      ]
+    },
+    "gatehouse": {
+      "cat": "defence", "rank": 5, "own": 0, "max": 4, "tech": "curtain_walls", "slope": 0.6, "skill": "masonry",
+      "does": "The fortified gate with portcullis and murder-holes: the way in and the first thing a besieger meets.",
+      "levels": [
+        { "goods": { "stone": 180, "timber": 20, "iron": 24, "nails": 20 }, "labour": 150, "pence": 80 },
+        { "goods": { "stone": 100, "timber": 12, "iron": 16 }, "labour": 90, "pence": 60 }
+      ]
+    },
+    "motte": {
+      "cat": "defence", "rank": 5, "own": 0, "max": 1, "wild": true, "slope": 0.7, "skill": "carpentry",
+      "does": "An earth mound crowned with a timber tower and a bailey: a quick castle.",
+      "levels": [
+        { "goods": { "timber": 120, "planks": 40, "nails": 30 }, "labour": 400, "pence": 120 }
+      ]
+    },
+    "keep_stone": {
+      "cat": "defence", "rank": 5, "own": 0, "max": 1, "tech": "stone_keep", "slope": 0.6, "skill": "masonry",
+      "does": "A great square tower of stone: the lord's stronghold, hall and last refuge.",
+      "levels": [
+        { "goods": { "stone": 2500, "timber": 60, "iron": 40, "nails": 100 }, "labour": 2000, "pence": 800 },
+        { "goods": { "stone": 1200, "timber": 30, "iron": 20 }, "labour": 1000, "pence": 600 },
+        { "goods": { "stone": 1600, "timber": 40, "iron": 30 }, "labour": 1400, "pence": 800 }
+      ]
+    },
+    "great_hall": {
+      "cat": "defence", "rank": 5, "own": 0, "max": 1, "slope": 0.5, "skill": "carpentry",
+      "does": "The castle's hall for feasts, council and the retinue's tables.",
+      "levels": [
+        { "goods": { "timber": 30, "planks": 80, "stone": 40, "nails": 50, "iron": 4 }, "labour": 80, "pence": 60 },
+        { "goods": { "planks": 40, "stone": 40, "nails": 20 }, "labour": 50, "pence": 40 }
+      ]
+    },
+    "barracks": {
+      "cat": "military", "rank": 4, "own": 0, "max": 2, "skill": "carpentry",
+      "does": "Bunks and a mess for the garrison: more men can be kept under arms.",
+      "levels": [
+        { "goods": { "timber": 10, "planks": 50, "stone": 20, "nails": 30, "straw": 20 }, "labour": 40, "pence": 20 },
+        { "goods": { "planks": 24, "stone": 24, "nails": 14 }, "labour": 24, "pence": 0 },
+        { "goods": { "stone": 60, "planks": 20, "nails": 14 }, "labour": 40, "pence": 0 }
+      ]
+    },
+    "archery_butts": {
+      "cat": "military", "rank": 2, "own": 0, "max": 1, "slope": 0.4, "skill": "carpentry",
+      "does": "Targets and a mound: the village practises the longbow here on holy days.",
+      "levels": [
+        { "goods": { "timber": 3, "planks": 2, "straw": 20 }, "labour": 3, "pence": 0 }
+      ]
+    },
+    "training_yard": {
+      "cat": "military", "rank": 5, "own": 0, "max": 1, "slope": 0.4, "skill": "carpentry",
+      "does": "A fenced yard with posts and racks: men-at-arms and squires drill here.",
+      "levels": [
+        { "goods": { "timber": 12, "planks": 20, "nails": 10, "straw": 20 }, "labour": 12, "pence": 0 },
+        { "goods": { "planks": 14, "stone": 12, "nails": 8 }, "labour": 10, "pence": 0 }
+      ]
+    },
+    "tent": {
+      "cat": "military", "rank": 1, "own": 1, "wild": true, "slope": 0.4, "skill": "carpentry",
+      "does": "A canvas tent: a night's shelter for an army or a camp in the wild.",
+      "levels": [
+        { "goods": { "cloth": 4, "timber": 1 }, "labour": 0.5, "pence": 0 }
+      ]
+    }
+  }
+}
