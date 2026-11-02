@@ -11,6 +11,7 @@ import type { WorldModel } from '../../world/types';
 import { h } from '../core/dom';
 import { icon } from '../core/icons';
 import { hex } from '../core/nav';
+import { MARK_COLOR, MARK_GLYPH } from '../core/questMarks';
 import type { GameServices } from '../types';
 import { COLOR, type NavMarker, type NavState } from './navstate';
 
@@ -237,8 +238,31 @@ export class Minimap {
       if (kin || hh) { g.strokeStyle = 'rgba(42, 27, 15, 0.8)'; g.lineWidth = 0.8; g.stroke(); }
     }
 
-    // markers (the tracked objective last, on top)
-    const marks = nav.markers.slice().sort((a, b) => Number(a.primary) - Number(b.primary));
+    // the people who want something of you: a gold "!" or a silver "?" dot where they are (indoors: fainter)
+    for (const q of nav.quest.rows) {
+      if (!Number.isFinite(q.x) || q.x < x0 || q.x > x1 || q.z < z0 || q.z > z1) continue;
+      const qx = sx(q.x), qy = sy(q.z);
+      if (qx < 6 || qx > W - 6 || qy < 6 || qy > H - 6) continue;
+      g.save();
+      g.globalAlpha = q.indoors ? 0.7 : 1;
+      g.fillStyle = hex(MARK_COLOR[q.kind]);
+      g.strokeStyle = '#2a1b0f';
+      g.lineWidth = 1.3;
+      g.beginPath();
+      g.arc(qx, qy, 5.6, 0, Math.PI * 2);
+      g.fill();
+      g.stroke();
+      g.fillStyle = '#2a1b0f';
+      g.font = '700 9.5px "Iowan Old Style", Palatino, Georgia, serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(MARK_GLYPH[q.kind], qx, qy + 0.5);
+      g.restore();
+    }
+    g.textBaseline = 'alphabetic';
+
+    // markers (the tracked objective last, on top); the quest marks were drawn as dots above
+    const marks = nav.markers.filter((m) => m.kind !== 'quest' && m.kind !== 'turnin').sort((a, b) => Number(a.primary) - Number(b.primary));
     for (const m of marks) this.marker(g, m, sx(m.x), sy(m.z), now);
 
     // you, and where the camera looks
@@ -271,7 +295,7 @@ export class Minimap {
     const text = sName || `near ${world.nearestSettlement(px, pz).name}`;
     if (this.place.textContent !== text) this.place.textContent = text;
     const scaleM = Math.round(60 * mpp / 10) * 10;
-    const cap = `${scaleM} m ▬ · gold: your home and strips`;
+    const cap = `${scaleM} m ▬ · gold: your home and strips${nav.quest.rows.length ? ' · ! ? who wants something' : ''}`;
     if (this.caption.textContent !== cap) this.caption.textContent = cap;
   }
 

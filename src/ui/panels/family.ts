@@ -16,19 +16,9 @@ import { createWindow } from '../components/window';
 import type { PanelCtx, UiPanel } from '../app/panel';
 import { panelOf } from './base';
 
+/** Takes up another life: opens the "Live as" card (docs/CIV.md §2; anyone alive, since the civilization pass). */
 export function confirmPlayAs(ctx: PanelCtx, id: PersonId): void {
-  const target = ctx.sim.state.persons.get(id);
-  const me = ctx.sim.state.persons.get(ctx.playerId());
-  if (!target) return;
-  ctx.confirm({
-    title: `Become ${target.first}?`,
-    text: `You will take up the life of ${fullName(target)}. ${me ? `${me.first} goes on with ${me.sex === 'm' ? 'his' : 'her'} own life, run by the world.` : ''}\n\nYou may switch again to any living relation, or sworn member of your House of equal rank.`,
-    confirmLabel: `Become ${target.first}`, cancelLabel: 'Stay as you are',
-    onConfirm: () => {
-      const r = ctx.dispatch({ type: 'switchCharacter', personId: id });
-      if (!r.ok) ctx.say('warn', r.reason ?? 'That cannot be done.');
-    },
-  });
+  ctx.open({ panel: 'ext', name: 'liveAs', id, data: { reason: 'choose' } });
 }
 
 export function familyPanel(ctx: PanelCtx, startTab: FamilyTab | undefined): UiPanel {
@@ -46,8 +36,6 @@ export function familyPanel(ctx: PanelCtx, startTab: FamilyTab | undefined): UiP
   win.body.classList.add('flush');
   win.body.append(tabsEl.el, h('div.mu-tabbar-rule'), content);
 
-  const eligible = (): Set<PersonId> => new Set(sim.eligibleSwitchTargets());
-
   // ---------------------------------------------------------------- shared: a person's detail card
   const detail = (id: PersonId): HTMLElement => {
     const p = sim.state.persons.get(id);
@@ -55,8 +43,8 @@ export function familyPanel(ctx: PanelCtx, startTab: FamilyTab | undefined): UiP
     const card = personCard(sim, id);
     const me = sim.state.persons.get(ctx.playerId());
     const rel = me && me.id !== id ? kinshipLabel(sim.state, me, p) : me?.id === id ? 'you' : '';
-    const canSwitch = eligible().has(id);
     const alive = !p.death;
+    const canSwitch = alive && sim.canSwitchTo(id);
     return h('div.mu-fam-detail', null,
       h('h3.mu-fam-name', null, fullName(p)),
       h('div.mu-dim.mu-small', null, rel ? (rel === 'you' ? 'This is you' : `Your ${rel}`) : 'Not close kin'),
@@ -72,8 +60,8 @@ export function familyPanel(ctx: PanelCtx, startTab: FamilyTab | undefined): UiP
         alive ? null : h('dt', null, 'Cause'), alive ? null : h('dd', null, p.death ? deathCauseText(p.death.cause) : '')),
       h('div.mu-row.mu-wrap.mu-gap-6', { style: { marginTop: '10px' } },
         alive && id !== ctx.playerId() ? button('Talk', { icon: 'talk', size: 'small', onClick: () => { ctx.close(); const r = ctx.player.talkTo(id); if (!r.ok) ctx.say('warn', r.reason ?? 'They are not here.'); } }) : null,
-        alive && id !== ctx.playerId()
-          ? (canSwitch ? button('Play as them', { icon: 'user', size: 'small', variant: 'primary', onClick: () => confirmPlayAs(ctx, id) }) : chip('Not eligible to take over', '', 'lock', 'Only family, or sworn members of your House of equal rank, may be taken over (SPEC §8).'))
+        alive && id !== ctx.playerId() && canSwitch
+          ? button(`Live as ${p.first}`, { icon: 'user', size: 'small', variant: 'primary', tip: 'Take up their life (V). Anyone alive may be taken up.', onClick: () => confirmPlayAs(ctx, id) })
           : null));
   };
 
@@ -135,7 +123,6 @@ export function familyPanel(ctx: PanelCtx, startTab: FamilyTab | undefined): UiP
     const hc = p ? householdCard(sim, p.household) : null;
     if (!hc || !p) return empty('You have no household.');
     const plan = new Map(ctx.eco.householdPlan(hc.id).map((l) => [l.person, l]));
-    const elig = eligible();
     const hhHead = sim.state.persons.get(hc.head);
     const rows = hc.members.map((m: MemberLine) => {
       const line = plan.get(m.id);
@@ -143,7 +130,7 @@ export function familyPanel(ctx: PanelCtx, startTab: FamilyTab | undefined): UiP
         h('span.mu-fam-sexdot', { class: m.sex }),
         h('div.mu-grow', null, h('b', null, m.name), h('div.mu-small.mu-dim', null, `${m.role || 'Member'} · ${m.age} years old`)),
         h('div.mu-small', null, line ? TASK_LABEL[line.task] : '—', line && !line.set ? h('span.mu-dim', null, ' (their own choice)') : null),
-        m.id === ctx.playerId() ? chip('You', 'lapis') : elig.has(m.id) ? chip('Can be played', 'gold', 'user') : null);
+        m.id === ctx.playerId() ? chip('You', 'lapis') : m.alive ? button('Live as', { size: 'small', icon: 'user', tip: `Take up ${m.name}’s life`, onClick: (e) => { e.stopPropagation(); confirmPlayAs(ctx, m.id); } }) : null);
     });
     return h('div.mu-fam-split', null,
       h('div.mu-fam-main', null,
@@ -160,11 +147,10 @@ export function familyPanel(ctx: PanelCtx, startTab: FamilyTab | undefined): UiP
     const p = sim.state.persons.get(ctx.playerId());
     const hc = p ? houseCard(sim, p.house) : null;
     if (!hc) return empty('You belong to no House.');
-    const elig = eligible();
     const rows = hc.living.map((m) => h('div.mu-li.click', { class: m.id === selected ? 'sel' : '', onclick: () => { selected = m.id; render(); } },
       h('span.mu-fam-sexdot', { class: m.sex }),
       h('div.mu-grow', null, h('b', null, m.name), h('div.mu-small.mu-dim', null, `${m.role} · ${m.age} years old`)),
-      m.id === ctx.playerId() ? chip('You', 'lapis') : elig.has(m.id) ? chip('Can be played', 'gold', 'user') : null));
+      m.id === ctx.playerId() ? chip('You', 'lapis') : button('Live as', { size: 'small', icon: 'user', tip: `Take up ${m.name}’s life`, onClick: (e) => { e.stopPropagation(); confirmPlayAs(ctx, m.id); } })));
     return h('div.mu-fam-split', null,
       h('div.mu-fam-main', null,
         h('div.mu-row.mu-gap-16.mu-top', { style: { marginBottom: '10px' } },
@@ -178,7 +164,7 @@ export function familyPanel(ctx: PanelCtx, startTab: FamilyTab | undefined): UiP
               ...hc.titles.map((t) => chip(t.name, 'gold', 'crown'))))),
         heading('Who is of the House', 'users'),
         h('div.mu-list.mu-scroll', null, rows),
-        h('p.mu-tiny.mu-dim', { style: { marginTop: '8px' } }, 'The House is your family line and those sworn to it: servants, retainers, vassals. You may take over family, or House members of equal rank, at any time.')),
+        h('p.mu-tiny.mu-dim', { style: { marginTop: '8px' } }, 'The House is your family line and those sworn to it: servants, retainers, vassals. You may live as any of them, or as anyone alive, at any time.')),
       detail(selected));
   };
 

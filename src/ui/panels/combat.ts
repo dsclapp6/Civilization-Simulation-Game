@@ -1,14 +1,14 @@
-// The wounds panel (wave 3 combat): what the blows left on a body, drawn in the character sheet's style: a
+// The wounds page (wave 3 combat): what the blows left on a body, drawn in the character sheet's style: a
 // figure with each hit location shaded by how bad it is, the blood left, and a list of wounds with their state
-// (bleeding, broken, festering, bound) and what will mend them. Open it with
-// `{ panel: 'ext', name: 'wounds', id: personId }`. It reads the combat module through `sim.services.combat`.
+// (bleeding, broken, festering, bound) and what will mend them. Since the civilization pass your own wounds are a TAB of the
+// character sheet (Tab, then Wounds; the HUD's wound mark opens it): `{ panel: 'character', tab: 'wounds' }`; someone else's open in
+// a window of their own, `{ panel: 'ext', name: 'wounds', id: personId }`. It reads the combat module through `sim.services.combat`.
 import { relativeDay } from '../core/format';
 import { h, svgEl } from '../core/dom';
 import { bar, button, chip } from '../components/widgets';
 import { createWindow } from '../components/window';
-import type { PanelCtx, UiHooks, UiPanel } from '../app/panel';
+import type { PanelCtx, UiPanel } from '../app/panel';
 import { every, panelOf } from './base';
-import { registerPanel } from './extRegistry';
 import type { HitLocation, Wound } from '../../sim/wave3';
 import { ageYears, fullName, type Person } from '../../sim/state';
 import { skillOf } from '../../sim/skills';
@@ -91,15 +91,23 @@ function tags(w: WoundView): HTMLElement[] {
   return out;
 }
 
-export function woundsPanel(ctx: PanelCtx, req: { id?: number }): UiPanel {
+/** What the wounds page is made of (civilization pass: it is a tab of the character sheet; the window below is for someone else's wounds). */
+export interface WoundsView {
+  el: HTMLElement;
+  /** Repaints when something about the wounds changed. */
+  render(force?: boolean): void;
+  /** "Bind your wounds": for the caller to place (the tab puts it under the figure, the window in its footer). */
+  bindBtn: HTMLButtonElement;
+  /** How many wounds there are (for a badge on the tab) and how many bleed. */
+  count(): { wounds: number; bleeding: number };
+}
+
+export function woundsView(ctx: PanelCtx, id: number, onTitle?: (title: string, subtitle: string) => void): WoundsView {
   ensureStyle();
-  const id = req.id ?? ctx.playerId();
   const sim = ctx.sim;
   const combat = sim.services.combat;
   const person = (): Person | undefined => sim.state.persons.get(id);
-  const win = createWindow({ title: 'Wounds', subtitle: '', icon: 'heart', size: 'lg', onClose: () => ctx.close() });
   const body = h('div.mu-wounds');
-  win.body.append(body);
   const fig = figure({ head: 0, torso: 0, arm_l: 0, arm_r: 0, leg_l: 0, leg_r: 0 });
   const bloodBar = bar('vermilion', 1, { thin: true });
   const hpBar = bar('hp', 1, { thin: true });
@@ -109,7 +117,7 @@ export function woundsPanel(ctx: PanelCtx, req: { id?: number }): UiPanel {
   const note = h('p.mu-wounds-note');
   const msg = h('p.mu-small.mu-bold.mu-hide');
   let sig = '';
-  let bindBtn: HTMLButtonElement | undefined;
+  let bindBtn!: HTMLButtonElement;
 
   body.append(
     h('div.mu-wounds-fig', null, fig.el, h('div.mu-small.mu-dim.mu-ital', null, 'Each part is shaded by its worst wound')),
@@ -119,16 +127,16 @@ export function woundsPanel(ctx: PanelCtx, req: { id?: number }): UiPanel {
       list, note, msg),
   );
 
-  const render = (): void => {
+  const render = (force = false): void => {
     const p = person();
     if (!p) { list.replaceChildren(h('p.mu-empty', null, 'No one to examine.')); return; }
     const wounds = (combat?.wounds(id) ?? []) as readonly WoundView[];
     const blood = combat?.blood?.(id) ?? 1;
     const maxHp = 1;
     const key = JSON.stringify([wounds.map((w) => [w.location, w.kind, Math.round(w.severity * 100), w.bleeding, w.fracture, w.infected, w.care, w.lodged]), Math.round(blood * 100), Math.round(p.health.hp * 100), p.traits.length]);
-    if (key === sig) return;
+    if (key === sig && !force) return;
     sig = key;
-    win.setTitle(id === ctx.playerId() ? 'Your wounds' : `${fullName(p)}'s wounds`, `Age ${Math.floor(ageYears(p, sim.absDay))}`);
+    onTitle?.(id === ctx.playerId() ? 'Your wounds' : `${fullName(p)}'s wounds`, `Age ${Math.floor(ageYears(p, sim.absDay))}`);
     const worst: Record<HitLocation, number> = { head: 0, torso: 0, arm_l: 0, arm_r: 0, leg_l: 0, leg_r: 0 };
     for (const w of wounds) worst[w.location] = Math.max(worst[w.location], w.severity);
     fig.update(worst);
@@ -155,9 +163,7 @@ export function woundsPanel(ctx: PanelCtx, req: { id?: number }): UiPanel {
     if (marks.length > 0) lines.push(`Old wounds have left ${marks.join(' and ')}.`);
     note.textContent = lines.join(' ');
   };
-  render();
 
-  const foot: Array<HTMLElement | null> = [];
   const mine = id === ctx.playerId();
   const me = sim.state.persons.get(ctx.playerId());
   const skill = me ? skillOf(me, 'medicine') : 0;
@@ -170,20 +176,32 @@ export function woundsPanel(ctx: PanelCtx, req: { id?: number }): UiPanel {
       msg.classList.remove('mu-hide');
       msg.classList.toggle('mu-good', r.ok);
       msg.classList.toggle('mu-bad', !r.ok);
-      sig = '';
-      render();
+      render(true);
     },
   });
-  foot.push(bindBtn);
-  sig = '';
-  render();
-  foot.push(h('div.mu-grow'));
-  foot.push(button('Close', { onClick: () => ctx.close() }));
-  win.showFoot(...foot);
+  render(true);
+  return {
+    el: body, render, bindBtn,
+    count: () => {
+      const ws = combat?.wounds(id) ?? [];
+      let bleeding = 0;
+      for (const w of ws) if (w.bleeding) bleeding++;
+      return { wounds: ws.length, bleeding };
+    },
+  };
+}
+
+/** The wounds of someone else (or anyone, by `id`) in a window of their own. The player's own are a tab of the character sheet. */
+export function woundsPanel(ctx: PanelCtx, req: { id?: number }): UiPanel {
+  const id = req.id ?? ctx.playerId();
+  const win = createWindow({ title: 'Wounds', subtitle: '', icon: 'heart', size: 'lg', onClose: () => ctx.close() });
+  const view = woundsView(ctx, id, (t, sub) => win.setTitle(t, sub));
+  win.body.append(view.el);
+  win.showFoot(view.bindBtn, h('div.mu-grow'), button('Close', { onClick: () => ctx.close() }));
   return panelOf({ id: 'wounds', group: 'main', pauses: 'menu', backdropCloses: ctx }, win.el, {
-    tick: every(0.5, render),
-    key: (intent) => { if (intent.type === 'enter') { bindBtn?.click(); return true; } return false; },
+    tick: every(0.5, () => view.render()),
+    key: (intent) => { if (intent.type === 'enter') { view.bindBtn.click(); return true; } return false; },
   });
 }
 
-registerPanel('wounds', (ctx, req, _hooks: UiHooks) => woundsPanel(ctx, req));
+

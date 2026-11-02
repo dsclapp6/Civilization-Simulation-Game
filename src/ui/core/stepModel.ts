@@ -34,6 +34,17 @@ export function stepAt(steps: readonly ActionStep[] | undefined, progress: numbe
   return null;
 }
 
+/** Where each step ends as a fraction of the bout (the last is 1): the ticks on the progress bar. */
+export function stepEnds(steps: readonly ActionStep[]): number[] {
+  const weights = steps.map((s) => (Number.isFinite(s.share) ? Math.max(0, s.share) : 0));
+  let total = weights.reduce((a, b) => a + b, 0);
+  if (total <= 0) { weights.fill(1); total = steps.length; }
+  const out: number[] = [];
+  let acc = 0;
+  for (let i = 0; i < steps.length; i++) { acc += weights[i] / total; out.push(i === steps.length - 1 ? 1 : acc); }
+  return out;
+}
+
 /** "Heat the bar · step 1 of 3" for the action bar. */
 export function stepLine(v: StepView): string {
   return v.count > 1 ? `${v.label} · step ${v.index + 1} of ${v.count}` : v.label;

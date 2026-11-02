@@ -4,7 +4,7 @@ import type { ActionCategory, ActionOption } from '../../sim/actions';
 import { h } from '../core/dom';
 import { secondsText } from '../core/hudModel';
 import { icon } from '../core/icons';
-import { CATEGORY_ICON, CATEGORY_LABEL, CATEGORY_ORDER } from '../core/iconMap';
+import { CATEGORY_ICON, CATEGORY_LABEL, CATEGORY_ORDER, optionIcon } from '../core/iconMap';
 import { createWindow } from '../components/window';
 import type { PanelCtx, UiPanel } from '../app/panel';
 import { panelOf } from './base';
@@ -51,6 +51,7 @@ export function actionsPanel(ctx: PanelCtx): UiPanel {
       const idx = n++;
       const row = h('button.mu-wheel-opt', { type: 'button', class: o.enabled ? '' : 'is-disabled' },
         h('span.mu-key', { class: idx < 9 ? '' : 'mu-hide' }, String(idx + 1)),
+        h('span.mu-wheel-ico', null, icon(optionIcon(o), 17)),
         h('span.mu-wheel-main', null,
           h('span.mu-wheel-label', null, o.label),
           o.preview ? h('span.mu-wheel-prev', null, o.preview) : null,

@@ -40,7 +40,7 @@ export function createPanel(ctx: PanelCtx, req: PanelRequest, hooks: UiHooks): U
     case 'pause': return pausePanel(ctx, hooks);
     case 'settings': return settingsPanel(ctx);
     case 'birth': return birthPanel(ctx);
-    case 'character': return characterPanel(ctx);
+    case 'character': return characterPanel(ctx, req.tab);
     case 'perk': return (SKILLS as readonly string[]).includes(req.skill)
       ? perkPanel(ctx, req.person, req.skill as SkillId)
       : messagePanel(ctx, 'No such skill', `“${req.skill}” is not a skill.`);

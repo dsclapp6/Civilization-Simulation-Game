@@ -15,6 +15,7 @@ export type { ConfirmOptions };
 import type { StackPanel } from '../core/stack';
 import type { PinStore } from '../core/pins';
 import type { NavState } from '../hud/navstate';
+import type { LiveAsReason } from '../core/liveAsModel';
 
 export interface UiPanel extends StackPanel {
   /** The element appended to the panel layer (usually a `.mu-modal`). */
@@ -69,6 +70,15 @@ export interface PanelCtx {
   readonly pins: PinStore;
   /** Where the body and the camera are, and the places the HUD points at (refreshed every frame by the HUD). */
   readonly nav: NavState;
+  // ---- civilization pass ----
+  /**
+   * Take up another life (CIV §2): the camera glides to them when they are near (within 300 m), else the screen fades; then a card
+   * says who you are now. `reason` 'rule' (Rule this town) opens the seat of government once you are there. Refused with a reason
+   * when they cannot be taken over. Works while choosing a successor (the death screen) as well.
+   */
+  liveAs(person: PersonId, opts?: { reason?: LiveAsReason }): { ok: boolean; reason?: string };
+  /** Counts a page as opened for the first-minutes guide ("wounds" for the wounds tab of the character sheet). */
+  noteOpened(id: string): void;
 }
 
 /** Controller actions panels can trigger (leaving the game, starting over). */

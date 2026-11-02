@@ -5,4 +5,7 @@ import './politics';
 import './combat';
 import './advancement';
 import './military';
+// civilization pass, wave B: living as anyone (B6)
+import './liveas';
+import './accolade';
 export {};

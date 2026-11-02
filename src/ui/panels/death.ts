@@ -7,6 +7,7 @@ import { chronicleDate, plural, thousands, trim } from '../core/format';
 import { icon } from '../core/icons';
 import { STAT_ICON } from '../core/iconMap';
 import { lifeStory, successorCard, type SuccessorCard } from '../core/models';
+import { PeopleIndex, nearbyPeople, type PersonHit } from '../core/liveAsModel';
 import { STAT_INFO } from '../core/text';
 import { button, chip, heading } from '../components/widgets';
 import { createWindow } from '../components/window';
@@ -30,6 +31,17 @@ export function successorEl(c: SuccessorCard, selected: boolean, onPick: () => v
   return el;
 }
 
+/** A person from the lists below the suggestions: people near, or found by the search. Same look as a suggestion, but shorter. */
+function hitEl(h_: PersonHit, selected: boolean, onPick: () => void): HTMLElement {
+  const el = h('div.mu-card.click.mu-succ.compact', { class: selected ? 'sel' : '', role: 'radio', 'aria-checked': String(selected), tabindex: '0' },
+    h('div.mu-row.mu-between.mu-top', null,
+      h('div.mu-grow', null, h('h4', null, h_.name), h('div.mu-dim.mu-small', null, `${h_.age} years old · ${h_.role} · ${h_.place || 'the road'}`)),
+      selected ? h('span.mu-tier-check.static', null, icon('check', 16)) : chip(h_.rankName, 'gold', 'shield')));
+  el.addEventListener('click', onPick);
+  el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(); } });
+  return el;
+}
+
 export function deathPanel(ctx: PanelCtx, hooks: UiHooks): UiPanel {
   const st = ctx.sim.state;
   const run = st.run;
@@ -38,7 +50,10 @@ export function deathPanel(ctx: PanelCtx, hooks: UiHooks): UiPanel {
   const deceasedId = pending?.person ?? last?.person ?? run.playerId;
   const deceased = st.persons.get(deceasedId) ?? null;
   const story = lifeStory(ctx.sim, deceasedId, run.lives.length);
+  // your family and House come first; since the civilization pass (CIV §2) anyone alive may be taken up
   const eligible = (pending?.eligible ?? []).map((id) => successorCard(ctx.sim, deceased, id)).filter((c): c is SuccessorCard => !!c);
+  const suggested = new Set<number>(eligible.map((c) => c.id));
+  suggested.add(deceasedId);
 
   const day = deceased?.death?.day ?? last?.deathDay ?? ctx.sim.absDay;
   const d = toDate(day);
@@ -64,45 +79,92 @@ export function deathPanel(ctx: PanelCtx, hooks: UiHooks): UiPanel {
     );
   }
 
-  const gameOverNext = eligible.length === 0;
-  let chosen: SuccessorCard | null = null;
+  // the run goes on while anyone is alive: it ends only when abandoned (or when nobody at all is left)
+  const gameOverNext = run.phase !== 'choosing';
+  let chosen: { id: number; first: string } | null = null;
   const confirmBtn = button('Choose who to be', { variant: 'primary', size: 'big', icon: 'user', disabled: true });
-  const list = h('div.mu-col.mu-gap-8.mu-scroll.mu-succ-list');
-  const setChosen = (c: SuccessorCard): void => {
-    chosen = c;
+  const pick = (id: number, first: string): void => {
+    chosen = { id, first };
     confirmBtn.disabled = false;
-    confirmBtn.replaceChildren(icon('user', 20), h('span', null, `Carry on as ${c.name.split(' ')[0]}`));
-    render();
+    confirmBtn.replaceChildren(icon('user', 20), h('span', null, `Carry on as ${first}`));
+    renderAll();
   };
-  const render = (): void => { list.replaceChildren(...eligible.map((c) => successorEl(c, chosen?.id === c.id, () => setChosen(c)))); };
-  render();
+
+  // 1. family and House
+  const famList = h('div.mu-col.mu-gap-8');
+  // 2. people near where you fell
+  const body = ctx.player.body();
+  const around = body ?? (deceased ? (() => { try { const w = ctx.game.zone.whereabouts(deceased.id); return Number.isFinite(w.x) ? { x: w.x, z: w.z } : null; } catch { return null; } })() : null);
+  const nearby = gameOverNext ? [] : nearbyPeople(ctx.game, around, deceased?.settlement ?? 0, 6, suggested);
+  const nearList = h('div.mu-col.mu-gap-6');
+  // 3. anyone alive, by search
+  const index = new PeopleIndex(ctx.game);
+  const results = h('div.mu-col.mu-gap-6');
+  const searchBox = h<HTMLInputElement>('input.mu-input', { type: 'search', placeholder: 'Anyone alive: a name, a place, a trade', 'aria-label': 'Search everyone alive', autocomplete: 'off', spellcheck: 'false' });
+  let hits: PersonHit[] = [];
+  let more = false;
+  const search = (): void => {
+    const q = searchBox.value;
+    const found = index.search(q, 13, { exclude: new Set([deceasedId]), near: deceased?.settlement });
+    more = found.length > 12;
+    hits = found.slice(0, 12);
+    renderAll();
+  };
+  searchBox.addEventListener('input', search);
+
+  const renderAll = (): void => {
+    famList.replaceChildren(...eligible.map((c) => successorEl(c, chosen?.id === c.id, () => pick(c.id, c.name.split(' ')[0]))));
+    nearList.replaceChildren(...nearby.map((n) => hitEl(n, chosen?.id === n.id, () => pick(n.id, n.first))));
+    const q = searchBox.value.trim();
+    const rows: HTMLElement[] = hits.map((n) => hitEl(n, chosen?.id === n.id, () => pick(n.id, n.first)));
+    if (more) rows.push(h('p.mu-tiny.mu-dim.mu-ital', null, 'More people match: add a word to narrow the search.'));
+    else if (!hits.length && q) rows.push(h('p.mu-small.mu-dim.mu-ital', null, 'Nobody alive matches that.'));
+    results.replaceChildren(...rows);
+  };
+  renderAll();
   // the eldest able adult is the natural first choice: preselect when there is exactly one
-  if (eligible.length === 1) setChosen(eligible[0]);
+  if (eligible.length === 1) pick(eligible[0].id, eligible[0].name.split(' ')[0]);
 
   const right = h('div.mu-death-right', null,
     heading('Who will you be?', 'users'),
     gameOverNext
       ? h('div.mu-card.mu-succ-none', null, icon('crown', 22), h('p', null, 'No one is left to carry on your House.'), h('p.mu-dim.mu-small', null, 'Your story ends here. The score is counted and the Legacy gold you earned is kept.'))
-      : h('p.mu-small.mu-ink2', { style: { marginBottom: '8px' } }, 'Choose a living member of your family, or someone of your House of equal rank. The one you leave goes on with their life, run by the world.'),
-    gameOverNext ? null : list,
+      : h('p.mu-small.mu-ink2', { style: { marginBottom: '8px' } }, 'You may go on as anyone alive. Your family and House come first; or choose someone near, or search for anyone at all. The one you leave goes on with their life, run by the world.'),
+    gameOverNext ? null : h('div.mu-scroll.mu-succ-list', null,
+      eligible.length ? h('div.mu-succ-head', null, icon('tree', 14), 'Your family and House') : null,
+      eligible.length ? famList : null,
+      nearby.length ? h('div.mu-succ-head', null, icon('pin', 14), 'Near where you fell') : null,
+      nearby.length ? nearList : null,
+      h('div.mu-succ-head', null, icon('search', 14), 'Anyone alive'),
+      h('div.mu-succ-search', null, searchBox),
+      results),
   );
 
   win.body.append(h('div.mu-death', null, left, right));
   confirmBtn.addEventListener('click', () => {
     if (!chosen) return;
-    const r = ctx.dispatch({ type: 'switchCharacter', personId: chosen.id });
+    const r = ctx.liveAs(chosen.id, { reason: 'choose' });
     if (!r.ok) ctx.say('warn', r.reason ?? 'That cannot be done.');
   });
+  const endRun = (): void => {
+    ctx.confirm({
+      title: 'End the run?',
+      text: 'Your House’s story ends here, with no one to carry it on. The score is counted and the Legacy gold you earned is kept. There is no way back.',
+      confirmLabel: 'End the run', cancelLabel: 'Choose someone', danger: true,
+      onConfirm: () => { ctx.dispatch({ type: 'abandonRun' }); ctx.open({ panel: 'gameover', summary: hooks.pendingGameOver() ?? undefined }); },
+    });
+  };
   win.showFoot(
-    h('span.mu-dim.mu-small.mu-ital', null, gameOverNext ? 'Every run ends. What you earned stays.' : `${plural(eligible.length, 'person', 'people')} may take up your life.`),
+    h('span.mu-dim.mu-small.mu-ital', null, gameOverNext ? 'Every run ends. What you earned stays.' : `${plural(index.size, 'person', 'people')} alive; any of them may take up your life.`),
     h('div.mu-grow'),
+    gameOverNext ? null : button('End the run', { size: 'small', variant: 'ghost', onClick: endRun }),
     gameOverNext
       ? button('Continue', { variant: 'primary', size: 'big', icon: 'chev_right', onClick: () => ctx.open({ panel: 'gameover', summary: hooks.pendingGameOver() ?? undefined }) })
       : confirmBtn,
   );
   return panelOf({ id: 'death', group: 'screen', pauses: 'always', escape: 'ignore', mode: 'screen', hidesHud: true }, win.el, {
     key: (intent) => {
-      if (intent.type === 'digit' && eligible[intent.n - 1]) { setChosen(eligible[intent.n - 1]); return true; }
+      if (intent.type === 'digit' && eligible[intent.n - 1]) { pick(eligible[intent.n - 1].id, eligible[intent.n - 1].name.split(' ')[0]); return true; }
       if (intent.type === 'enter' && chosen) { confirmBtn.click(); return true; }
       return false;
     },

@@ -23,6 +23,9 @@ import type { PinStore } from '../core/pins';
 import { Dial } from './dial';
 import type { Toasts } from './toasts';
 import type { Guide } from './guide';
+import { ArrivalCard } from './arrival';
+import { stepAt, stepEnds } from '../core/stepModel';
+import { styledName } from '../core/titles';
 import { Banner } from './banner';
 import { Compass } from './compass';
 import { Destination } from './destination';
@@ -69,6 +72,8 @@ export class Hud {
   private readonly minimap: Minimap;
   private readonly edge = new EdgeArrows();
   readonly banner = new Banner();
+  /** Civilization pass: "who you are now", after taking up another life. */
+  readonly arrival: ArrivalCard;
   private readonly hoverCard = new HoverCard();
   private readonly dest = new Destination();
   private readonly dayTypeEl = h('div.mu-hud-daytype');
@@ -90,6 +95,9 @@ export class Hud {
   private readonly stNum = h('span.mu-hud-num');
   private readonly needEls = new Map<NeedView['id'], HTMLElement>();
   private readonly perkBadge = h<HTMLButtonElement>('button.mu-hud-perk.mu-hide', { type: 'button' });
+  /** The wound mark (civilization pass): the wounds are a page of the character sheet, and this is the way to it from the plate. */
+  private readonly woundMark = h<HTMLButtonElement>('button.mu-hud-wound.mu-hide', { type: 'button', 'aria-label': 'Wounds' });
+  private lastWoundKey = '';
 
   // clock plate
   private readonly clockPlate = h('div.mu-hud-clock.mu-plate');
@@ -110,6 +118,13 @@ export class Hud {
   private readonly actionLabel = h('span');
   private readonly actionSecs = h('span.mu-num');
   private readonly actionBar: BarHandle = bar('gold');
+  /** Hands-on work (CIV §8): the step the bout is in, with the steps as ticks on the bar and pips under it. */
+  private readonly actionStep = h('div.mu-hud-action-step.mu-hide');
+  private readonly actionStepLabel = h('span.mu-hud-action-steplabel');
+  private readonly actionStepPips = h('span.mu-hud-action-pips');
+  private readonly setStepLabel = textBinder(this.actionStepLabel);
+  private stepsKey = '';
+  private stepIndex = -1;
   private readonly promptEl = h('div.mu-hud-prompt.mu-hide');
   private readonly promptKey = keycap('E');
   private readonly promptLabel = h('span.mu-hud-prompt-label');
@@ -141,7 +156,7 @@ export class Hud {
   private readonly hitFlash = h('div.mu-hud-hit');
   private readonly downEl = h('div.mu-hud-down');
   private readonly downText = h('div.mu-hud-down-text');
-  private readonly bloodRow = h('div.mu-hud-bar.mu-hud-blood.mu-hide', { tip: 'Blood: bleeding wounds drain it; bind them (B)' });
+  private readonly bloodRow = h('div.mu-hud-bar.mu-hud-blood.mu-hide', { tip: 'Blood: bleeding wounds drain it; bind them (Tab, Wounds)' });
   private readonly bloodBar: BarHandle = bar('vermilion');
   private readonly bloodNum = h('span.mu-hud-num');
   private readonly stRow = h('div.mu-hud-bar', { tip: 'Stamina' });
@@ -208,6 +223,7 @@ export class Hud {
       openJournal: () => deps.open({ panel: 'journal' }),
     });
     this.minimap = new Minimap({ game: () => deps.game(), nav: this.nav, openMap: () => deps.open({ panel: 'map' }) });
+    this.arrival = new ArrivalCard({ game: () => deps.game(), openJournal: () => deps.open({ panel: 'journal' }) });
     // civilization pass: HUD parts registered by module UI files (src/ui/core/extHud.ts)
     for (const [name, make] of hudPartFactories()) {
       try {
@@ -229,7 +245,7 @@ export class Hud {
         button('Wake up', { onClick: () => this.cancelSkip(), icon: 'sun', variant: 'primary' }),
         h('div.mu-dim.mu-small', null, keycap('Esc', true), ' also wakes you')),
     );
-    this.leftCol.append(this.plate, this.tracker.el, this.whatNow.el, this.deps.guide.el);
+    this.leftCol.append(this.plate, this.arrival.el, this.tracker.el, this.whatNow.el, this.deps.guide.el);
     this.rightCol.append(this.clockPlate, this.minimap.el);
     this.el.append(
       this.leftCol, this.rightCol, this.compass.el, this.banner.el, this.dangerEl, this.deps.toasts.el, this.travelEl, this.edge.el, this.dest.el,
@@ -254,13 +270,14 @@ export class Hud {
     this.stRow.append(icon('bolt', 15, 'sta'), this.stBar.el, this.stNum);
     this.perkBadge.append(icon('star_f', 14), h('span', null, 'Perk ready'));
     this.perkBadge.addEventListener('click', () => this.openPerk());
+    this.woundMark.addEventListener('click', () => this.deps.open({ panel: 'character', tab: 'wounds' }));
     this.plate.append(
       h('div.mu-hud-namerow', null, this.nameEl, money),
       this.metaEl,
       h('div.mu-hud-bar', { tip: 'Health' }, icon('heart', 15, 'hp'), this.hpBar.el, this.hpNum),
       this.bloodRow,
       this.stRow,
-      h('div.mu-row.mu-between.mu-hud-lower', null, needs, this.perkBadge),
+      h('div.mu-row.mu-between.mu-hud-lower', null, needs, h('div.mu-row.mu-gap-6', null, this.woundMark, this.perkBadge)),
     );
   }
 
@@ -292,7 +309,8 @@ export class Hud {
   }
 
   private buildCenter(): void {
-    this.actionEl.append(h('div.mu-hud-action-top', null, this.actionLabel, this.actionSecs), this.actionBar.el);
+    this.actionStep.append(this.actionStepLabel, this.actionStepPips);
+    this.actionEl.append(h('div.mu-hud-action-top', null, this.actionLabel, this.actionSecs), this.actionBar.el, this.actionStep);
     this.promptEl.append(
       h('div.mu-hud-prompt-main', null, this.promptKey, this.promptLabel, h('span.mu-hud-prompt-dot', null, '·'), this.promptTarget),
       this.promptReason,
@@ -420,6 +438,7 @@ export class Hud {
     this.lastPlace = '';
     this.lastSettlementId = -2;
     this.banner.hide();
+    this.arrival.hide();
     this.whatNow.close();
     this.hoverCard.hide();
     this.sleepOn(false);
@@ -437,13 +456,14 @@ export class Hud {
     this.updateClock(clock, now);
     this.updatePlayer(hud);
     this.updatePrompt(hud);
-    this.updateAction(hud);
+    this.updateAction(game, hud);
     this.updateTravel(hud);
     this.updateCombat(game, hud);
     this.updateOverlays(clock, hud);
     this.updateFeed(now);
     this.clockNow = now;
     this.updateGuidance(game, hud, now);
+    this.arrival.update(now);
     for (const part of this.extParts) {
       try { part.update(now); } catch (err) { console.error('HUD part failed', err); }
     }
@@ -459,7 +479,7 @@ export class Hud {
   /** The compass, the minimap, the tracker, the screen-edge arrows, the destination ring and the cursor's tooltip. */
   private updateGuidance(game: GameServices, hud: ReturnType<GameServices['player']['hud']>, now: number): void {
     const nav = this.nav;
-    nav.update(game, this.deps.host, this.deps.pins);
+    nav.update(game, this.deps.host, this.deps.pins, now);
     if (now - this.lastArrival >= 0.25) {
       this.lastArrival = now;
       const arrived = arrivedAt(game, this.deps.pins, nav.x, nav.z);
@@ -478,7 +498,8 @@ export class Hud {
     this.edge.el.classList.toggle('mu-hide', !showGuides);
     this.dest.update(game, this.deps.host, scale);
     const hov = game.player.hover?.() ?? null;
-    this.hoverCard.update(hov, now, hov ? hov.x / scale : 0, hov ? hov.y / scale : 0, window.innerWidth / scale, window.innerHeight / scale);
+    const wants = hov && hov.target.kind === 'person' ? this.nav.quest.rowFor(hov.target.id) : undefined;
+    this.hoverCard.update(hov, now, hov ? hov.x / scale : 0, hov ? hov.y / scale : 0, window.innerWidth / scale, window.innerHeight / scale, wants ? { kind: wants.kind, text: wants.text } : null);
     this.el.classList.toggle('with-banner', this.banner.isOn(now));
     this.banner.update(now);
   }
@@ -515,7 +536,8 @@ export class Hud {
   private updatePlayer(hud: ReturnType<GameServices['player']['hud']>): void {
     this.plate.classList.toggle('mu-hide', !hud);
     if (!hud) return;
-    this.setName(hud.name);
+    const me = this.deps.game()?.sim.state.persons.get(hud.personId);
+    this.setName(me ? styledName(me) : hud.name);
     if (hud.money !== this.lastMoney) { this.lastMoney = hud.money; this.setMoney(formatMoney(hud.money)); }
     if (hud.hp !== this.lastHp || hud.maxHp !== this.lastHpMax) {
       this.lastHp = hud.hp; this.lastHpMax = hud.maxHp;
@@ -567,6 +589,15 @@ export class Hud {
     const wounds = cb?.wounds(pid) ?? [];
     let bleeding = 0;
     for (const w of wounds) if (w.bleeding) bleeding++;
+    // the wound mark: gold while the wounds mend, red and throbbing while one bleeds; it opens the Wounds page of the character sheet
+    const woundKey = `${wounds.length}|${bleeding}`;
+    if (woundKey !== this.lastWoundKey) {
+      this.lastWoundKey = woundKey;
+      this.woundMark.classList.toggle('mu-hide', wounds.length === 0);
+      this.woundMark.classList.toggle('bleeding', bleeding > 0);
+      this.woundMark.replaceChildren(icon('heart', 14), h('span', null, bleeding > 0 ? `${bleeding} bleeding` : wounds.length === 1 ? '1 wound' : `${wounds.length} wounds`));
+      this.woundMark.setAttribute('data-tip', bleeding > 0 ? 'You are bleeding: open the Wounds page and bind them (Tab)' : 'Your wounds (Tab, then Wounds)');
+    }
     const showBlood = blood < 0.995 || bleeding > 0;
     this.bloodRow.classList.toggle('mu-hide', !showBlood);
     this.plate.classList.toggle('bleeding', bleeding > 0);
@@ -612,13 +643,43 @@ export class Hud {
     this.promptDisabled(!p.enabled);
   }
 
-  private updateAction(hud: ReturnType<GameServices['player']['hud']>): void {
+  private updateAction(game: GameServices, hud: ReturnType<GameServices['player']['hud']>): void {
     const a = hud?.action ? actionView(hud.action) : null;
     this.actionEl.classList.toggle('mu-hide', !a);
-    if (!a) return;
+    if (!a) { this.stepsKey = ''; return; }
     this.setActionLabel(a.label);
     this.setActionSecs(secondsText(a.secondsLeft));
     this.actionBar.set(a.progress);
+    // hands-on work: the bout is a few steps ("Heat the bar", "Draw it out", "Quench"), shares of its seconds
+    const act = game.sim.actions.active(game.sim.state.run.playerId);
+    const steps = act && act.option.steps && act.option.steps.length > 0 ? act.option.steps : null;
+    const sv = steps && act ? stepAt(steps, act.progress) : null;
+    const key = steps && act ? `${act.option.provider}/${act.option.id}|${steps.length}` : '';
+    if (key !== this.stepsKey) {
+      this.stepsKey = key;
+      this.stepIndex = -1;
+      for (const t of this.actionBar.el.querySelectorAll('b.mu-step-tick')) t.remove();
+      this.actionStepPips.replaceChildren();
+      if (steps) {
+        const ends = stepEnds(steps);
+        steps.forEach((st, i) => {
+          this.actionStepPips.appendChild(h('i', { tip: st.label }));
+          if (i < steps.length - 1) this.actionBar.el.appendChild(h('b.mu-step-tick', { style: { left: `${(ends[i] * 100).toFixed(1)}%` } }));
+        });
+      }
+    }
+    this.actionStep.classList.toggle('mu-hide', !sv);
+    if (sv) {
+      this.setStepLabel(sv.label);
+      if (sv.index !== this.stepIndex) {
+        this.stepIndex = sv.index;
+        const pips = this.actionStepPips.children;
+        for (let i = 0; i < pips.length; i++) pips[i].className = i < sv.index ? 'done' : i === sv.index ? 'now' : '';
+        this.actionStepLabel.classList.remove('flip');
+        void this.actionStepLabel.offsetWidth;
+        this.actionStepLabel.classList.add('flip');
+      }
+    }
   }
 
   private updateTravel(hud: ReturnType<GameServices['player']['hud']>): void {
@@ -803,7 +864,8 @@ function dockIcon(d: DockEntry): IconName {
     case 'chronicle': return 'scroll';
     case 'rest': return 'bed';
     case 'requests': return 'quill';
-    case 'wounds': return 'heart';
+    case 'builder': return 'hammer';
+    case 'ruler': return 'crown';
     case 'techs': return 'book';
     case 'politics': return 'crown';
     case 'army': return 'swords';

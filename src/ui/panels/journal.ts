@@ -8,6 +8,7 @@ import { distanceText, plural } from '../core/format';
 import { icon } from '../core/icons';
 import { findState, isFound, showPerson, showPlace, stopFinding, type FindState, type Spot } from '../core/finder';
 import { where } from '../core/nav';
+import { MARK_GLYPH, QuestMarkView, type QuestRow } from '../core/questMarks';
 import {
   PERSON_GROUPS, peopleRows, placeRows, todayModel, type PersonRow, type PlaceRow,
 } from '../core/journalModel';
@@ -49,15 +50,55 @@ export function journalPanel(ctx: PanelCtx, start: JournalTab | undefined): UiPa
 
   // ---------------------------------------------------------------------------------------- Tasks
 
+  // ---------------------------------------------------------------------------------------- Who wants something of you
+
+  const marks = new QuestMarkView();
+  const markRows = (): QuestRow[] => {
+    const b = ctx.player.body();
+    marks.update(game, b ?? { x: 0, z: 0 }, ctx.now());
+    return marks.sorted();
+  };
+  const findMarked = (m: QuestRow): void => {
+    if (game.objectives) {
+      showPerson(game, ctx.pins, m.person);
+      ctx.say('info', `Looking for ${m.name}: watch the compass.`);
+    } else if (Number.isFinite(m.x) && Number.isFinite(m.z)) {
+      ctx.pins.set({ x: m.x, z: m.z, label: m.name });
+      ctx.say('info', `Looking for ${m.name}: watch the compass.`);
+    } else ctx.say('warn', `${m.name} cannot be found just now.`);
+    render();
+  };
+  /** The people with a mark over their head: a gold "!" has something for you, a silver "?" is waiting for a task to be handed in. */
+  const markSection = (): HTMLElement[] => {
+    const rows = markRows();
+    if (!rows.length) return [];
+    const fs = findState(game, ctx.pins);
+    const out: HTMLElement[] = [h('div.mu-jhead', null, icon('exclaim', 14), 'Who wants something of you')];
+    for (const m of rows) {
+      const on = fs.person === m.person;
+      const b = ctx.player.body();
+      const whereText = Number.isFinite(m.dist) && b ? where(b.x, b.z, m.x, m.z) : 'somewhere in the district';
+      out.push(h('div.mu-jmark', { class: `${m.kind}${on ? ' found' : ''}` },
+        h('span.mu-jmark-glyph', { tip: m.kind === 'turnin' ? 'A task of yours can be handed in to them' : 'They have something for you' }, MARK_GLYPH[m.kind]),
+        h('div.mu-jmark-main', null,
+          h('div.mu-jmark-text', null, m.text),
+          h('div.mu-jmark-sub', null, `${whereText}${m.indoors ? ' · indoors' : ''}`)),
+        on ? button('Stop', { size: 'small', icon: 'cross', onClick: stop }) : button('Find', { size: 'small', icon: 'pin', onClick: () => findMarked(m) })));
+    }
+    return out;
+  };
+
   const objectivesView = (): HTMLElement => {
     const list = api ? api.list() : [];
     if (!api || list.length === 0) {
-      return h('div.mu-journal-empty', null, empty('Nothing has been asked of you yet. Talk to your family, walk about the village, see what the day needs.', { icon: 'scroll', title: 'No tasks' }));
+      const asked = markSection();
+      const none = h('div.mu-journal-empty', null, empty('Nothing has been asked of you yet. Talk to your family, walk about the village, see what the day needs.', { icon: 'scroll', title: 'No tasks' }));
+      return asked.length ? h('div.mu-journal-split', null, h('div.mu-journal-list.mu-scroll', null, asked), none) : none;
     }
     const g = groupObjectives(list);
     const pick = list.find((o) => o.id === selected) ?? g.tracked ?? g.groups[0]?.items[0] ?? g.done[0];
     if (pick) selected = pick.id;
-    const rows: HTMLElement[] = [];
+    const rows: HTMLElement[] = [...markSection()];
     const row = (o: Objective, tracked: boolean): HTMLElement => {
       const frac = o.steps.length ? o.steps.filter((s) => s.done).length / o.steps.length : 0;
       return h('button.mu-jrow', { type: 'button', class: `${o.id === selected ? 'sel' : ''} ${o.state !== 'active' ? 'done' : ''}`, onclick: () => { selected = o.id; render(); } },
@@ -180,7 +221,9 @@ export function journalPanel(ctx: PanelCtx, start: JournalTab | undefined): UiPa
           h('div.mu-prow-main', null,
             h('div.mu-prow-name', null, h('b', null, r.name), h('span.mu-dim', null, ` · ${r.relation || 'known to you'}`)),
             h('div.mu-prow-sub', null, [r.role ? `${r.role}, ${plural(r.age, 'year')}` : plural(r.age, 'year'), r.where].filter(Boolean).join(' · '))),
-          on ? button('Stop', { size: 'small', icon: 'cross', onClick: stop }) : button('Find', { size: 'small', icon: 'pin', onClick: () => findPerson(r) })));
+          h('div.mu-row.mu-gap-6', null,
+            on ? button('Stop', { size: 'small', icon: 'cross', onClick: stop }) : button('Find', { size: 'small', icon: 'pin', onClick: () => findPerson(r) }),
+            button('Live as', { size: 'small', icon: 'user', tip: `Take up ${r.name}’s life: anyone alive may be taken up`, onClick: () => ctx.open({ panel: 'ext', name: 'liveAs', id: r.id, data: { reason: 'choose' } }) }))));
       }
     }
     return h('div.mu-journal-people.mu-scroll', null, out);

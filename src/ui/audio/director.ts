@@ -21,6 +21,8 @@ export class SoundDirector {
   /** Hands-on work (CIV §8): the cue of each step of a bout, once as the step begins, and the strokes of the rhythmic ones. */
   private readonly cues = new CueScheduler();
   private readonly cueOut: CueSound[] = [];
+  /** The step cues requested so far, newest last (the last 60): for tools and tests, since the browser may keep the audio asleep. */
+  readonly cuesPlayed: string[] = [];
   private readonly cleanups: Array<() => void> = [];
 
   constructor(private readonly host: UiHost, root: HTMLElement) {
@@ -75,7 +77,11 @@ export class SoundDirector {
     if (a && a.option.seconds > 0 && a.option.steps && a.option.steps.length > 0) {
       this.nextWork = 0;
       this.cues.update(`${a.option.provider}/${a.option.id}`, a.option.steps, a.progress, now, this.cueOut);
-      for (const c of this.cueOut) this.sfx.play(c.sfx, c.gain, 0.94 + Math.random() * 0.12);
+      for (const c of this.cueOut) {
+        this.sfx.play(c.sfx, c.gain, 0.94 + Math.random() * 0.12);
+        this.cuesPlayed.push(c.sfx);
+        if (this.cuesPlayed.length > 60) this.cuesPlayed.shift();
+      }
     } else this.cues.reset();
     const w = a && a.option.seconds > 0 && !(a.option.steps && a.option.steps.length > 0) ? workSound(a.option.anim) : null;
     if (w && a) {

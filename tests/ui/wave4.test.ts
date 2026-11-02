@@ -35,7 +35,11 @@ describe('hotkeys and the dock', () => {
     const none = (): boolean => false;
     expect(panelForKey('politics', all)).toEqual({ request: { panel: 'ext', name: 'politics' }, panelId: 'politics' });
     expect(panelForKey('techs', all)?.panelId).toBe('techs');
-    expect(panelForKey('wounds', all)?.request).toEqual({ panel: 'ext', name: 'wounds' });
+    // the wounds are a page of the character sheet now (civilization pass); builder, ruler and live-as have their own panels
+    expect(panelForKey('wounds', all)).toEqual({ request: { panel: 'character', tab: 'wounds' }, panelId: 'character' });
+    expect(panelForKey('builder', all)).toEqual({ request: { panel: 'ext', name: 'builder' }, panelId: 'builder' });
+    expect(panelForKey('ruler', all)).toEqual({ request: { panel: 'ext', name: 'ruler' }, panelId: 'ruler' });
+    expect(panelForKey('liveAs', all)).toEqual({ request: { panel: 'ext', name: 'liveAs' }, panelId: 'liveAs' });
     expect(panelForKey('politics', none)).toBeNull();
     expect(panelForKey('command', all)?.panelId).toBe('army');
     expect(panelForKey('command', none)).toEqual({ request: { panel: 'ledger', tab: 'household' }, panelId: 'ledger' });
@@ -45,7 +49,13 @@ describe('hotkeys and the dock', () => {
   it('lists a dock button per page, with the key that opens it', () => {
     const ids = DOCK_ENTRIES.map((d) => d.id);
     expect(new Set(ids).size).toBe(ids.length);
-    for (const id of ['politics', 'techs', 'requests', 'wounds', 'army']) expect(ids).toContain(id);
+    for (const id of ['politics', 'techs', 'requests', 'builder', 'ruler', 'army']) expect(ids).toContain(id);
+    // B and U are the builder's and the ruler's; the wounds lost their key (they are a tab of the character sheet and a mark on the HUD)
+    expect(ids).not.toContain('wounds');
+    expect(DOCK_ENTRIES.find((d) => d.id === 'builder')!.key).toBe(keyLabel(KEYMAP.ui.builder));
+    expect(DOCK_ENTRIES.find((d) => d.id === 'ruler')!.key).toBe(keyLabel(KEYMAP.ui.ruler));
+    expect(DOCK_ENTRIES.find((d) => d.id === 'builder')!.needs).toBe('construction');
+    expect(DOCK_ENTRIES.find((d) => d.id === 'ruler')!.needs).toBe('realm');
     const keys = DOCK_ENTRIES.map((d) => d.key);
     expect(new Set(keys).size).toBe(keys.length);
     expect(DOCK_ENTRIES.find((d) => d.id === 'army')!.key).toBe(keyLabel(KEYMAP.ui.command));

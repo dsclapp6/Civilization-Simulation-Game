@@ -54,6 +54,9 @@ export class SwitchFx {
     this.phase = kind === 'fade' ? 'out' : 'glide';
   }
 
+  /** The switch has happened already (nobody faded out first): start from black, holding, and open the veil. */
+  blackOut(): void { this.kind = 'fade'; this.phase = 'hold'; this.t = 0; }
+
   cancel(): void { this.phase = 'idle'; this.kind = null; this.t = 0; }
 
   /** 0 clear … 1 black. */
@@ -85,4 +88,14 @@ export class SwitchFx {
 function ease(t: number): number {
   const x = clamp(t, 0, 1);
   return x * x * (3 - 2 * x);
+}
+
+/**
+ * The player module raises the camera to the strategic map and brings it down again for about two seconds whenever the character
+ * changes (and the zone sends everyone home meanwhile, `view.mode()` being 'map'). The glide and the fade replace that, so the
+ * module's own clock is advanced past it: `PlayerApi.frame` with a long step ends the effect at once. A module without the effect
+ * only smooths its draw position one more time.
+ */
+export function skipPlayerSwitchEffect(player: { frame?(dt: number): void }): void {
+  try { player.frame?.(2); } catch (err) { console.error('could not skip the switch effect', err); }
 }

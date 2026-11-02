@@ -153,6 +153,7 @@ export interface WhoNowCard {
   id: PersonId;
   name: string;
   first: string;
+  sex: 'm' | 'f';
   age: number;
   rankName: string;
   role: string;
@@ -178,7 +179,7 @@ export function whoNowCard(game: GameServices, id: PersonId, doing?: string): Wh
   } catch { /* the objectives are mid-change */ }
   tasks.sort((a, b) => Number(b.tracked) - Number(a.tracked));
   return {
-    id, name: s.name, first: s.first, age: s.age, rankName: s.rankName, role: s.role, place: s.place, household: s.household, house: s.house,
+    id, name: s.name, first: s.first, sex: s.sex, age: s.age, rankName: s.rankName, role: s.role, place: s.place, household: s.household, house: s.house,
     doing: doing ?? s.doing, tasks: tasks.slice(0, 4),
   };
 }

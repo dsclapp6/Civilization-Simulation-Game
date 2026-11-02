@@ -40,10 +40,10 @@ export const CONTROL_GROUPS: readonly ControlGroup[] = [
     rows: [
       { keys: [k(K.input.interact)], what: 'Tap: the default action on what you face (the prompt tells you which); the same as clicking it.' },
       { keys: ['Hold ' + k(K.input.interact)], what: 'The action wheel: every option on the target, with the reasons for the greyed ones.' },
-      { keys: [k(K.input.cancel)], what: 'Stop the work you are doing (walking away stops it too).' },
+      { keys: [k(K.input.cancel)], what: 'Stop the work you are doing (walking away stops it too). At the forge, the butcher’s block or the kiln the bar under your name says which step the work is at.' },
       { keys: [k(K.ui.rest)], what: 'Sleep or wait until a time you choose.' },
       { keys: [k(K.ui.whatNow)], what: 'What now? The next step of your task and what else is worth doing; choose one to be shown the way.' },
-      { keys: [k(K.ui.journal)], what: 'The journal: your tasks, what kind of day it is, the people you know and the places (each with Find).' },
+      { keys: [k(K.ui.journal)], what: 'The journal: your tasks, who wants something of you (a gold ! over their head), what kind of day it is, the people you know (with Live as) and the places (each with Find).' },
       { keys: [k(K.ui.minimap)], what: 'Show or hide the minimap in the corner.' },
     ],
   },
@@ -76,10 +76,10 @@ export const CONTROL_GROUPS: readonly ControlGroup[] = [
       { keys: [k(K.ui.chronicle)], what: 'The chronicle of your House and the land.' },
       { keys: [k(K.ui.journal)], what: 'The journal: tasks, today, the people you know, places.' },
       { keys: [k(K.ui.requests)], what: 'Requests and news: favours people have asked of you.' },
-      { keys: [k(K.ui.character)], what: 'Wounds: a tab of the character sheet (and the wound mark on the HUD): what the blows left, and bind them.' },
-      { keys: [k(K.ui.builder)], what: 'Builder mode: raise, upgrade, repair or pull down buildings on land you may build on.' },
-      { keys: [k(K.ui.ruler)], what: 'Ruler mode: the seat of government of what you rule (research, troops, fields, trade, rivals).' },
-      { keys: [k(K.ui.liveAs)], what: 'Live as the person under the cursor or in front of you.' },
+      { keys: [k(K.ui.character)], what: 'Wounds: a tab of the character sheet (also the red or gold mark under your name): what the blows left, and bind them.' },
+      { keys: [k(K.ui.builder)], what: 'Builder mode (also on the dock): raise, upgrade, repair or pull down buildings on land you may build on.' },
+      { keys: [k(K.ui.ruler)], what: 'Ruler mode (also on the dock): the seat of government of what you rule: research, troops, fields, trade, rivals.' },
+      { keys: [k(K.ui.liveAs)], what: 'Live as the person under the cursor or in front of you: anyone alive, at any time (a card asks first; it can be turned off in the settings). Also in the wheel (Live as…), the journal’s people, the family page and the map.' },
       { keys: [k(K.ui.techs)], what: 'House techniques: what your House knows.' },
       { keys: [k(K.ui.politics)], what: 'Realm and politics: Houses, wars, claims, offices.' },
       { keys: [k(K.ui.command)], what: 'Command and army (the household page of the ledger when you have no troops).' },
@@ -121,7 +121,7 @@ export const BASICS: readonly HelpSection[] = [
     title: 'Money, land and the House',
     paragraphs: [
       'Coin is pence, shillings (12 pence) and pounds (20 shillings). Your household’s holdings, its dues to the lord and what you own are in the Ledger (J). Your family and the House that bears your name are on H.',
-      'When you die the story goes on: choose an heir or a relation from the death screen and play on as them. Only when nobody is left does the run end, and your Legacy gold carries over.',
+      'You may live as anyone alive, at any time: press V looking at someone (or choose Live as… in the wheel, the journal’s people, the family page, or a place’s people on the map). The camera glides to them when they are near and the screen fades when they are far; a card says who you are now and what they were doing. The one you leave goes on with their life. When you die, choose anyone to go on as: your family and House first, then people near, or search everyone alive. The run ends only when you give it up, and your Legacy gold carries over.',
     ],
   },
 ];
@@ -130,7 +130,7 @@ export const COMBAT_HELP: readonly HelpSection[] = [
   {
     title: 'Blows and guards',
     paragraphs: [
-      'There is no health bar that refills: blows leave wounds, and wounds bleed, fester and mend over days. The red drop under your health shows the blood you have left; bind your wounds on the Wounds page (B) or ask a healer. Stamina pays for every swing, guard and roll: when you are out of breath you can only walk.',
+      'There is no health bar that refills: blows leave wounds, and wounds bleed, fester and mend over days. The red drop under your health shows the blood you have left; bind your wounds on the Wounds page of the character sheet (Tab, or the mark under your name) or ask a healer. Stamina pays for every swing, guard and roll: when you are out of breath you can only walk.',
       'Tap the left mouse button for a quick blow, hold it for a heavy one that costs more breath. Hold the right button to guard; a shield helps a great deal, and armour turns edges. Space rolls out of the way.',
     ],
   },

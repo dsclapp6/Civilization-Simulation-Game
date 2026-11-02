@@ -87,8 +87,8 @@ export const HINTS: readonly HintDef[] = [
   },
   {
     id: 'wounds', icon: 'heart', title: 'You are wounded', keys: [k(KEYMAP.ui.character)],
-    text: 'Bleeding wounds must be bound or the blood runs out. Open the Wounds page and bind them; rest and food do the rest, and a healer helps.',
-    link: { label: 'Open Wounds', request: { panel: 'ext', name: 'wounds' } },
+    text: 'Bleeding wounds must be bound or the blood runs out. Open the character sheet (Tab or the red mark under your name), go to its Wounds page and bind them; rest and food do the rest, and a healer helps.',
+    link: { label: 'Open Wounds', request: { panel: 'character', tab: 'wounds' } },
     when: (f) => f.wounded && !f.engaged, done: (f) => f.opened.has('wounds'), maxSeconds: 30,
   },
   {

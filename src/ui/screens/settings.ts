@@ -34,6 +34,8 @@ export function settingsBody(host: UiHost, onChange: () => void): HTMLElement {
       field('Minimap', toggle(s.minimap ?? true, (v) => set({ minimap: v }), 'Minimap'), undefined, 'The little chart of the ground around you, in the corner (N shows or hides it)'),
       field('Interface size', slider(0.8, 1.4, 0.05, s.uiScale, (v) => { scale.textContent = `${Math.round(v * 100)}%`; set({ uiScale: v }); }), scale),
       field('Pause in menus', toggle(s.pauseInMenus ?? true, (v) => set({ pauseInMenus: v }), 'Pause in menus'), undefined, 'Time stands still while the character sheet, inventory and similar panels are open'),
+      field('Ask before living as someone', toggle(s.askBeforeLiveAs ?? true, (v) => set({ askBeforeLiveAs: v }), 'Ask before living as someone'), undefined,
+        'You may live as anyone alive (V, the wheel, the lists). On: a card names them and asks you to confirm. Off: the glide begins at once'),
       field('Hints for new players', toggle(s.hints ?? true, (v) => set({ hints: v }), 'Hints for new players'), undefined, 'Small notes in the first minutes: what to do and which key does it'),
       h('div.mu-row.mu-end', { style: { marginTop: '10px' } },
         button('Restore defaults', { size: 'small', onClick: () => { host.setSettings({ ...DEFAULT_SETTINGS }); host.renderer()?.setQuality(DEFAULT_SETTINGS.quality); onChange(); render(); } })),

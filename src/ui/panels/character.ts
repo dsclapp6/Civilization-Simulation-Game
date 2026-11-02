@@ -12,10 +12,14 @@ import { icon } from '../core/icons';
 import { SKILL_ICON, STAT_ICON } from '../core/iconMap';
 import { needViews } from '../core/hudModel';
 import { CONDITIONS, SKILL_GROUPS, SKILL_NAMES, STAT_INFO, TRAITS } from '../core/text';
-import { bar, button, chip, empty, heading, statBar } from '../components/widgets';
+import { bar, button, chip, empty, heading, statBar, tabs } from '../components/widgets';
+import type { CharacterTab } from '../core/requests';
+import { tabKeys } from '../core/tabkeys';
 import { createWindow } from '../components/window';
 import type { PanelCtx, UiPanel } from '../app/panel';
 import { every, panelOf } from './base';
+import { woundsPanel, woundsView, type WoundsView } from './combat';
+import { registerPanel } from './extRegistry';
 
 const REP_FACETS: ReadonlyArray<{ id: keyof Person['rep']; name: string; high: string; low: string; icon: Parameters<typeof icon>[0] }> = [
   { id: 'honour', name: 'Honour', high: 'honourable', low: 'dishonourable', icon: 'shield' },
@@ -75,11 +79,41 @@ function skillRow(ctx: PanelCtx, card: PersonCard, person: Person, id: SkillId):
   );
 }
 
-export function characterPanel(ctx: PanelCtx): UiPanel {
+/**
+ * The character sheet (Tab). Civilization pass: when the combat module is in the run it has a second page, Wounds (the old wounds
+ * panel moved here; the HUD's wound mark opens it): `{ panel: 'character', tab: 'wounds' }`.
+ */
+export function characterPanel(ctx: PanelCtx, startTab: CharacterTab = 'sheet'): UiPanel {
   const win = createWindow({ title: '', icon: 'user', size: 'xl', onClose: () => ctx.close() });
+  const hasWounds = !!ctx.sim.services.combat;
+  let tab: CharacterTab = hasWounds ? startTab : 'sheet';
   const body = h('div.mu-char');
-  win.body.append(body);
+  const page = h('div.mu-char-page.mu-scroll');
+  win.body.classList.add('flush');
   let signature = '';
+  let wounds: WoundsView | null = null;
+  let woundsEl: HTMLElement | null = null;
+  const tabItems = [{ id: 'sheet', label: 'Character', icon: 'user' as const }, ...(hasWounds ? [{ id: 'wounds', label: 'Wounds', icon: 'heart' as const }] : [])];
+  const tabsEl = tabs(tabItems, tab, (id) => select(id as CharacterTab));
+  if (hasWounds) win.body.append(tabsEl.el, h('div.mu-tabbar-rule'));
+  win.body.append(page);
+
+  const showWounds = (): void => {
+    if (!wounds) {
+      wounds = woundsView(ctx, ctx.playerId());
+      woundsEl = h('div.mu-char-wounds', null, wounds.el, h('div.mu-row.mu-gap-8', { style: { marginTop: '14px' } }, wounds.bindBtn));
+    }
+    wounds.render();
+    page.replaceChildren(woundsEl as HTMLElement);
+    ctx.noteOpened('wounds');
+  };
+  const select = (id: CharacterTab): void => {
+    tab = id;
+    tabsEl.set(id);
+    page.scrollTop = 0;
+    if (id === 'wounds' && hasWounds) showWounds();
+    else { page.replaceChildren(body); signature = ''; render(); }
+  };
 
   const render = (): void => {
     const id = ctx.playerId();
@@ -174,8 +208,29 @@ export function characterPanel(ctx: PanelCtx): UiPanel {
     body.replaceChildren(left, mid, right);
   };
 
-  render();
-  const tick = every(0.5, render);
-  return panelOf({ id: 'character', group: 'main', pauses: 'menu', backdropCloses: ctx }, win.el, { tick });
+  const refresh = (): void => {
+    if (tab === 'wounds' && wounds) wounds.render();
+    else render();
+    if (hasWounds) {
+      const c = (wounds ?? (wounds = woundsView(ctx, ctx.playerId()))).count();
+      tabsEl.badge('wounds', c.wounds);
+    }
+  };
+  if (tab === 'wounds' && hasWounds) showWounds();
+  else { page.replaceChildren(body); render(); }
+  if (hasWounds) { const c = (wounds ?? (wounds = woundsView(ctx, ctx.playerId()))).count(); tabsEl.badge('wounds', c.wounds); }
+  const tick = every(0.5, refresh);
+  const nav = tabKeys(tabItems.map((x) => x.id), () => tab, (id) => select(id as CharacterTab), { scroller: page, digits: () => false });
+  return panelOf({ id: 'character', group: 'main', pauses: 'menu', backdropCloses: ctx }, win.el, {
+    tick,
+    key: (intent, e) => {
+      if (tab === 'wounds' && intent.type === 'enter' && wounds) { wounds.bindBtn.click(); return true; }
+      return hasWounds ? nav(intent, e) : false;
+    },
+  });
 }
+
+// `{ panel: 'ext', name: 'wounds' }` (the guide, the combat module's own requests): your own wounds are a page of the character sheet;
+// someone else's open in a window of their own
+registerPanel('wounds', (ctx, req) => (req.id === undefined || req.id === ctx.playerId() ? characterPanel(ctx, 'wounds') : woundsPanel(ctx, req)));
 
