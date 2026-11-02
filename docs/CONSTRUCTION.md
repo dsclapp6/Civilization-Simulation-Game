@@ -130,8 +130,8 @@ and mines worked by the parent's people).
 **Where the builder may build** (`area.ts`, `buildArea(person)`). The polygons (world m) builder mode tints with
 `renderer.setBuildArea`: the whole lands of every settlement in `scope(person).settlements` — the territory service's
 `landsPolygon(settlement)` when it has one (one outline or several; anything that is not a list of points is ignored), else a circle
-of 24 points of `landsRadius(settlement)` round the settlement's centre (2000/2500/3000 m by the kind of place when there is no
-territory service at all) — the 300 m circles round the outposts the person's House or places hold, and, for a household head with
+of 24 points of `landsRadius(settlement)` round the settlement's centre (3000 m for a city, 2500 a town, 2000 a village, 1200 any
+other, when there is no territory service at all; neighbouring circles overlap, so the renderer should tint the union) — the 300 m circles round the outposts the person's House or places hold, and, for a household head with
 no say over his own place (a peasant, a master), the household's own plots: the garden parcels the territory says it holds
 (`landAt(...).household`), else the yards (10 m) round its buildings. Someone who is not a head and has no authority gets `[]`.
 The same array comes back until the territory's `version()`, the module's `version()`, the day, the places or outposts held or the

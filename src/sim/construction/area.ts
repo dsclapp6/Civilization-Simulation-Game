@@ -103,6 +103,7 @@ function outpostLands(C: Construction, si: ScopeInfo): Polygon[] {
 }
 
 const cache = new WeakMap<Construction, Map<PersonId, { key: string; area: BuildArea }>>();
+const MAX_CACHED = 256;
 
 /**
  * Where this person may build: the lands of every settlement they have authority over, the land round their outposts and, for a
@@ -118,6 +119,7 @@ export function buildArea(C: Construction, personId: PersonId): BuildArea {
   if (!m) { m = new Map(); cache.set(C, m); }
   const hit = m.get(personId);
   if (hit && hit.key === key) return hit.area;
+  if (m.size >= MAX_CACHED && !hit) m.clear(); // (only the player and a few planners ask; a runaway caller cannot grow it)
   const polys: Polygon[] = [];
   for (const sid of places) polys.push(...landsPolygons(C, sid));
   polys.push(...outpostLands(C, si));
