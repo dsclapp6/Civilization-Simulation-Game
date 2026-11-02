@@ -48,6 +48,8 @@ export interface RealmSimOptions extends TestSimOptions {
   market?: boolean | 'real';
   /** Keep the player (default: removed, so a long run cannot end in game over). */
   keepPlayer?: boolean;
+  /** Install the AI rulers (src/sim/realm/ai*.ts). Off by default: these tests are about the calls, in a world nobody else acts in. */
+  ai?: boolean;
   noon?: boolean;
 }
 
@@ -70,7 +72,7 @@ export function bootRealm(sim: Simulation, opts: RealmSimOptions = {}): RealmSim
   const eco: EconomyApi = opts.market === 'real' ? economy
     : opts.market === false ? { ...economy, procure: undefined, sell: undefined } : stubEconomy(sim, economy, market);
   const deps = { economy: eco, social };
-  const realm = installRealm(sim, deps);
+  const realm = installRealm(sim, deps, { ai: opts.ai === true });
   if (opts.market !== false && opts.market !== 'real') {
     sim.registerSystem({
       name: 'stub.deliver', phase: 'hourly', order: 5,
