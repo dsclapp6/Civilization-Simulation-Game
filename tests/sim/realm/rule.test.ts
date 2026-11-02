@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { createPerson } from '../../../src/sim/people';
 import { bookIn, bookOut, closeBooks } from '../../../src/sim/realm/books';
 import { mayCommand } from '../../../src/sim/realm/rule';
-import type { Person, Title } from '../../../src/sim/state';
 import { aManor, holderOf, householdOf, realmSim, stock, titlesOfKind } from './helpers';
 
 const rig = () => realmSim({ politics: true, military: true, preset: 'large' });
@@ -180,12 +179,32 @@ describe('view', () => {
   });
 });
 
-describe('who holds which person', () => {
-  it('finds each title\'s place', () => {
-    const { sim } = rig();
-    const titles: Title[] = [...sim.state.titles.values()];
-    expect(titles.length).toBeGreaterThan(20);
-    const lord: Person | undefined = sim.state.persons.get(titles[0].holder);
-    expect(lord).toBeTruthy();
+describe('every place', () => {
+  it('has a title that governs it and someone who rules it, and each title\'s place is governed by a title held by someone', () => {
+    const { sim, realm } = rig();
+    for (const s of sim.world.settlements) {
+      const ruler = realm.rulerOf(s.id);
+      expect(ruler, `${s.kind} ${s.name}`).toBeGreaterThan(0);
+      expect(sim.state.persons.get(ruler)).toBeTruthy();
+      expect(realm.canRule(ruler), `${s.name}`).toBe(true);
+    }
+    for (const t of sim.state.titles.values()) {
+      const person = holderOf(sim, t);
+      const grown = (sim.absDay - person.birthDay) / 16 >= 16;
+      if (!grown) continue; // a minor's title is ruled by his regent
+      expect(realm.rules!(person.id).some((r) => r.title === t.id), t.name).toBe(true);
+      expect(realm.view(person.id)!.settlements.length, t.name).toBeGreaterThan(0);
+    }
+  });
+
+  it('is governed by the most local title: a village by its manor, a town by its lordship, never by a count above them', () => {
+    const { sim, realm } = rig();
+    const manor = titlesOfKind(sim, 'manor')[0];
+    const town = titlesOfKind(sim, 'town')[0];
+    expect(realm.rules!(manor.holder).find((r) => r.title === manor.id)?.place).toBe(manor.place);
+    expect(realm.rules!(town.holder).find((r) => r.title === town.id)?.place).toBe(town.place);
+    // a lord is not the ruler of a vassal's village
+    const vassalPlace = titlesOfKind(sim, 'manor').find((m) => m.holder !== town.holder)!.place;
+    expect(realm.rulerOf(vassalPlace)).not.toBe(town.holder);
   });
 });
