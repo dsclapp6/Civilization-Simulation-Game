@@ -106,9 +106,10 @@ standing (a handful against a crowd breaks, an army that has lost a few does not
 scaled by the size of the army so that a big host does not fall apart in seconds. A group's morale (the HUD's bar) is the mean of its
 men's. A man whose courage fails runs, or, if he is noble and the fight allows it, yields.
 
-**The AI commander** (`commander.ts`) gives its groups the same orders every 1.6 s: attackers advance, the horse charge when the foot
-is engaged, archers loose when an enemy is in range, defenders hold (the walls too), the lost (ratio below 0.32, morale below 0.5)
-retreat. It commands every man the player does not, and the player's layer while he is down. The player's own orders hold for 45 s
+**The AI commander** (`commander.ts`) gives its groups the same orders every 1.6 s: attackers advance in line (a shield wall against a
+side of archers) and charge at 22 m, defenders hold, archers stand back and loose at 70 m, the horse wait on the flank and ride in
+as soon as their foot are locked (from up to 130 m), or when enemy archers are exposed to them, or at 30 m with the odds in their favour,
+and a charge once begun is carried through; the lost (ratio below 0.32, morale below 0.5) retreat. It commands every man the player does not, and the player's layer while he is down. The player's own orders hold for 45 s
 before the AI would touch that group.
 
 The six macro orders of the command panel (`hold`, `advance`, `charge`, `loose`, `retreat`, `follow`) become orders to every commanded
@@ -129,9 +130,10 @@ Advance goes where the player looks, charge and loose at the man he looks at (th
 four groups with their keycap, count, order word and a morale bar (green, gold, vermilion); banners float over every group, the
 player's with a pole, the enemy's in red, at projected positions (DOM, the renderer's `project`).
 
-**The tactical view** (C): the world slows to a quarter (`SLOW_SPEED`), the camera rises over the field (`setOverview`, with a fallback
-to `setCameraPose` for a renderer without it), the banners stay, and orders are drawn on the ground (`setOrderMarks`: gold arrows
-for the player's orders, hold flags, attack rings, the enemy's in red). Click ground to march the selected group there (alt: move
+**The tactical view** (C): the world slows to a quarter (`SLOW_SPEED`), the camera rises over the field (`setOverview`; the UI's renderer
+controls always have the call, so after two seconds the panel checks that the field's centre is near the middle of the screen and, if the
+renderer has no overhead camera, puts a free camera high above the field with `setCameraPose`), the banners stay, and orders are drawn on
+the ground (`setOrderMarks`: gold arrows for the player's orders, hold flags, attack rings, the enemy's in red). Click ground to march the selected group there (alt: move
 without fighting), click an enemy to charge (archers loose), drag a banner to move its group, right-drag turns, the wheel zooms, C or
 Esc goes back and the previous speed returns. It closes itself when the player has no men to command or the battle ends.
 
