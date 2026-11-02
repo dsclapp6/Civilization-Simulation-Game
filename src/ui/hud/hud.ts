@@ -199,6 +199,9 @@ export class Hud {
   private lastTravelPhase = '';
   private lastNeedSig = '';
   private savedUntil = 0;
+  private lastDuelKey = '-';
+  /** The duel's reading (guard line, the blow coming, riposte, breath) while steel is out. */
+  private readonly duelEl = h('div.mu-duel.mu-hide');
   /** The work mini-game over the action bar (its strokes go to the action runner). */
   readonly mini = new MiniGameView((score) => { const g = this.deps.game(); if (g) g.sim.actions.perform(g.sim.state.run.playerId, score); });
   private lastFrame = 0;
@@ -237,7 +240,7 @@ export class Hud {
     this.el.append(
       this.leftCol, this.rightCol, this.compass.el, this.banner.el, this.dangerEl, this.deps.toasts.el, this.travelEl, this.edge.el, this.dest.el,
       this.gainsEl, this.mini.el, this.actionEl, this.promptEl, this.feedEl, this.dockEl, this.savedEl, this.reticle, this.hitFlash, this.downEl, this.combatChip, this.drawnChip,
-      this.hoverCard.el, this.sleepEl, this.battleBtn,
+      this.hoverCard.el, this.sleepEl, this.battleBtn, this.duelEl,
     );
     this.downEl.append(h('div.mu-hud-down-card', null, icon('skull', 30), h('div.mu-hud-down-title', null, 'You are down'), this.downText));
   }
@@ -568,6 +571,23 @@ export class Hud {
     }
     const down = state === 'down';
     this.downEl.classList.toggle('on', down);
+    // the duel's reading: where your guard is, which line the blow comes on, the riposte, breath
+    const duel = !!c && c.engaged && !c.ranged && !down && !!hud?.drawn;
+    const duelKey = duel ? `${c.guardLine ?? ''}|${c.threat ?? ''}|${(c.riposte ?? 0) > 0 ? 'r' : ''}|${Math.round((c.breath ?? 1) * 10)}` : '';
+    if (duelKey !== this.lastDuelKey) {
+      this.lastDuelKey = duelKey;
+      this.duelEl.classList.toggle('mu-hide', !duel);
+      if (duel) {
+        const lineCell = (l: string): HTMLElement => h('span', { class: `mu-duel-line ${c.guardLine === l ? 'guard' : ''} ${c.threat === l ? 'threat' : ''}` }, l === 'high' ? 'High' : l === 'mid' ? 'Mid' : 'Low');
+        const covered = c.threat && c.guardLine === c.threat;
+        this.duelEl.replaceChildren(
+          h('div.mu-duel-lines', null, lineCell('high'), lineCell('mid'), lineCell('low')),
+          h('div.mu-duel-note', null,
+            (c.riposte ?? 0) > 0 ? h('b.mu-duel-riposte', null, 'Riposte! (J)') : c.threat ? (covered ? h('span.ok', null, `Guarded: ${c.threat}`) : h('b.warn', null, `${c.threat === 'low' ? 'Low cut' : c.threat === 'high' ? 'Blow from above' : 'Blow at the body'}: guard ${c.threat === 'high' ? 'W+K' : c.threat === 'low' ? 'S+K' : 'K'}`)) : h('span.mu-dim', null, 'W+J over · S+J low · A/D+J thrust · K mid-swing feints')),
+          h('div.mu-duel-breath', null, h('i', { style: { width: `${Math.round((c.breath ?? 1) * 100)}%` } })),
+        );
+      }
+    }
     // blood and wounds
     const cb = game.sim.services.combat;
     const pid = game.sim.state.run.playerId;

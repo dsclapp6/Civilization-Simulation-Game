@@ -363,3 +363,17 @@
 .mu-agenda-item:hover { background: rgba(255, 255, 255, 0.5); }
 .mu-agenda-item.danger { border-color: #b3261e; box-shadow: 0 0 6px rgba(179, 38, 30, 0.45); color: #7d1a14; font-weight: 700; }
 .mu-agenda-item.warn { border-color: #a5762a; }
+
+/* ---- the duel's reading (steel out) ---- */
+.mu-duel { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); width: 300px; padding: 6px 10px 8px; pointer-events: none;
+  background: rgba(20, 13, 6, 0.72); color: #f6e7be; border-radius: 3px; font-size: 12.5px; text-align: center; }
+.mu-duel-lines { display: flex; gap: 6px; justify-content: center; margin-bottom: 4px; }
+.mu-duel-line { flex: 1; padding: 2px 0; border: 1px solid rgba(246, 231, 190, 0.35); border-radius: 2px; opacity: 0.75; }
+.mu-duel-line.guard { background: rgba(91, 154, 62, 0.55); border-color: #a8d48a; opacity: 1; }
+.mu-duel-line.threat { border-color: #ff6b5a; box-shadow: 0 0 8px rgba(255, 80, 60, 0.8); opacity: 1; font-weight: 700; }
+.mu-duel-note { min-height: 17px; }
+.mu-duel-note .warn { color: #ff9a8a; }
+.mu-duel-note .ok { color: #a8d48a; }
+.mu-duel-riposte { color: #f2d27a; text-shadow: 0 0 6px rgba(242, 210, 122, 0.9); }
+.mu-duel-breath { height: 4px; margin-top: 4px; background: rgba(246, 231, 190, 0.2); border-radius: 2px; overflow: hidden; }
+.mu-duel-breath i { display: block; height: 100%; background: linear-gradient(90deg, #5b9a3e, #c49a35); }

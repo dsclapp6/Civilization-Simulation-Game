@@ -109,7 +109,7 @@ describe('the duties of one\'s station (in place of quests)', () => {
     const me = playerOf(o.sim);
     me.birthDay -= 16 * 20; // a grown man
     // he holds the manor of his own village
-    const title = [...o.sim.state.titles.values()].find((t) => t.settlement === me.settlement) ?? [...o.sim.state.titles.values()][0];
+    const title = [...o.sim.state.titles.values()].find((t) => t.kind !== 'kingdom' && t.kind !== 'county' && t.place === me.settlement) ?? [...o.sim.state.titles.values()][0];
     o.sim.state.setTitleHolder(title, me.id);
     goHome(o);
     install(o);

@@ -15,6 +15,20 @@ export const S = {
 } as const;
 export type StateId = (typeof S)[keyof typeof S];
 
+/** The line of a blow or a guard. */
+export type Line = 'high' | 'mid' | 'low';
+export const LINES: readonly Line[] = ['high', 'mid', 'low'];
+
+/** How much of a blow on `blow` line a guard held on `guard` covers (a shield covers high and mid well, low poorly). */
+export function guardCover(guard: Line, blow: Line, shield: boolean): number {
+  if (guard === blow) return 1;
+  const far = (guard === 'high' && blow === 'low') || (guard === 'low' && blow === 'high');
+  const base = far ? 0.15 : 0.55;
+  if (!shield) return base;
+  // a shield is big: it covers the body whatever the guard, the legs least
+  return blow === 'low' ? Math.max(base, 0.4) : Math.max(base, 0.75);
+}
+
 export const BEAST_KEY_BASE = 1_000_000_000;
 
 export interface BeastInfo {
@@ -77,6 +91,16 @@ export class Fighter {
   animSkew = 0;
   /** Seconds the guard has been up (a fresh guard parries). */
   guardT = 0;
+  /** The line of the blow being thrown (high: at the head, mid: at the body, low: at the legs). */
+  line: Line = 'mid';
+  /** Where the guard is held: a guard covers its own line fully, the next one partly, the far one hardly at all. */
+  guardLine: Line = 'mid';
+  /** Seconds left to answer a parry with a riposte (a quicker, surer, harder blow). */
+  riposteT = 0;
+  /** Seconds the guard is thrown wide (by a parry, or drawn by a feint): blows land more surely. */
+  openT = 0;
+  /** Feints thrown in this fight (the AI reads a habit of feinting). */
+  feints = 0;
   /** Seconds of invulnerability left in a dodge. */
   dodgeI = 0;
   dodgeDx = 0; dodgeDz = 0;

@@ -374,7 +374,7 @@ export class PlayerController implements PlayerApi {
     i.forward = input.forward; i.right = input.right; i.cameraYaw = input.cameraYaw;
     i.sprint = input.sprint; i.walk = input.walk; i.interactHeld = input.interactHeld;
     i.attack = input.attack; i.block = input.block; i.aim = input.aim ?? null;
-    this.combat()?.input(input.attack, input.block, input.aim ?? null, input.cameraYaw);
+    this.combat()?.input(input.attack, input.block, input.aim ?? null, input.cameraYaw, { forward: input.forward, right: input.right });
     if (input.interact) this.edgeInteract = true;
     if (input.mount) this.edgeMount = true;
     if (input.dodge) this.edgeDodge = true;
@@ -446,6 +446,10 @@ export class PlayerController implements PlayerApi {
     if ((state === 'hit' || state === 'stagger' || state === 'down') && c.state !== state && c.state !== 'stagger' && c.state !== 'down') c.hitSeq++;
     c.state = state;
     c.engaged = cp?.engaged ?? false;
+    c.guardLine = cp?.guardLine ?? null;
+    c.threat = cp?.threat ?? null;
+    c.riposte = cp?.riposte ?? 0;
+    c.breath = cp?.breath ?? 1;
     const main = cp?.mainHand ?? null;
     c.ranged = state === 'draw' || state === 'aim' || state === 'shoot' || state === 'reload' || main === 'longbow' || main === 'shortbow' || main === 'crossbow';
     return c;
