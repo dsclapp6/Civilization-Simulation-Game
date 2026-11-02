@@ -32,6 +32,7 @@ import { Minimap } from './minimap';
 import { NavState } from './navstate';
 import { Tracker } from './tracker';
 import { WhatNow } from './whatnow';
+import { MiniGameView } from './minigame';
 
 export interface HudDeps {
   game(): GameServices | null;
@@ -198,6 +199,9 @@ export class Hud {
   private lastTravelPhase = '';
   private lastNeedSig = '';
   private savedUntil = 0;
+  /** The work mini-game over the action bar (its strokes go to the action runner). */
+  readonly mini = new MiniGameView((score) => { const g = this.deps.game(); if (g) g.sim.actions.perform(g.sim.state.run.playerId, score); });
+  private lastFrame = 0;
   private promptShown = false;
   private skipLabel = '';
   private needScratch: NeedView[] = [];
@@ -232,7 +236,7 @@ export class Hud {
     this.rightCol.append(this.clockPlate, this.minimap.el);
     this.el.append(
       this.leftCol, this.rightCol, this.compass.el, this.banner.el, this.dangerEl, this.deps.toasts.el, this.travelEl, this.edge.el, this.dest.el,
-      this.gainsEl, this.actionEl, this.promptEl, this.feedEl, this.dockEl, this.savedEl, this.reticle, this.hitFlash, this.downEl, this.combatChip, this.drawnChip,
+      this.gainsEl, this.mini.el, this.actionEl, this.promptEl, this.feedEl, this.dockEl, this.savedEl, this.reticle, this.hitFlash, this.downEl, this.combatChip, this.drawnChip,
       this.hoverCard.el, this.sleepEl, this.battleBtn,
     );
     this.downEl.append(h('div.mu-hud-down-card', null, icon('skull', 30), h('div.mu-hud-down-title', null, 'You are down'), this.downText));
@@ -441,6 +445,10 @@ export class Hud {
     this.updatePlayer(hud);
     this.updatePrompt(hud);
     this.updateAction(hud);
+    const dt = this.lastFrame ? Math.min(0.1, Math.max(0, (now - this.lastFrame) / 1000)) : 0;
+    this.lastFrame = now;
+    // the game runs with the clock: paused, it waits
+    this.mini.update(hud?.action ?? null, sim.clock.paused ? 0 : dt);
     this.updateTravel(hud);
     this.updateCombat(game, hud);
     this.updateOverlays(clock, hud);

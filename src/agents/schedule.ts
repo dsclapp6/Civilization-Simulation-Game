@@ -189,6 +189,131 @@ const WORK: Partial<Record<CareerId, Work>> = {
   beggar: W('church', 'sit', 'Begging at the church'),
 };
 
+/**
+ * Rotas: what a role does through the week, half a day at a time, beside its main work (`WORK`). A knight rides the
+ * bounds, trains the men at the yard, sees to his arms at the forge and attends his lord; a soldier stands guard,
+ * walks the walls and drills; a smith forges and shoes horses; a priest says the office and visits the sick. The
+ * entry is chosen by the person, the day and the half of it, so the same man is seen at different duties.
+ */
+const ROTA: Partial<Record<CareerId, readonly Work[]>> = {
+  knight: [
+    W('walls', 'walk', 'Riding the bounds on patrol', { main: 'sword' }),
+    W('drill', 'attack_slash', 'Training the men at arms', { main: 'sword', off: 'shield_heater' }),
+    W('door', 'work_hammer', 'At the forge, seeing to his arms', { kinds: ['smithy'], main: 'hammer' }),
+    W('manor', 'idle', 'Attending the lord'),
+    W('drill', 'attack_slash', 'Sword practice', { main: 'sword' }),
+  ],
+  squire: [
+    W('drill', 'attack_slash', 'Drilling with the sword', { main: 'sword' }),
+    W('door', 'work_hammer', 'Scouring his knight\'s mail', { kinds: ['smithy', 'stable'], main: 'hammer' }),
+    W('door', 'work_lift', 'Grooming the horses', { kinds: ['stable'], carry: 'bucket' }),
+    W('manor', 'idle', 'Waiting on his knight'),
+  ],
+  man_at_arms: [
+    W('guard', 'idle', 'On guard', { main: 'spear', off: 'shield_heater' }),
+    W('walls', 'walk', 'On patrol', { main: 'spear' }),
+    W('drill', 'attack_slash', 'Drilling the levy', { main: 'sword' }),
+  ],
+  soldier: [
+    W('guard', 'idle', 'On guard', { main: 'spear' }),
+    W('walls', 'walk', 'On patrol', { main: 'spear' }),
+    W('drill', 'attack_slash', 'At drill', { main: 'spear' }),
+  ],
+  sergeant: [
+    W('walls', 'walk', 'Walking the walls', { main: 'sword' }),
+    W('drill', 'attack_slash', 'Training the levy', { main: 'sword' }),
+    W('guard', 'idle', 'Inspecting the guard', { main: 'sword' }),
+  ],
+  archer: [
+    W('drill', 'draw_bow', 'Archery practice', { main: 'longbow' }),
+    W('walls', 'walk', 'On watch on the walls', { main: 'longbow' }),
+    W('door', 'work_hammer', 'Fletching arrows', { kinds: ['carpenter', 'smithy'], main: 'dagger' }),
+  ],
+  lord: [
+    W('manor', 'idle', 'Holding court in the hall'),
+    W('stroll', 'walk', 'Inspecting the fields'),
+    W('walls', 'walk', 'Inspecting the walls'),
+    W('drill', 'idle', 'Watching the men drill'),
+  ],
+  lady: [
+    W('manor', 'idle', 'Ordering the household'),
+    W('garden', 'work_dig', 'In the garden', { main: 'spade' }),
+    W('church', 'idle', 'At prayer'),
+    W('manor', 'work_spin', 'At her needlework', { main: 'distaff' }),
+  ],
+  smith: [
+    W('door', 'work_hammer', 'At the forge', { kinds: ['smithy'], main: 'hammer', off: 'tongs' }),
+    W('door', 'work_hammer', 'Shoeing horses', { kinds: ['stable', 'smithy'], main: 'hammer' }),
+    W('door', 'work_hammer', 'Forging blades', { kinds: ['smithy'], main: 'hammer', off: 'tongs' }),
+  ],
+  priest: [
+    W('church', 'idle', 'Saying the office', { main: 'book' }),
+    W('errand', 'walk', 'Visiting the sick', { main: 'book' }),
+    W('garden', 'work_dig', 'In the glebe garden', { main: 'spade' }),
+  ],
+  healer: [
+    W('garden', 'work_dig', 'Gathering herbs', { main: 'spade', shelter: true }),
+    W('errand', 'carry_walk', 'Tending the sick', { carry: 'basket' }),
+    W('home', 'work_stir', 'Preparing remedies', { main: 'ladle', shelter: true }),
+  ],
+  midwife: [
+    W('garden', 'work_dig', 'Gathering herbs', { main: 'spade', shelter: true }),
+    W('errand', 'carry_walk', 'Visiting mothers', { carry: 'basket' }),
+  ],
+  servant: [
+    W('errand', 'carry_walk', 'Fetching water', { carry: 'bucket' }),
+    W('errand', 'carry_walk', 'Carrying firewood', { carry: 'bundle_wood' }),
+    W('home', 'work_stir', 'Scrubbing pots', { main: 'ladle', shelter: true }),
+    W('garden', 'work_dig', 'Weeding the garden', { main: 'spade' }),
+  ],
+  steward: [
+    W('manor', 'idle', 'Keeping the accounts', { main: 'book' }),
+    W('stroll', 'walk', 'Going about the manor', { main: 'book' }),
+    W('market', 'idle', 'Buying for the household'),
+  ],
+  bailiff: [
+    W('stroll', 'walk', 'Inspecting the fields', { main: 'staff' }),
+    W('strip', 'idle', 'Overseeing the week-work', { main: 'staff' }),
+  ],
+  carpenter: [
+    W('door', 'work_saw', 'Sawing timber', { kinds: ['carpenter', 'sawpit'], main: 'saw', shelter: true }),
+    W('church', 'work_pick', 'Mending the church roof', { main: 'hammer' }),
+  ],
+  mason: [
+    W('church', 'work_pick', 'Dressing stone', { main: 'chisel' }),
+    W('walls', 'walk', 'Surveying the walls'),
+  ],
+  page: [
+    W('errand', 'carry_walk', 'Running errands', { carry: 'basket' }),
+    W('drill', 'attack_slash', 'Learning the sword', { main: 'sword' }),
+  ],
+  clerk: [
+    W('manor', 'idle', 'Keeping accounts', { main: 'book' }),
+    W('church', 'idle', 'Copying letters', { main: 'book' }),
+  ],
+  woodward: [
+    W('wood', 'work_axe', 'Felling wood', { main: 'axe' }),
+    W('wood', 'walk', 'Walking the woods for poachers', { main: 'staff' }),
+  ],
+};
+
+/** The rota entry for this person in this half of the day (undefined: the role has no rota). */
+export function rotaWork(p: Person, day: number, morning: boolean): Work | undefined {
+  const r = ROTA[p.career];
+  if (!r || r.length === 0) return undefined;
+  return r[Math.floor(hash01(p.id, day * 2 + (morning ? 0 : 1) + 300) * r.length) % r.length];
+}
+
+/** Every duty a role does (for the "who is this" card). */
+export function dutiesOf(career: CareerId): string[] {
+  const r = ROTA[career];
+  const w = WORK[career];
+  const out = new Set<string>();
+  if (w) out.add(w.label);
+  for (const x of r ?? []) out.add(x.label);
+  return [...out];
+}
+
 const MONASTIC: ReadonlySet<CareerId> = new Set<CareerId>(['monk', 'nun', 'prior', 'abbot']);
 const MARKET_SELLERS: ReadonlySet<CareerId> = new Set<CareerId>([
   'merchant', 'shopkeeper', 'peddler', 'baker', 'butcher', 'weaver', 'tailor', 'cobbler', 'potter', 'chandler', 'cooper', 'tanner', 'saddler',
@@ -826,9 +951,11 @@ export class Schedule {
     }
     // householders (no trade of their own): the home and its garden, the well, a visit
     if (c === 'none' || c === 'child') { this.domestic(p, o, day, wet, home, sp, morning); return; }
-    const wk = WORK[c];
+    const wk = rotaWork(p, day, morning) ?? WORK[c];
     if (!wk) { this.domestic(p, o, day, wet, home, sp, morning); return; }
     const w = this.workPlace(p, day, f, home, sp, o, wk);
+    // the rota names the duty (walls, drill and guard posts otherwise say their own)
+    if (w && wk !== WORK[c]) { o.label = wk.label; if (wk.where === 'drill' || wk.where === 'walls') { o.anim = wk.anim === 'idle' ? 'idle' : o.anim; if (wk.main) o.main = wk.main; } }
     if (!w) { this.clearLook(o); this.domestic(p, o, day, wet, home, sp, morning); return; }
     // bad weather sends field workers home for the afternoon and craftsmen under their roofs
     if (wet > 0.5 && wk.where !== 'cloister') {

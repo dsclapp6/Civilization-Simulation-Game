@@ -9,4 +9,5 @@ import './ruler';
 import './people';
 import './build';
 import './battle';
+import './who';
 export {};

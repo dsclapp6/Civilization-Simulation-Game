@@ -20,9 +20,14 @@ function opt(p: Pick<ActionOption, 'id' | 'label' | 'category' | 'target' | 'pri
 
 const SOLDIER_CAREERS: ReadonlySet<string> = new Set(['soldier', 'man_at_arms', 'sergeant', 'squire', 'knight', 'archer']);
 
+/** The steady hand in the binding mini-game counts like a few levels of Medicine (−3 … +3); unplayed, none. */
+function handedWith(perf: number, skill: number): number { return perf < 0 ? skill : Math.max(0, Math.min(20, skill + (perf - 0.5) * 6)); }
+
 export function createCombatProvider(sv: Services): ActionProvider {
   const sim: Simulation = sv.sim;
   const st = sim.state;
+  const handed = (actor: PersonId, skill: number): number => handedWith(sim.actions.performance(actor), skill);
+  const handXp = (actor: PersonId): number => { const p = sim.actions.performance(actor); return p < 0 ? 1 : 0.75 + 0.75 * p; };
 
   const weaponHeld = (actor: PersonId): HeldItem => {
     const eq = sv.economy?.inventory(actor).equipment.main;
@@ -166,17 +171,17 @@ export function createCombatProvider(sv: Services): ActionProvider {
           return { ok: r.ok, message: r.ok ? 'You take to your bed to mend.' : r.reason };
         }
         case 'bind': {
-          const r = sv.book.tend(me, skillOf(me, 'medicine'), sim.rng('combat'));
-          if (r.tended > 0) gainSkill(sim, me, 'medicine', 3 * fraction + 1);
+          const r = sv.book.tend(me, handed(actor, skillOf(me, 'medicine')), sim.rng('combat'));
+          if (r.tended > 0) gainSkill(sim, me, 'medicine', (3 * fraction + 1) * handXp(actor));
           return { ok: r.tended > 0, message: r.tended > 0 ? 'You bind your own wounds as best you can.' : r.message, gains: r.tended > 0 ? [{ label: 'Medicine', ref: 'medicine' }] : [] };
         }
         case 'tend': {
           if (option.target.kind !== 'person') return { ok: false };
           const q = st.persons.get(option.target.id);
           if (!q) return { ok: false };
-          const r = sv.book.tend(q, skillOf(me, 'medicine'), sim.rng('combat'));
+          const r = sv.book.tend(q, handed(actor, skillOf(me, 'medicine')), sim.rng('combat'));
           if (r.tended > 0) {
-            gainSkill(sim, me, 'medicine', 6);
+            gainSkill(sim, me, 'medicine', 6 * handXp(actor));
             sv.social?.adjustOpinion(q.id, actor, 8, 'bound my wounds');
             me.rep.generosity = Math.min(100, me.rep.generosity + 1);
             st.touch(me);

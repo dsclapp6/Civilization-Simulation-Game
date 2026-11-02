@@ -227,17 +227,19 @@ export function offerRequest(H: Hap, type: RequestType, from?: PersonId): number
   return r ? r.id : 0;
 }
 
-/** Each daytime hour: possibly offer a new request, keeping to the pacing target (a day is ten minutes of play: about one request every seven or eight). */
+/** Each daytime hour: possibly offer a new request, keeping to the pacing target (a day is ten minutes of play: a request every two or three days at most). */
 function maybeOffer(H: Hap): void {
   const me = H.state.persons.get(H.playerId);
   if (!me || me.death || H.state.run.phase !== 'alive') return;
   const cfg = DATA.requests;
   const open = H.save.reqs.filter((r) => r.state === 'offered' || r.state === 'accepted').length;
   if (open >= cfg.maxOpen) return;
+  // a lord is not sent on villagers' errands: their petitions come to the ruler's seat as matters of the realm
+  if (H.state.titlesHeldBy(me.id).size > 0) return;
   const since = H.day - H.save.lastOffer;
   if (since < cfg.minGapDays) return;
-  // a long quiet spell makes the next request likelier
-  const p = cfg.hourlyChance * H.diff('requests') + Math.min(0.5, Math.max(0, since - 1.2) * 0.35);
+  // a long quiet spell makes the next request a little likelier (requests are occasional: the days are for one's work)
+  const p = cfg.hourlyChance * H.diff('requests') + Math.min(0.2, Math.max(0, since - 3) * 0.08);
   if (!H.rng().chance(p)) return;
   offer(H, me);
 }

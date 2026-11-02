@@ -188,7 +188,7 @@ export class PlayerController implements PlayerApi {
 
   // ---- reused objects ----
   private readonly hudObj: PlayerHud;
-  private readonly hudAction: NonNullable<PlayerHud['action']> = { label: '', progress: 0, seconds: 0 };
+  private readonly hudAction: NonNullable<PlayerHud['action']> = { label: '', progress: 0, seconds: 0, id: '', anim: '', step: '' };
   private readonly playerView: PlayerView = { personId: 0, x: 0, y: 0, z: 0, yaw: 0, mounted: false, alive: true };
   private readonly focusPoint: P2 = { x: 0, z: 0 };
   private readonly markers: MapMarker[] = [
@@ -407,7 +407,11 @@ export class PlayerController implements PlayerApi {
     const a = this.sim.actions.active(this.personId);
     if (a && a.option.seconds > 0) {
       const ha = this.hudAction;
-      ha.label = a.option.label; ha.progress = a.progress; ha.seconds = a.option.seconds;
+      ha.label = a.option.label; ha.progress = a.progress; ha.seconds = a.option.seconds; ha.id = a.option.id;
+      // the visible step of the bout (the forge's heat → hammer → quench), else the bout's own animation
+      let acc = 0, step = a.option.steps?.[0];
+      for (const s of a.option.steps ?? []) { if (a.progress <= acc + s.share) { step = s; break; } acc += s.share; }
+      ha.anim = step?.anim ?? a.option.anim ?? ''; ha.step = step?.label ?? '';
       h.action = ha;
     } else h.action = null;
     h.travel = this.journey ? this.journey.state : null;

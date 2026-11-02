@@ -69,7 +69,8 @@ export function peoplePanel(ctx: PanelCtx): UiPanel {
       const row = h('div.mu-people-row', { class: p.id === me ? 'me' : '' },
         h('div.mu-people-who', null,
           h('b', null, fullName(p)),
-          h('span.mu-dim.mu-small', null, ` · ${role}, ${age}${titles.length ? ` · ${titles.join(', ')}` : ''}${p.id === ruler ? ' · rules here' : ''}`)),
+          h('span.mu-dim.mu-small', null, ` · ${role}, ${age}${titles.length ? ` · ${titles.join(', ')}` : ''}${p.id === ruler ? ' · rules here' : ''}`),
+          h('div.mu-tiny.mu-dim.mu-ital', null, `Now: ${ctx.game.zone.whereabouts(p.id, now).label}`)),
         p.id === me ? h('span.mu-small.mu-dim', null, 'you') : button('Live as', {
           size: 'small', icon: 'user', onClick: () => {
             const r = ctx.dispatch({ type: 'switchCharacter', personId: p.id });

@@ -65,17 +65,17 @@ describe('offering', () => {
     }
   });
 
-  it('keeps to the pacing target: about one request every five to ten minutes of play (a day is ten), never more than the cap open', () => {
+  it('keeps requests occasional: one every two to four days (a day is ten minutes of play), never more than the cap open', () => {
     const a = advSim({ seed: 'req-pace' });
     const days: number[] = [];
     a.sim.events.on('request', () => days.push(a.sim.absDay));
     let maxOpen = 0;
     for (let d = 0; d < 48; d++) { a.sim.advanceDays(1); maxOpen = Math.max(maxOpen, a.adv.happenings.openRequests().length); }
     // the player answers by declining at once, so the slots keep freeing
-    expect(maxOpen).toBeLessThanOrEqual(4);
+    expect(maxOpen).toBeLessThanOrEqual(2);
     const per = 48 / days.length; // game days between requests
-    expect(per).toBeGreaterThan(0.45);
-    expect(per).toBeLessThan(1.3);
+    expect(per).toBeGreaterThan(1.6);
+    expect(per).toBeLessThan(4.5);
   });
 
   it('lets the player ask a neighbour whether there is anything to do', () => {

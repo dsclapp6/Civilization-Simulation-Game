@@ -82,9 +82,9 @@
     "christening": { "start": ["{name} is christened at the font of {place}."], "end": ["The christening is over."] }
   },
   "requests": {
-    "maxOpen": 4,
-    "minGapDays": 0.25,
-    "hourlyChance": 0.32,
+    "maxOpen": 2,
+    "minGapDays": 1.5,
+    "hourlyChance": 0.08,
     "offerDays": 2.5,
     "weights": { "fetch": 3, "loan": 1.4, "work": 3, "message": 1.6, "lost_animal": 1.3, "watch": 0.5, "godparent": 0.5, "marriage": 0.25 },
     "fetch": {

@@ -117,7 +117,7 @@ export interface PlayerHud {
   /** Interact prompt for what the player faces ("E  Reap · strip of barley"). */
   prompt: { label: string; targetLabel: string; enabled: boolean; reason?: string } | null;
   /** The timed action in progress. */
-  action: { label: string; progress: number; seconds: number } | null;
+  action: { label: string; progress: number; seconds: number; id?: string; anim?: string; step?: string } | null;
   travel: TravelState | null;
   /** A hostile is within the fast-speed refusal radius. */
   danger: boolean;

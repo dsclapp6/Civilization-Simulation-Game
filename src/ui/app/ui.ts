@@ -135,6 +135,11 @@ export class UiApp implements GameUIExt {
     const onKey = (e: KeyboardEvent): void => this.onKeyDown(e);
     window.addEventListener('keydown', onKey, true);
     this.offs.push(() => window.removeEventListener('keydown', onKey, true));
+    const onKeyUp = (e: KeyboardEvent): void => {
+      if ((e.code === 'KeyJ' || e.code === 'KeyK') && this.hud.mini.active) { this.hud.mini.release(e.code === 'KeyJ' ? 'J' : 'K'); e.preventDefault(); }
+    };
+    window.addEventListener('keyup', onKeyUp, true);
+    this.offs.push(() => window.removeEventListener('keyup', onKeyUp, true));
     const onResize = (): void => this.applySettings();
     window.addEventListener('resize', onResize);
     this.offs.push(() => window.removeEventListener('resize', onResize));
@@ -427,6 +432,8 @@ export class UiApp implements GameUIExt {
     if (g) {
       const to = g.sim.state.persons.get(e.to);
       if (to) this.toasts.push({ tone: 'gold', icon: 'user', title: e.reason === 'death' ? 'You carry on' : 'A new life', text: `You are now ${fullName(to)}.`, ttl: 6, key: 'switched' }, this.clock);
+      // who this person is and what they are about (not over the heir screen after a death)
+      if (to && e.reason !== 'death') this.openPanel({ panel: 'ext', name: 'who', id: e.to });
     }
   }
 
@@ -692,6 +699,12 @@ export class UiApp implements GameUIExt {
       return;
     }
     if (this.screen !== 'game' || !this.bound) return;
+    // a bout of work is being played: J and K are its keys
+    if ((e.code === 'KeyJ' || e.code === 'KeyK') && this.hud.mini.active && !this.stack.top() && !isTypingTarget(e.target)) {
+      this.hud.mini.press(e.code === 'KeyJ' ? 'J' : 'K');
+      e.preventDefault(); e.stopPropagation();
+      return;
+    }
     // with steel out, J and K strike and guard (the input layer's), not the ledger and the realm pages
     if ((e.code === KEYMAP.input.strike || e.code === KEYMAP.input.guard) && this.bound.game.player.drawn?.() && !this.stack.top()) return;
     if (intent.type === 'escape') {
