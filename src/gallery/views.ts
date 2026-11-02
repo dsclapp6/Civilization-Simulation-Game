@@ -249,15 +249,16 @@ export function sheetStates(lib: MillenniaAssetLibrary, root: THREE.Group, kind:
 export function sheetForts(lib: MillenniaAssetLibrary, root: THREE.Group, culture: CultureId, o: Omit<BuildingOpts, 'culture' | 'level' | 'construction' | 'damage'>): ViewState {
   const st = newState('Gates and breaches');
   const base = { ...o, culture, construction: 1, damage: 0 };
-  (['open', 'shut', 'broken'] as const).forEach((gate, i) => {
-    placeBuilding(lib, st, root, 'gatehouse', { ...base, level: 1, gate }, (i - 1) * 14, -24, 'Gatehouse', `L1 ${gate}`);
-    placeBuilding(lib, st, root, 'gatehouse', { ...base, level: 2, gate }, (i - 1) * 14, -10, 'Gatehouse', `L2 ${gate}`);
-  });
+  // the six gatehouses side by side, their gates (+z) to the camera
+  const gx = BUILDINGS.gatehouse.w + 4;
+  ([1, 2] as const).forEach((level, li) => (['open', 'shut', 'broken'] as const).forEach((gate, i) => {
+    placeBuilding(lib, st, root, 'gatehouse', { ...base, level, gate }, (li * 3 + i - 2.5) * gx, -14, 'Gatehouse', `L${level} ${gate}`);
+  }));
   [0, 0.25, 0.5, 0.75, 1].forEach((breach, i) => {
-    placeBuilding(lib, st, root, 'wall', { ...base, level: 1, breach }, (i - 2) * 8.5, 4, 'Wall', `breach ${breach}`);
-    placeBuilding(lib, st, root, 'palisade', { ...base, level: 1, breach }, (i - 2) * 8.5, 14, 'Palisade', `breach ${breach}`);
+    placeBuilding(lib, st, root, 'wall', { ...base, level: 1, breach }, (i - 2) * 8.5, 10, 'Wall', `breach ${breach}`);
+    placeBuilding(lib, st, root, 'palisade', { ...base, level: 1, breach }, (i - 2) * 8.5, 20, 'Palisade', `breach ${breach}`);
   });
-  st.cam = { az: -24, el: 30, k: 0.7 };
+  st.cam = { az: -14, el: 24, k: 0.72 };
   return st;
 }
 
