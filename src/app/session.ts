@@ -167,5 +167,14 @@ export function makeControls(renderer: GameRenderer): UiRendererControls {
       const g = renderer.screenToGround(x, y);
       return g ? { x: g.x, z: g.z } : null;
     },
+    // civilization pass, wave B: what builder mode and the tactical view drive (absent on renderers without them)
+    setGhost: (g) => renderer.setGhost?.(g),
+    setBuildArea: (a) => renderer.setBuildArea?.(a),
+    setOverview: (o) => renderer.setOverview?.(o),
+    setOrderMarks: (m) => renderer.setOrderMarks?.(m),
+    orbit: (dy, dp) => renderer.orbit(dy, dp),
+    zoom: (n) => renderer.zoom(n),
+    pan: (dx, dy) => renderer.pan(dx, dy),
+    pick: (x, y) => renderer.pick(x, y),
   };
 }

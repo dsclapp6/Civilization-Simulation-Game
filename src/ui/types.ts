@@ -13,6 +13,7 @@ import type { ObjectivesApi } from '../sim/objectives/types';
 import type { ConstructionApi } from '../sim/construction/types';
 import type { RealmApi } from '../sim/realm/types';
 import type { LawApi } from '../sim/law/types';
+import type { BuildGhost, OrderMark, OverviewView } from '../render/types';
 import type { TerritoryApi } from '../sim/territory/types';
 import type { PersonId } from '../sim/state';
 import type { PanelRequest } from './core/requests';
@@ -74,6 +75,20 @@ export interface UiRendererControls {
   cameraMode?(): 'follow' | 'map' | 'free' | 'cinematic';
   /** Puts the camera somewhere for a cut-scene (switches to 'free'); `setCameraMode('follow')` brings it back. */
   setCameraPose?(position: { x: number; y: number; z: number }, lookAt: { x: number; y: number; z: number }, seconds?: number): void;
+  // ---- civilization pass, wave B (optional; the renderer may lack them: render/types.ts) ----
+  /** Builder mode: the ghost building and the buildable-land tint. */
+  setGhost?(ghost: BuildGhost | null): void;
+  setBuildArea?(area: ReadonlyArray<ReadonlyArray<{ x: number; z: number }>> | null): void;
+  /** Builder mode and the battle's tactical view: the overhead camera over a circle of land (null = back to before). */
+  setOverview?(view: OverviewView | null): void;
+  /** Orders drawn on the ground in battle. */
+  setOrderMarks?(marks: readonly OrderMark[] | null): void;
+  /** Turn / zoom / pan the camera (the overview camera while it is on): radians, wheel steps, screen pixels. */
+  orbit?(dYaw: number, dPitch: number): void;
+  zoom?(steps: number): void;
+  pan?(dxPixels: number, dyPixels: number): void;
+  /** What is under a screen position: a character, an animal, a building or the ground. */
+  pick?(x: number, y: number): { type: 'character' | 'animal' | 'building' | 'ground' | 'none'; id?: number; point?: { x: number; y: number; z: number } };
 }
 
 /** The app side of the UI: lifecycle and meta state. */
