@@ -100,6 +100,11 @@ describe('trespass', () => {
       terr.grantLeave!(guest.id, village.id, 2);
       expect(terr.leaveUntil!(guest.id, village.id)).toBeCloseTo(day + 2, 6);
       expect(terr.trespass(guest.id, court.x, court.z).level).toBe('none');
+      // a leave of no days is no leave
+      const caller = person();
+      terr.grantLeave!(caller.id, village.id, 0);
+      terr.grantLeave!(caller.id, village.id, -3);
+      expect(terr.leaveUntil!(caller.id, village.id)).toBe(0);
       // leave here is not leave elsewhere
       const manor2 = world.plots.find((p) => p.kind === 'manor_house' && p.settlement !== village.id)!;
       expect(terr.trespass(guest.id, manor2.x, manor2.z).level).toBe('private');
@@ -123,6 +128,16 @@ describe('trespass', () => {
       sim.state.clock.absDay = other + 0.5; terr.refresh();
       expect(isMarketDay(sim.absDay, town.id)).toBe(false);
       expect(terr.trespass(stranger.id, here.x, here.z).level).toBe('private');
+    });
+
+    it('does not let the market day open private ground by night, nor a shut castle', () => {
+      const here = { x: townManor.x, z: townManor.z };
+      let market = Math.floor(sim.absDay) + 8;
+      while (!isMarketDay(market, town.id)) market++;
+      sim.state.clock.absDay = market + 0.02; terr.refresh();            // the small hours of the market day
+      expect(terr.trespass(stranger.id, here.x, here.z)).toMatchObject({ level: 'private', cause: 'demesne' });
+      sim.state.clock.absDay = market + 0.5; terr.refresh();
+      expect(terr.trespass(stranger.id, here.x, here.z).level).toBe('none');
     });
 
     it('closes the lord\'s deer park to those without business, like his closes', () => {

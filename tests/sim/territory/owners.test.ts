@@ -106,6 +106,14 @@ describe('who holds the land', () => {
     const v3 = terr.version();
     sim.events.emit('siege', { phase: 'start', settlement: 1, besieger: 2 });
     expect(terr.version()).toBeGreaterThan(v3);
+    // a title holder's death moves it; a commoner household head's does not
+    const v4 = terr.version();
+    const commoner = mkPerson(sim, { age: 40, tier: 2 });
+    sim.events.emit('death', { person: commoner.id, cause: 'illness', age: 40, wasHead: true });
+    expect(terr.version()).toBe(v4);
+    const holder = st.persons.get(st.titleFor('manor', world.settlements.find((q) => q.kind === 'village' && st.titleFor('manor', q.id))!.id)!.holder)!;
+    sim.events.emit('death', { person: holder.id, cause: 'illness', age: 40, wasHead: true });
+    expect(terr.version()).toBeGreaterThan(v4);
   });
 
   it('moves `version` when a feud between Houses with armies in the field starts and when it runs out', () => {

@@ -134,7 +134,6 @@ export class Territory implements TerritoryRuntime {
   private readonly owners: Array<Owner | undefined> = [];
   private claims: Claim[] = [];
   private claimSig = '';
-  private profileEpoch = 0;
   private readonly profiles = new Map<number, ResourceProfile>();
   private riverHolders: Set<number> | null = null;
   private readonly alarms = new Map<number, { hour: number; on: boolean }>();
@@ -155,7 +154,7 @@ export class Territory implements TerritoryRuntime {
     const on = sim.events.on.bind(sim.events);
     this.offs.push(on('inheritance', () => this.bump()));
     this.offs.push(on('office', (e) => { if (TITLE_OFFICES.has(e.office)) this.bump(); }));
-    this.offs.push(on('death', (e) => { if (e.wasHead || sim.state.titlesHeldBy(e.person).size > 0) this.bump(); }));
+    this.offs.push(on('death', (e) => { if (sim.state.titlesHeldBy(e.person).size > 0) this.bump(); }));
     for (const ev of ['war', 'stance', 'siege', 'raid', 'battle'] as const) this.offs.push(on(ev, () => this.bump()));
     this.offs.push(on('construction', () => { this.raisedDirty = true; this.watchOutposts(); }));
     this.offs.push(on('dayStarted', () => this.expireLeave()));
@@ -246,7 +245,6 @@ export class Territory implements TerritoryRuntime {
     if (sig === this.claimSig) return false;
     this.claimSig = sig;
     this.claims = list.map((o) => ({ id: o.id, x: o.x, z: o.z, parent: o.settlement, name: o.name, owner: NO_OWNER }));
-    this.profileEpoch++;
     this.profiles.clear();
     this.owners.length = 0;
     if (bumpIfChanged) this.ver++;
@@ -529,17 +527,19 @@ export class Territory implements TerritoryRuntime {
     // the manor's bound people work his closes
     if (land.kind === 'demesne' && p.estate === 'unfree' && p.settlement === land.settlement) return true;
     if (this.leaveUntil(p.id, land.settlement) > this.sim.absDay) return true;
+    // the market day brings strangers into a town (by day: the castle shut against the night or an enemy stays shut)
     const st = this.sById.get(land.settlement);
-    if (st && st.market && (st.kind === 'town' || st.kind === 'city') && isMarketDay(this.sim.absDay, st.id)) return true;
+    if (st && st.market && (st.kind === 'town' || st.kind === 'city') && land.kind !== 'castle' && isMarketDay(this.sim.absDay, st.id) && dayPart(this.sim.absDay) !== 'night') return true;
     return false;
   }
 
   // ---- the lord's leave (saved) ----
 
   grantLeave(person: PersonId, settlement: number, days: number): void {
+    if (!(days > 0)) return;
     let m = this.leave.get(person);
     if (!m) { m = new Map(); this.leave.set(person, m); }
-    const until = this.sim.absDay + Math.max(0, days);
+    const until = this.sim.absDay + days;
     if ((m.get(settlement) ?? 0) >= until) return;
     m.set(settlement, until);
     this.saveLeave();

@@ -2,7 +2,8 @@
 // water, salt on the coastal marsh, silver and gold in the mountains. Generated from the terrain the earlier stages made and
 // from the settlements, strips and roads the layout stage placed (a deposit never lies in a village, a field or on a road),
 // and a pure function of the seed: every random number comes from a fork of the generator's own stream, and nothing earlier
-// in the pipeline is touched, so adding deposits changed no plot, strip or height.
+// in the pipeline is touched (no plot, strip or road moved); the one thing added to the world besides the list is a level
+// working floor under each mining deposit in uneven ground (see PAD_HALF).
 //
 // How: one pass over the macro grid scores every dry cell for each kind (biome, height, slope, nearness to water or coast and a
 // slowly varying "province" so ores lie in belts, not evenly). Candidates are then taken best first with a minimum spacing per

@@ -2,6 +2,8 @@
 // Implemented by src/sim/territory/** (`installTerritory`). Pure functions of the world and the sim state (land kinds
 // from strips, parcels, plots and the world's maps; owners from titles); cheap enough to ask per frame for the player and
 // a few times a second for patrols. Registered as `sim.services.territory`.
+// Builder A1 added, additively: `TrespassCheck.cause` and `.lord`, `TrespassCause`, `LandOwner`, the optional `TerritoryApi.ownerOf`,
+// `grantLeave`, `leaveUntil`, `exitFrom`, and `TerritoryRuntime` (what `installTerritory` returns).
 import type { P2 } from '../../core/math';
 import type { Deposit, ResourceKind } from '../../world/types';
 import type { HouseId, HouseholdId, PersonId, TitleId } from '../state';
