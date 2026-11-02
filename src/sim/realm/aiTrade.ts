@@ -6,6 +6,7 @@
 import type { CropKind } from '../../core/domain';
 import { hash01 } from '../../core/math';
 import { adjustWorks, warmUp } from './aiWorks';
+import { tidyOrders } from './aiSupply';
 import { held, refreshFunds, type Place, type Sense } from './aiSense';
 import type { Ai } from './ai';
 import { cropPlanView, setCropPlan } from './plans';
@@ -53,23 +54,17 @@ const SELL: ReadonlyArray<{ good: string; keep: number }> = [
   { good: 'rye', keep: 40 }, { good: 'oats', keep: 30 }, { good: 'ale', keep: 40 },
 ];
 
-/** The common building materials a ruler who builds keeps a stock of, bought only when the price is under this share over the usual. */
-const STOCK: ReadonlyArray<{ good: string; keep: number }> = [
-  { good: 'planks', keep: 40 }, { good: 'nails', keep: 40 }, { good: 'stone', keep: 40 },
-];
-const CLASS_SCALE = { manor: 0.5, abbey: 0.4, barony: 1, county: 2, kingdom: 3 } as const;
-const CHEAP = 1.12;
-
 /**
- * The standing orders of the treasury, looked at once a year: a surplus he holds is put on sale (the order stays and sells what
- * comes in above what he keeps), and a ruler with a full purse who builds keeps a small stock of the common materials, bought only
- * when they are cheap. A thin purse takes the buying orders down.
+ * The standing orders of the treasury: a surplus he holds is put on sale once a year (the order stays and sells what comes in above
+ * what he keeps), the orders that lay in the materials a work lacks are taken down when they have done their work, and a thin purse
+ * takes the buying orders down.
  */
 export function orderRound(A: Ai, S: Sense): void {
   const R = A.R;
   if (!R.economy.sell || !R.economy.procure || !S.payer) return;
   const market = S.markets.length ? S.markets[0] : -1;
   refreshFunds(R, S);
+  tidyOrders(A, S);
   const orders = tradeOrders(R, S.ruler);
   // a thin purse buys nothing: the standing buy orders are taken down until it fills
   if (S.funds < S.comfort * 0.7) {
@@ -84,14 +79,6 @@ export function orderRound(A: Ai, S: Sense): void {
     if (have(s.good, 'sell') || held(S, s.good) <= s.keep * 1.5 + 10) continue;
     const res = addTradeOrder(R, S.ruler, { settlement: market, good: s.good, side: 'sell', limit: 0, keep: s.keep });
     if (res.ok) A.year().orders++;
-  }
-  if (S.class !== 'manor' && S.class !== 'abbey' && S.allowance > S.comfort * 2 && (S.open.length > 0 || S.fear > 0.4)) {
-    for (const s of STOCK) {
-      if (have(s.good, 'buy')) continue;
-      const base = R.economy.good(s.good)?.basePrice ?? 1;
-      const res = addTradeOrder(R, S.ruler, { settlement: market, good: s.good, side: 'buy', limit: Math.round(base * CHEAP * 100) / 100, keep: Math.ceil(s.keep * CLASS_SCALE[S.class]) });
-      if (res.ok) A.year().orders++;
-    }
   }
 }
 

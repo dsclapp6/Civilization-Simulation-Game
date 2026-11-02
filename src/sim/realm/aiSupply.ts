@@ -8,6 +8,7 @@ import type { SiteView } from '../construction/types';
 import { AI } from './aiConfig';
 import { held, type Place, type Sense } from './aiSense';
 import type { Ai } from './ai';
+import { addTradeOrder, removeTradeOrder, tradeOrders } from './trade';
 
 /** The goods that run short at the markets (they are dug or felled, and a market keeps a few weeks of them). */
 export const SCARCE: ReadonlySet<string> = new Set(['timber', 'stone', 'iron', 'planks', 'brick']);
@@ -47,6 +48,41 @@ export function supplied(A: Ai, S: Sense, p: Place, kind: BuildingKind, level = 
     if (scarce && A.priceRatio(p.id, g) > AI.dearPrice) return `${g} (dear)`;
   }
   return null;
+}
+
+/**
+ * A ruler who cannot start a work for want of a material the market has too little of lays in a stock: a standing order to buy it
+ * (never at more than `AI.dearPrice` times the usual price) until the store holds what the first days of the work need, and starts
+ * the work when it does. Returns whether an order stands for it.
+ */
+export function stockUp(A: Ai, S: Sense, p: Place, kind: BuildingKind, good: string, level = 1): boolean {
+  const R = A.R, C = R.construction;
+  if (!C || !R.economy.procure || !S.payer) return false;
+  const cost = C.cost(kind, level);
+  const q = cost.goods[good] ?? 0;
+  if (q < 1) return false;
+  const need = Math.ceil(q * Math.min(1, (8 * maxCrew(cost.labour)) / Math.max(1, cost.labour)) * AI.supplyMargin);
+  const orders = tradeOrders(R, S.ruler);
+  const have = orders.find((o) => o.good === good && o.side === 'buy');
+  if (have && have.keep >= need) return true;
+  if (have && !removeTradeOrder(R, S.ruler, have.id).ok) return true;
+  const base = R.economy.good(good)?.basePrice ?? 1;
+  const res = addTradeOrder(R, S.ruler, { settlement: -1, good, side: 'buy', limit: Math.round(base * AI.dearPrice * 100) / 100, keep: need });
+  if (!res.ok) return false;
+  A.mark(S.house, `stock:${good}`);
+  A.year().orders++;
+  return true;
+}
+
+/** Stock-up orders that have done their work (the store holds what they wanted) or waited too long are taken down. */
+export function tidyOrders(A: Ai, S: Sense): void {
+  const R = A.R;
+  for (const o of tradeOrders(R, S.ruler)) {
+    if (o.side !== 'buy') continue;
+    const at = A.lastAt(S.house, `stock:${o.good}`);
+    if (at < 0) continue;
+    if (held(S, o.good) >= o.keep || R.day - at > AI.stockDays) { removeTradeOrder(R, S.ruler, o.id); A.touch(); }
+  }
 }
 
 /** A work that is stuck: stalled, or waiting for a material the market cannot give. */

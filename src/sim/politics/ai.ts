@@ -8,6 +8,7 @@ import { toDate } from '../../core/time';
 import { ageYears, TITLE_RANK, type HouseId, type Person } from '../state';
 import { claimOn } from './titles';
 import { clamp, type PoliticsCore, YEAR } from './core';
+import { fortFactor, mightOf, masonryOf, siegecraftOf } from './might';
 import type { Diplomacy } from './diplomacy';
 import type { AiGoal, WarCause } from './types';
 import type { Wars } from './wars';
@@ -270,8 +271,52 @@ export class Ai {
     }
     w += Math.min(0.3, famine) + (stricken ? 0.22 : 0);
     if (toDate(c.day).season === 3) w += 0.08;
-    // thin on men-at-arms: the House has less than its land should field
+    // thin on men-at-arms: the House has less under arms than its people should field (the rulers' recruits - `realm.recruit` - fill this)
+    w += 0.12 * this.thin(o);
     return clamp(w, 0, 1);
+  }
+
+  /** 0..1: how short of its people's due in standing men a House is (retinue, garrisons and hired companies, weighed as the military does). */
+  thin(o: HouseId): number {
+    const c = this.core;
+    return c.memo(`t:${o}`, () => {
+      const mil = c.sim.services.military;
+      if (!mil?.standing) return 0;
+      let pop = 0;
+      for (const sid of c.demesnes(o)) pop += c.state.residentsOf(sid).length;
+      const due = Math.max(3, pop * 0.04);
+      return clamp(1 - mil.standing(o) / due, 0, 1);
+    });
+  }
+
+  /** What the House's techniques add to the weight of its men (1 .. 1.35). */
+  might(h: HouseId): number {
+    const c = this.core;
+    return c.memo(`m:${h}`, () => mightOf((k) => c.techBonus(h, k)));
+  }
+
+  /**
+   * What a siege of the House's lands would meet, as a multiplier on its defenders (1 .. ~1.9): the walls, towers and keeps of its
+   * demesnes as the macro siege counts them (mean over the places, since the besiegers take them one by one), made to count for more
+   * by the masonry it commands.
+   */
+  bulwark(o: HouseId): number {
+    const c = this.core;
+    return c.memo(`b:${o}`, () => {
+      const places = c.demesnes(o);
+      if (places.length === 0) return 1;
+      let sum = 0;
+      for (const sid of places) sum += c.memo(`f:${sid}`, () => fortFactor(c.state.buildingsAt.get(sid) ?? []).fort);
+      const mean = sum / places.length;
+      return 1 + (mean - 1) * 0.35 * (mean > 1 ? masonryOf((k) => c.techBonus(o, k)) : 1);
+    });
+  }
+
+  /** How much a House has out-built another this year, -1 .. 1 (the AI rulers' works, techniques and men; 0 when nobody tells). */
+  outbuilt(h: HouseId, o: HouseId): number {
+    const g = this.core.growthSource;
+    if (!g) return 0;
+    return clamp((g(h) - g(o)) / 12, -1, 1);
   }
 
   /** Friends fight beside a House: half of every ally's strength counts. */
@@ -289,12 +334,15 @@ export class Ai {
     const c = this.core;
     const pw = c.personality(h);
     const mind = c.mindOf(h);
-    const sa = this.withAllies(h);
+    // the weight of the men, made to count for what their techniques and arms are worth, and of the defender's walls
+    const sa = this.withAllies(h) * this.might(h) * (this.bulwark(o) > 1.05 ? siegecraftOf((k) => c.techBonus(h, k)) : 1);
     // a defender's overlord (if he is of another realm) and allies come to his aid
     const lo = c.realmLeader(o) !== c.realmLeader(h) ? c.realmLeader(o) : o;
-    const sd = Math.max(this.withAllies(o), lo !== o ? this.withAllies(lo) : 0);
+    const sd = Math.max(this.withAllies(o) * this.might(o), lo !== o ? this.withAllies(lo) * this.might(lo) : 0) * this.bulwark(o);
     const odds = sa / (sa + sd);
     let d = (odds - 0.5) * 1.7 + this.weakness(o) - WAR_BASELINE;
+    // a House that is out-building its neighbour grows bold, and a neighbour that does not keep up is a prize (SPEC §16)
+    d += 0.1 * this.outbuilt(h, o);
     const claim = this.bestClaim(h, o);
     if (claim) d += 0.12 * claim;
     d += c.tie(h, o).grievance / 200;

@@ -158,6 +158,7 @@ export function installPolitics(sim: Simulation, deps: Pick<Wave3Deps, 'economy'
     personality: (h) => core.personality(h),
     mind: (h) => core.save.ai[String(h)],
     think: (h) => ai.think(h),
+    setGrowthSource: (fn) => { core.growthSource = fn; },
 
     // ---- offices ----
     officeSeats: (place) => offices.officeSeats(place),

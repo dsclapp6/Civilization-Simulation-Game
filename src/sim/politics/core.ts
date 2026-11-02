@@ -89,6 +89,8 @@ export class PoliticsCore {
   private geo: { sig: number; link: number; neighbours: Map<HouseId, HouseId[]>; pts: Map<HouseId, number[]>; dem: Map<HouseId, number[]> } | null = null;
   /** Bumped when a marriage or alliance link between two Houses appears or goes. */
   private linkRev = 0;
+  /** Set by the AI rulers (src/sim/realm): how much a House has grown this year (works raised, techniques, men), 0 when nobody tells. */
+  growthSource: ((house: HouseId) => number) | null = null;
   private readonly stanceMemo = new Map<string, Stance>();
 
   constructor(sim: Simulation, deps: { social: SocialApi; economy: EconomyApi }) {

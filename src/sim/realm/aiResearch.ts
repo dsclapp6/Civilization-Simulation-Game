@@ -8,7 +8,6 @@ import type { TechDef } from '../advancement/types';
 import { AI, RESEARCH_AT_ONCE, RESEARCH_GAP } from './aiConfig';
 import { held, refreshFunds, type Sense } from './aiSense';
 import type { Ai } from './ai';
-import { outpostRound } from './aiOutpost';
 import { SCARCE } from './aiSupply';
 import { startResearch } from './research';
 import { hash01 } from '../../core/math';
@@ -126,9 +125,20 @@ export function researchPicks(A: Ai, S: Sense): ResearchPick[] {
     if (def.year !== undefined && day / 16 < def.year) continue;
     let goods = 0, short = false;
     for (const [g, q] of Object.entries(res.goods)) {
-      goods += q * (R.economy.good(g)?.basePrice ?? 1);
-      // the dear materials must be in the markets (a technique that wants 400 stone waits for a quarry); the rest are bought over time
-      if (SCARCE.has(g) && R.economy.stockAt && held(S, g) + A.stockAt(seat, g) * 0.9 < q * AI.supplyMargin) short = true;
+      const gd = R.economy.good(g);
+      goods += q * (gd?.basePrice ?? 1);
+      if (!R.economy.stockAt) continue;
+      const missing = q - held(S, g);
+      if (missing <= 0) continue;
+      if (!gd?.macro) {
+        // goods the markets keep only a shelf of (arrows, cloth, horses) are bought a shelf at a time: the price of a hundred where
+        // there are a score runs away
+        const shelf = gd?.category === 'livestock' ? 4 : gd?.quality ? 10 : 25;
+        if (missing > shelf) short = true;
+      } else if (SCARCE.has(g)) {
+        // the dear materials must be in the markets: a technique that wants 400 stone waits for a quarry
+        if (A.stockAt(seat, g) * 0.9 < missing * AI.supplyMargin) short = true;
+      } else if (A.stockAt(seat, g) * 0.9 < missing) short = true;
     }
     if (short) continue;
     const value = res.pence + goods;
@@ -193,11 +203,4 @@ export function researchRound(A: Ai, S: Sense): void {
     A.block(S.house, `r:${pick.def.id}`, AI.retryDays * (res.reason?.startsWith('Nobody') ? 3 : 1));
   }
   A.mark(S.house, 'res');
-}
-
-/** The third stage of a round: what he learns, and where he founds new places. */
-export function learningRound(A: Ai, S: Sense): void {
-  const round = Math.floor(A.R.day / 4);
-  if ((round + S.unit.key) % 2 === 0) researchRound(A, S);
-  outpostRound(A, S);
 }

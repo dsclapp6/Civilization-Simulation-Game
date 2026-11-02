@@ -9,11 +9,12 @@ import { hash01 } from '../../core/math';
 import type { ResourceKind } from '../../world/types';
 import { costValue, maxPerSettlement, rulesOf } from '../construction/data';
 import { TITLE_RANK } from '../state';
-import { AI, BARRACKS_MEN, DEFENCE_KINDS, FORT_WEIGHT, HOUSING_KINDS, NOTABLE, PLACE_PER_ROUND, YEAR_SHARE } from './aiConfig';
+import { AI, BARRACKS_MEN, DEFENCE_KINDS, FORT_WEIGHT, HOUSING_KINDS, NOTABLE, YEAR_SHARE } from './aiConfig';
+import type { PlacementCheck } from '../construction/types';
 import { fortWanted, loadPlace, openLimit, refreshFunds, type Place, type Sense } from './aiSense';
 import { researchPlaceWanted } from './aiResearch';
 import { findSpot } from './aiSpot';
-import { liveValue, stuck, supplied } from './aiSupply';
+import { liveValue, stockUp, stuck, supplied } from './aiSupply';
 import type { Ai } from './ai';
 import { addNews } from './news';
 import { setWorksShare, worksShare } from './plans';
@@ -107,11 +108,11 @@ const RULES: readonly Rule[] = [
   { kind: 'cloister', group: 'faith', f: (c) => ((c.p.kind === 'abbey' || c.p.kind === 'priory' || c.p.kind === 'nunnery') && c.n('cloister') < 1 ? [0.5, 'a cloister'] : 0) },
   { kind: 'abbey_church', group: 'faith', f: (c) => ((c.p.kind === 'abbey') && c.n('abbey_church') < 1 ? [0.5, 'an abbey church'] : 0) },
   // ---- arms and walls: they follow fear ----
-  { kind: 'archery_butts', group: 'military', f: (c) => (c.n('archery_butts') < 1 && c.p.pop >= 60 && (c.S.fear > 0.25 || c.S.mind.ambitious > 0.5) ? [0.2 + 0.2 * c.S.fear, 'butts to train the archers'] : 0) },
+  { kind: 'archery_butts', group: 'military', f: (c) => (c.n('archery_butts') < 1 && c.p.pop >= 80 && (c.S.fear > 0.3 || c.S.mind.ambitious > 0.6) ? [0.18 + 0.2 * c.S.fear, 'butts to train the archers'] : 0) },
   { kind: 'barracks', group: 'military', f: (c) => (c.men >= BARRACKS_MEN && c.n('barracks') < Math.ceil(c.men / 40) ? [0.32 + 0.3 * c.S.fear, 'a barracks for the men'] : 0) },
   { kind: 'training_yard', group: 'military', f: (c) => (c.S.troops.length >= 14 && c.n('training_yard') < 1 ? [0.22 + 0.2 * c.S.fear, 'a yard to train in'] : 0) },
   { kind: 'great_hall', group: 'military', f: (c) => (c.n('great_hall') < 1 && c.S.tier >= 5 && c.p.id === c.S.seat ? [0.14, 'a great hall'] : 0) },
-  { kind: 'palisade', group: 'defence', f: (c) => (fortGap(c) && (!c.has('curtain_walls') || c.p.kind === 'village' || c.p.kind === 'hamlet') ? [0.3 + 0.5 * c.S.fear, 'a palisade against the danger'] : 0) },
+  { kind: 'palisade', group: 'defence', f: (c) => (c.S.fear >= 0.3 && fortGap(c) && (!c.has('curtain_walls') || c.p.kind === 'village' || c.p.kind === 'hamlet') ? [0.3 + 0.5 * c.S.fear, 'a palisade against the danger'] : 0) },
   { kind: 'wall', group: 'defence', f: (c) => (fortGap(c) && c.has('curtain_walls') ? [0.45 + 0.5 * c.S.fear, 'curtain wall against the danger'] : 0) },
   { kind: 'tower', group: 'defence', f: (c) => (fortGap(c) && c.has('stone_keep') && c.p.pieces >= 5 && c.n('tower') < c.p.pieces / 6 ? [0.3 + 0.3 * c.S.fear, 'a tower on the wall'] : 0) },
   { kind: 'gatehouse', group: 'defence', f: (c) => (fortGap(c) && c.has('curtain_walls') && c.n('wall') >= 6 && c.n('gatehouse') < 1 ? [0.3 + 0.2 * c.S.fear, 'a gatehouse'] : 0) },
@@ -198,7 +199,7 @@ export function wantsFor(A: Ai, S: Sense, p: Place): Want[] {
   // a place to work out the technique he wants most
   if (p.id === S.seat || S.places.length === 1) {
     const need = researchPlaceWanted(A, S);
-    if (need) add(need.kind, 0.7, `a place to work out ${need.tech.replace(/_/g, ' ')}`, 'craft');
+    if (need) add(need.kind, 0.45, `a place to work out ${need.tech.replace(/_/g, ' ')}`, 'craft');
   }
   out.sort((a, b) => b.score - a.score || (a.kind < b.kind ? -1 : 1));
   return out;
@@ -210,24 +211,44 @@ export function wantsFor(A: Ai, S: Sense, p: Place): Want[] {
 
 const aOrAn = (n: string): string => (/^[aeiou]/i.test(n) ? `an ${n.toLowerCase()}` : `a ${n.toLowerCase()}`);
 
-export function tryPlace(A: Ai, S: Sense, w: Want): boolean {
-  const R = A.R, C = R.construction;
-  if (!C || !S.payer) return false;
+/** What a ruler's round decided to do with the builder (chosen in one shard, done in the next, so that no call is long). */
+export type Pending =
+  | { kind: 'place'; want: Want; spot: PlacementCheck }
+  | { kind: 'repair'; place: Place }
+  | { kind: 'upgrade'; place: Place; id: number; building: BuildingKind };
+
+/** Weighs a want against the purse and the markets and finds it a spot: the spot, or null (with the reason noted and the want put off). */
+function prepare(A: Ai, S: Sense, w: Want): PlacementCheck | null {
+  const R = A.R;
   const key = `w:${w.place.id}:${w.kind}`;
-  if (A.blocked(S.house, key)) return false;
   const value = liveValue(A, w.place, w.kind);
   const share = value <= 600 ? 1 : AI.projectShare;
-  if (value > S.allowance * share || S.allowance < AI.minFunds) return false;
+  if (value > S.allowance * share || S.allowance < AI.minFunds) { A.note(`${S.ruler} ${w.kind}@${w.place.id}: too dear (${Math.round(value)} of ${Math.round(S.allowance)})`); return null; }
   const short = supplied(A, S, w.place, w.kind);
-  if (short) { A.block(S.house, key, 6); return false; }
+  if (short) {
+    A.note(`${S.ruler} ${w.kind}@${w.place.id}: no ${short}`);
+    // a material the markets lack is laid in by a standing order, and the work begun when the store holds it
+    if (!short.endsWith(')') && w.score >= AI.startScore + 0.1) stockUp(A, S, w.place, w.kind, short);
+    A.block(S.house, key, 6);
+    return null;
+  }
   const spot = findSpot(R, S, w.place, w.kind);
-  if (!spot) { A.block(S.house, key, AI.retryDays); return false; }
+  if (!spot) { A.note(`${S.ruler} ${w.kind}@${w.place.id}: no room`); A.fail(S.house, key, AI.retryDays); return null; }
+  return spot;
+}
+
+/** Stakes the work out with the builder. */
+function commitPlace(A: Ai, S: Sense, w: Want, spot: PlacementCheck): boolean {
+  const R = A.R, C = R.construction;
+  if (!C) return false;
+  const key = `w:${w.place.id}:${w.kind}`;
   const rules = rulesOf(w.kind);
   const res = C.place(S.ruler, w.kind, spot.x, spot.z, spot.rot, {
     occupant: rules.cat === 'home' ? 'vacant' : undefined,
     priority: DEFENCE_KINDS.has(w.kind) && S.fear > 0.6 ? -1000 : undefined,
   });
-  if (!res.ok || res.site === undefined) { A.block(S.house, key, AI.retryDays); return false; }
+  if (!res.ok || res.site === undefined) { A.note(`${S.ruler} ${w.kind}@${w.place.id}: refused: ${res.reason}`); A.fail(S.house, key, AI.retryDays); return false; }
+  A.worked(S.house, key);
   A.sitePlaced(S.house, res.site, w.kind, w.place.id);
   const view = C.site(res.site);
   if (view) S.open.push(view);
@@ -251,31 +272,33 @@ export function tryPlace(A: Ai, S: Sense, w: Want): boolean {
 
 /** What a ruler cares to improve when he is rich, and how much. */
 const UPGRADES: Readonly<Partial<Record<BuildingKind, number>>> = {
-  watermill: 0.35, windmill: 0.3, smithy: 0.28, bakehouse: 0.24, brewhouse: 0.22, church: 0.3, barn: 0.2, granary: 0.22,
-  market_hall: 0.3, guildhall: 0.25, warehouse: 0.2, tavern: 0.2, school: 0.2, infirmary: 0.2, stable: 0.2, carpenter: 0.2, weaver: 0.2,
+  watermill: 0.35, windmill: 0.3, smithy: 0.2, bakehouse: 0.2, brewhouse: 0.18, church: 0.3, barn: 0.18, granary: 0.2,
+  market_hall: 0.3, guildhall: 0.25, warehouse: 0.2, tavern: 0.2, school: 0.2, infirmary: 0.2, stable: 0.14, carpenter: 0.16, weaver: 0.16,
   manor_house: 0.18, great_hall: 0.15,
   barracks: 0.3, training_yard: 0.2, palisade: 0.3, wall: 0.4, tower: 0.3, gatehouse: 0.3, keep_stone: 0.4, motte: 0.3,
 };
 const FORT_UP: ReadonlySet<BuildingKind> = new Set<BuildingKind>(['palisade', 'wall', 'tower', 'gatehouse', 'keep_stone', 'motte', 'barracks', 'training_yard']);
 
-export function tryRepair(A: Ai, S: Sense, p: Place): boolean {
+function commitRepair(A: Ai, S: Sense, p: Place): boolean {
   const C = A.R.construction;
-  if (!C || !p.hurt || A.blocked(S.house, `m:${p.hurt.id}`)) return false;
-  const q = C.quote?.(S.ruler, 'repair', p.hurt.id);
-  if (!q || !q.ok) { A.block(S.house, `m:${p.hurt.id}`, AI.retryDays); return false; }
-  const value = q.cost ? costValue(p.hurt.kind, q.cost) : 0;
+  if (!C || !p.hurt) return false;
+  const b = p.hurt;
+  const q = C.quote?.(S.ruler, 'repair', b.id);
+  if (!q || !q.ok) { A.fail(S.house, `m:${b.id}`, AI.retryDays); return false; }
+  const value = q.cost ? costValue(b.kind, q.cost) : 0;
   if (value > S.funds - S.comfort * 0.5) return false;
-  const res = C.repair(S.ruler, p.hurt.id);
-  if (!res.ok) { A.block(S.house, `m:${p.hurt.id}`, AI.retryDays); return false; }
-  if (res.site !== undefined) A.sitePlaced(S.house, res.site, p.hurt.kind, p.id, 'repair');
+  const res = C.repair(S.ruler, b.id);
+  if (!res.ok) { A.fail(S.house, `m:${b.id}`, AI.retryDays); return false; }
+  if (res.site !== undefined) A.sitePlaced(S.house, res.site, b.kind, p.id, 'repair');
   p.hurt = null;
   refreshFunds(A.R, S);
   return true;
 }
 
-export function tryUpgrade(A: Ai, S: Sense, p: Place): boolean {
-  const R = A.R, C = R.construction;
-  if (!C || p.prosperity < 1 || S.allowance < AI.minFunds * 4) return false;
+/** The building the ruler would most like to improve at the place (a look at the place's buildings; nothing is asked of the builder). */
+function chooseUpgrade(A: Ai, S: Sense, p: Place): { id: number; kind: BuildingKind } | null {
+  const R = A.R;
+  if (!R.construction || p.prosperity < 1 || S.allowance < AI.minFunds * 4) return null;
   const list = R.state.buildingsAt.get(p.id) ?? [];
   let best: { id: number; kind: BuildingKind; score: number } | null = null;
   const week = Math.floor(R.day / 4);
@@ -285,23 +308,28 @@ export function tryUpgrade(A: Ai, S: Sense, p: Place): boolean {
     if (b.level >= 3) continue;
     if (A.blocked(S.house, `u:${b.id}`)) continue;
     if (b.owner !== 0 && b.owner !== S.house && b.household !== 0) continue;
-    if (R.construction?.siteOf(b.id)) continue;
+    if (R.construction.siteOf(b.id)) continue;
     const fort = FORT_UP.has(b.kind) ? 0.4 + 1.1 * S.fear : 1;
     if (FORT_WEIGHT[b.kind] !== undefined && p.fort >= fortWanted(S.fear) + 0.4) continue;
     const score = base * fort * (1 - 0.3 * (b.level - 1)) + (hash01(b.id, week, 7) - 0.5) * 0.08;
     if (!best || score > best.score || (score === best.score && b.id < best.id)) best = { id: b.id, kind: b.kind, score };
   }
-  if (!best || best.score < AI.improveScore) return false;
-  const q = C.quote?.(S.ruler, 'upgrade', best.id);
-  if (!q || !q.ok || !q.cost) { A.block(S.house, `u:${best.id}`, AI.retryDays); return false; }
-  const value = costValue(best.kind, q.cost);
-  if (value > S.allowance * AI.projectShare) { A.block(S.house, `u:${best.id}`, 8); return false; }
-  const short = supplied(A, S, p, best.kind, q.level ?? 2);
-  if (short) { A.block(S.house, `u:${best.id}`, 6); return false; }
-  const res = C.upgrade(S.ruler, best.id);
-  if (!res.ok) { A.block(S.house, `u:${best.id}`, AI.retryDays); return false; }
-  if (res.site !== undefined) A.sitePlaced(S.house, res.site, best.kind, p.id, 'upgrade');
-  refreshFunds(R, S);
+  return best && best.score >= AI.improveScore ? { id: best.id, kind: best.kind } : null;
+}
+
+function commitUpgrade(A: Ai, S: Sense, p: Place, id: number, kind: BuildingKind): boolean {
+  const C = A.R.construction;
+  if (!C) return false;
+  const q = C.quote?.(S.ruler, 'upgrade', id);
+  if (!q || !q.ok || !q.cost) { A.fail(S.house, `u:${id}`, AI.retryDays); return false; }
+  const value = costValue(kind, q.cost);
+  if (value > S.allowance * AI.projectShare) { A.block(S.house, `u:${id}`, 8); return false; }
+  const short = supplied(A, S, p, kind, q.level ?? 2);
+  if (short) { A.block(S.house, `u:${id}`, 6); return false; }
+  const res = C.upgrade(S.ruler, id);
+  if (!res.ok) { A.fail(S.house, `u:${id}`, AI.retryDays); return false; }
+  if (res.site !== undefined) A.sitePlaced(S.house, res.site, kind, p.id, 'upgrade');
+  refreshFunds(A.R, S);
   return true;
 }
 
@@ -343,6 +371,14 @@ export function yearCap(S: Sense): number {
   return Math.floor(x) + (hash01(S.house, S.year, 41) < x - Math.floor(x) ? 1 : 0);
 }
 
+/** Homes a House may stake out in a game year: a share of its works, and more where many families share a home. */
+export function homeCap(S: Sense, cap: number): number {
+  let sharing = 0, families = 0;
+  for (const p of S.places) { sharing += p.sharing; families += p.families; }
+  const crowd = families > 0 ? sharing / families : 0;
+  return Math.max(1, Math.ceil(cap / 2)) + (crowd > 0.25 ? 1 : 0) + (crowd > 0.4 ? 1 : 0);
+}
+
 /** The place the ruler looks at this round: one a round, in turn (the loop over a place's buildings is the dear part of looking). */
 export function focusOf(S: Sense, round: number): Place {
   return S.places[(round + S.unit.key) % S.places.length];
@@ -362,37 +398,55 @@ export function warmUp(A: Ai, S: Sense): void {
 
 /** Can the ruler start a new work this round at all (his share of the year, the works going, the purse)? */
 export function canStake(A: Ai, S: Sense): boolean {
-  return A.placedThisYear(S.house).works < yearCap(S) && S.open.length < openLimit(S) && S.allowance >= AI.minFunds && !S.open.some(stuck);
+  return A.placedThisYear(S.house).works < yearCap(S) + 2 && S.open.length < openLimit(S) && S.allowance >= AI.minFunds && !S.open.some(stuck);
 }
 
-/** One round of works for the ruler: give up what is stuck, mend what is hurt, stake out what is wanted, else improve what stands. */
-export function worksRound(A: Ai, S: Sense): void {
+/**
+ * Stage 1 of a round, for the works: gives up what is stuck, and chooses what to do with the builder - mend what is hurt, stake out
+ * the work he wants most that his purse, the markets and the ground allow (looking for the spot is the dear part, so it ends the
+ * stage), else improve a building. The doing is the next stage's.
+ */
+export function worksChoose(A: Ai, S: Sense): Pending | null {
   const R = A.R, C = R.construction;
-  if (!C || !S.payer || S.places.length === 0) return;
+  if (!C || !S.payer || S.places.length === 0) return null;
   const round = Math.floor(R.day / 4);
   cancelStalled(A, S);
   const p = loadPlace(A, focusOf(S, round));
   const limit = openLimit(S);
-  if (p.hurt && S.open.length <= limit + 1) tryRepair(A, S, p);
+  if (p.hurt && S.open.length <= limit + 1 && !A.blocked(S.house, `m:${p.hurt.id}`)) return { kind: 'repair', place: p };
   // a ruler whose works wait for materials starts nothing new, nor one who has had his share of the year
   const done = A.placedThisYear(S.house);
   const cap = yearCap(S);
-  const held = S.open.some(stuck);
-  if (!held && done.works < cap && S.open.length < limit && S.allowance >= AI.minFunds) {
-    const homesFull = done.homes >= Math.max(1, Math.ceil(cap / 2));
-    const wants = wantsFor(A, S, p);
-    const per = Math.max(1, Math.round(PLACE_PER_ROUND[S.class] * S.pace));
-    let placed = 0, tried = 0;
-    for (const w of wants) {
-      if (placed >= per || tried >= 3 || S.open.length >= limit) break;
-      if (w.score < AI.startScore) break;
+  const homes = homeCap(S, cap);
+  if (S.open.some(stuck) || S.open.length >= limit || S.allowance < AI.minFunds) return null;
+  // the crowded realm may stake out a home or two more than its share of the year, and no more than that
+  if (done.works < cap + (homes - Math.max(1, Math.ceil(cap / 2)))) {
+    const homesFull = done.homes >= homes;
+    let tried = 0;
+    for (const w of wantsFor(A, S, p)) {
+      if (tried >= 2 || w.score < AI.startScore) break;
       if (homesFull && HOMES.has(w.kind)) continue;
+      // what is put off, or cannot be afforded, costs the round nothing; only a real attempt counts
+      if (A.blocked(S.house, `w:${w.place.id}:${w.kind}`)) continue;
       tried++;
-      if (tryPlace(A, S, w)) placed++;
+      const spot = prepare(A, S, w);
+      if (spot) return { kind: 'place', want: w, spot };
     }
-    if (placed === 0 && S.open.length < limit && hash01(S.ruler, round, 3) < 0.5) tryUpgrade(A, S, p);
+    if (hash01(S.ruler, round, 3) < 0.5) {
+      const up = chooseUpgrade(A, S, p);
+      if (up) return { kind: 'upgrade', place: p, id: up.id, building: up.kind };
+    }
   }
-  adjustWorks(A, S);
+  return null;
+}
+
+/** Stage 2 of a round, for the works: does what stage 1 chose. */
+export function worksAct(A: Ai, S: Sense, what: Pending): void {
+  switch (what.kind) {
+    case 'place': commitPlace(A, S, what.want, what.spot); break;
+    case 'repair': commitRepair(A, S, what.place); break;
+    default: commitUpgrade(A, S, what.place, what.id, what.building); break;
+  }
 }
 
 const HOMES: ReadonlySet<BuildingKind> = new Set<BuildingKind>(['hovel', 'cottage', 'longhouse', 'townhouse']);

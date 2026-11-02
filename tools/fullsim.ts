@@ -95,25 +95,29 @@ if (!quiet) console.log('year   pop  prosp  low  famine  wars  battles  sieges  
 interface YearRow { year: number; pop: number; pros: number; prosMin: number; famine: number; revolts: number; wars: number; battles: number; sieges: number; raids: number; ms: number }
 const rows: YearRow[] = [];
 // what the AI rulers' realms look like at the end of each year (for the AI table below)
-interface AiState { buildings: number; fortPieces: number; troops: number; rulers: number; belowComfort: number; open: number; outposts: number; warsNow: number }
+interface AiState { buildings: number; fortPieces: number; troops: number; rulers: number; belowComfort: number; open: number; outposts: number; warsNow: number; purseIdx: number }
 const aiStates: AiState[] = [];
 const FORTS = new Set(['palisade', 'wall', 'tower', 'gatehouse', 'motte', 'keep_stone']);
 const aiSnapshot = (): AiState => {
   let buildings = 0, fortPieces = 0;
   for (const b of sim.state.buildings.values()) { if (b.construction < 1) continue; buildings++; if (FORTS.has(b.kind)) fortPieces++; }
   let rulers = 0, below = 0;
+  const idx: number[] = [];
   if (realm.ai) {
     for (const u of realm.ai.units()) {
       const S = realm.ai.sense(u.ruler);
       if (!S) continue;
       rulers++;
       if (S.funds < S.comfort) below++;
+      idx.push(S.funds / Math.max(1, S.comfort));
     }
   }
+  idx.sort((a, b) => a - b);
   return {
     buildings, fortPieces, troops: realm.ctx.data.troops.length, rulers, belowComfort: below,
     open: sim.services.construction?.sites().length ?? 0, outposts: sim.services.construction?.outposts().length ?? 0,
     warsNow: sim.services.politics?.wars().length ?? 0,
+    purseIdx: idx.length ? idx[Math.floor(idx.length / 2)] : 0,
   };
 };
 const count = (...keys: string[]): number => keys.reduce((a, k) => a + (tally[k] ?? 0), 0);
@@ -142,14 +146,14 @@ for (let y = 1; y <= years; y++) {
 console.log('\ntotals:', Object.entries(tally).sort().map(([k, v]) => `${k}=${v}`).join('  '));
 if (realm.ai) {
   console.log('\nthe AI rulers, by game year (works = staked out by the rulers; done = of theirs finished; walls = palisade/wall/tower/gate/motte/keep pieces staked out; techs = worked out by their research; wars = declared in the year):');
-  console.log('year  works  built homes walls upgr repair  done cancel outp  res techs recruit knights  orders crops | bldgs  forts  men open outposts below-comfort');
+  console.log('year  works  built homes walls upgr repair  done cancel outp  res techs recruit knights  orders crops | bldgs  forts  men open outposts below-comfort  purse/comfort(median)');
   const table = realm.ai.table();
   for (let i = 0; i < rows.length; i++) {
     const t = table.find((x) => x.year === rows[i].year);
     const a = aiStates[i];
     const wars = rows[i].wars;
     if (!t || !a) continue;
-    console.log(`${String(rows[i].year).padStart(4)} ${String(t.placed).padStart(6)} ${String(t.built).padStart(6)} ${String(t.homes).padStart(5)} ${String(t.defence).padStart(5)} ${String(t.upgrades).padStart(4)} ${String(t.repairs).padStart(6)} ${String(t.done).padStart(5)} ${String(t.cancelled).padStart(6)} ${String(t.outposts).padStart(4)} ${String(t.research).padStart(4)} ${String(t.techs).padStart(5)} ${String(t.recruits).padStart(7)} ${String(t.knights).padStart(7)} ${String(t.orders).padStart(7)} ${String(t.crops).padStart(5)} | ${String(a.buildings).padStart(5)} ${String(a.fortPieces).padStart(6)} ${String(a.troops).padStart(4)} ${String(a.open).padStart(4)} ${String(a.outposts).padStart(8)} ${String(a.belowComfort).padStart(5)}/${a.rulers}  wars ${wars}`);
+    console.log(`${String(rows[i].year).padStart(4)} ${String(t.placed).padStart(6)} ${String(t.built).padStart(6)} ${String(t.homes).padStart(5)} ${String(t.defence).padStart(5)} ${String(t.upgrades).padStart(4)} ${String(t.repairs).padStart(6)} ${String(t.done).padStart(5)} ${String(t.cancelled).padStart(6)} ${String(t.outposts).padStart(4)} ${String(t.research).padStart(4)} ${String(t.techs).padStart(5)} ${String(t.recruits).padStart(7)} ${String(t.knights).padStart(7)} ${String(t.orders).padStart(7)} ${String(t.crops).padStart(5)} | ${String(a.buildings).padStart(5)} ${String(a.fortPieces).padStart(6)} ${String(a.troops).padStart(4)} ${String(a.open).padStart(4)} ${String(a.outposts).padStart(8)} ${String(a.belowComfort).padStart(5)}/${a.rulers}  ${a.purseIdx.toFixed(1).padStart(8)}  wars ${wars}`);
   }
   const ap = sim.scheduler.profile.get('realm.ai');
   if (ap) {

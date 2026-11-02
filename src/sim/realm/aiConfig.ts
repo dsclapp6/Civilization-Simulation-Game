@@ -25,6 +25,8 @@ export const AI = {
   /** The dear materials (timber, stone, iron, planks, bricks) are not bought at more than this many times their usual price, and need this margin over the market's stock. */
   dearPrice: 2.6,
   supplyMargin: 1.35,
+  /** Days a standing order to lay in a material is kept before it is given up. */
+  stockDays: 48,
   /** Least score a work needs to be started, and an improvement to be made. */
   startScore: 0.26,
   improveScore: 0.2,
@@ -65,9 +67,8 @@ export const OUTPOST = {
   minFunds: 2500,
 } as const;
 
-/** The siege model's fortification weights (src/sim/military/siege.ts DEFENCE_WEIGHT) and ceiling, so the rulers build what the sieges count. */
-export const FORT_WEIGHT: Readonly<Partial<Record<BuildingKind, number>>> = { palisade: 0.45, wall: 0.9, tower: 0.25, gatehouse: 0.3, motte: 0.8, keep_stone: 1.1 };
-export const FORT_MAX = 3.2;
+/** The siege model's fortification weights (src/sim/military/siege.ts DEFENCE_WEIGHT) and ceiling, so the rulers build what the sieges count (shared with the rival AI's reckoning, src/sim/politics/might.ts). */
+export { FORT_WEIGHT, FORT_MAX } from '../politics/might';
 
 /** Kinds that count as a defence work (for the news and the yearly table). */
 export const DEFENCE_KINDS: ReadonlySet<BuildingKind> = new Set<BuildingKind>(['palisade', 'wall', 'tower', 'gatehouse', 'motte', 'keep_stone']);

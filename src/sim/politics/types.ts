@@ -326,6 +326,8 @@ export interface PoliticsRuntime extends PoliticsApi {
   mind(house: HouseId): AiMind | undefined;
   /** Runs one decision round for a House now (tests and tools; the daily system does this on a slice). */
   think(house: HouseId): void;
+  /** Additive (civilization pass): the AI rulers tell the rival AI how much each House has grown this year (works raised, techniques, men taken on), which it weighs in its wars. */
+  setGrowthSource?(fn: ((house: HouseId) => number) | null): void;
 
   // ---- offices and elections ----
   officeSeats(place: number): OfficeSeat[];

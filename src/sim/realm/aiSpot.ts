@@ -180,12 +180,12 @@ export function findSpot(R: Rlm, S: Sense, place: Place, kind: BuildingKind, hin
   } else if (def.segment) {
     cands = wallSpots(R, S, place, kind);
   } else {
-    const radius = Math.max(40, place.s.radius * 1.3);
+    const radius = Math.max(60, place.s.radius * 2);
     let origin: P2;
     if (hint.near) origin = hint.near;
     else if (rules.cat === 'farm' || rules.cat === 'resource') origin = { x: place.s.x + Math.cos(kind.length + salt) * place.s.radius * 0.7, z: place.s.z + Math.sin(kind.length + salt) * place.s.radius * 0.7 };
     else origin = anchorOf(R, place, kind, salt);
-    cands = spiral(R, place, kind, origin, AI.searchChecks * 2, radius, salt);
+    cands = spiral(R, place, kind, origin, AI.searchChecks * 3, radius, salt);
   }
   const T = R.territory;
   let looked = 0;

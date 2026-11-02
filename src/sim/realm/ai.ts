@@ -12,20 +12,32 @@
 import { DAYS_PER_YEAR } from '../../core/time';
 import type { HourInfo } from '../clock';
 import type { HouseId, PersonId } from '../state';
+import type { PoliticsRuntime } from '../politics/types';
 import { AI } from './aiConfig';
 import { armsRound } from './aiMilitary';
-import { learningRound } from './aiResearch';
+import { researchRound } from './aiResearch';
+import { outpostChoose, outpostAct, type OutpostPending } from './aiOutpost';
 import { senseOf, unitsOf, type AiUnit, type Sense } from './aiSense';
 import { bookkeeping } from './aiTrade';
-import { worksRound } from './aiWorks';
+import { worksAct, worksChoose, type Pending } from './aiWorks';
+import { yearCounts } from './news';
 import type { Rlm } from './store';
 
 export const AI_EXT = 'realm.ai';
+
+/**
+ * The stages of a round, one per shard of the hourly system: 0 the look round and the book-keeping (fields, orders), 1 the choice of
+ * what to build, 2 the building of it, 3 arms, 4 learning and the choice of an outpost, 5 the founding of it. The dear calls (looking
+ * for a spot, staking out a site, the market's census after it) fall in different shards so that no call is long.
+ */
+export const SHARDS = 6;
 
 /** What a House's rulers remember. */
 export interface AiHouseRec {
   /** Things that did not work, until this absolute day ("w:47:cottage": no room; "r:watermill": refused; "m:812": no mending). */
   no: Record<string, number>;
+  /** How many times in a row each failed (the wait doubles each time, up to eightfold). */
+  nf: Record<string, number>;
   /** Day the House last told the neighbours something, by key (so the news is not a stream). */
   said: Record<string, number>;
   /** Day a thing was last done: research, recruit, dub, outpost, orders. */
@@ -85,8 +97,10 @@ export interface RealmAi {
   enabled: boolean;
   /** The yearly table so far, oldest first. */
   table(): Array<{ year: number } & YearStats>;
-  /** The groups of places that rulers hold, and the hour of the week each is dealt. */
+  /** The groups of places that rulers hold; the i-th is due in hour i of the week (96 hours), the 97th again in hour 0. */
   units(): AiUnit[];
+  /** The rulers whose round falls in the hour (an hour index of the clock). */
+  dueAt(hourIndex: number): AiUnit[];
   /** What a ruler sees now (null for a House the player runs). */
   sense(ruler: PersonId): Sense | null;
   /** Runs one ruler's whole round now (tests and tools; the hourly system does the same in four shards). */
@@ -98,6 +112,9 @@ export class Ai implements RealmAi {
   data: AiSave;
   enabled = true;
   private cache = new Map<PersonId, Sense | null>();
+  /** What a ruler's round chose to do with the builder this hour, for the next shard to do (nothing is kept longer than the hour). */
+  private pending = new Map<PersonId, Pending>();
+  private outposts = new Map<PersonId, OutpostPending>();
   private unitsAt = -1;
   private cachedUnits: AiUnit[] = [];
   private dueHour = -1;
@@ -131,7 +148,7 @@ export class Ai implements RealmAi {
   rec(house: HouseId): AiHouseRec {
     const k = String(house);
     let r = this.data.h[k];
-    if (!r) { r = { no: {}, said: {}, at: {}, outs: 0, yr: [-1, 0, 0] }; this.data.h[k] = r; }
+    if (!r) { r = { no: {}, nf: {}, said: {}, at: {}, outs: 0, yr: [-1, 0, 0] }; this.data.h[k] = r; }
     return r;
   }
 
@@ -148,9 +165,27 @@ export class Ai implements RealmAi {
     r.no[key] = Math.floor(this.day) + days;
     // lapsed entries go when the record grows
     const keys = Object.keys(r.no);
-    if (keys.length > 60) for (const k of keys) if (r.no[k] <= this.day) delete r.no[k];
+    if (keys.length > 60) for (const k of keys) if (r.no[k] <= this.day) { delete r.no[k]; delete r.nf[k]; }
     this.touch();
   }
+
+  /** A thing that failed again: put off for `days`, twice as long each time it fails in a row (up to eight times as long). */
+  fail(house: HouseId, key: string, days: number): void {
+    const r = this.rec(house);
+    const n = Math.min(3, r.nf[key] ?? 0);
+    r.nf[key] = n + 1;
+    this.block(house, key, days * (1 << n));
+  }
+
+  /** A thing that worked: its failures are forgotten. */
+  worked(house: HouseId, key: string): void {
+    const r = this.data.h[String(house)];
+    if (r && r.nf[key] !== undefined) { delete r.nf[key]; this.touch(); }
+  }
+
+  /** Tools and tests: when set, the rounds write down why they did not do what they weighed. */
+  trace: string[] | null = null;
+  note(text: string): void { if (this.trace && this.trace.length < 4000) this.trace.push(`d${Math.floor(this.day)} ${text}`); }
 
   /** Has the House said this within `days`? */
   said(house: HouseId, key: string, days: number): boolean {
@@ -268,6 +303,11 @@ export class Ai implements RealmAi {
     return this.cachedUnits;
   }
 
+  dueAt(hourIndex: number): AiUnit[] {
+    const slot = ((hourIndex % AI.periodHours) + AI.periodHours) % AI.periodHours;
+    return this.units().filter((_, i) => i % AI.periodHours === slot);
+  }
+
   sense(ruler: PersonId): Sense | null {
     const u = this.units().find((x) => x.ruler === ruler);
     return u ? senseOf(this, u) : null;
@@ -284,7 +324,9 @@ export class Ai implements RealmAi {
     const u = this.units().find((x) => x.ruler === ruler);
     if (!u) return;
     this.cache.clear();
-    for (let stage = 0; stage < 4; stage++) this.stage(u, stage);
+    this.pending.clear();
+    this.outposts.clear();
+    for (let stage = 0; stage < SHARDS; stage++) this.stage(u, stage);
   }
 
   /** Tools: per-stage wall time (ms) of the rounds, when a tool sets it (stage 0 is the sense and the book-keeping). */
@@ -296,9 +338,16 @@ export class Ai implements RealmAi {
     if (S) {
       switch (stage) {
         case 0: bookkeeping(this, S); break;
-        case 1: worksRound(this, S); break;
-        case 2: armsRound(this, S); break;
-        default: learningRound(this, S); break;
+        case 1: { const w = worksChoose(this, S); if (w) this.pending.set(u.ruler, w); break; }
+        case 2: { const w = this.pending.get(u.ruler); if (w) { this.pending.delete(u.ruler); worksAct(this, S, w); } break; }
+        case 3: armsRound(this, S); break;
+        case 4: {
+          if ((Math.floor(this.R.day / 4) + u.key) % 2 === 0) researchRound(this, S);
+          const o = outpostChoose(this, S);
+          if (o) this.outposts.set(u.ruler, o);
+          break;
+        }
+        default: { const o = this.outposts.get(u.ruler); if (o) { this.outposts.delete(u.ruler); outpostAct(this, S, o); } break; }
       }
     }
     if (this.timings) {
@@ -308,26 +357,44 @@ export class Ai implements RealmAi {
     }
   }
 
+  /** Tells the rival AI (politics) how much each House has grown this year, for its wars: "a strong neighbour that out-builds you comes for your lands". */
+  private fed: PoliticsRuntime | null = null;
+  private feedPolitics(): void {
+    const pol = this.R.politics as unknown as PoliticsRuntime | undefined;
+    if (!pol?.setGrowthSource || this.fed === pol) return;
+    pol.setGrowthSource((house) => {
+      const c = yearCounts(this.R, house);
+      return c.built + 0.5 * c.techs + 0.25 * c.recruited;
+    });
+    this.fed = pol;
+  }
+
   /** The hourly system: shard 0 finds who is due this hour, shard k does stage k for each. */
   hourly(info: HourInfo, shard: number): void {
     if (!this.enabled) return;
+    if (shard === 0) this.feedPolitics();
     if (this.dueHour !== info.hourIndex) {
       this.cache.clear();
-      const slot = ((info.hourIndex % AI.periodHours) + AI.periodHours) % AI.periodHours;
-      this.due = this.units().filter((_, i) => i % AI.periodHours === slot);
+      this.pending.clear();
+      this.outposts.clear();
+      this.due = this.dueAt(info.hourIndex);
       this.dueHour = info.hourIndex;
     }
     for (const u of this.due) this.stage(u, shard);
   }
 
-  dispose(): void { for (const off of this.offs.splice(0)) off(); }
+  dispose(): void {
+    for (const off of this.offs.splice(0)) off();
+    this.fed?.setGrowthSource?.(null);
+    this.fed = null;
+  }
 
   /** Registers the system and the listeners; returns the remover. */
   install(): () => void {
     const R = this.R;
     this.touch();
     this.offs.push(R.sim.registerSystem({
-      name: 'realm.ai', phase: 'hourly', order: 85, shards: 4,
+      name: 'realm.ai', phase: 'hourly', order: 85, shards: SHARDS,
       run: (_ctx, info, shard = 0) => this.hourly(info, shard),
     }));
     this.offs.push(R.sim.events.on('construction', (e) => {

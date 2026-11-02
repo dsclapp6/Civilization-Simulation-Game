@@ -13,7 +13,8 @@ import { TIER_PURSE } from '../people';
 import { TITLE_RANK, type BuildingState, type Household, type HouseId, type Person, type PersonId } from '../state';
 import type { PoliticsRuntime, Personality } from '../politics/types';
 import type { ResourceProfile } from '../territory/types';
-import { AI, FORT_MAX, FORT_WEIGHT, OPEN_SITES, PACE, type RealmClass } from './aiConfig';
+import { fortFactor } from '../politics/might';
+import { AI, OPEN_SITES, PACE, type RealmClass } from './aiConfig';
 import type { Ai } from './ai';
 import { bagCount } from './bags';
 import { rulerOf, rulesOf } from './rule';
@@ -123,18 +124,7 @@ export interface Sense {
 // ---------------------------------------------------------------------------------------------
 
 /** The multiplier the macro siege (src/sim/military/siege.ts fortBonus) gives a place's walls: so a ruler builds what a siege counts. */
-export function fortOf(buildings: readonly BuildingState[]): { fort: number; pieces: number } {
-  let bonus = 0, pieces = 0;
-  for (const b of buildings) {
-    const w = FORT_WEIGHT[b.kind];
-    if (w === undefined || b.construction < 1) continue;
-    pieces++;
-    const lv = b.kind === 'wall' || b.kind === 'palisade' ? Math.min(1.4, 0.6 + b.level * 0.35) : 1 + (b.level - 1) * 0.15;
-    bonus += w * lv * (1 - Math.min(1, b.damage));
-  }
-  const fort = Math.min(FORT_MAX, 1 + Math.min(2.2, (bonus / 3.2) * 2.2 + (bonus > 0 ? 0.25 : 0)));
-  return { fort, pieces };
-}
+export function fortOf(buildings: readonly BuildingState[]): { fort: number; pieces: number } { return fortFactor(buildings); }
 
 /** The multiplier a House with this much fear would like a place's walls to give. */
 export function fortWanted(fear: number): number {
