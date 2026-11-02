@@ -41,7 +41,7 @@ vec3 mlBuildGlow(float m) {
   float w = max(fwidth(m), 1e-4);
   float line = 1.0 - smoothstep(0.6, 1.6, abs(m - 0.5) / w);
   float band = smoothstep(0.45, 0.6, m) * (1.0 - smoothstep(0.6, 0.98, m));
-  return (vec3(1.0, 0.8, 0.38) * line * 0.9 + vec3(0.5, 0.36, 0.12) * band * 0.25) * uBuildOn;
+  return (vec3(1.0, 0.66, 0.2) * line * 0.62 + vec3(0.5, 0.34, 0.1) * band * 0.22) * uBuildOn;
 }
 `;
 

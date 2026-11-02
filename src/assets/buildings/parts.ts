@@ -43,6 +43,8 @@ export interface Ctx {
   seed: number;
   owner: number;
   out: RecipeOut;
+  /** Civilization pass: a gatehouse's gate state (FortView; default open). */
+  gate?: 'open' | 'shut' | 'broken';
 }
 
 export function newOut(): RecipeOut {

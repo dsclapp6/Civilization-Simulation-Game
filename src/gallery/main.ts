@@ -15,14 +15,14 @@ import { CROP_KINDS } from '../assets/crops';
 import { computeLighting, createStage } from './stage';
 import { checkbox, el, injectCss, LabelLayer, select, slider } from './ui';
 import {
-  CATEGORIES, SCATTER_KINDS, decalSnow, disposeView, sheetCrops, sheetCulture, sheetCultures, sheetLevels, sheetProps, sheetStages, sheetStates,
+  CATEGORIES, SCATTER_KINDS, decalSnow, disposeView, sheetCrops, sheetCulture, sheetCultures, sheetForts, sheetLevels, sheetProps, sheetSiege, sheetStages, sheetStates,
   sheetVegetation, sheetVegLods, viewBuilding, viewCrop, viewFx, viewProp, viewVegetation, viewVillage, type ViewState,
 } from './views';
 
 type Cat = 'buildings' | 'vegetation' | 'crops' | 'props' | 'fx' | 'sheets';
 const SHEETS = [
   'culture-home', 'culture-farm', 'culture-work', 'culture-social', 'culture-church', 'culture-defence',
-  'stages-home', 'stages-farm', 'stages-work', 'stages-social', 'stages-church', 'stages-defence',
+  'forts', 'siege', 'stages-home', 'stages-farm', 'stages-work', 'stages-social', 'stages-church', 'stages-defence',
   'levels', 'cultures', 'states', 'vegetation-seasons', 'vegetation-lods', 'crops', 'props', 'fx', 'village', 'village-night', 'village-winter',
 ] as const;
 
@@ -91,7 +91,9 @@ export function start(root: AppRoot): void {
           const g = s.slice(7);
           const cats = g === 'social' ? ['social', 'trade', 'civic'] : g === 'defence' ? ['defence', 'camp'] : [g];
           view = sheetStages(lib, content, cats as never, P.culture, { owner: P.owner, seed: P.seed });
-        } else if (s === 'levels') view = sheetLevels(lib, content, kind, [...CULTURES], base);
+        } else if (s === 'forts') view = sheetForts(lib, content, P.culture, { owner: P.owner, seed: P.seed });
+        else if (s === 'siege') view = sheetSiege(lib, content);
+        else if (s === 'levels') view = sheetLevels(lib, content, kind, [...CULTURES], base);
         else if (s === 'cultures') view = sheetCultures(lib, content, kind, P.level, base);
         else if (s === 'states') view = sheetStates(lib, content, kind, P.culture, P.level, { owner: P.owner, seed: P.seed });
         else if (s === 'vegetation-seasons') view = sheetVegetation(lib, content, true, P.lod);

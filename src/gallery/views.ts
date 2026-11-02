@@ -8,6 +8,7 @@ import type { FxEvent } from '../core/view';
 import type { FxLayer, PropKind } from '../assets/types';
 import type { MillenniaBuildingAsset, MillenniaAssetLibrary } from '../assets/library';
 import { PROP_KINDS } from '../assets/props/props';
+import { buildSiegeWork, charBuilder, engineArmAngle } from '../assets/siege';
 import { CROP_KINDS } from '../assets/crops';
 import { PALETTE } from '../assets/palette';
 import { Ground } from '../world/types';
@@ -46,6 +47,9 @@ export interface BuildingOpts {
   damage: number;
   owner: number;
   seed: number;
+  /** Civilization pass: a gatehouse's gate and a wall's breach (FortView). */
+  gate?: 'open' | 'shut' | 'broken';
+  breach?: number;
 }
 
 function newState(title: string): ViewState {
@@ -132,7 +136,7 @@ function dressGround(lib: MillenniaAssetLibrary, st: ViewState, root: THREE.Grou
 }
 
 function placeBuilding(lib: MillenniaAssetLibrary, st: ViewState, root: THREE.Group, kind: BuildingKind, o: BuildingOpts, x: number, z: number, label?: string, sub?: string): MillenniaBuildingAsset {
-  const a = lib.building({ kind, level: o.level, culture: o.culture, seed: o.seed, construction: o.construction, damage: o.damage, ownerColor: o.owner });
+  const a = lib.building({ kind, level: o.level, culture: o.culture, seed: o.seed, construction: o.construction, damage: o.damage, ownerColor: o.owner, gate: o.gate, breach: o.breach });
   a.object.position.set(x, 0, z);
   root.add(a.object);
   const def = BUILDINGS[kind];
@@ -238,6 +242,65 @@ export function sheetStates(lib: MillenniaAssetLibrary, root: THREE.Group, kind:
   const dmg = [0, 0.25, 0.5, 0.75, 1];
   dmg.forEach((d, i) => placeBuilding(lib, st, root, kind, { ...o, culture, level, construction: 1, damage: d }, (i - (dmg.length - 1) / 2) * gx, gz / 2, '', `damage ${Math.round(d * 100)}%`));
   st.cam = { az: -20, el: 34, k: 0.8 };
+  return st;
+}
+
+/** Gates and breaches (FortView): the gatehouse at both levels open, shut and battered in; walls and palisades breached. */
+export function sheetForts(lib: MillenniaAssetLibrary, root: THREE.Group, culture: CultureId, o: Omit<BuildingOpts, 'culture' | 'level' | 'construction' | 'damage'>): ViewState {
+  const st = newState('Gates and breaches');
+  const base = { ...o, culture, construction: 1, damage: 0 };
+  (['open', 'shut', 'broken'] as const).forEach((gate, i) => {
+    placeBuilding(lib, st, root, 'gatehouse', { ...base, level: 1, gate }, (i - 1) * 14, -24, 'Gatehouse', `L1 ${gate}`);
+    placeBuilding(lib, st, root, 'gatehouse', { ...base, level: 2, gate }, (i - 1) * 14, -10, 'Gatehouse', `L2 ${gate}`);
+  });
+  [0, 0.25, 0.5, 0.75, 1].forEach((breach, i) => {
+    placeBuilding(lib, st, root, 'wall', { ...base, level: 1, breach }, (i - 2) * 8.5, 4, 'Wall', `breach ${breach}`);
+    placeBuilding(lib, st, root, 'palisade', { ...base, level: 1, breach }, (i - 2) * 8.5, 14, 'Palisade', `breach ${breach}`);
+  });
+  st.cam = { az: -24, el: 30, k: 0.7 };
+  return st;
+}
+
+/** Siege works (SimView.siegeWorks): ladders, a ram with its log, a mantlet, a trebuchet and a mangonel; burning and broken. */
+export function sheetSiege(lib: MillenniaAssetLibrary, root: THREE.Group): ViewState {
+  const st = newState('Siege works');
+  const mats = lib.sharedMaterials?.();
+  const put = (kind: 'ladder' | 'ram' | 'mantlet' | 'trebuchet' | 'mangonel', x: number, z: number, opts: { swing?: number; charred?: boolean; length?: number; label: string; tilt?: number }) => {
+    const sm = buildSiegeWork(kind, 0, opts.length ?? 7);
+    if (opts.charred) { charBuilder(sm.body, 0.85); if (sm.part) charBuilder(sm.part, 0.85); }
+    const g = new THREE.Group();
+    const body = sm.body.toGeometry({ mat: 0, surf: true, aoHeight: 0.5, aoStrength: 0.2 });
+    if (body) { const m = new THREE.Mesh(body, mats?.opaqueDS ?? new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true })); m.castShadow = true; m.receiveShadow = true; g.add(m); st.disposables.push(body); }
+    if (sm.part) {
+      const pg = sm.part.toGeometry({ mat: 0, surf: true });
+      if (pg) {
+        const piv = new THREE.Object3D();
+        piv.position.set(...sm.pivot);
+        if (kind === 'ram') piv.rotation.x = -((opts.swing ?? 0.5) - 0.45) * 0.62;
+        else if (kind === 'trebuchet' || kind === 'mangonel') piv.rotation.x = engineArmAngle(kind, opts.swing ?? 0);
+        const m = new THREE.Mesh(pg, mats?.opaqueDS ?? new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true }));
+        m.castShadow = true;
+        piv.add(m);
+        g.add(piv);
+        st.disposables.push(pg);
+      }
+    }
+    g.position.set(x, 0, z);
+    if (opts.tilt) g.rotation.z = opts.tilt;
+    root.add(g);
+    st.bounds.expandByPoint(new THREE.Vector3(x - 4, 0, z - 6));
+    st.bounds.expandByPoint(new THREE.Vector3(x + 4, kind === 'trebuchet' ? 12 : 5, z + 6));
+    st.labels.push({ text: opts.label, pos: new THREE.Vector3(x, 0, z + 5) });
+  };
+  put('ladder', -22, 0, { label: 'Ladder', length: 8 });
+  put('ram', -13, 0, { label: 'Ram (struck)', swing: 1 });
+  put('mantlet', -4, 0, { label: 'Mantlet' });
+  put('trebuchet', 7, 0, { label: 'Trebuchet (cocked)', swing: 0 });
+  put('mangonel', 18, 0, { label: 'Mangonel (loosed)', swing: 1 });
+  put('ram', -13, 14, { label: 'Ram (burning)', swing: 0.2, charred: true });
+  put('trebuchet', 7, 14, { label: 'Trebuchet (thrown)', swing: 1 });
+  put('mantlet', -4, 14, { label: 'Mantlet (broken)', charred: true, tilt: 0.42 });
+  st.cam = { az: -22, el: 22, k: 0.8 };
   return st;
 }
 

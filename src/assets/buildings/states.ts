@@ -513,3 +513,69 @@ function rubble(dst: MeshBuilder, src: MeshBuilder, info: StateInfo, d: number, 
     dst.beam(p0, p1, 0.2, 0.2, COL.char);
   }
 }
+
+/**
+ * A breach in a wall or palisade segment (FortView.breach; the segment runs along local x). Below one half the top is
+ * battered (merlons knocked off, a ragged crest); from one half a gap opens in the middle — the masonry broken down in a
+ * jagged V to a passable heap of rubble spilling out on both sides (stakes snapped off to stubs and lying about, for a
+ * palisade) — wider as the breach grows, the full width at 1.
+ */
+export function applyBreach(src: MeshBuilder, breach: number, palisade: boolean, info: StateInfo, seed: number): MeshBuilder {
+  const lb = layerBounds(src);
+  const top = Math.max(lb[Layer.Wall].max, 1);
+  const dst = new MeshBuilder(seed + 9);
+  const gap = breach >= 0.5;
+  const half = gap ? (info.w / 2) * Math.min(1.05, 0.32 + 1.3 * (breach - 0.5)) : 0;
+  const xc = gap && breach < 1 ? (posHash(seed, 1, 2) - 0.5) * (info.w / 2 - half) : 0;
+  const low = palisade ? 0.35 : 0.55;
+  const height = (x: number, z: number): number => {
+    const n = posHash(Math.floor(x / 0.7), 0, Math.floor(z / 0.7), seed);
+    if (!gap) return top - 0.55 - n * 0.8;
+    const d = Math.abs(x - xc) - half;
+    if (d < 0) return low + n * (palisade ? 0.3 : 0.7);
+    const ramp = palisade ? 0.6 : 2.2;
+    return d < ramp ? low + (top - low) * (d / ramp) + (n - 0.5) * 0.8 : Infinity;
+  };
+  for (let t = 0; t < src.triCount; t++) {
+    const layer = src.tLayer[t];
+    if (layer === Layer.Wall || layer === Layer.Detail || layer === Layer.Frame) raggedClip(dst, src, t, height, 0.7, low, top + 2);
+    else if (layer === Layer.Decor) { if (!gap) dst.copyTri(src, t); }
+    else dst.copyTri(src, t);
+  }
+  // rubble (or snapped stakes) in and around the gap, spilling to both faces
+  let r = 0, g = 0, bl = 0, n = 0;
+  for (let t = 0; t < src.triCount && n < 300; t += 2) {
+    if (src.tLayer[t] !== Layer.Wall) continue;
+    r += src.col[t * 9]; g += src.col[t * 9 + 1]; bl += src.col[t * 9 + 2]; n++;
+  }
+  const toHex = (x: number) => Math.round(Math.pow(Math.min(1, x / Math.max(1, n)), 1 / 2.2) * 255);
+  const wallHex = n ? (toHex(r) << 16) | (toHex(g) << 8) | toHex(bl) : COL.stoneGrey;
+  dst.layer = Layer.Ground;
+  dst.flags = F.Snow;
+  const rnd = (k: number) => posHash(k, 3, 5, seed);
+  const span = gap ? half + 0.8 : info.w / 2;
+  const count = Math.round((palisade ? 6 : 10) + (gap ? breach * (palisade ? 10 : 26) : 4));
+  for (let i = 0; i < count; i++) {
+    const x = xc + (rnd(i * 4) * 2 - 1) * span;
+    const side = rnd(i * 4 + 1) < 0.5 ? -1 : 1;
+    const z = side * (info.d / 2) * (0.2 + rnd(i * 4 + 2) * (gap ? 1.4 : 0.7));
+    if (palisade) {
+      // a snapped stake lying on the ground, its pale broken end showing
+      const a = rnd(i * 4 + 3) * Math.PI;
+      const L = 1.2 + rnd(i * 4 + 3) * 1.4;
+      dst.flags = F.Snow | F.Burn;
+      dst.beam([x - Math.cos(a) * L / 2, 0.15, z - Math.sin(a) * L / 2], [x + Math.cos(a) * L / 2, 0.12, z + Math.sin(a) * L / 2], 0.26, 0.26, i % 3 ? COL.bark : 0x9a7a52);
+      continue;
+    }
+    const s = 0.35 + rnd(i * 4 + 3) * 0.55;
+    const inGap = Math.abs(x - xc) < half;
+    // a heap across the gap (higher in the middle of the wall's thickness), loose blocks further out
+    const y = inGap ? Math.max(0, 0.5 - Math.abs(z) / Math.max(1, info.d) * 0.6) : 0;
+    dst.blob(x, y + s * 0.2, z, s * 1.2, s * 0.65, s, i % 5 === 0 ? COL.stoneDark : wallHex, 0.3, 0, seed + i);
+  }
+  if (gap && !palisade) {
+    // the rubble ramp itself: a long low mound through the gap, out on both faces
+    dst.blob(xc, 0.05, 0, half * 0.95, 0.85, info.d * 0.95, wallHex, 0.22, 1, seed + 77);
+  }
+  return dst;
+}

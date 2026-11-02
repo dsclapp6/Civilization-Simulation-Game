@@ -10,6 +10,42 @@ import { COL, roofTint, type WallKind } from '../style';
 import { squareTower } from './church';
 import { ovFor, vernacular } from '../vernacular';
 
+/**
+ * A pair of gate leaves hung on the jambs at ±pw/2 across the passage at `z`: swung back (open), closed with a draw-bar
+ * (shut), or battered in — one leaf hanging askew off its top hinge, the other thrown down flat, splinters about (broken).
+ */
+function gateLeaves(ctx: Ctx, pw: number, z: number, h: number, state: 'open' | 'shut' | 'broken', stone = false): void {
+  const { b, lod } = ctx;
+  const oak = stone ? 0x5e4329 : COL.timberRaw;
+  const leaf = (w: number) => {
+    b.box(0, 0, -0.07, w, h, 0.07, { side: shade(oak, 0.9), pz: oak, nz: shade(oak, 0.95) });
+    if (lod === 0) for (const y of [0.5, h * 0.5, h - 0.5]) b.box(0.05, y - 0.06, 0.07, w - 0.05, y + 0.06, 0.1, COL.iron);
+  };
+  b.state({ layer: Layer.Detail, flags: F.Burn | F.Snow }, () => {
+    for (const sd of [-1, 1]) {
+      b.push(); b.translate(sd * pw / 2, 0, z);
+      // each leaf is built along its local +x from the hinge; the right one turned round to point at the middle; a leaf
+      // swings inwards (-z) when it opens
+      const swing = stone ? 1.45 : 1.0;
+      if (state === 'open') b.rotY(sd < 0 ? swing : Math.PI - swing);
+      else if (state === 'shut') b.rotY(sd < 0 ? 0 : Math.PI);
+      else if (sd < 0) { b.rotY(0.45); b.rotZ(-0.22); }
+      else { b.translate(-0.3, 0.08, -0.4); b.rotY(Math.PI - 0.3); b.rotX(-Math.PI / 2); }
+      leaf(pw / 2 - 0.02);
+      b.pop();
+    }
+    if (state === 'shut') {
+      // the draw-bar across both leaves, in its iron staples
+      b.box(-pw / 2 - 0.15, h * 0.48, z - 0.25, pw / 2 + 0.15, h * 0.48 + 0.2, z - 0.07, shade(oak, 0.8));
+    } else if (state === 'broken' && lod === 0) {
+      for (let i = 0; i < 7; i++) {
+        const x = -pw / 2 + ((i * 0.37) % 1) * pw, zz = z - 0.6 - ((i * 0.53) % 1) * 1.8, a = i * 1.3;
+        b.beam([x, 0.06, zz], [x + Math.cos(a) * 0.9, 0.08, zz + Math.sin(a) * 0.9], 0.12, 0.05, shade(oak, 0.85 + (i % 3) * 0.08));
+      }
+    }
+  });
+}
+
 function castleStone(ctx: Ctx): number {
   const s = ctx.s;
   return s.id === 'gael' || s.id === 'cymric' ? COL.stoneGrey : s.id === 'norse' ? 0x8b8a85 : s.stone;
@@ -178,14 +214,8 @@ export function gatehouse(ctx: Ctx, def: BuildingDef): void {
     });
     b.pop();
     void res;
-    // Gate leaves standing open inwards.
-    b.state({ layer: Layer.Detail, flags: F.Burn | F.Snow }, () => {
-      for (const sd of [-1, 1]) {
-        b.push(); b.translate(sd * pw / 2, 0, -D / 2 + 1.5); b.rotY(sd * -1.0);
-        b.box(sd < 0 ? 0 : -pw / 2, 0, -0.06, sd < 0 ? pw / 2 : 0, 3.6, 0.06, { side: COL.timberRaw, pz: shade(COL.timberRaw, 1.05) });
-        b.pop();
-      }
-    });
+    // The gate leaves: open inwards, shut and barred, or battered in (FortView).
+    gateLeaves(ctx, pw, -D / 2 + 1.5, 3.6, ctx.gate ?? 'open');
     ctx.out.doors.push({ x: 0, z: D / 2 + 0.3 }, { x: 0, z: -D / 2 - 0.3 });
     return;
   }
@@ -217,11 +247,23 @@ export function gatehouse(ctx: Ctx, def: BuildingDef): void {
       b.pop();
     }
   });
+  // The portcullis: half raised when the gate is open, down when shut, wrenched up and bent when battered in; the oak
+  // leaves behind it (FortView).
+  const gate = ctx.gate ?? 'open';
   if (lod < 2) b.state({ layer: Layer.Detail, flags: F.Snow }, () => {
     const z = zf - 0.35;
-    for (let i = 0; i <= 6; i++) { const x = -pw / 2 + 0.2 + ((pw - 0.4) * i) / 6; b.box(x - 0.05, 2.5, z - 0.05, x + 0.05, 4.3, z + 0.05, 0x3a3430); b.cyl(x, z, 2.25, 2.5, 0, 0.05, 4, 0x3a3430, { top: false }); }
-    for (let k = 0; k < 4; k++) b.box(-pw / 2 + 0.1, 2.7 + k * 0.45, z - 0.06, pw / 2 - 0.1, 2.78 + k * 0.45, z + 0.06, 0x3a3430);
+    const y0 = gate === 'shut' ? 0.25 : gate === 'broken' ? 3.1 : 2.5;
+    for (let i = 0; i <= 6; i++) {
+      if (gate === 'broken' && (i === 2 || i === 5)) continue;
+      const x = -pw / 2 + 0.2 + ((pw - 0.4) * i) / 6;
+      const bend = gate === 'broken' && i === 3 ? 0.35 : 0;
+      b.beam([x, y0, z + bend], [x, 4.3, z], 0.1, 0.1, 0x3a3430);
+      b.cyl(x, z + bend, y0 - 0.25, y0, 0, 0.05, 4, 0x3a3430, { top: false });
+    }
+    const rows = Math.max(1, Math.floor((4.3 - y0) / 0.45));
+    for (let k = 0; k < rows; k++) b.box(-pw / 2 + 0.1, y0 + 0.2 + k * 0.45, z - 0.06, pw / 2 - 0.1, y0 + 0.28 + k * 0.45, z + 0.06, 0x3a3430);
   });
+  gateLeaves(ctx, pw, zf - 1.1, 4.0, gate, true);
   // Passage floor (cobbles) and crenellations.
   b.state({ layer: Layer.Ground, flags: F.NoAO }, () => b.box(-pw / 2, -0.05, -D / 2 + 0.4, pw / 2, 0.06, zf + 0.1, { top: 0x8e8a80, side: 0x7a766e }, 'b'));
   crenelLine(ctx, -W / 2 + 0.5, W / 2 - 0.5, zf, H, col, { thick: 0.45, period: 1.5, merlon: 0.9, phase: 0.3 });

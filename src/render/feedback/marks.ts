@@ -13,9 +13,9 @@ export const MAX_MARKS = 48;
 /** Full strength to FULL_R m, gone by FADE_R m (CIV §1: visible from ~90 m). */
 export const FULL_R = 85, FADE_R = 100;
 /** Least glyph height on screen (px). */
-export const MIN_PX = 16;
+export const MIN_PX = 22;
 /** Glyph height when close (m). */
-const BASE_H = 0.5;
+const BASE_H = 0.75;
 /** Strength of the see-through pass, and of everything behind a building. */
 const XRAY = 0.38, BEHIND_HOUSE = 0.22;
 
@@ -68,21 +68,21 @@ void main() {
   float d;
   if (vKind < 0.5) {
     // "!": a bar tapering downwards and a dot
-    d = min(sdSeg(p, vec2(0.0, 0.88), vec2(0.0, 0.36), 0.105, 0.068), length(p - vec2(0.0, 0.13)) - 0.088);
+    d = min(sdSeg(p, vec2(0.0, 0.86), vec2(0.0, 0.37), 0.12, 0.078), length(p - vec2(0.0, 0.13)) - 0.098);
   } else {
     // "?": a hook (arc from the left round over the top to the right and down), a short stem and a dot
-    float hook = sdArc(p, vec2(0.0, 0.69), 0.17, 0.06, -1.15, 3.55);
-    float stem = sdSeg(p, vec2(0.075, 0.535), vec2(0.0, 0.36), 0.06, 0.058);
-    d = min(min(hook, stem), length(p - vec2(0.0, 0.13)) - 0.083);
+    float hook = sdArc(p, vec2(0.0, 0.69), 0.165, 0.07, -1.15, 3.55);
+    float stem = sdSeg(p, vec2(0.075, 0.535), vec2(0.0, 0.36), 0.07, 0.066);
+    d = min(min(hook, stem), length(p - vec2(0.0, 0.13)) - 0.092);
   }
   float aa = fwidth(d) * 0.9 + 1e-4;
   float face = 1.0 - smoothstep(-aa, aa, d);
-  float rim = 1.0 - smoothstep(0.035 - aa, 0.035 + aa, d);
+  float rim = 1.0 - smoothstep(0.042 - aa, 0.042 + aa, d);
   float glow = exp(-max(d, 0.0) * 18.0) * 0.55;
-  vec3 hi = vKind < 0.5 ? vec3(1.0, 0.93, 0.6) : vec3(0.97, 0.98, 1.0);
-  vec3 lo = vKind < 0.5 ? vec3(0.93, 0.62, 0.12) : vec3(0.62, 0.68, 0.78);
-  vec3 edge = vKind < 0.5 ? vec3(0.22, 0.12, 0.02) : vec3(0.1, 0.12, 0.18);
-  vec3 halo = vKind < 0.5 ? vec3(1.0, 0.78, 0.3) : vec3(0.8, 0.88, 1.0);
+  vec3 hi = vKind < 0.5 ? vec3(1.0, 0.95, 0.62) : vec3(1.0, 1.0, 1.0);
+  vec3 lo = vKind < 0.5 ? vec3(0.96, 0.62, 0.1) : vec3(0.74, 0.8, 0.9);
+  vec3 edge = vKind < 0.5 ? vec3(0.2, 0.1, 0.02) : vec3(0.08, 0.1, 0.16);
+  vec3 halo = vKind < 0.5 ? vec3(1.0, 0.76, 0.28) : vec3(0.78, 0.88, 1.0);
   vec3 fill = mix(lo, hi, smoothstep(0.1, 0.9, vUv.y));
   // a glint across the face
   fill += 0.18 * smoothstep(0.05, 0.0, abs(vUv.x - vUv.y * 0.35 - 0.28));

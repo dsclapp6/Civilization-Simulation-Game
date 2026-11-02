@@ -14,15 +14,20 @@ const OK_COLOR = new THREE.Color(0x7be58f);
 const BAD_COLOR = new THREE.Color(0xff5a48);
 
 const SHELL_VERT = /* glsl */`
+attribute vec3 color;
 varying vec3 vN;
 varying vec3 vV;
 varying float vY;
+varying float vLum;
 void main() {
+  // the model's own colours (linear) as a brightness, so roof, walls, doors and timbers still read through the tint
+  vLum = dot(color, vec3(0.2126, 0.7152, 0.0722));
   vec4 wp = modelMatrix * vec4(position, 1.0);
   vN = normalize(mat3(modelMatrix) * normal);
   vV = cameraPosition - wp.xyz;
   vY = position.y;
-  gl_Position = projectionMatrix * viewMatrix * wp;
+  // the same arithmetic as the depth pre-pass (projection × modelView), so LessEqual passes exactly on the front surface
+  gl_Position = projectionMatrix * (modelViewMatrix * vec4(position, 1.0));
 }`;
 const SHELL_FRAG = /* glsl */`
 uniform vec3 uColor;
@@ -31,16 +36,18 @@ uniform float uHeight;
 varying vec3 vN;
 varying vec3 vV;
 varying float vY;
+varying float vLum;
 void main() {
   vec3 n = normalize(vN);
   vec3 v = normalize(vV);
   float facing = abs(dot(n, v));
-  float rim = pow(1.0 - facing, 2.2);
-  // light from above so the form reads, a scan line rising up the model
-  float lit = 0.55 + 0.45 * max(0.0, n.y) + 0.2 * max(0.0, dot(n, normalize(vec3(0.4, 0.6, 0.3))));
+  float rim = pow(1.0 - facing, 2.0);
+  // a key light from above and one side so the form reads; the model's own tones underneath; a scan line rising
+  float lit = 0.32 + 0.5 * max(0.0, n.y) + 0.38 * max(0.0, dot(n, normalize(vec3(0.55, 0.5, 0.35))));
+  float tone = 0.45 + 1.6 * sqrt(clamp(vLum, 0.0, 1.0));
   float scan = smoothstep(0.06, 0.0, abs(fract(vY / max(uHeight, 1.0) - uTime * 0.35) - 0.5) - 0.44);
-  vec3 col = uColor * lit + uColor * rim * 0.9 + vec3(1.0) * scan * 0.12;
-  float a = 0.34 + rim * 0.45 + scan * 0.1;
+  vec3 col = uColor * lit * tone + uColor * rim * 0.8 + vec3(1.0) * scan * 0.12;
+  float a = 0.42 + rim * 0.4 + scan * 0.1;
   gl_FragColor = vec4(col, a);
 }`;
 

@@ -21,6 +21,10 @@ export interface BuildingRequest {
   ownerColor?: number;
   /** Optional detail level: 0 = full (default), 1 = mid (no small decals/decor), 2 = far silhouette. */
   lod?: 0 | 1 | 2;
+  /** Civilization pass (FortView): a gatehouse's gate — open (default), shut and barred, or battered in. */
+  gate?: 'open' | 'shut' | 'broken';
+  /** Civilization pass (FortView): a wall or palisade breached 0..1 (≥ 0.5 a gap of rubble one can climb through). */
+  breach?: number;
 }
 
 export interface BuildingAsset {
@@ -149,6 +153,12 @@ export interface AssetLibrary {
    * look. Used by the renderer's world-props layer (SimView.worldProps). Optional (clarity pass).
    */
   propKits?(kind: PropKind, seed?: number, size?: number): readonly InstancedKit[];
+  /**
+   * Civilization pass (optional): the shared opaque and water materials, for geometry the renderer builds itself from the
+   * asset kit (deposits on the ground, siege works) so it takes snow, the night and the fog like every asset. The opaque
+   * material wants the `aSurf` attribute (MeshBuilder.toGeometry({ surf: true })).
+   */
+  sharedMaterials?(): { opaque: THREE.Material; opaqueDS: THREE.Material; water: THREE.Material; glow: THREE.Material };
   createCharacterLayer(): CharacterLayer;
   createAnimalLayer(): AnimalLayer;
   createProjectileLayer(): ProjectileLayer;

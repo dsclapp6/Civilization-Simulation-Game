@@ -508,6 +508,9 @@ export class MockView implements SimView {
       this.markers.push({ id: 3, kind: 'caravan', x: p.x, z: p.z, color: 0xd9a441, size: 12, label: 'Wool caravan' });
     }
     this.markers.push({ id: 4, kind: 'bandits', x: this.village.x - 1800, z: this.village.z + 900, color: 0x3a3a3a, size: 15, label: 'Outlaws' });
+    // an outpost at the iron deposit nearest the village (civilization pass: MapMarker 'outpost')
+    const iron = (this.world.deposits ?? []).filter((d) => d.kind === 'iron').sort((a, b) => Math.hypot(a.x - this.village.x, a.z - this.village.z) - Math.hypot(b.x - this.village.x, b.z - this.village.z))[0];
+    if (iron) this.markers.push({ id: 5, kind: 'outpost', x: iron.x, z: iron.z, color: this.world.kingdoms[this.village.kingdom]?.color ?? 0xa8302a, size: 6, label: 'Iron camp' });
   }
 
   // ---------- SimView ----------

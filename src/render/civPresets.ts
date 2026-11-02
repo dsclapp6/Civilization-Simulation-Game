@@ -62,6 +62,35 @@ export function openGround(c: CivCtx, from: { x: number; z: number }, clear: num
   return { x: from.x + 120, z: from.z };
 }
 
+const TREES = new Set(['oak', 'beech', 'birch', 'ash', 'willow', 'pine', 'spruce', 'apple', 'deadtree', 'bush']);
+/** No tree or bush within r of (x, z). */
+export function clearOfTrees(w: WorldModel, x: number, z: number, r: number): boolean {
+  const C = 64;
+  for (let cz = Math.floor((z - r - 8) / C); cz <= Math.floor((z + r + 8) / C); cz++) {
+    for (let cx = Math.floor((x - r - 8) / C); cx <= Math.floor((x + r + 8) / C); cx++) {
+      if (cx < 0 || cz < 0 || cx * C >= w.size || cz * C >= w.size) continue;
+      for (const it of w.scatterInChunk(cx, cz)) if (TREES.has(it.kind) && Math.hypot(it.x - x, it.z - z) < r + 3 * Math.max(1, it.scale)) return false;
+    }
+  }
+  return true;
+}
+/** A camera `back` m behind a point (opposite `yaw`) and `up` m high looking at `look`, swung sideways until no tree is in the way. */
+export function clearView(w: WorldModel, at: { x: number; z: number }, yaw: number, back: number, up: number, look: { x: number; z: number; y?: number }): Pose {
+  for (const sw of [0, 0.35, -0.35, 0.7, -0.7, 1.0, -1.0]) {
+    for (const k of [1, 1.4, 0.7]) {
+      const x = at.x - Math.sin(yaw + sw) * back * k, z = at.z - Math.cos(yaw + sw) * back * k;
+      let ok = clearOfTrees(w, x, z, 3);
+      for (let i = 1; i < 6 && ok; i++) {
+        const t = i / 6;
+        ok = clearOfTrees(w, x + (look.x - x) * t * 0.8, z + (look.z - z) * t * 0.8, 1.5);
+      }
+      if (ok) return { pos: { x, y: g(w, x, z) + up, z }, look: { x: look.x, y: look.y ?? g(w, look.x, look.z) + 1.6, z: look.z } };
+    }
+  }
+  const x = at.x - Math.sin(yaw) * back, z = at.z - Math.cos(yaw) * back;
+  return { pos: { x, y: g(w, x, z) + up, z }, look: { x: look.x, y: look.y ?? g(w, look.x, look.z) + 1.6, z: look.z } };
+}
+
 function lookAt(w: WorldModel, tx: number, tz: number, fromYaw: number, dist: number, height: number, lookUp = 0): Pose {
   const x = tx - Math.sin(fromYaw) * dist, z = tz - Math.cos(fromYaw) * dist;
   return { pos: { x, y: Math.max(g(w, x, z), 0) + height, z }, look: { x: tx, y: Math.max(g(w, tx, tz), 0) + lookUp, z: tz } };
@@ -107,13 +136,10 @@ export const CIV_PRESETS: Record<string, CivPreset> = {
       stand(c.v.character(104), c.w, f.x + fx * 7 - rx * 3, f.z + fz * 7 - rz * 3, yaw + Math.PI, 'talk', 'quest');
       stand(c.v.character(109), c.w, f.x + fx * 13 + rx * 6, f.z + fz * 13 + rz * 6, yaw + Math.PI - 0.4, 'idle', 'turnin');
       if (crowd[5]) crowd[5].mark = 'quest';
-      // far off along the street (~80 m)
+      // further off (~50 and ~80 m)
       stand(c.v.character(120), c.w, f.x + fx * 78 - rx * 10, f.z + fz * 78 - rz * 10, yaw + Math.PI, 'idle', 'quest');
       stand(c.v.character(121), c.w, f.x + fx * 52 + rx * 18, f.z + fz * 52 + rz * 18, yaw + Math.PI, 'idle', 'turnin');
-      c.r.setCameraMode('follow');
-      const d = Math.atan2(Math.sin(yaw - c.r.getCameraYaw()), Math.cos(yaw - c.r.getCameraYaw()));
-      c.r.orbit(d, 0.06);
-      return 'follow';
+      return clearView(c.w, f, yaw, 7, 3.2, { x: f.x + fx * 14, z: f.z + fz * 14 });
     },
   },
   /** The same at dusk: the marks keep their colour and glow against the dark. */
@@ -127,11 +153,11 @@ export const CIV_PRESETS: Record<string, CivPreset> = {
     season: 1, day: 2, time: 0.52, weather: 'clear',
     camera: (c) => {
       const v = c.v.village;
-      const area = [starOutline(v.x - 60, v.z + 20, 230, 72, 1), starOutline(v.x + 260, v.z - 120, 150, 48, 4)];
+      const area = [starOutline(v.x - 60, v.z + 20, 150, 72, 1), starOutline(v.x + 110, v.z - 60, 90, 48, 4)];
       c.r.setBuildArea?.(area);
-      const spot = openGround(c, { x: v.x + 40, z: v.z + 30 }, 9, 30);
+      const spot = openGround(c, { x: v.x + 30, z: v.z + 20 }, 9, 20);
       c.r.setGhost?.({ kind: 'cottage', level: 2, x: spot.x, z: spot.z, rot: 0.6, ok: true, footprint: footprint('cottage', spot.x, spot.z, 0.6) });
-      c.r.setOverview?.({ x: v.x + 20, z: v.z + 10, radius: 260, distance: 210, yaw: Math.atan2(c.sunX, c.sunZ) + 0.6 });
+      c.r.setOverview?.({ x: v.x + 10, z: v.z, radius: 260, distance: 260, yaw: Math.atan2(c.sunX, c.sunZ) + 0.6 });
       c.v.teleportAvatar(v.x, v.z);
       return 'follow';
     },
@@ -145,7 +171,7 @@ export const CIV_PRESETS: Record<string, CivPreset> = {
       c.r.setBuildArea?.(area);
       const spot = openGround(c, { x: v.x + 40, z: v.z + 30 }, 10, 30);
       c.r.setGhost?.({ kind: 'smithy', level: 2, x: spot.x, z: spot.z, rot: 0.6, ok: true, footprint: footprint('smithy', spot.x, spot.z, 0.6) });
-      c.r.setOverview?.({ x: spot.x, z: spot.z, radius: 260, distance: 42, yaw: Math.atan2(c.sunX, c.sunZ) + 0.9 });
+      c.r.setOverview?.({ x: spot.x, z: spot.z, radius: 260, distance: 28, yaw: Math.atan2(c.sunX, c.sunZ) + 0.9 });
       return 'follow';
     },
   },
@@ -160,7 +186,7 @@ export const CIV_PRESETS: Record<string, CivPreset> = {
       const q = road.points[Math.min(road.points.length - 1, 4)];
       const rot = Math.atan2(q.x - p.x, q.z - p.z);
       c.r.setGhost?.({ kind: 'barn', level: 1, x: p.x, z: p.z, rot, ok: false, footprint: footprint('barn', p.x, p.z, rot) });
-      c.r.setOverview?.({ x: p.x, z: p.z, radius: 260, distance: 46, yaw: Math.atan2(c.sunX, c.sunZ) + 0.9 });
+      c.r.setOverview?.({ x: p.x, z: p.z, radius: 260, distance: 34, yaw: Math.atan2(c.sunX, c.sunZ) + 0.9 });
       return 'follow';
     },
   },
@@ -196,6 +222,48 @@ export const CIV_PRESETS: Record<string, CivPreset> = {
       return 'follow';
     },
   },
+};
+
+/** The deposit of a kind nearest the home village. */
+function depositNear(c: CivCtx, kind: string): { x: number; z: number; radius: number } | null {
+  const v = c.v.village;
+  let best: { x: number; z: number; radius: number } | null = null, bd = Infinity;
+  for (const d of c.w.deposits ?? []) {
+    if (d.kind !== kind) continue;
+    const dd = Math.hypot(d.x - v.x, d.z - v.z);
+    if (dd < bd) { bd = dd; best = d; }
+  }
+  return best;
+}
+
+/** A deposit from the side the sun lights, `dist` m off and `up` m high, clear of trees where possible. */
+function depositView(c: CivCtx, kind: string, dist: number, up: number): Pose {
+  const d = depositNear(c, kind);
+  if (!d) return lookAt(c.w, c.v.village.x, c.v.village.z, 0, 40, 12);
+  c.v.teleportAvatar(d.x + 4, d.z + 4);
+  const sunYaw = Math.atan2(c.sunX, c.sunZ);
+  for (const sw of [0, 0.5, -0.5, 1, -1, 1.6, -1.6, Math.PI]) {
+    const yaw = sunYaw + Math.PI + sw;
+    const x = d.x - Math.sin(yaw) * dist, z = d.z - Math.cos(yaw) * dist;
+    if (c.w.waterSurfaceAt(x, z) !== null || !clearOfTrees(c.w, x, z, 4)) continue;
+    let ok = true;
+    for (let i = 1; i < 6 && ok; i++) { const t = i / 6; ok = clearOfTrees(c.w, x + (d.x - x) * t, z + (d.z - z) * t, 2); }
+    if (!ok) continue;
+    const gy = Math.max(g(c.w, x, z), g(c.w, d.x, d.z));
+    return { pos: { x, y: gy + up, z }, look: { x: d.x, y: g(c.w, d.x, d.z) + 1, z: d.z } };
+  }
+  const yaw = sunYaw + Math.PI;
+  const x = d.x - Math.sin(yaw) * dist, z = d.z - Math.cos(yaw) * dist;
+  return { pos: { x, y: Math.max(g(c.w, x, z), g(c.w, d.x, d.z)) + up, z }, look: { x: d.x, y: g(c.w, d.x, d.z) + 1, z: d.z } };
+}
+
+for (const [kind, dist, up] of [['iron', 58, 26], ['stone', 64, 28], ['clay', 52, 20], ['salt', 70, 26], ['silver', 48, 22], ['gold', 30, 12]] as [string, number, number][]) {
+  CIV_PRESETS[`civ-deposit-${kind}`] = { season: 1, day: 2, time: 0.45, weather: 'clear', camera: (c) => depositView(c, kind, dist, up) };
+}
+/** The map at a regional zoom: deposit icons by kind, an outpost marker. */
+CIV_PRESETS['civ-map-deposits'] = {
+  season: 1, day: 1, time: 0.55, weather: 'clear',
+  camera: (c) => { c.v.setMode('map'); c.r.setCameraMode('map'); c.r.focusMap(c.v.village.x + 900, c.v.village.z + 600, 6500); return 'map'; },
 };
 
 /** Clears everything a civ preset may have set on the renderer. */

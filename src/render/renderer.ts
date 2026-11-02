@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { clamp, smoothstep } from '../core/math';
 import { DAYS_PER_SEASON } from '../core/time';
-import type { CharacterDrawItem, AnimalDrawItem, BuildingView, SimView, StripView, ViewMode, WorldMarker, WorldPropView } from '../core/view';
+import type { CharacterDrawItem, AnimalDrawItem, BuildingView, FortView, SiegeWorkDrawItem, SimView, StripView, ViewMode, WorldMarker, WorldPropView } from '../core/view';
 import type { AssetLibrary } from '../assets/types';
 import type { WorldModel } from '../world/types';
 import { QUALITY, type QualitySettings } from './quality';
@@ -35,11 +35,15 @@ import { QuestMarks } from './feedback/marks';
 import { GhostLayer } from './feedback/ghost';
 import { BuildAreaOverlay } from './feedback/buildArea';
 import { OrderMarkLayer } from './feedback/orderMarks';
+import { DepositSystem } from './deposits';
+import { SiegeLayer } from './siege';
 
 export type { CameraMode, GameRenderer, GroundPoint, HoverTarget, PickResult, QualityLevel, RenderStats, RendererOptions } from './types';
 
 const NO_PROPS: readonly WorldPropView[] = [];
 const NO_MARKERS: readonly WorldMarker[] = [];
+const NO_FORTS: readonly FortView[] = [];
+const NO_WORKS: readonly SiegeWorkDrawItem[] = [];
 
 const AIM_ANIMS = new Set<string>(['draw_bow', 'aim_bow', 'shoot_bow', 'aim_crossbow', 'shoot_crossbow', 'reload_crossbow']);
 const VIEW_TO_CAMERA: Record<ViewMode, CameraMode> = { street: 'follow', map: 'map', travel: 'map', cinematic: 'cinematic' };
@@ -109,6 +113,8 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
   const marks = new QuestMarks();
   const ghost = new GhostLayer(world, assets, heightAt);
   const orders = new OrderMarkLayer(heightAt);
+  const deposits = new DepositSystem(world, assets, heightAt);
+  const siege = new SiegeLayer(assets);
   let lastBuildings: readonly BuildingView[] = [];
   let lastStrips: readonly StripView[] = [];
   const hover = new HoverLayer({
@@ -144,7 +150,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
   lighting.configure(quality.shadows, quality.shadowMapSize, quality.shadowRadius);
 
   scene.add(sky.stars, sky.dome, terrain.root, water.root, roads.root, vegetation.root, buildings.root, fields.root, dynamic.root,
-    worldProps.root, hover.root, beacons.root, precip.rain, precip.snow, marks.root, ghost.root, orders.root);
+    worldProps.root, hover.root, beacons.root, precip.rain, precip.snow, marks.root, ghost.root, orders.root, deposits.root, siege.root);
 
   let post: PostFx | null = null;
   const atmo = createAtmosphereState();
@@ -336,7 +342,9 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     g += roads.update(camera, Math.max(0.5 * budgetScale, budget - g));
     buildings.nightLight = atmo.nightLight * (1 - mapBlend);
     lastBuildings = view.buildings();
+    buildings.setForts(view.forts?.() ?? NO_FORTS, view.fortsVersion?.() ?? 0);
     const bfx = buildings.update(lastBuildings, view.buildingsVersion(), camera, time, dt, Math.max(1.5, budget * 0.6), budgetScale > 1);
+    deposits.update(camera, lastBuildings, view.buildingsVersion(), time, atmo.day * (1 - atmo.overcast * 0.7), mapBlend < 0.9);
     lastStrips = view.strips();
     const sv = view.stripsVersion();
     g += fields.update(lastStrips, sv, camera, Math.max(0.5 * budgetScale, budget - g), dt);
@@ -349,7 +357,9 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     lastAnimals = animals;
     const streetView = mapBlend < 0.98;
     dynamic.root.visible = streetView;
-    dynamic.update(streetView ? chars : [], streetView ? animals : [], view.projectiles(), view.drainFx(), bfx, camera, dt);
+    siege.root.visible = streetView;
+    const sfx = siege.update(streetView ? view.siegeWorks?.() ?? NO_WORKS : NO_WORKS, dt);
+    dynamic.update(streetView ? chars : [], streetView ? animals : [], view.projectiles(), view.drainFx(), sfx.length ? [...bfx, ...sfx] : bfx, camera, dt);
 
     // results of work, beacons, floating gains, nameplates, hover outline
     const tf = performance.now();
@@ -460,7 +470,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
       const groups: [string, THREE.Object3D][] = [
         ['terrain', terrain.root], ['water', water.root], ['roads', roads.root], ['vegetation', vegetation.root],
         ['buildings', buildings.root], ['fields', fields.root], ['dynamic', dynamic.root], ['sky', sky.dome],
-        ['props', worldProps.root], ['beacons', beacons.root], ['hover', hover.root], ['marks', marks.root], ['ghost', ghost.root], ['orders', orders.root],
+        ['props', worldProps.root], ['beacons', beacons.root], ['hover', hover.root], ['marks', marks.root], ['ghost', ghost.root], ['orders', orders.root], ['deposits', deposits.root], ['siege', siege.root],
       ];
       for (const [name, obj] of groups) {
         const was = obj.visible;
@@ -557,6 +567,8 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
       marks.dispose();
       ghost.dispose();
       orders.dispose();
+      deposits.dispose();
+      siege.dispose();
       buildArea.dispose();
       precip.dispose();
       mapLabels.dispose();
