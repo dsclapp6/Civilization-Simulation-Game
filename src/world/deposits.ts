@@ -151,10 +151,9 @@ export function generateDeposits(s: GenState, tm: TerrainModel, ctx: LayoutCtx, 
         }
         const ws = W_STONE[b];
         if (ws) {
-          let pre = ws * (0.15 + 0.85 * smoothstep(0.1, 0.42, sl)) * (0.4 + 0.6 * hill) * (0.3 + 0.7 * notCliff);
+          const pre = ws * (0.15 + 0.85 * smoothstep(0.1, 0.42, sl)) * (0.4 + 0.6 * hill) * (0.3 + 0.7 * notCliff);
           const cliff = waterDist[k] < 70 && sl > 0.08 ? 0.35 * smoothstep(0.08, 0.3, sl) * notCliff : 0;
           if (pre > 0.022 || cliff > 0) { const sc = pre * (0.5 + 0.9 * provStone.at(x, z)) + cliff; if (sc > 0.03) cand.stone.add(k, sc); }
-          pre = 0;
         }
         const m = mountain[k];
         if (m > 0.3 && h > 260 && (b === Biome.Mountain || b === Biome.Upland)) {
@@ -350,7 +349,6 @@ export function generateDeposits(s: GenState, tm: TerrainModel, ctx: LayoutCtx, 
   placeGold(s, tm, ctx, lands, add, apart, clearOfOthers);
   lap(s, 'd.gold');
   alignDepositsWithPlots(out, ctx.s.plots, lands);
-  void NN;
   return out;
 }
 

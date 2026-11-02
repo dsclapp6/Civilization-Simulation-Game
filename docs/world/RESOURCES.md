@@ -46,8 +46,8 @@ spacing, a cap per kingdom and a minimum per kingdom, then moved to the flattest
 | **stone** | rocky uplands and mountains, bare slopes, **river cliffs** (steep banks of a stream), low rises | 3 – 9 | 640 m | ~70 m | 0.4 – 1 |
 | **clay** | river and lake banks, marsh, flood plain; flat (≤ 0.09), low (< 190 m), 3 – 80 m from water | 3 – 6 | 560 m | ~58 m | 0.2 – 0.62 (thin banks) |
 | **salt** | coastal marsh and the flats behind the beach; low (< 12 m), flat, within ~260 m of the sea | 0 – 3 (coasts only) | 1100 m | ~72 m | 0.25 – 0.68 |
-| **silver** | mountains and high uplands (≥ 260 m): scarce, a few to a kingdom | 0 – 5, 3 – 7 in all | 1250 m | ~38 m | 0.4 – 0.92 |
-| **gold** | the banks of narrow mountain **streams** (9 – 17 m from the stream's line): alluvial | 0 – 2, 2 – 3 in all | 3200 m | ~30 m | 0.3 – 0.8 |
+| **silver** | mountains and high uplands (≥ 260 m; a world with no real mountains makes do with its highest hills): scarce, a few to a kingdom | 0 – 5, 3 – 7 in all | 1250 m | ~38 m | 0.4 – 0.92 |
+| **gold** | the banks of narrow (≤ 7 m) mountain **streams**, the highest first (9 – 17 m from the stream's line): alluvial | 0 – 2, 2 – 3 in all | 3200 m | ~30 m | 0.3 – 0.8 |
 
 Rules that hold for every deposit (and are tested, `tests/world/deposits.test.ts`, on two full and two sparse continents):
 dry land inside the map, not on a road (≥ 3 m), a plot, a strip, a parcel or in a settlement; the extents of two deposits never
@@ -179,7 +179,8 @@ under siege, or a hostile army within 1.5 km), unless he has business there:
 * an **office** at that place (reeve, bailiff, steward, a household knight at the castle…);
 * on the manor's own **demesne**: the manor's bound people (`estate: 'unfree'`, living there) work his closes;
 * the lord's **leave** (`grantLeave`, below);
-* the **market day** of a town with a market (`isMarketDay`): everyone has business on its private ground.
+* the **market day** of a town with a market (`isMarketDay`): everyone has business on its private ground, by day (not by night, and not
+  in a castle that is shut).
 
 Reasons in plain words: "the lord's closes at Dromore", "the lord's deer park at Cyney", "the grounds of Dun Balross, closed at night" /
 "…closed while the castle is on alert". Poaching is a matter for the hunting actions (they can ask `landAt(...).kind`): walking through
