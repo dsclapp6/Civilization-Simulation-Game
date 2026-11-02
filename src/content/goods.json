@@ -26,7 +26,7 @@
   "meat":    { "name": "Meat",    "unit": "pounds of meat", "unitOne": "pound of meat", "category": "food", "basePrice": 0.5, "weight": 0.45, "spoilDays": 6, "food": 0.3, "macro": true, "sold": ["market"] },
   "salt_meat": { "name": "Salt meat", "unit": "pounds of salt meat", "unitOne": "pound of salt meat", "category": "food", "basePrice": 0.8, "weight": 0.45, "spoilDays": 120, "food": 0.3, "sold": ["market", "slaughterhouse"] },
   "fish":    { "name": "Fish",    "unit": "pounds of fish", "unitOne": "pound of fish", "category": "food", "basePrice": 0.35, "weight": 0.45, "spoilDays": 4, "food": 0.25, "macro": true, "sold": ["market"] },
-  "salt":    { "name": "Salt",    "unit": "pounds of salt", "unitOne": "pound of salt", "category": "misc", "basePrice": 0.25, "weight": 0.45, "sold": ["market"] },
+  "salt":    { "name": "Salt",    "unit": "pounds of salt", "unitOne": "pound of salt", "category": "misc", "basePrice": 0.25, "weight": 0.45, "sold": ["market"], "macro": true, "supply": { "use": 0.03, "cover": 40, "relax": 0.04 } },
   "honey":   { "name": "Honey",   "unit": "pounds of honey", "unitOne": "pound of honey", "category": "food", "basePrice": 1.0, "weight": 0.5, "food": 0.3, "sold": ["market"] },
 
   "wool":    { "name": "Wool",    "unit": "pounds of wool", "unitOne": "pound of wool", "category": "textile", "basePrice": 2.0, "weight": 0.45, "sold": ["market", "weaver"] },
@@ -37,22 +37,22 @@
 
   "hide":    { "name": "Hide",    "unit": "hides", "unitOne": "hide", "category": "material", "basePrice": 24, "weight": 8, "spoilDays": 30, "sold": ["market", "tannery"] },
   "leather": { "name": "Leather", "unit": "pieces of leather", "unitOne": "piece of leather", "category": "material", "basePrice": 36, "weight": 6, "sold": ["market", "tannery"] },
-  "timber":  { "name": "Timber",  "unit": "logs", "unitOne": "log", "category": "material", "basePrice": 12, "weight": 16, "sold": ["market", "carpenter", "sawpit"] },
-  "planks":  { "name": "Planks",  "unit": "planks", "unitOne": "plank", "category": "material", "basePrice": 2.5, "weight": 4, "sold": ["market", "carpenter", "sawpit"] },
-  "stone":   { "name": "Stone",   "unit": "blocks of stone", "unitOne": "block of stone", "category": "material", "basePrice": 3.0, "weight": 12, "sold": ["market", "quarry"] },
+  "timber":  { "name": "Timber",  "unit": "logs", "unitOne": "log", "category": "material", "basePrice": 12, "weight": 16, "sold": ["market", "carpenter", "sawpit"], "macro": true, "supply": { "use": 0.0035, "cover": 30, "relax": 0.04 } },
+  "planks":  { "name": "Planks",  "unit": "planks", "unitOne": "plank", "category": "material", "basePrice": 2.5, "weight": 4, "sold": ["market", "carpenter", "sawpit"], "macro": true, "supply": { "use": 0.018, "cover": 24, "relax": 0.05 } },
+  "stone":   { "name": "Stone",   "unit": "blocks of stone", "unitOne": "block of stone", "category": "material", "basePrice": 3.0, "weight": 12, "sold": ["market", "quarry"], "macro": true, "supply": { "use": 0.008, "cover": 40, "relax": 0.03 } },
   "iron_ore": { "name": "Iron ore", "unit": "baskets of iron ore", "unitOne": "basket of iron ore", "category": "material", "basePrice": 1.5, "weight": 8, "sold": ["mine", "bloomery"] },
   "clay":     { "name": "Clay",     "unit": "loads of clay", "unitOne": "load of clay", "category": "material", "basePrice": 0.6, "weight": 20, "sold": ["clay_pit", "kiln"] },
-  "brick":    { "name": "Bricks",   "unit": "bricks", "unitOne": "brick", "category": "material", "basePrice": 0.25, "weight": 2.5, "sold": ["market", "kiln"] },
+  "brick":    { "name": "Bricks",   "unit": "bricks", "unitOne": "brick", "category": "material", "basePrice": 0.25, "weight": 2.5, "sold": ["market", "kiln"], "macro": true, "supply": { "use": 0.004, "cover": 40, "relax": 0.03 } },
   "silver_ore": { "name": "Silver ore", "unit": "baskets of silver ore", "unitOne": "basket of silver ore", "category": "material", "basePrice": 30, "weight": 8, "sold": ["mine", "market"] },
   "gold_ore": { "name": "Gold ore", "unit": "pouches of gold ore", "unitOne": "pouch of gold ore", "category": "material", "basePrice": 160, "weight": 2, "sold": ["mine", "market"] },
-  "straw":   { "name": "Straw",   "unit": "bundles of straw", "unitOne": "bundle of straw", "category": "material", "basePrice": 0.25, "weight": 4, "sold": ["market"] },
+  "straw":   { "name": "Straw",   "unit": "bundles of straw", "unitOne": "bundle of straw", "category": "material", "basePrice": 0.25, "weight": 4, "sold": ["market"], "macro": true, "supply": { "use": 0.05, "cover": 12, "relax": 0.15 } },
   "hay":     { "name": "Hay",     "unit": "bales of hay", "unitOne": "bale of hay", "category": "material", "basePrice": 0.5, "weight": 8, "spoilDays": 300, "sold": ["market"] },
   "manure":  { "name": "Manure",  "unit": "loads of manure", "unitOne": "load of manure", "category": "material", "basePrice": 0.2, "weight": 10 },
 
   "firewood": { "name": "Firewood", "unit": "bundles of firewood", "unitOne": "bundle of firewood", "category": "fuel", "basePrice": 0.4, "weight": 4, "macro": true, "sold": ["market"] },
-  "charcoal": { "name": "Charcoal", "unit": "sacks of charcoal", "unitOne": "sack of charcoal", "category": "fuel", "basePrice": 3.0, "weight": 8, "sold": ["market", "charcoal_mound", "smithy"] },
-  "iron":     { "name": "Iron",     "unit": "iron bars", "unitOne": "iron bar", "category": "metal", "basePrice": 7.0, "weight": 3, "sold": ["market", "smithy", "bloomery"] },
-  "nails":    { "name": "Nails",    "unit": "handfuls of nails", "unitOne": "handful of nails", "category": "metal", "basePrice": 1.0, "weight": 0.2, "sold": ["market", "smithy", "carpenter"] },
+  "charcoal": { "name": "Charcoal", "unit": "sacks of charcoal", "unitOne": "sack of charcoal", "category": "fuel", "basePrice": 3.0, "weight": 8, "sold": ["market", "charcoal_mound", "smithy"], "macro": true, "supply": { "use": 0.012, "cover": 20, "relax": 0.06 } },
+  "iron":     { "name": "Iron",     "unit": "iron bars", "unitOne": "iron bar", "category": "metal", "basePrice": 7.0, "weight": 3, "sold": ["market", "smithy", "bloomery"], "macro": true, "supply": { "use": 0.004, "cover": 40, "relax": 0.03 } },
+  "nails":    { "name": "Nails",    "unit": "handfuls of nails", "unitOne": "handful of nails", "category": "metal", "basePrice": 1.0, "weight": 0.2, "sold": ["market", "smithy", "carpenter"], "macro": true, "supply": { "use": 0.03, "cover": 30, "relax": 0.05 } },
 
   "sickle":    { "name": "Sickle",    "unit": "sickles", "unitOne": "sickle", "category": "tool", "basePrice": 4,  "weight": 0.5, "quality": true, "slot": "main", "held": "sickle",    "sold": ["smithy"] },
   "scythe":    { "name": "Scythe",    "unit": "scythes", "unitOne": "scythe", "category": "tool", "basePrice": 30, "weight": 2,   "quality": true, "slot": "main", "held": "scythe",    "sold": ["smithy"] },
@@ -108,10 +108,16 @@
   "goat":    { "name": "Goat",    "unit": "goats", "unitOne": "goat", "category": "livestock", "basePrice": 14, "weight": 0, "sold": ["market"] },
   "chicken": { "name": "Chicken", "unit": "chickens", "unitOne": "chicken", "category": "livestock", "basePrice": 0.6, "weight": 0, "sold": ["market"] },
 
-  "candle":  { "name": "Candle",  "unit": "candles", "unitOne": "candle", "category": "misc", "basePrice": 0.35, "weight": 0.1, "sold": ["market"] },
-  "tallow":   { "name": "Tallow",   "unit": "pounds of tallow", "unitOne": "pound of tallow", "category": "misc", "basePrice": 0.4, "weight": 0.45, "sold": ["market", "slaughterhouse"] },
-  "vellum":   { "name": "Vellum",   "unit": "sheets of vellum", "unitOne": "sheet of vellum", "category": "misc", "basePrice": 3, "weight": 0.05, "sold": ["tannery", "market"] },
+  "candle":  { "name": "Candle",  "unit": "candles", "unitOne": "candle", "category": "misc", "basePrice": 0.35, "weight": 0.1, "sold": ["market"], "macro": true, "supply": { "use": 0.06, "cover": 12, "relax": 0.1 } },
+  "tallow":   { "name": "Tallow",   "unit": "pounds of tallow", "unitOne": "pound of tallow", "category": "misc", "basePrice": 0.4, "weight": 0.45, "sold": ["market", "slaughterhouse"], "macro": true, "supply": { "use": 0.02, "cover": 20, "relax": 0.08 } },
+  "vellum":   { "name": "Vellum",   "unit": "sheets of vellum", "unitOne": "sheet of vellum", "category": "misc", "basePrice": 3, "weight": 0.05, "sold": ["tannery", "market"], "macro": true, "supply": { "use": 0.0006, "cover": 60, "relax": 0.02 } },
   "barrel":  { "name": "Barrel",  "unit": "barrels", "unitOne": "barrel", "category": "misc", "basePrice": 12, "weight": 12, "sold": ["market", "carpenter"] },
   "pot":     { "name": "Cooking pot", "unit": "pots", "unitOne": "pot", "category": "misc", "basePrice": 2, "weight": 1.5, "sold": ["market", "kiln"] },
-  "cart":    { "name": "Cart",    "unit": "carts", "unitOne": "cart", "category": "misc", "basePrice": 120, "weight": 0, "sold": ["carpenter"] }
+  "cart":    { "name": "Cart",    "unit": "carts", "unitOne": "cart", "category": "misc", "basePrice": 120, "weight": 0, "sold": ["carpenter"] },
+
+  "pig_carcass":   { "name": "Pig carcass",   "unit": "pig carcasses",   "unitOne": "pig carcass",   "category": "food", "basePrice": 34,  "weight": 55,  "spoilDays": 2.5, "sold": ["slaughterhouse"] },
+  "sheep_carcass": { "name": "Sheep carcass", "unit": "sheep carcasses", "unitOne": "sheep carcass", "category": "food", "basePrice": 14,  "weight": 22,  "spoilDays": 2.5, "sold": ["slaughterhouse"] },
+  "goat_carcass":  { "name": "Goat carcass",  "unit": "goat carcasses",  "unitOne": "goat carcass",  "category": "food", "basePrice": 11,  "weight": 18,  "spoilDays": 2.5, "sold": ["slaughterhouse"] },
+  "cow_carcass":   { "name": "Beef carcass",  "unit": "beef carcasses",  "unitOne": "beef carcass",  "category": "food", "basePrice": 98,  "weight": 160, "spoilDays": 3,   "sold": ["slaughterhouse"] },
+  "ox_carcass":    { "name": "Ox carcass",    "unit": "ox carcasses",    "unitOne": "ox carcass",    "category": "food", "basePrice": 135, "weight": 220, "spoilDays": 3,   "sold": ["slaughterhouse"] }
 }

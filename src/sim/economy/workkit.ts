@@ -10,9 +10,10 @@ import { TRAIN_SCALE, XP_SCALE, gainSkill, trainStat } from '../skills';
 import type { Household, Person } from '../state';
 import type { Econ } from './core';
 import { TOOL_SPEED } from './data';
-import { bagEntries, bestOf, wearTool, type Bag } from './items';
+import { bagAdd, bagEntries, bestOf, wearTool, type Bag } from './items';
 import { drainWork, needsFactor } from './needs';
 import { creditWeekWork } from './obligations';
+import { capacityOf, carriedWeight, weightOf } from './own';
 import { perkSum, perkTotal } from './perks';
 import { parseItemKey, type ItemKey, type Quality } from './types';
 
@@ -147,6 +148,20 @@ export const round2 = (v: number): number => Math.round(v * 100) / 100;
 export function stoch(E: Econ, x: number): number {
   const f = Math.floor(x);
   return f + (E.rng('roll').next() < x - f ? 1 : 0);
+}
+
+/** Puts a product in the pack if it can be carried, else in the household's stores. */
+export function giveOutput(E: Econ, p: Person, key: string, qty: number): 'pack' | 'stores' {
+  const w = weightOf(key, qty);
+  const hh = E.hhOf(p);
+  if (carriedWeight(p) + w <= capacityOf(p) + 1e-6 || !hh) {
+    bagAdd(p.inventory, key, qty);
+    E.state.touch(p);
+    return 'pack';
+  }
+  bagAdd(hh.stores, key, qty);
+  E.state.touchHousehold(hh);
+  return 'stores';
 }
 
 /** Care a piece of work puts into a crop or product: skill, tool and how rested the worker is (0.4..1). */

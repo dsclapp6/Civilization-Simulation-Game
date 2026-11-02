@@ -1,19 +1,19 @@
 {
   "_doc": "Production recipes for the player's craft work (and the default product ranges of craftsmen). building = workshop kinds where the batch can be made ('home' = the hearth of any home); skill/level = skill and minimum level; stage = minimum ladder stage in the craft (0 apprentice, 1 journeyman, 2 master; -1 = anyone, e.g. household work); tool = tool class that must be carried; inputs/outputs are goods per batch; work = bouts of effort at speed 1; quality: true = outputs get a quality tier from skill, tool and perks; xp = base experience per bout; anim/held = what the body shows.",
   "recipes": {
-    "bake_bread":   { "name": "Bake bread", "building": ["bakehouse", "home"], "skill": "brewing", "level": 0, "stage": -1, "inputs": { "flour": 4, "firewood": 0.5 }, "outputs": { "bread": 4 }, "work": 2, "xp": 6, "anim": "work_knead", "held": "none" },
-    "malt_barley":  { "name": "Malt barley", "building": ["brewhouse", "kiln", "home"], "skill": "brewing", "level": 0, "stage": -1, "inputs": { "barley": 1 }, "outputs": { "malt": 0.9 }, "work": 1, "xp": 4, "anim": "work_lift", "held": "basket" },
-    "brew_ale":     { "name": "Brew ale", "building": ["brewhouse", "alehouse", "tavern", "home"], "skill": "brewing", "level": 1, "stage": -1, "inputs": { "malt": 1, "firewood": 0.5 }, "outputs": { "ale": 6 }, "work": 3, "xp": 8, "anim": "work_stir", "held": "ladle" },
-    "make_cheese":  { "name": "Press cheese", "building": ["home", "cowshed", "barn"], "skill": "husbandry", "level": 0, "stage": -1, "inputs": { "milk": 4, "salt": 0.1 }, "outputs": { "cheese": 3 }, "work": 2, "xp": 6, "anim": "work_knead", "held": "none" },
-    "dip_candles":  { "name": "Dip candles", "building": ["home"], "skill": "brewing", "level": 1, "stage": -1, "inputs": { "meat": 1 }, "outputs": { "candle": 8 }, "work": 1.5, "xp": 4, "anim": "work_stir", "held": "none" },
-    "spin_yarn":    { "name": "Spin yarn", "building": ["home", "weaver"], "skill": "tailoring", "level": 0, "stage": -1, "tool": "distaff", "inputs": { "wool": 1 }, "outputs": { "yarn": 0.9 }, "work": 1.5, "xp": 5, "anim": "work_spin", "held": "distaff" },
-    "weave_cloth":  { "name": "Weave woollen cloth", "building": ["weaver", "home"], "skill": "tailoring", "level": 2, "stage": -1, "tool": "loom", "inputs": { "yarn": 3.5 }, "outputs": { "cloth": 2 }, "work": 3, "xp": 8, "anim": "work_spin", "held": "none" },
-    "weave_linen":  { "name": "Weave linen", "building": ["weaver", "home"], "skill": "tailoring", "level": 2, "stage": -1, "tool": "loom", "inputs": { "flax": 4 }, "outputs": { "linen": 3 }, "work": 3, "xp": 8, "anim": "work_spin", "held": "none" },
-    "sew_clothes":  { "name": "Sew clothes", "building": ["weaver", "home"], "skill": "tailoring", "level": 1, "stage": -1, "tool": "needle", "inputs": { "cloth": 3 }, "outputs": { "clothes": 1 }, "work": 3, "quality": true, "xp": 8, "anim": "work_spin", "held": "none" },
-    "sew_cloak":    { "name": "Sew a cloak", "building": ["weaver", "home"], "skill": "tailoring", "level": 2, "stage": -1, "tool": "needle", "inputs": { "cloth": 4 }, "outputs": { "cloak": 1 }, "work": 3.5, "quality": true, "xp": 9, "anim": "work_spin", "held": "none" },
-    "sew_padded":   { "name": "Quilt a padded jack", "building": ["weaver", "home"], "skill": "tailoring", "level": 4, "stage": -1, "tool": "needle", "inputs": { "cloth": 5, "wool": 2 }, "outputs": { "padded_armour": 1 }, "work": 5, "quality": true, "xp": 10, "anim": "work_spin", "held": "none" },
-    "tan_hide":     { "name": "Tan a hide", "building": ["tannery"], "skill": "tailoring", "level": 1, "stage": 1, "inputs": { "hide": 1 }, "outputs": { "leather": 1 }, "work": 5, "xp": 7, "anim": "work_lift", "held": "none" },
-    "saw_planks":   { "name": "Saw planks", "building": ["sawpit", "carpenter"], "skill": "carpentry", "level": 0, "stage": 0, "tool": "saw", "inputs": { "timber": 1 }, "outputs": { "planks": 6 }, "work": 3, "xp": 7, "anim": "work_saw", "held": "saw" },
+    "bake_bread":   { "name": "Bake bread", "building": ["bakehouse", "home"], "skill": "brewing", "level": 0, "stage": -1, "inputs": { "flour": 4, "firewood": 0.5 }, "outputs": { "bread": 4 }, "work": 2, "xp": 6, "anim": "work_knead", "held": "none", "plan": "bread" },
+    "malt_barley":  { "name": "Malt barley", "building": ["brewhouse", "kiln", "home"], "skill": "brewing", "level": 0, "stage": -1, "inputs": { "barley": 1 }, "outputs": { "malt": 0.9 }, "work": 1, "xp": 4, "anim": "work_lift", "held": "basket", "plan": "malt" },
+    "brew_ale":     { "name": "Brew ale", "building": ["brewhouse", "alehouse", "tavern", "home"], "skill": "brewing", "level": 1, "stage": -1, "inputs": { "malt": 1, "firewood": 0.5 }, "outputs": { "ale": 6 }, "work": 3, "xp": 8, "anim": "work_stir", "held": "ladle", "plan": "mash" },
+    "make_cheese":  { "name": "Press cheese", "building": ["home", "cowshed", "barn"], "skill": "husbandry", "level": 0, "stage": -1, "inputs": { "milk": 4, "salt": 0.1 }, "outputs": { "cheese": 3 }, "work": 2, "xp": 6, "anim": "work_knead", "held": "none", "plan": "cheese" },
+    "dip_candles":  { "name": "Dip candles", "building": ["home", "slaughterhouse"], "skill": "brewing", "level": 1, "stage": -1, "inputs": { "tallow": 1 }, "outputs": { "candle": 8 }, "work": 1.5, "xp": 4, "anim": "work_stir", "held": "none", "plan": "candle" },
+    "spin_yarn":    { "name": "Spin yarn", "building": ["home", "weaver"], "skill": "tailoring", "level": 0, "stage": -1, "tool": "distaff", "inputs": { "wool": 1 }, "outputs": { "yarn": 0.9 }, "work": 1.5, "xp": 5, "anim": "work_spin", "held": "distaff", "plan": "spin" },
+    "weave_cloth":  { "name": "Weave woollen cloth", "building": ["weaver", "home"], "skill": "tailoring", "level": 2, "stage": -1, "tool": "loom", "inputs": { "yarn": 3.5 }, "outputs": { "cloth": 2 }, "work": 3, "xp": 8, "anim": "work_spin", "held": "none", "plan": "weave" },
+    "weave_linen":  { "name": "Weave linen", "building": ["weaver", "home"], "skill": "tailoring", "level": 2, "stage": -1, "tool": "loom", "inputs": { "flax": 4 }, "outputs": { "linen": 3 }, "work": 3, "xp": 8, "anim": "work_spin", "held": "none", "plan": "weave" },
+    "sew_clothes":  { "name": "Sew clothes", "building": ["weaver", "home"], "skill": "tailoring", "level": 1, "stage": -1, "tool": "needle", "inputs": { "cloth": 3 }, "outputs": { "clothes": 1 }, "work": 3, "quality": true, "xp": 8, "anim": "work_spin", "held": "none", "plan": "sew" },
+    "sew_cloak":    { "name": "Sew a cloak", "building": ["weaver", "home"], "skill": "tailoring", "level": 2, "stage": -1, "tool": "needle", "inputs": { "cloth": 4 }, "outputs": { "cloak": 1 }, "work": 3.5, "quality": true, "xp": 9, "anim": "work_spin", "held": "none", "plan": "sew" },
+    "sew_padded":   { "name": "Quilt a padded jack", "building": ["weaver", "home"], "skill": "tailoring", "level": 4, "stage": -1, "tool": "needle", "inputs": { "cloth": 5, "wool": 2 }, "outputs": { "padded_armour": 1 }, "work": 5, "quality": true, "xp": 10, "anim": "work_spin", "held": "none", "plan": "sew" },
+    "tan_hide":     { "name": "Tan a hide", "building": ["tannery"], "skill": "tailoring", "level": 1, "stage": 1, "inputs": { "hide": 1 }, "outputs": { "leather": 1 }, "work": 5, "xp": 7, "anim": "work_lift", "held": "none", "plan": "tannery" },
+    "saw_planks":   { "name": "Saw planks", "building": ["sawpit", "carpenter", "lumber_camp"], "skill": "carpentry", "level": 0, "stage": 0, "tool": "saw", "inputs": { "timber": 1 }, "outputs": { "planks": 6 }, "work": 3, "xp": 7, "anim": "work_saw", "held": "saw" },
     "make_flail":   { "name": "Make flails", "building": ["carpenter"], "skill": "carpentry", "level": 1, "stage": 1, "tool": "saw", "inputs": { "planks": 1, "nails": 1 }, "outputs": { "flail": 2 }, "work": 2, "quality": true, "xp": 7, "anim": "work_saw", "held": "saw" },
     "make_bucket":  { "name": "Make buckets", "building": ["carpenter"], "skill": "carpentry", "level": 1, "stage": 1, "tool": "saw", "inputs": { "planks": 3, "nails": 1 }, "outputs": { "bucket": 8 }, "work": 4, "quality": true, "xp": 7, "anim": "work_saw", "held": "saw" },
     "make_barrel":  { "name": "Make a barrel", "building": ["carpenter"], "skill": "carpentry", "level": 2, "stage": 1, "tool": "saw", "inputs": { "planks": 3, "nails": 1 }, "outputs": { "barrel": 1 }, "work": 3, "xp": 8, "anim": "work_saw", "held": "saw" },
@@ -22,14 +22,19 @@
     "make_cart":    { "name": "Build a cart", "building": ["carpenter"], "skill": "carpentry", "level": 6, "stage": 1, "tool": "saw", "inputs": { "planks": 14, "nails": 6, "iron": 2 }, "outputs": { "cart": 1 }, "work": 14, "xp": 12, "anim": "work_saw", "held": "saw" },
     "make_shortbow": { "name": "Shape a shortbow", "building": ["carpenter"], "skill": "carpentry", "level": 3, "stage": 1, "tool": "saw", "inputs": { "planks": 1 }, "outputs": { "shortbow": 1 }, "work": 3, "quality": true, "xp": 8, "anim": "work_saw", "held": "saw" },
     "make_longbow": { "name": "Shape a longbow", "building": ["carpenter"], "skill": "carpentry", "level": 7, "stage": 1, "tool": "saw", "inputs": { "planks": 2 }, "outputs": { "longbow": 1 }, "work": 6, "quality": true, "xp": 12, "anim": "work_saw", "held": "saw" },
-    "fletch_arrows": { "name": "Fletch arrows", "building": ["carpenter", "home"], "skill": "carpentry", "level": 2, "stage": -1, "inputs": { "planks": 1, "iron": 0.1 }, "outputs": { "arrow": 24 }, "work": 4, "quality": true, "xp": 8, "anim": "work_saw", "held": "none" },
+    "fletch_arrows": { "name": "Fletch arrows", "building": ["carpenter", "home"], "skill": "carpentry", "level": 2, "stage": -1, "inputs": { "planks": 1, "iron": 0.1 }, "outputs": { "arrow": 24 }, "work": 4, "quality": true, "xp": 8, "anim": "work_saw", "held": "none", "plan": "bench" },
     "make_shield":  { "name": "Make a shield", "building": ["carpenter"], "skill": "carpentry", "level": 3, "stage": 1, "tool": "saw", "inputs": { "planks": 2, "leather": 0.2 }, "outputs": { "shield": 1 }, "work": 3, "quality": true, "xp": 8, "anim": "work_saw", "held": "saw" },
     "make_spear":   { "name": "Make a spear", "building": ["carpenter", "smithy"], "skill": "carpentry", "level": 2, "stage": 1, "tool": "saw", "inputs": { "planks": 1, "iron": 0.4 }, "outputs": { "spear": 1 }, "work": 2, "quality": true, "xp": 7, "anim": "work_saw", "held": "saw" },
 
-    "burn_charcoal": { "name": "Burn charcoal", "building": ["charcoal_mound"], "skill": "woodcutting", "level": 0, "stage": -1, "inputs": { "firewood": 12 }, "outputs": { "charcoal": 3 }, "work": 5, "xp": 7, "anim": "work_lift", "held": "none" },
-    "smelt_iron":   { "name": "Smelt a bloom of iron", "building": ["bloomery"], "skill": "smithing", "level": 3, "stage": -1, "tool": "hammer", "inputs": { "iron_ore": 6, "charcoal": 3 }, "outputs": { "iron": 3 }, "work": 6, "xp": 10, "anim": "work_hammer", "held": "hammer" },
-    "cut_stone":    { "name": "Dress stone blocks", "building": ["quarry"], "skill": "masonry", "level": 1, "stage": -1, "tool": "chisel", "inputs": { "stone": 2 }, "outputs": { "stone": 2 }, "work": 3, "quality": true, "xp": 8, "anim": "work_hammer", "held": "chisel" },
-    "fire_pots":    { "name": "Fire cooking pots", "building": ["kiln"], "skill": "masonry", "level": 1, "stage": -1, "inputs": { "firewood": 3 }, "outputs": { "pot": 6 }, "work": 4, "xp": 6, "anim": "work_stir", "held": "none" },
+    "burn_charcoal": { "name": "Burn charcoal", "building": ["charcoal_mound", "lumber_camp"], "skill": "woodcutting", "level": 0, "stage": -1, "inputs": { "firewood": 12 }, "outputs": { "charcoal": 3 }, "work": 5, "xp": 7, "anim": "work_lift", "held": "none", "plan": "charcoal" },
+    "smelt_iron":   { "name": "Smelt a bloom of iron", "building": ["bloomery"], "skill": "smithing", "level": 3, "stage": -1, "tool": "hammer", "inputs": { "iron_ore": 6, "charcoal": 3 }, "outputs": { "iron": 3 }, "work": 6, "xp": 10, "anim": "work_hammer", "held": "hammer", "plan": "bloomery" },
+    "cut_stone":    { "name": "Dress stone blocks", "building": ["quarry"], "skill": "masonry", "level": 1, "stage": -1, "tool": "chisel", "inputs": { "stone": 2 }, "outputs": { "stone": 2 }, "work": 3, "quality": true, "xp": 8, "anim": "work_hammer", "held": "chisel", "plan": "masonry" },
+    "fire_pots":    { "name": "Fire cooking pots", "building": ["kiln"], "skill": "masonry", "level": 1, "stage": -1, "inputs": { "clay": 2, "firewood": 3 }, "outputs": { "pot": 6 }, "work": 4, "xp": 6, "anim": "work_stir", "held": "none", "plan": "kiln" },
+    "fire_bricks":   { "name": "Fire bricks", "building": ["kiln"], "skill": "masonry", "level": 1, "stage": -1, "inputs": { "clay": 4, "firewood": 6 }, "outputs": { "brick": 24 }, "work": 4, "xp": 7, "anim": "work_lift", "held": "none", "plan": "kiln" },
+
+    "boil_salt":     { "name": "Boil salt", "building": ["salt_pan"], "skill": "brewing", "level": 0, "stage": -1, "inputs": { "firewood": 5 }, "outputs": { "salt": 10 }, "work": 3, "xp": 6, "anim": "work_stir", "held": "ladle", "deposit": "salt", "plan": "saltern" },
+    "make_vellum":   { "name": "Prepare vellum", "building": ["tannery"], "skill": "tailoring", "level": 3, "stage": -1, "inputs": { "hide": 1 }, "outputs": { "vellum": 10 }, "work": 4, "xp": 9, "anim": "work_lift", "held": "none", "plan": "tannery" },
+    "salt_meat":     { "name": "Salt meat", "building": ["slaughterhouse", "home", "tavern"], "skill": "brewing", "level": 0, "stage": -1, "inputs": { "meat": 12, "salt": 2 }, "outputs": { "salt_meat": 11 }, "work": 2, "xp": 5, "anim": "work_knead", "held": "none", "plan": "salting" },
 
     "forge_nails":    { "name": "Forge nails", "building": ["smithy"], "skill": "smithing", "level": 1, "stage": 1, "tool": "hammer", "inputs": { "iron": 1, "charcoal": 0.2 }, "outputs": { "nails": 10 }, "work": 2, "xp": 6, "anim": "work_hammer", "held": "hammer" },
     "forge_sickle":   { "name": "Forge sickles", "building": ["smithy"], "skill": "smithing", "level": 1, "stage": 1, "tool": "hammer", "inputs": { "iron": 1, "charcoal": 0.3 }, "outputs": { "sickle": 3 }, "work": 3, "quality": true, "xp": 8, "anim": "work_hammer", "held": "hammer" },
@@ -44,7 +49,7 @@
     "forge_shears":   { "name": "Forge shears", "building": ["smithy"], "skill": "smithing", "level": 4, "stage": 1, "tool": "hammer", "inputs": { "iron": 1, "charcoal": 0.3 }, "outputs": { "shears": 2 }, "work": 3, "quality": true, "xp": 9, "anim": "work_hammer", "held": "hammer" },
     "forge_saw":      { "name": "Forge saws", "building": ["smithy"], "skill": "smithing", "level": 6, "stage": 1, "tool": "hammer", "inputs": { "iron": 2, "planks": 1, "charcoal": 0.5 }, "outputs": { "saw": 2 }, "work": 5, "quality": true, "xp": 11, "anim": "work_hammer", "held": "hammer" },
     "forge_scythe":   { "name": "Forge a scythe", "building": ["smithy"], "skill": "smithing", "level": 6, "stage": 1, "tool": "hammer", "inputs": { "iron": 1.5, "planks": 1, "charcoal": 0.5 }, "outputs": { "scythe": 1 }, "work": 4, "quality": true, "xp": 11, "anim": "work_hammer", "held": "hammer" },
-    "forge_plough":   { "name": "Fit a plough", "building": ["smithy", "carpenter"], "skill": "smithing", "level": 4, "stage": 1, "tool": "hammer", "inputs": { "iron": 2, "planks": 6, "nails": 2 }, "outputs": { "plough": 1 }, "work": 6, "quality": true, "xp": 10, "anim": "work_hammer", "held": "hammer" },
+    "forge_plough":   { "name": "Fit a plough", "building": ["smithy", "carpenter"], "skill": "smithing", "level": 4, "stage": 1, "tool": "hammer", "inputs": { "iron": 2, "planks": 6, "nails": 2 }, "outputs": { "plough": 1 }, "work": 6, "quality": true, "xp": 10, "anim": "work_hammer", "held": "hammer", "plan": "forge" },
     "forge_dagger":   { "name": "Forge a dagger", "building": ["smithy"], "skill": "smithing", "level": 5, "stage": 1, "tool": "hammer", "inputs": { "iron": 0.8, "charcoal": 0.3 }, "outputs": { "dagger": 1 }, "work": 3, "quality": true, "xp": 10, "anim": "work_hammer", "held": "hammer" },
     "forge_spearhead": { "name": "Forge a bill", "building": ["smithy"], "skill": "smithing", "level": 5, "stage": 1, "tool": "hammer", "inputs": { "iron": 1.5, "planks": 1, "charcoal": 0.4 }, "outputs": { "bill": 1 }, "work": 4, "quality": true, "xp": 10, "anim": "work_hammer", "held": "hammer" },
     "forge_mace":     { "name": "Forge a mace", "building": ["smithy"], "skill": "smithing", "level": 6, "stage": 1, "tool": "hammer", "inputs": { "iron": 2, "planks": 0.5, "charcoal": 0.5 }, "outputs": { "mace": 1 }, "work": 4, "quality": true, "xp": 11, "anim": "work_hammer", "held": "hammer" },
@@ -57,6 +62,162 @@
     "forge_mail":     { "name": "Rivet a mail hauberk", "building": ["smithy"], "skill": "smithing", "level": 12, "stage": 2, "tool": "hammer", "inputs": { "iron": 24, "charcoal": 2 }, "outputs": { "mail_hauberk": 1 }, "work": 30, "quality": true, "xp": 16, "anim": "work_hammer", "held": "hammer" },
     "forge_plates":   { "name": "Forge a coat of plates", "building": ["smithy"], "skill": "smithing", "level": 14, "stage": 2, "tool": "hammer", "inputs": { "iron": 40, "leather": 3, "charcoal": 4 }, "outputs": { "coat_of_plates": 1 }, "work": 40, "quality": true, "xp": 18, "anim": "work_hammer", "held": "hammer" }
   },
+  "_plans_doc": "Visible steps of a craft bout (ActionOption.steps, docs/CIV.md section 8): plans[id] is a list of { share, label, anim, held, off, sfx } whose shares sum to 1; a recipe names its plan (plan) or takes its building's (buildingPlans), else 'generic'. sfx cues: bellows, hammer, quench, saw, chop, cut, dig, stir, fire, plus grind, scrape, knead.",
+  "plans": {
+    "forge": [
+      { "share": 0.28, "label": "Heat the bar", "anim": "work_lift", "held": "tongs", "sfx": "bellows" },
+      { "share": 0.4, "label": "Draw it out", "anim": "work_hammer", "held": "hammer", "off": "tongs", "sfx": "hammer" },
+      { "share": 0.12, "label": "Quench", "anim": "work_lift", "held": "tongs", "sfx": "quench" },
+      { "share": 0.2, "label": "Grind and finish", "anim": "work_saw", "held": "chisel", "sfx": "grind" }
+    ],
+    "bench": [
+      { "share": 0.4, "label": "Mark and saw", "anim": "work_saw", "held": "saw", "sfx": "saw" },
+      { "share": 0.3, "label": "Shape and plane", "anim": "work_saw", "held": "chisel", "sfx": "scrape" },
+      { "share": 0.3, "label": "Fit and nail", "anim": "work_hammer", "held": "hammer", "sfx": "hammer" }
+    ],
+    "sawpit": [
+      { "share": 0.15, "label": "Set the log over the pit", "anim": "work_lift", "held": "none" },
+      { "share": 0.7, "label": "Pull the saw", "anim": "work_saw", "held": "saw", "sfx": "saw" },
+      { "share": 0.15, "label": "Stack the planks", "anim": "work_lift", "held": "none" }
+    ],
+    "weave": [
+      { "share": 0.25, "label": "Dress the warp", "anim": "work_spin", "held": "none" },
+      { "share": 0.55, "label": "Throw the shuttle", "anim": "work_spin", "held": "none" },
+      { "share": 0.2, "label": "Cut the cloth off", "anim": "work_spin", "held": "none", "sfx": "cut" }
+    ],
+    "sew": [
+      { "share": 0.3, "label": "Cut the cloth", "anim": "work_spin", "held": "none", "sfx": "cut" },
+      { "share": 0.6, "label": "Stitch", "anim": "work_spin", "held": "none" },
+      { "share": 0.1, "label": "Press the seams", "anim": "work_lift", "held": "none" }
+    ],
+    "spin": [
+      { "share": 0.3, "label": "Draw out the fibre", "anim": "work_spin", "held": "distaff" },
+      { "share": 0.7, "label": "Spin", "anim": "work_spin", "held": "distaff" }
+    ],
+    "tannery": [
+      { "share": 0.3, "label": "Soak the hide in the pit", "anim": "work_lift", "held": "bucket", "sfx": "stir" },
+      { "share": 0.45, "label": "Scrape it clean", "anim": "work_lift", "held": "none", "sfx": "scrape" },
+      { "share": 0.25, "label": "Stretch and dry", "anim": "work_lift", "held": "none" }
+    ],
+    "kiln": [
+      { "share": 0.3, "label": "Load the kiln", "anim": "work_lift", "held": "none" },
+      { "share": 0.45, "label": "Fire it", "anim": "work_stir", "held": "none", "sfx": "fire" },
+      { "share": 0.25, "label": "Draw the ware", "anim": "work_lift", "held": "none" }
+    ],
+    "bread": [
+      { "share": 0.4, "label": "Knead the dough", "anim": "work_knead", "held": "none", "sfx": "knead" },
+      { "share": 0.2, "label": "Shape the loaves", "anim": "work_knead", "held": "none" },
+      { "share": 0.4, "label": "Bake", "anim": "work_stir", "held": "none", "sfx": "fire" }
+    ],
+    "malt": [
+      { "share": 0.3, "label": "Steep the barley", "anim": "work_lift", "held": "basket" },
+      { "share": 0.4, "label": "Spread and turn it", "anim": "work_lift", "held": "basket" },
+      { "share": 0.3, "label": "Dry it over the fire", "anim": "work_stir", "held": "none", "sfx": "fire" }
+    ],
+    "mash": [
+      { "share": 0.4, "label": "Mash the malt", "anim": "work_stir", "held": "ladle", "sfx": "stir" },
+      { "share": 0.3, "label": "Boil the wort", "anim": "work_stir", "held": "ladle", "sfx": "fire" },
+      { "share": 0.3, "label": "Cool and barrel it", "anim": "work_lift", "held": "bucket" }
+    ],
+    "cheese": [
+      { "share": 0.35, "label": "Warm the milk and curdle it", "anim": "work_stir", "held": "ladle", "sfx": "stir" },
+      { "share": 0.4, "label": "Press the curd", "anim": "work_knead", "held": "none", "sfx": "knead" },
+      { "share": 0.25, "label": "Salt and turn", "anim": "work_lift", "held": "none" }
+    ],
+    "candle": [
+      { "share": 0.3, "label": "Melt the tallow", "anim": "work_stir", "held": "ladle", "sfx": "fire" },
+      { "share": 0.5, "label": "Dip the wicks", "anim": "work_lift", "held": "none" },
+      { "share": 0.2, "label": "Trim and hang", "anim": "work_spin", "held": "none", "sfx": "cut" }
+    ],
+    "charcoal": [
+      { "share": 0.35, "label": "Stack the mound", "anim": "work_lift", "held": "none" },
+      { "share": 0.3, "label": "Light and cover it", "anim": "work_stir", "held": "none", "sfx": "fire" },
+      { "share": 0.35, "label": "Tend the burn", "anim": "work_stir", "held": "staff" }
+    ],
+    "bloomery": [
+      { "share": 0.25, "label": "Charge the furnace", "anim": "work_lift", "held": "none" },
+      { "share": 0.35, "label": "Work the bellows", "anim": "work_lift", "held": "none", "sfx": "bellows" },
+      { "share": 0.4, "label": "Hammer out the bloom", "anim": "work_hammer", "held": "hammer", "off": "tongs", "sfx": "hammer" }
+    ],
+    "masonry": [
+      { "share": 0.2, "label": "Mark the block", "anim": "work_hammer", "held": "chisel" },
+      { "share": 0.8, "label": "Cut and dress it", "anim": "work_hammer", "held": "chisel", "off": "hammer", "sfx": "hammer" }
+    ],
+    "saltern": [
+      { "share": 0.25, "label": "Let in the brine", "anim": "work_lift", "held": "bucket" },
+      { "share": 0.5, "label": "Boil it down", "anim": "work_stir", "held": "ladle", "sfx": "fire" },
+      { "share": 0.25, "label": "Rake the salt", "anim": "work_lift", "held": "staff", "sfx": "scrape" }
+    ],
+    "salting": [
+      { "share": 0.4, "label": "Rub in the salt", "anim": "work_knead", "held": "none", "sfx": "knead" },
+      { "share": 0.35, "label": "Pack the tub", "anim": "work_lift", "held": "none" },
+      { "share": 0.25, "label": "Weight and cover it", "anim": "work_lift", "held": "none" }
+    ],
+    "slaughter": [
+      { "share": 0.25, "label": "Catch and steady the beast", "anim": "work_lift", "held": "none" },
+      { "share": 0.15, "label": "Stun it", "anim": "work_hammer", "held": "mace" },
+      { "share": 0.35, "label": "Stick and bleed", "anim": "work_lift", "held": "dagger", "sfx": "cut" },
+      { "share": 0.25, "label": "Scald and hang it", "anim": "work_lift", "held": "none" }
+    ],
+    "wring": [
+      { "share": 0.4, "label": "Take the bird", "anim": "work_lift", "held": "none" },
+      { "share": 0.3, "label": "Wring its neck", "anim": "work_lift", "held": "none" },
+      { "share": 0.3, "label": "Pluck and dress it", "anim": "work_lift", "held": "dagger", "sfx": "cut" }
+    ],
+    "butcher": [
+      { "share": 0.15, "label": "Hang the carcass", "anim": "work_lift", "held": "none" },
+      { "share": 0.25, "label": "Skin it", "anim": "work_lift", "held": "dagger", "sfx": "cut" },
+      { "share": 0.4, "label": "Joint the meat", "anim": "work_lift", "held": "dagger", "off": "none", "sfx": "cut" },
+      { "share": 0.2, "label": "Trim and render the fat", "anim": "work_stir", "held": "ladle", "sfx": "fire" }
+    ],
+    "dig_stone": [
+      { "share": 0.5, "label": "Strike the face", "anim": "work_pick", "held": "pick", "sfx": "dig" },
+      { "share": 0.3, "label": "Fill the baskets", "anim": "work_lift", "held": "basket" },
+      { "share": 0.2, "label": "Haul to the heap", "anim": "carry_walk", "held": "none" }
+    ],
+    "dig_ore": [
+      { "share": 0.5, "label": "Pick at the seam", "anim": "work_pick", "held": "pick", "sfx": "dig" },
+      { "share": 0.3, "label": "Fill the baskets", "anim": "work_lift", "held": "basket" },
+      { "share": 0.2, "label": "Haul to the shaft", "anim": "carry_walk", "held": "none" }
+    ],
+    "dig_clay": [
+      { "share": 0.5, "label": "Cut the clay", "anim": "work_dig", "held": "spade", "sfx": "dig" },
+      { "share": 0.3, "label": "Barrow it", "anim": "carry_walk", "held": "none" },
+      { "share": 0.2, "label": "Tip it on the heap", "anim": "work_lift", "held": "none" }
+    ],
+    "dig_timber": [
+      { "share": 0.5, "label": "Notch and fell", "anim": "work_axe", "held": "axe", "sfx": "chop" },
+      { "share": 0.3, "label": "Trim the log", "anim": "work_axe", "held": "axe", "sfx": "chop" },
+      { "share": 0.2, "label": "Drag it to the stack", "anim": "work_lift", "held": "none" }
+    ],
+    "generic": [
+      { "share": 0.25, "label": "Get ready", "anim": "work_lift", "held": "none" },
+      { "share": 0.5, "label": "Work", "anim": "work_hammer", "held": "none" },
+      { "share": 0.25, "label": "Finish", "anim": "work_lift", "held": "none" }
+    ]
+  },
+  "buildingPlans": { "smithy": "forge", "carpenter": "bench", "sawpit": "sawpit", "lumber_camp": "sawpit", "weaver": "weave", "tannery": "tannery", "kiln": "kiln", "bakehouse": "bread", "brewhouse": "mash", "alehouse": "mash", "tavern": "mash", "bloomery": "bloomery", "charcoal_mound": "charcoal", "quarry": "masonry", "salt_pan": "saltern", "slaughterhouse": "salting", "cowshed": "cheese", "barn": "cheese", "home": "generic" },
+  "_beasts_doc": "Livestock at the block (docs/CIV.md section 8): kg = live weight, meat = pounds of meat on the carcass at ordinary condition, hide = hides (a cattle hide is 1), tallow = pounds of fat rendered, carcass = the good a slaughtered beast hangs as (null: a fowl is dressed in one go), work = bouts to slaughter, cut = bouts to joint it, home = may be slaughtered at home (the rest need a slaughterhouse).",
+  "beasts": {
+    "chicken": { "kg": 2.5, "meat": 1.4, "hide": 0, "tallow": 0, "carcass": null, "work": 0.7, "cut": 0, "home": true },
+    "goat": { "kg": 35, "meat": 22, "hide": 0.2, "tallow": 2, "carcass": "goat_carcass", "work": 1.2, "cut": 1.6, "home": true },
+    "sheep": { "kg": 40, "meat": 24, "hide": 0.15, "tallow": 4, "carcass": "sheep_carcass", "work": 1.2, "cut": 1.8, "home": true },
+    "pig": { "kg": 90, "meat": 55, "hide": 0.25, "tallow": 10, "carcass": "pig_carcass", "work": 1.6, "cut": 2.4, "home": true },
+    "cow": { "kg": 350, "meat": 180, "hide": 1, "tallow": 20, "carcass": "cow_carcass", "work": 3, "cut": 5, "home": false },
+    "ox": { "kg": 500, "meat": 260, "hide": 1.2, "tallow": 24, "carcass": "ox_carcass", "work": 3.5, "cut": 6, "home": false }
+  },
+  "_workplaces_doc": "What the macro economy's works turn out in a day when staffed (units of a stock-and-flow good, building level 1; each further level adds 40 percent). The smithies, carpenters and mills of the old world are not listed: its prices were struck with them. A kiln fires its bricks from the clay of a pit in reach (see supply.ts).",
+  "workplaces": {
+    "sawpit": { "planks": 24 },
+    "lumber_camp": { "timber": 12 },
+    "quarry": { "stone": 14 },
+    "kiln": { "brick": 28 },
+    "bloomery": { "iron": 4 },
+    "charcoal_mound": { "charcoal": 3 },
+    "salt_pan": { "salt": 40 },
+    "tannery": { "vellum": 1.2 },
+    "slaughterhouse": { "tallow": 5 }
+  },
   "apprenticeTasks": {
     "smithy":    [ { "id": "bellows", "name": "Pump the bellows", "anim": "work_lift", "held": "none", "str": 0.7, "end": 1.0 }, { "id": "strike", "name": "Strike for the smith", "anim": "work_hammer", "held": "hammer", "str": 1.0, "end": 0.7 }, { "id": "fetch", "name": "Fetch charcoal and water", "anim": "carry_walk", "held": "bucket", "str": 0.4, "end": 0.6 }, { "id": "sweep", "name": "Sweep the smithy", "anim": "work_lift", "held": "staff", "str": 0.2, "end": 0.3 } ],
     "carpenter": [ { "id": "saw", "name": "Saw timber for the master", "anim": "work_saw", "held": "saw", "str": 0.8, "end": 0.7 }, { "id": "plane", "name": "Plane boards", "anim": "work_saw", "held": "chisel", "str": 0.5, "end": 0.5 }, { "id": "fetch", "name": "Fetch timber and tools", "anim": "carry_walk", "held": "none", "str": 0.4, "end": 0.6 }, { "id": "sweep", "name": "Sweep up the shavings", "anim": "work_lift", "held": "staff", "str": 0.2, "end": 0.3 } ],
@@ -66,6 +227,7 @@
     "watermill": [ { "id": "sacks", "name": "Carry sacks of grain", "anim": "carry_walk", "held": "sack", "str": 0.9, "end": 0.8 }, { "id": "tend", "name": "Tend the millstones", "anim": "work_lift", "held": "none", "str": 0.5, "end": 0.5 }, { "id": "sweep", "name": "Sweep the mill floor", "anim": "work_lift", "held": "staff", "str": 0.2, "end": 0.3 } ],
     "windmill":  [ { "id": "sacks", "name": "Carry sacks of grain", "anim": "carry_walk", "held": "sack", "str": 0.9, "end": 0.8 }, { "id": "tend", "name": "Trim the sails", "anim": "work_lift", "held": "none", "str": 0.5, "end": 0.5 }, { "id": "sweep", "name": "Sweep the mill floor", "anim": "work_lift", "held": "staff", "str": 0.2, "end": 0.3 } ],
     "brewhouse": [ { "id": "stir", "name": "Stir the mash", "anim": "work_stir", "held": "ladle", "str": 0.4, "end": 0.5 }, { "id": "fetch", "name": "Carry water", "anim": "carry_walk", "held": "bucket", "str": 0.4, "end": 0.6 }, { "id": "sweep", "name": "Scrub the vats", "anim": "work_lift", "held": "staff", "str": 0.3, "end": 0.4 } ],
+    "slaughterhouse": [ { "id": "scrape", "name": "Scrape and wash the carcasses", "anim": "work_lift", "held": "none", "str": 0.7, "end": 0.8 }, { "id": "carry", "name": "Carry the quarters to the hooks", "anim": "carry_walk", "held": "none", "str": 0.8, "end": 0.8 }, { "id": "sharpen", "name": "Sharpen the knives", "anim": "work_saw", "held": "dagger", "str": 0.3, "end": 0.4 }, { "id": "sweep", "name": "Sluice down the floor", "anim": "work_lift", "held": "staff", "str": 0.3, "end": 0.4 } ],
     "kiln":      [ { "id": "stoke", "name": "Stoke the kiln", "anim": "work_lift", "held": "none", "str": 0.6, "end": 0.7 }, { "id": "fetch", "name": "Fetch clay and wood", "anim": "carry_walk", "held": "none", "str": 0.4, "end": 0.6 } ],
     "tavern":    [ { "id": "serve", "name": "Carry ale to the tables", "anim": "carry_walk", "held": "cup", "str": 0.3, "end": 0.4 }, { "id": "sweep", "name": "Scrub the floor", "anim": "work_lift", "held": "staff", "str": 0.3, "end": 0.4 } ],
     "alehouse":  [ { "id": "serve", "name": "Carry ale to the benches", "anim": "carry_walk", "held": "cup", "str": 0.3, "end": 0.4 }, { "id": "sweep", "name": "Scrub the floor", "anim": "work_lift", "held": "staff", "str": 0.3, "end": 0.4 } ]
