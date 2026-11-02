@@ -65,6 +65,24 @@ export class NavState {
     this.settlementId = here ? here.id : -1;
 
     this.used = 0;
+    // the people who want something of you ("!") or can be handed a finished task ("?"): the nearest few within 150 m. They come first, so the mark
+    // over a head is not lost to the church, the market or the door of a home they happen to stand at (the same spot is shown once)
+    const qrows = this.quest.update(game, { x: this.x, z: this.z }, now);
+    let taken = 0;
+    let floor = -1;
+    while (taken < MAX_QUEST_MARKS) {
+      let best = -1;
+      for (let i = 0; i < qrows.length; i++) {
+        const r = qrows[i];
+        if (r.dist > COMPASS_RANGE || r.dist <= floor) continue;
+        if (best < 0 || r.dist < qrows[best].dist) best = i;
+      }
+      if (best < 0) break;
+      const r = qrows[best];
+      floor = r.dist;
+      this.push(`q${r.person}`, r.kind, r.x, r.z, sim.world.heightAt(r.x, r.z) + 2.6, r.text, MARK_COLOR[r.kind], false);
+      taken++;
+    }
     let haveHome = false, haveWork = false;
     const src = sim.view.worldMarkers?.();
     if (src) {
@@ -87,26 +105,9 @@ export class NavState {
     for (const p of this.places) this.push(p.kind, p.kind, p.x, p.z, sim.world.heightAt(p.x, p.z) + 6, p.label, p.kind === 'church' ? COLOR.church : COLOR.market, false);
     const pin = pins.get();
     if (pin) this.push('pin', 'pin', pin.x, pin.z, sim.world.heightAt(pin.x, pin.z) + 3, pin.label, COLOR.pin, false);
-    // the people who want something of you ("!") or can be handed a finished task ("?"): the nearest few within 150 m
-    const qrows = this.quest.update(game, { x: this.x, z: this.z }, now);
-    let taken = 0;
-    let floor = -1;
-    while (taken < MAX_QUEST_MARKS) {
-      let best = -1;
-      for (let i = 0; i < qrows.length; i++) {
-        const r = qrows[i];
-        if (r.dist > COMPASS_RANGE || r.dist <= floor) continue;
-        if (best < 0 || r.dist < qrows[best].dist) best = i;
-      }
-      if (best < 0) break;
-      const r = qrows[best];
-      floor = r.dist;
-      this.push(`q${r.person}`, r.kind, r.x, r.z, sim.world.heightAt(r.x, r.z) + 2.6, r.text, MARK_COLOR[r.kind], false);
-      taken++;
-    }
-
     // the same spot marked twice (the church the task points at, and the church we mark anyway; a pin on the home) is
-    // shown once, as the first of them: the objectives module's markers come first
+    // shown once, as the first of them: the people who want something, then the objectives module's markers (the tracked
+    // objective's own marker is never dropped)
     let n = 0;
     for (let i = 0; i < this.used; i++) {
       const m = this.pool[i];

@@ -70,7 +70,8 @@ export class Compass {
       acc.push({ m, x: spot.x, inside: spot.inside, side: spot.side });
     }
     let sig = '';
-    for (const a of acc) sig += `${a.m.id}:${Math.round(a.x)}:${Math.round(a.m.dist / 5)};`;
+    // the words are part of the signature: a task's words arrive a moment after the mark does
+    for (const a of acc) sig += `${a.m.id}:${Math.round(a.x)}:${Math.round(a.m.dist / 5)}:${a.m.label};`;
     if (!(Math.abs(nav.camYaw - this.lastYaw) <= 0.004)) { this.lastYaw = nav.camYaw; this.drawTicks(nav.camYaw); }
     if (sig !== this.lastSig) {
       this.lastSig = sig;

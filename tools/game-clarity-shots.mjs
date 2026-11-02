@@ -9,6 +9,7 @@
 //   node tools/game-clarity-shots.mjs --fake               # the UI's stand-in objectives (`?fakeobjectives=1`) instead of the module
 //   node tools/game-clarity-shots.mjs lives --out=docs/ui  # civilization pass, B6: living as anyone, quest marks, steps, wounds, the accolade (docs/ui/lives-*.png)
 //   PORT=5190 node …                                       # another port (a private Vite server of this worktree)
+//   --format=jpg                                           # JPEG shots even at 1280x720 (what docs/ui/lives-*.jpg are)
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { mkdirSync, statSync } from 'node:fs';
@@ -73,8 +74,8 @@ async function shot(name, { settle = true } = {}) {
   if (settle) await page.evaluate(() => window.__game.settle());
   await page.evaluate(() => window.__game.draw());
   await page.waitForTimeout(150);
-  // 1280x720 is the reference set (lossless); other sizes are saved as JPEG (quality 90) to keep the folder small
-  const jpeg = W !== 1280 || H !== 720;
+  // 1280x720 is the reference set (lossless); other sizes (and `--format=jpg`) are saved as JPEG (quality 90) to keep the folder small
+  const jpeg = W !== 1280 || H !== 720 || opt('format', 'png') === 'jpg';
   const file = resolve(OUT, `${name}${suffix}.${jpeg ? 'jpg' : 'png'}`);
   await (jpeg ? page.screenshot({ path: file, type: 'jpeg', quality: 90 }) : page.screenshot({ path: file }));
   console.log(`${name}${suffix}: ${Math.round(statSync(file).size / 1024)} KB`);
