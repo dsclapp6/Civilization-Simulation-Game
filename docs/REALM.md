@@ -275,7 +275,9 @@ homes when families share a home (and none stands empty), the granary / barn / m
 bakehouse / brewhouse a place of that size lacks, a mill by a river, a lumber camp, saw pit, quarry, clay pit, kiln or mine where the
 timber, planks, stone, bricks or iron he builds with run dear, markets, wells, a church for the faithful, a school, a cloister,
 archery butts / barracks / a yard when afraid or ambitious, and **defence by the fear**: palisade (fear ≥ .3) → curtain wall (with
-`curtain_walls`) → towers on the wall (with `stone_keep`) → gatehouse → stone keep, or a motte where the keep is not yet known. A
+`curtain_walls`) until the walls count for what he fears (three pieces of wall already fill the sum the siege counts), then the towers (with
+`stone_keep`) and the gatehouse (with `curtain_walls`) that go with the wall that stands, and a stone keep at the seat or a motte where the keep is
+not yet known. A
 want must also be **permitted** (rank, technique and count — the builder's own `rulesOf` / `maxPerSettlement`), affordable (`liveValue`
 at today's prices against the allowance and a share of it), **supplied** (the first days' materials in his stores or at the market with a
 margin, not dearer than 2.6 × the usual price; a material the market lacks makes him lay in a **standing buy order** — `stockUp`, taken
@@ -296,8 +298,9 @@ besides the comfortable purse),
 and a worthy man (melee 5, grown, whole) is knighted every 12 days or so. Research: every technique he does not have is scored by what
 suits him (the military branch by fear and ambition, the mill where there is a river and grain, the charters where there is a market,
 the letters by piety), weighed against its price in coin and goods and **what he can have**: goods the market keeps only a shelf of
-(arrows, cloth, horses) are bought a shelf at a time, the dear materials must be in the market, and a place of the right kind must stand
-(else the works planner raises one). He starts one at the pace of his class (manor every 24 days, kingdom every 6; 1-3 at once).
+(arrows, cloth, horses) are bought a shelf at a time, the dear materials must be in the market (a great House, with two hands or more for
+research, may begin with a quarter of them there: the realm's research orders the rest again every few days and waits for the carts, which is
+how the stone keep and the curtain walls come at all), and a place of the right kind must stand (else the works planner raises one). He starts one at the pace of his class (manor every 24 days, kingdom every 6; 1-3 at once).
 
 **Trade, fields, outposts (`aiTrade.ts`, `aiOutpost.ts`).** The fields: rye after a hard year or on tired soil, pulses where the soil is
 tired, wheat / barley / oats otherwise. Orders: a surplus of wool, cheese, grain or ale above what the table needs is put on sale once a
