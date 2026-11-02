@@ -167,15 +167,23 @@ export class Layers {
   /** A castle's walls (a keep in a city: the compound round it) mark the ground the lord keeps for himself. */
   private addCastle(s: Settlement): void {
     const world = this.world;
-    if (s.kind === 'castle' && s.walls && s.walls.length >= 3) {
-      let cx = 0, cz = 0;
-      for (const p of s.walls) { cx += p.x; cz += p.z; }
-      cx /= s.walls.length; cz /= s.walls.length;
-      // the bailey reaches a few metres beyond the walls
-      this.castles.push(zoneOf(s.id, s.walls.map((p) => {
-        const d = Math.hypot(p.x - cx, p.z - cz) || 1;
-        return { x: p.x + ((p.x - cx) / d) * 6, z: p.z + ((p.z - cz) / d) * 6 };
-      })));
+    if (s.kind === 'castle') {
+      if (s.walls && s.walls.length >= 3) {
+        let cx = 0, cz = 0;
+        for (const p of s.walls) { cx += p.x; cz += p.z; }
+        cx /= s.walls.length; cz /= s.walls.length;
+        // the bailey reaches a few metres beyond the walls
+        this.castles.push(zoneOf(s.id, s.walls.map((p) => {
+          const d = Math.hypot(p.x - cx, p.z - cz) || 1;
+          return { x: p.x + ((p.x - cx) / d) * 6, z: p.z + ((p.z - cz) / d) * 6 };
+        })));
+      } else {
+        // no walls drawn (a stand-in world): the grounds are a disc as wide as the settlement
+        const r = Math.max(40, s.radius);
+        const pts: P2[] = [];
+        for (let i = 0; i < 16; i++) pts.push({ x: s.x + Math.cos((i / 16) * Math.PI * 2) * r, z: s.z + Math.sin((i / 16) * Math.PI * 2) * r });
+        this.castles.push(zoneOf(s.id, pts));
+      }
       return;
     }
     // a city's castle stands inside the walls: the compound is the keep, the hall, the barracks and what goes with them

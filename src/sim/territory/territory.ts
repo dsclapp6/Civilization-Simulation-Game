@@ -191,6 +191,9 @@ export class Territory implements TerritoryRuntime {
     this.owners.length = 0;
     this.alarms.clear();
     for (const c of this.claims) c.owner = NO_OWNER;
+    // what the caches will be rebuilt from: a later quiet change away from it (a title going back to its old holder) is seen
+    this.titleSig = this.titleSignature();
+    this.warSig = this.warSignature();
   }
 
   /** A sum over every title's holder and regent (order-independent, so a loaded game agrees with the live one). */
@@ -384,7 +387,8 @@ export class Territory implements TerritoryRuntime {
     const land = this.landAt(x, z);
     const none: TrespassCheck = { level: 'none', land, reason: '' };
     const p = this.state.persons.get(person);
-    if (!p || p.death || land.settlement < 0 || land.house === 0) return none;
+    // a prisoner goes where he is led
+    if (!p || p.death || p.flags.captive || land.settlement < 0 || land.house === 0) return none;
     const owner = this.ownerForLand(land);
     if (p.house === owner.house) return none;
 

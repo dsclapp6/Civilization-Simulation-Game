@@ -121,10 +121,12 @@ export function generateDeposits(s: GenState, tm: TerrainModel, ctx: LayoutCtx, 
   // ---- one pass over the macro grid: a score per kind ----
   const cand = { iron: new Candidates(), stone: new Candidates(), clay: new Candidates(), salt: new Candidates(), silver: new Candidates() };
   const landCells = new Int32Array(nKingdoms);
-  const STRIDE = 4;
-  for (let j = 2; j < N; j += STRIDE) {
-    const z = (j + 0.5) * G.CELL;
-    for (let i = 2; i < N; i += STRIDE) {
+  // one sample per 5 x 5 block of cells, at a hashed place in the block so nothing lines up on a lattice
+  const STRIDE = 5;
+  for (let bj = 0; bj + STRIDE <= N; bj += STRIDE) {
+    for (let bi = 0; bi + STRIDE <= N; bi += STRIDE) {
+      const j = bj + Math.floor(hash01(bi, bj, salt) * STRIDE), i = bi + Math.floor(hash01(bj, bi, salt ^ 0x55) * STRIDE);
+      const z = (j + 0.5) * G.CELL;
       const k = j * N + i;
       if (!land[k] || water[k] !== 0 || kingdomGrid[k] === 0) continue;
       landCells[kingdomGrid[k] - 1]++;
@@ -209,10 +211,10 @@ export function generateDeposits(s: GenState, tm: TerrainModel, ctx: LayoutCtx, 
   const siteNear = (kind: ResourceKind, k: number, maxSlope: number): Site | null => {
     const cx = cellX(k), cz = cellZ(k);
     const c0 = trial(kind, cx, cz, maxSlope);
-    if (c0 >= 0 && c0 <= 0.1) return { x: cx, z: cz, slope: c0 };
+    if (c0 >= 0 && c0 <= 0.12) return { x: cx, z: cz, slope: c0 };
     let best: Site | null = c0 >= 0 ? { x: cx, z: cz, slope: c0 } : null, bestScore = c0 >= 0 ? c0 : Infinity;
-    for (let q = 0; q < 8; q++) {
-      const a = (q / 8) * Math.PI * 2 + hash01(k, q, salt) * 0.4, r = 22 + 10 * hash01(k, q + 8, salt);
+    for (let q = 0; q < 6; q++) {
+      const a = (q / 6) * Math.PI * 2 + hash01(k, q, salt) * 0.5, r = 24 + 14 * hash01(k, q + 8, salt);
       const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
       const sl = trial(kind, x, z, maxSlope);
       if (sl < 0) continue;
@@ -222,12 +224,14 @@ export function generateDeposits(s: GenState, tm: TerrainModel, ctx: LayoutCtx, 
     return best;
   };
 
-  const add = (kind: ResourceKind, x: number, z: number, score: number, scoreRef: number, spec: Spec): Deposit => {
+  /** Adds a deposit (richer ground, richer and wider), or null when its extent would touch another's. */
+  const add = (kind: ResourceKind, x: number, z: number, score: number, scoreRef: number, spec: Spec): Deposit | null => {
     // richness follows how good the ground is (relative to the best cell of the kind), with scatter
     const q = Math.min(1, Math.max(0, score / scoreRef));
     const t = Math.min(1, Math.max(0, 0.25 + 0.6 * q + (rng.next() - 0.5) * 0.5));
     const richness = Math.round((spec.richness[0] + (spec.richness[1] - spec.richness[0]) * t) * 100) / 100;
     const radius = Math.round(spec.radius * (0.8 + 0.5 * richness) * (0.92 + 0.16 * rng.next()));
+    if (!clearOfOthers(x, z, radius)) return null;
     const d: Deposit = { id: out.length, kind, x: Math.round(x * 10) / 10, z: Math.round(z * 10) / 10, radius, richness, settlement: lands.lookup(x, z) };
     out.push(d);
     placed(kind).push(d);
@@ -265,7 +269,7 @@ export function generateDeposits(s: GenState, tm: TerrainModel, ctx: LayoutCtx, 
         if (!clearOfOthers(x0, z0, spec.radius)) continue;
         const site = siteNear(spec.kind, c.k, spec.maxSlope);
         if (!site || kingdomAtPoint(site.x, site.z) !== kd) continue;
-        add(spec.kind, site.x, site.z, c.score, ref, spec);
+        if (!add(spec.kind, site.x, site.z, c.score, ref, spec)) continue;
         count[kd]++;
       }
     };
@@ -281,7 +285,7 @@ export function generateDeposits(s: GenState, tm: TerrainModel, ctx: LayoutCtx, 
         if (!apart(spec.kind, x0, z0, spec.spacing * 0.4) || !clearOfOthers(x0, z0, spec.radius)) continue;
         const site = siteNear(spec.kind, c.k, spec.maxSlope * 1.5);
         if (!site || kingdomAtPoint(site.x, site.z) !== kd) continue;
-        add(spec.kind, site.x, site.z, ref * 0.12, ref || 1, spec);
+        if (!add(spec.kind, site.x, site.z, ref * 0.12, ref || 1, spec)) continue;
         count[kd]++;
       }
     }
@@ -317,7 +321,7 @@ export function generateDeposits(s: GenState, tm: TerrainModel, ctx: LayoutCtx, 
       if (!apart('silver', x0, z0, spec.spacing) || !clearOfOthers(x0, z0, spec.radius)) continue;
       const site = siteNear('silver', c.k, spec.maxSlope);
       if (!site || kingdomAtPoint(site.x, site.z) !== kd) continue;
-      add('silver', site.x, site.z, c.score, ref, spec);
+      if (!add('silver', site.x, site.z, c.score, ref, spec)) continue;
       count[kd]++; total++;
     }
   }
@@ -334,7 +338,7 @@ export function generateDeposits(s: GenState, tm: TerrainModel, ctx: LayoutCtx, 
 /** Alluvial gold: a deposit on the bank of a mountain stream. */
 function placeGold(
   s: GenState, tm: TerrainModel, ctx: LayoutCtx, lands: LandsIndex,
-  add: (kind: ResourceKind, x: number, z: number, score: number, ref: number, spec: Spec) => Deposit,
+  add: (kind: ResourceKind, x: number, z: number, score: number, ref: number, spec: Spec) => Deposit | null,
   apart: (kind: ResourceKind, x: number, z: number, spacing: number) => boolean,
   clearOfOthers: (x: number, z: number, r: number) => boolean,
 ): void {
@@ -376,7 +380,7 @@ function placeGold(
       best = { x, z, sl };
     }
     if (!best) continue;
-    add('gold', best.x, best.z, c.sc, ref, { radius: GOLD.radius, richness: GOLD.richness });
+    if (!add('gold', best.x, best.z, c.sc, ref, { radius: GOLD.radius, richness: GOLD.richness })) continue;
     perKingdom.set(kd, (perKingdom.get(kd) ?? 0) + 1);
     total++;
   }
