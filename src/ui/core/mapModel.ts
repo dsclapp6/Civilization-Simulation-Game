@@ -2,6 +2,8 @@
 // nearest a clicked point, distance and direction from the player.
 import type { SettlementKind } from '../../core/domain';
 import { marketDayOf } from '../../sim/calendar';
+import { roleLabel, type CareerId } from '../../sim/careers';
+import { ageYears, type GameState } from '../../sim/state';
 import { compass, distanceText } from './format';
 
 export interface PlaceLike {
@@ -195,6 +197,7 @@ export const ROLE_GROUPS: ReadonlyArray<{ id: RoleGroup | 'all'; label: string }
   { id: 'all', label: 'Everyone' }, { id: 'lord', label: 'Lords' }, { id: 'officer', label: 'Reeve and stewards' }, { id: 'priest', label: 'Church' },
   { id: 'smith', label: 'Smiths' }, { id: 'knight', label: 'Knights' }, { id: 'soldier', label: 'Soldiers' }, { id: 'merchant', label: 'Merchants' },
   { id: 'craft', label: 'Crafts' }, { id: 'farmer', label: 'Farm folk' }, { id: 'servant', label: 'Servants' }, { id: 'child', label: 'Children' },
+  { id: 'other', label: 'Householders and others' },
 ];
 
 const LORDLY = new Set(['lord', 'lady', 'noble']);
@@ -218,6 +221,8 @@ export interface PersonLike {
   age: number;
   rankTier: number;
   household: number;
+  /** The rung of the career's ladder (apprentice, journeyman, master…), for the role's wording. */
+  stage?: number;
 }
 
 /** Which group of the people list a person belongs to: the highest calling they have (a lord who is also a knight is a lord). */
@@ -273,4 +278,18 @@ export function groupCounts(rows: readonly PeopleRow[]): Record<RoleGroup | 'all
   for (const g of ROLE_GROUPS) if (g.id !== 'all') out[g.id] = 0;
   for (const r of rows) out[r.group]++;
   return out;
+}
+
+/**
+ * Everyone who lives in a settlement as rows (the map's *People here*): the person's calling in words, their group, their age; the
+ * ruler and the holders of the place's titles first. A city has thousands, so the caller searches and shows a page of them.
+ */
+export function peopleOfSettlement(state: Pick<GameState, 'residentsOf' | 'titles'>, settlement: number, absDay: number, rulerId: number): PeopleRow[] {
+  const holders = new Set<number>();
+  if (rulerId) holders.add(rulerId);
+  for (const t of state.titles.values()) if (t.place === settlement && t.holder) holders.add(t.holder);
+  const likes: PersonLike[] = state.residentsOf(settlement).map((p) => ({
+    id: p.id, first: p.first, byname: p.byname, sex: p.sex, career: p.career, offices: p.offices, age: ageYears(p, absDay), rankTier: p.rankTier, household: p.household, stage: p.careerStage,
+  }));
+  return peopleRows(likes, (p) => roleLabel(p.career as CareerId, p.stage ?? 0, p.sex), holders, rulerId);
 }

@@ -25,6 +25,7 @@ import { buildResearch } from './pages/research';
 import { buildRivals } from './pages/rivals';
 import { buildTrade } from './pages/trade';
 import '../builder/lands.css';
+import './newsToast';
 import './ruler.css';
 
 /** What opens the seat on a page: from the news toast (rivals), from a link (lands, research). */

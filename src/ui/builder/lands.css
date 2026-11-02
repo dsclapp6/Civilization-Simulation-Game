@@ -10,6 +10,35 @@
 .mu-caption { margin: 10px 0 4px; }
 .mu-reason { margin: 4px 0; font-weight: 700; }
 
+/* ================================================================== the map: layers, deposits, outposts, people */
+.mu-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.55); flex: none; }
+.mu-map-layers { padding-top: 2px; }
+.mu-map-layers .mu-chip { font-size: 12px; padding: 0 7px 1px; }
+.mu-map-markers .mu-map-borders { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
+.mu-map-deps, .mu-map-outs { position: absolute; inset: 0; pointer-events: none; }
+.mu-map-dep { position: absolute; left: 0; top: 0; width: 17px; height: 17px; margin: -8px 0 0 -8px; border-radius: 50%; background: var(--c, #999); border: 1.5px solid #2a1b0f; display: grid; place-items: center; color: #2a1b0f; pointer-events: auto; cursor: pointer; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.65); will-change: transform; }
+.mu-map-dep:hover { filter: brightness(1.15); box-shadow: 0 0 0 2px #fff3c4, 0 1px 4px rgba(0, 0, 0, 0.7); z-index: 3; }
+.mu-map-dep svg { display: block; }
+.mu-map-out { position: absolute; left: 0; top: 0; margin: -9px 0 0 -9px; display: flex; align-items: center; gap: 4px; padding: 1px 8px 2px 5px; border-radius: 10px; background: rgba(26, 17, 9, 0.82); color: #ffd9a6; font-size: 12px; white-space: nowrap; pointer-events: auto; will-change: transform; border: 1px solid rgba(227, 154, 69, 0.9); }
+.mu-map-out svg { color: #f0a24a; }
+.mu-dep-badge { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; border: 2px solid #2a1b0f; color: #2a1b0f; flex: none; }
+.mu-map-people { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; position: relative; z-index: 2; }
+.mu-map-phead { display: flex; align-items: center; gap: 10px; padding: 0 26px 8px 28px; }
+.mu-map-plist { flex: 1 1 0; min-height: 0; padding: 0 14px 10px 20px; }
+.mu-map-prow { padding: 5px 8px; gap: 8px; }
+
+/* the news toast (ruler/newsToast.ts): below the UI's own toasts */
+.mu-hud > .mu-toasts.mu-news-toasts { top: 300px; }
+.mu-hud.with-banner > .mu-toasts.mu-news-toasts { top: 326px; }
+.mu-news-toasts .mu-toast { cursor: default; }
+
+/* the banner's "Rule this town" */
+.mu-hud > .mu-banner.act { pointer-events: auto; }
+.mu-hud > .mu-banner.act:hover { animation-play-state: paused; }
+.mu-banner-act { display: none; margin-top: 7px; gap: 8px; align-items: center; }
+.mu-banner.act .mu-banner-act { display: flex; }
+.mu-banner-act .mu-btn { min-height: 26px; padding: 2px 12px 3px; font-size: 13px; }
+
 /* ================================================================== builder mode */
 .mu-bld-root { display: contents; }
 .mu-modal.clear:has(.mu-bld-root) { justify-content: flex-end; padding-top: 210px; padding-bottom: 72px; }
