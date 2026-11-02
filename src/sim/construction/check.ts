@@ -7,7 +7,7 @@ import type { Deposit, ResourceKind } from '../../world/types';
 import type { LandInfo } from '../territory/types';
 import type { PersonId } from '../state';
 import type { Construction } from './core';
-import { levelCost, maxPerSettlement, rulesOf, type KindRules } from './data';
+import { RULES, levelCost, maxPerSettlement, rulesOf, type KindRules } from './data';
 import { footprintCorners, kindName } from './geometry';
 import { noScopeReason, rankReason, scopeInfo, lordTitleAt, type Auth, type ScopeInfo } from './scope';
 import type { OutpostRec } from './save';
@@ -320,6 +320,9 @@ export function defaultOutpostName(C: Construction, parent: number, kind: Buildi
 }
 
 export function evaluate(C: Construction, personId: PersonId, kind: BuildingKind, x: number, z: number, rot: number, opts: { ignoreBuilding?: number } = {}): Evaluated {
+  if (!RULES.has(kind) || !Number.isFinite(x) || !Number.isFinite(z) || !Number.isFinite(rot)) {
+    return { check: { ok: false, reason: RULES.has(kind) ? 'No such place' : 'No such building', x, z, rot, settlement: -1, footprint: [] }, standing: null, si: null };
+  }
   const def = BUILDINGS[kind];
   const fp = footprintCorners(x, z, def.w, def.d, rot, [{ x: 0, z: 0 }, { x: 0, z: 0 }, { x: 0, z: 0 }, { x: 0, z: 0 }]);
   const out: PlacementCheck = { ok: false, x, z, rot, settlement: -1, footprint: fp };
@@ -396,6 +399,7 @@ function depositCandidates(C: Construction, kinds: readonly ResourceKind[], orig
 }
 
 export function suggest(C: Construction, personId: PersonId, kind: BuildingKind, settlement: number, near?: P2): PlacementCheck | null {
+  if (!RULES.has(kind)) return null;
   const si = scopeInfo(C, personId);
   if (!si) return null;
   const rules = rulesOf(kind);

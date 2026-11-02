@@ -273,6 +273,21 @@ describe('placement: whose land, whose right', () => {
     expect(r.sim.state.buildings.get(r.cons.site(res.site as number)?.building ?? -1)?.construction ?? 1).toBe(1);
   });
 
+  it('answers nonsense with a reason instead of an error', () => {
+    const { r, lord } = lordRig();
+    expect(r.cons.check(lord.id, 'cottage', NaN, OPEN.z, 0).reason).toBe('No such place');
+    expect(r.cons.check(lord.id, 'cottage', OPEN.x, OPEN.z, Infinity).ok).toBe(false);
+    expect(r.cons.check(lord.id, 'moon_base' as never, OPEN.x, OPEN.z, 0).reason).toBe('No such building');
+    expect(r.cons.suggestSpot(lord.id, 'moon_base' as never, village(r.sim).id)).toBeNull();
+    expect(r.cons.place(lord.id, 'moon_base' as never, OPEN.x, OPEN.z, 0).ok).toBe(false);
+    expect(r.cons.upgrade(lord.id, -5).ok).toBe(false);
+    expect(r.cons.demolish(lord.id, 9999999).ok).toBe(false);
+    expect(r.cons.cancel(lord.id, 424242).ok).toBe(false);
+    expect(r.cons.site(31337)).toBeNull();
+    expect(r.cons.siteOf(-1)).toBeNull();
+    expect(r.cons.workersAt(5555)).toEqual([]);
+  });
+
   it('answers a stranger and a nobody with a reason', () => {
     const { r } = lordRig();
     expect(r.cons.check(999999, 'cottage', OPEN.x, OPEN.z, 0).ok).toBe(false);
