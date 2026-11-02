@@ -317,10 +317,10 @@ function sitePiles(kind: BuildingKind): PropKind[] {
   return stone ? ['stone_pile', 'logs', 'plank_pile'] : ['logs', 'plank_pile', 'stone_pile'];
 }
 
-/** Every kind of a building category at each construction stage, with material piles beside the sites. */
-export function sheetStages(lib: MillenniaAssetLibrary, root: THREE.Group, cats: BuildingCategory[], culture: CultureId, o: Omit<BuildingOpts, 'culture' | 'level' | 'construction' | 'damage'>): ViewState {
-  const kinds = BUILDING_KINDS.filter((k) => cats.includes(BUILDINGS[k].cat));
-  const st = newState(`Construction stages — ${cats.join(', ')}`);
+/** Every kind of a building category (or the kinds named) at each construction stage, with material piles beside the sites. */
+export function sheetStages(lib: MillenniaAssetLibrary, root: THREE.Group, cats: BuildingCategory[], culture: CultureId, o: Omit<BuildingOpts, 'culture' | 'level' | 'construction' | 'damage'>, only?: BuildingKind[]): ViewState {
+  const kinds = only?.length ? only : BUILDING_KINDS.filter((k) => cats.includes(BUILDINGS[k].cat));
+  const st = newState(`Construction stages — ${only?.length ? only.map((k) => BUILDINGS[k].name).join(', ') : cats.join(', ')}`);
   let z = 0;
   kinds.forEach((kind) => {
     const def = BUILDINGS[kind];

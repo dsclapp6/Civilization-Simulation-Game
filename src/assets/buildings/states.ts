@@ -117,7 +117,23 @@ function clipFlat(dst: MeshBuilder, src: MeshBuilder, t: number, h: number): voi
   emitPoly(dst, clipBy(vs, (p) => p[1] - h), src, t);
 }
 
-export interface StateInfo { w: number; d: number; }
+/** A triangle heaped up to a fraction k of its height: earth and plinths rise whole, never cut open at the top. */
+function squashY(dst: MeshBuilder, src: MeshBuilder, t: number, k: number): void {
+  dst.copyTri(src, t);
+  const o = dst.pos.length - 9;
+  for (let i = 0; i < 3; i++) {
+    if (dst.pos[o + i * 3 + 1] > 0) dst.pos[o + i * 3 + 1] *= k;
+    if (dst.ctr[o + i * 3 + 1] > 0) dst.ctr[o + i * 3 + 1] *= k;
+  }
+}
+
+export interface StateInfo {
+  w: number;
+  d: number;
+  /** Dug or heaped rather than built up (a quarry face, a clay pit, a mine, a charcoal mound, a motte, salt pans):
+   *  no scaffold round it while it is made. */
+  earthwork?: boolean;
+}
 
 /**
  * Construction progress bins. Each cached construction model stands for one bin (drawn at its middle); the breaks
@@ -163,7 +179,8 @@ export function applyConstruction(src: MeshBuilder, c: number, info: StateInfo, 
     return lo + (L.max + 0.01 - lo) * ss(a, b, c);
   };
   const G = lb[Layer.Ground];
-  const hGround = G.min === Infinity || c < 0.08 ? -Infinity : -0.12 + (G.max + 0.13) * ss(0.08, 0.2, c);
+  // the ground works (plinths, platforms, a motte's mound) are heaped up whole: squashed, not cut, so no hollow shows
+  const kGround = G.min === Infinity || c < 0.08 ? -1 : Math.max(0.04, ss(0.08, 0.2, c));
   const hFrame = reveal(Layer.Frame, 0.17, 0.5);
   const hWall = reveal(Layer.Wall, 0.2, 0.7);
   const hRF = reveal(Layer.RoofFrame, 0.5, 0.72, lb[Layer.RoofFrame].min);
@@ -178,7 +195,7 @@ export function applyConstruction(src: MeshBuilder, c: number, info: StateInfo, 
       continue;
     }
     switch (layer) {
-      case Layer.Ground: if (hGround > -Infinity) clipFlat(dst, src, t, hGround); break;
+      case Layer.Ground: if (kGround > 0) squashY(dst, src, t, kGround); break;
       case Layer.Frame: if (hFrame > -Infinity) clipFlat(dst, src, t, hFrame); break;
       case Layer.Wall: if (hWall > -Infinity) raggedClip(dst, src, t, ragged(hWall), 1.1, hWall - 0.3, hWall + 0.3); break;
       case Layer.RoofFrame: if (hRF > -Infinity) clipFlat(dst, src, t, hRF); break;
@@ -202,7 +219,7 @@ export function applyConstruction(src: MeshBuilder, c: number, info: StateInfo, 
   // (a church's porch roof is low but its tower is not: anything with walls 10 m up is scaffolded too)
   const tall = eaves >= SCAFFOLD_H || wallTop >= 10;
   const rising = Math.max(hWall, hFrame);
-  if (c >= 0.2 && c < 0.92 && rising > 1.2) {
+  if (c >= 0.2 && c < 0.92 && rising > 1.2 && !info.earthwork) {
     if (tall) scaffolding(dst, src, info, Math.min(wallTop, rising + 1.2), seed);
     else lightScaffold(dst, outline, Math.min(eaves, rising), c, seed);
   }

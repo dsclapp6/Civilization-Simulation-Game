@@ -92,13 +92,24 @@ export function runRecipe(n: NormalizedRequest): { b: MeshBuilder; ctx: Ctx; def
   return { b, ctx, def };
 }
 
+/** Kinds dug or heaped rather than built up: no scaffold while they are made. */
+const EARTHWORKS: ReadonlySet<BuildingKind> = new Set<BuildingKind>(['quarry', 'clay_pit', 'mine', 'charcoal_mound', 'motte', 'salt_pan']);
+
 export function generateBuilding(n: NormalizedRequest): BuiltBuilding {
   const { b, ctx, def } = runRecipe(n);
   let src = b;
   const seed = ctx.seed;
-  const info = { w: def.w, d: def.d };
+  const info = { w: def.w, d: def.d, earthwork: EARTHWORKS.has(n.kind) };
   // Coarser LODs drop yard clutter (LOD1+) and small details except lit window panes (LOD2).
   if (n.lod >= 1) src = src.filter((t) => src.tLayer[t] !== Layer.Decor && !(n.lod === 2 && src.tLayer[t] === Layer.Detail && src.tMat[t] !== Mat.Window));
+  if (n.construction < 0.95) {
+    // the moving parts stand still while the building goes up: a post mill's buck is framed on its post and a mill
+    // wheel hung with the rest (their own moving parts, the sails, go on at the end)
+    for (const p of ctx.out.anims) {
+      if (p.kind !== 'yawToWind' && p.kind !== 'spinX' && p.kind !== 'spinZ') continue;
+      b.push(); b.translate(p.pivot[0], p.pivot[1], p.pivot[2]); b.append(p.builder); b.pop();
+    }
+  }
   if (n.construction < 1) src = applyConstruction(src, n.construction, info, seed);
   if (n.damage > 0) src = applyDamage(src, n.damage, info, seed);
   else if (n.construction >= 1) src = src.filter((t) => src.tLayer[t] !== Layer.RoofFrame);

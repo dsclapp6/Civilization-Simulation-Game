@@ -91,6 +91,10 @@ export function start(root: AppRoot): void {
           const g = s.slice(7);
           const cats = g === 'social' ? ['social', 'trade', 'civic'] : g === 'defence' ? ['defence', 'camp'] : [g];
           view = sheetStages(lib, content, cats as never, P.culture, { owner: P.owner, seed: P.seed });
+        } else if (s === 'stages') {
+          // ?sheet=stages&kinds=windmill,watermill: just those kinds, closer
+          const only = (root.params.get('kinds') ?? '').split(',').filter((k): k is BuildingKind => (BUILDING_KINDS as readonly string[]).includes(k));
+          view = sheetStages(lib, content, [], P.culture, { owner: P.owner, seed: P.seed }, only.length ? only : ['cottage']);
         } else if (s === 'forts') view = sheetForts(lib, content, P.culture, { owner: P.owner, seed: P.seed });
         else if (s === 'siege') view = sheetSiege(lib, content);
         else if (s === 'levels') view = sheetLevels(lib, content, kind, [...CULTURES], base);
