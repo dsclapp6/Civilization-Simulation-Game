@@ -187,6 +187,9 @@ export function placeSite(C: Construction, personId: PersonId, kind: BuildingKin
     household: 0, occupied: false, x: r2(x), z: r2(z), rot: r3(rot), culture: settlement?.culture ?? C.person(personId)?.culture ?? 'anglo',
     seed: hash3(Math.round(x * 10), Math.round(z * 10), def.w * 31 + def.d) & 0x3fffffff,
   };
+  // a home being built is held in the payer's name, so no family is put into the unfinished house (`pickHome` takes any home with
+  // no household); it is let go again when the work is done
+  if (rulesOf(kind).cat === 'home') b.household = payer.id;
   addBuilding(C, b);
   clearGround(C, b);
   const rec = newRec(C, {

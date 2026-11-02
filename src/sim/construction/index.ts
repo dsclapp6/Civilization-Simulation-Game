@@ -3,7 +3,7 @@
 // system that plans each morning and puts in each working hour, and the action provider for the player's own hands on a site.
 // Costs and rules are content (src/content/construction.json); the saved data is in state.ext['construction']. Everything works
 // headless; the territory, economy (`procure`), realm and advancement services are looked up lazily and may be missing.
-import { BUILDINGS, type BuildingKind } from '../../content/types';
+import type { BuildingKind } from '../../content/types';
 import type { P2 } from '../../core/math';
 import type { Simulation } from '../sim';
 import type { PersonId } from '../state';
@@ -28,6 +28,8 @@ export { Construction } from './core';
 export interface ConstructionInstall extends ConstructionApi {
   /** The module's runtime (tests, tools, the debug page). */
   readonly core: Construction;
+  /** Takes the system, the action provider and the service out again (tests, tools). */
+  dispose(): void;
 }
 
 const installed = new WeakMap<Simulation, ConstructionInstall>();
@@ -60,6 +62,11 @@ export function installConstruction(sim: Simulation, deps: Wave3Deps): Construct
 
   const api: ConstructionInstall = {
     core: C,
+    dispose() {
+      for (const off of offs.splice(0)) off();
+      if (sim.services.construction === api) delete sim.services.construction;
+      installed.delete(sim);
+    },
 
     scope(person: PersonId): BuildScope {
       const si = scopeInfo(C, person);
@@ -139,8 +146,6 @@ export function installConstruction(sim: Simulation, deps: Wave3Deps): Construct
 
   sim.services.construction = api;
   installed.set(sim, api);
-  void offs;
-  void BUILDINGS;
   return api;
 }
 

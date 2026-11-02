@@ -313,3 +313,21 @@ export function clearSpot(r: Rig, settlement: number, kind: BuildingKind, who: P
   if (!spot) throw new Error(`no spot for ${kind} at ${settlement}`);
   return { x: spot.x, z: spot.z, rot: spot.rot };
 }
+
+/** Runs the player's work bouts at a building until the site is done (or `max` bouts pass), by ticking the action runner alone. */
+export function workUntilDone(r: Rig, actor: number, building: number, max = 400): number {
+  let bouts = 0;
+  while (bouts < max && r.cons.core.openByBuilding.has(building)) {
+    const o = r.sim.actions.list(actor, { kind: 'building', id: building }).find((x) => x.provider === 'construction' && x.enabled);
+    if (!o) break;
+    // (a long job is a long day's work: the test does not let the worker starve)
+    const p = r.sim.state.persons.get(actor);
+    if (p) { p.needs.hunger = 1; p.needs.rest = 1; }
+    r.sim.actions.start(actor, o);
+    let guard = 0;
+    while (r.sim.actions.active(actor) && guard++ < 4000) r.sim.actions.tick(1 / 20);
+    r.sim.actions.cancel(actor);
+    bouts++;
+  }
+  return bouts;
+}

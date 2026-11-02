@@ -13,7 +13,7 @@ import type { Person } from '../state';
 import type { Construction } from './core';
 import { stoneWork } from './data';
 import { progressOf, stageOf } from './sites';
-import { putIn, wageOfSite } from './progress';
+import { capacity, putIn, wageOfSite } from './progress';
 import type { SiteRec } from './save';
 
 /** Seconds a bout takes at speed 1, as in the economy's other work (≈ half a game hour). */
@@ -117,15 +117,9 @@ function blockedFor(C: Construction, p: Person, rec: SiteRec): string | null {
   if (isHolyDay(C.absDay)) return 'It is the holy day: rest, go to church, or practise at the butts';
   if (p.needs.hunger <= 0.03) return 'You are too weak from hunger';
   if (p.health.hp < 0.12) return 'You are too hurt to work';
-  if (rec.work !== 'demolish') {
-    const cap = rec.labour - rec.done;
-    if (cap > 1e-6 && Object.entries(rec.need).some(([g, q]) => (rec.have[g] ?? 0) < q - 0.005)) {
-      // work may go on as far as the materials in hand allow
-      let need = 0, have = 0;
-      for (const [g, q] of Object.entries(rec.need)) { need += q; have += Math.min(q, rec.have[g] ?? 0); }
-      if (have > 0 && rec.done < rec.labour * (have / need) - 0.02) return null;
-      return rec.note && rec.note.startsWith('Waiting') ? rec.note : 'There is nothing to build with yet: the materials have not come';
-    }
+  // work may go on only as far as the materials in hand allow
+  if (rec.labour - rec.done > 0.01 && capacity(rec) <= 0.01) {
+    return rec.note && rec.note.startsWith('Waiting') ? rec.note : 'There is nothing to build with yet: the materials have not come';
   }
   return null;
 }

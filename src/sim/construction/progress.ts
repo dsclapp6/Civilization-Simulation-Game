@@ -191,7 +191,7 @@ function supply(C: Construction, rec: SiteRec, payer: Household, ctx?: PlanCtx):
 }
 
 /** Worker-days the job may still take given the materials in hand. */
-function capacity(rec: SiteRec): number {
+export function capacity(rec: SiteRec): number {
   const left = rec.labour - rec.done;
   if (left <= 1e-6) return 0;
   if (rec.work === 'demolish') return left;
@@ -217,6 +217,7 @@ function planSite(C: Construction, ctx: PlanCtx, rec: SiteRec): void {
     payer = lordHouseholdAt(C, rec.settlement);
     if (!payer) { closeSite(C, rec, 'cancelled'); return; }
     rec.household = payer.id;
+    if (rec.work === 'build' && b.construction < 1 && rulesOf(rec.kind).cat === 'home') { b.household = payer.id; C.state.touchBuilding(b); }
     C.touch();
   }
   rec.crew = [];
@@ -501,6 +502,7 @@ function finish(C: Construction, rec: SiteRec): void {
       b.construction = 1;
       b.owner = rec.house;
       const cat = rulesOf(rec.kind).cat;
+      if (cat === 'home') { b.household = 0; b.occupied = false; }
       if (rec.occupant === 'builder' && payer) {
         if (cat === 'home') moveIn(C, payer, b);
         else {
