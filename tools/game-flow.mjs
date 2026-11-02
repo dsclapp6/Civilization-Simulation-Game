@@ -68,7 +68,7 @@ async function hoverPerson(not = []) {
       if (!a) return null;
       const dx = b.x - a.x, dz = b.z - a.z; const d = Math.hypot(dx, dz) || 1;
       p.placeAt(a.x + (dx / d) * 6, a.z + (dz / d) * 6, Math.atan2(-dx, -dz));
-      const r = se.renderer; const yaw = Math.atan2(-dx, -dz); r.orbit(Math.atan2(Math.sin(yaw - r.getCameraYaw()), Math.cos(yaw - r.getCameraYaw())), 0);
+      const r = se.renderer; const yaw = Math.atan2(-dx, -dz) + 0.45; r.orbit(Math.atan2(Math.sin(yaw - r.getCameraYaw()), Math.cos(yaw - r.getCameraYaw())), 0); // a little to one side, so the player's own body does not hide them
       return a.personId;
     }, [not, k]);
     if (t === null) break;
@@ -768,6 +768,7 @@ try {
   await tick(0.6);
   await sim(() => window.__game.killPlayer());
   await tick(0.5);
+  await page.waitForTimeout(250); // the first death screen fades out for 130 ms before it leaves the page
   s = await ui();
   check('death shows the family, people near, and a search over everyone alive', s.panels.join() === 'death' && (await page.locator('.mu-succ-search input').count()) === 1 && (await page.locator('.mu-succ-head').count()) >= 2, JSON.stringify(s));
   const stranger = await sim(() => {
