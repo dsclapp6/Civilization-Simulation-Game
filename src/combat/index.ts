@@ -12,6 +12,7 @@ import type { Wave3Deps } from '../sim/wave3deps';
 import type { CombatApi, FightResult, FightSide, HarmResult, Wound } from '../sim/wave3';
 import type { WarCombatApi, WarEngageOpts } from '../sim/military/war';
 import { createCombatProvider, PROVIDER_ID } from './actions';
+import { createWarProvider } from './warActions';
 import { Arena, type ArenaEnv, type Fight, type KitOverride } from './arena';
 import { S, type Fighter } from './fighter';
 import { chainAnimals, chainCharacters, chainFx, chainProjectiles, FxQueue } from './fx';
@@ -188,6 +189,7 @@ export function installCombat(sim: Simulation, deps: Wave3Deps): CombatModule {
 
   const services: Services = { sim, arena, book, economy, social, zone, player, assault };
   sim.actions.register(createCombatProvider(services));
+  sim.actions.register(createWarProvider(services));
 
   // ---- the API ----
   const listeners = arena.endListeners;

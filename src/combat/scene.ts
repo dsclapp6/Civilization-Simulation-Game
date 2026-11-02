@@ -72,6 +72,8 @@ export interface Work {
   /** Seconds to the next blow / throw / re-planting. */
   cool: number;
   landed: number;
+  /** The player is on the ladder (his climb is the action's, not the scene's). */
+  playerBusy?: boolean;
   /** Where the foot of the work stands on the ground. */
   footX: number; footZ: number;
 }
@@ -106,6 +108,8 @@ export class SiegeScene {
   private readonly draw: SiegeWorkDrawItem[] = [];
   private drawPool = new Map<number, SiegeWorkDrawItem>();
   private ladderSites: Station[] = [];
+  /** The player (or anyone else lending a hand) pushing the ram: counted in its crew while near. */
+  readonly pushers = new Set<Fighter>();
 
   constructor(private readonly arena: Arena, readonly fight: Fight, readonly setup: SiegeSetup) {
     const camp = setup.camp;
@@ -464,13 +468,13 @@ export class SiegeScene {
 
   private stepRam(w: Work, dt: number): boolean {
     const g = this.gate;
-    const crew = w.crew.filter((m) => m.active && dist(m.x, m.z, w.x, w.z) < 6);
+    const crewN = this.crewNear(w);
     if (!g || this.gateOpen()) { w.phase = 'idle'; w.swing = 0; return false; }
     if (w.phase === 'march') {
       const dx = w.goalX - w.x, dz = w.goalZ - w.z, d = Math.hypot(dx, dz);
       if (d < 0.7) { w.phase = 'batter'; w.cool = RAM_PERIOD * 0.5; return true; }
-      if (crew.length >= 2) {
-        const v = RAM_SPEED * clamp(crew.length / 5, 0.45, 1);
+      if (crewN >= 2) {
+        const v = RAM_SPEED * clamp(crewN / 5, 0.45, 1);
         const step = Math.min(d, v * dt);
         const nx = w.x + (dx / d) * step, nz = w.z + (dz / d) * step;
         w.x = nx; w.z = nz; w.y = this.arena.groundY(nx, nz);
@@ -480,11 +484,11 @@ export class SiegeScene {
     }
     // at the gate: swing, and on the stroke the gate takes a blow
     w.y = this.arena.groundY(w.x, w.z);
-    if (crew.length === 0) { w.swing = 0; return true; }
+    if (crewN === 0) { w.swing = 0; return true; }
     const prev = w.swing;
     w.swing += dt / RAM_PERIOD;
     if (prev < 0.62 && w.swing >= 0.62) {
-      const force = clamp(crew.length / 5, 0.3, 1.3);
+      const force = clamp(crewN / 5, 0.3, 1.3);
       this.damage(g.b, RAM_BLOW * force * (g.b.level >= 2 ? 0.65 : 1));
       const a = this.arena;
       a.env.fx.add('impact', g.x + g.ox * (g.hd + 0.4), a.groundY(g.x, g.z) + 1.6, g.z + g.oz * (g.hd + 0.4), 1.6);
@@ -493,6 +497,14 @@ export class SiegeScene {
     }
     if (w.swing >= 1) w.swing = 0;
     return true;
+  }
+
+  /** Men at the ram's beam: its crew within reach, and anyone else lending a shoulder. */
+  private crewNear(w: Work): number {
+    let n = 0;
+    for (const m of w.crew) if (m.active && dist(m.x, m.z, w.x, w.z) < 6) n++;
+    for (const p of this.pushers) if (p.active && dist(p.x, p.z, w.x, w.z) < 5.5 && !w.crew.includes(p)) n++;
+    return n;
   }
 
   /** A man of the crew: where he walks beside the ram. */
@@ -525,7 +537,8 @@ export class SiegeScene {
       if (w.cool <= 0 && w.crew.some((m) => m.active)) w.phase = 'up';
       return true;
     }
-    // planted: the queue climbs one at a time
+    // planted: the queue climbs one at a time (and not while the player is on it)
+    if (w.playerBusy) return true;
     if (!w.climber) {
       w.queue = w.queue.filter((m) => m.active && m.role === R.Ladder);
       const at = w.queue.findIndex((m) => dist(m.x, m.z, w.footX, w.footZ) < 3.6);
@@ -922,6 +935,41 @@ export class SiegeScene {
     const gate: SiegeStatus['gate'] = !this.gate ? 'none' : this.gateBroken() ? 'broken' : this.gateOpened ? 'open' : 'shut';
     return { settlement: this.sid, gate, gateIntegrity: this.gateIntegrity(), rams, ladders, onWalls, breaches, stationed, engines: engines };
   }
+
+  // ---- what the player's verbs ask ----
+
+  ramNear(x: number, z: number, within: number): Work | null {
+    let best: Work | null = null, bd = within;
+    for (const w of this.works) {
+      if (w.kind !== 'ram' || w.state === 'broken' || w.phase === 'idle') continue;
+      const d = dist(x, z, w.x, w.z);
+      if (d < bd) { bd = d; best = w; }
+    }
+    return best;
+  }
+
+  ladderNear(x: number, z: number, within: number): Work | null {
+    let best: Work | null = null, bd = within;
+    for (const w of this.works) {
+      if (w.kind !== 'ladder' || w.phase !== 'up' || w.playerBusy) continue;
+      const d = dist(x, z, w.footX, w.footZ);
+      if (d < bd) { bd = d; best = w; }
+    }
+    return best;
+  }
+
+  stationNear(x: number, z: number, within: number): Station | null {
+    let best: Station | null = null, bd = within;
+    for (const s of this.stations) {
+      if (s.holder && s.holder.active) continue;
+      const d = dist(x, z, s.inx, s.inz);
+      if (d < bd) { bd = d; best = s; }
+    }
+    return best;
+  }
+
+  workById(id: number): Work | null { return this.works.find((w) => w.id === id) ?? null; }
+  stationById(id: number): Station | null { return this.stations.find((s) => s.id === id) ?? null; }
 
   /** The siege works as draw items (objects reused). */
   draws(): readonly SiegeWorkDrawItem[] {

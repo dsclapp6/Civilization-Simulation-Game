@@ -568,6 +568,12 @@ export class Arena {
     if (!b) return;
     f.px = f.x; f.pz = f.z;
     f.x = b.x; f.z = b.z; f.y = b.y; f.yaw = b.yaw;
+    // he has come down off the wall-walk
+    if (f.onWall && f.station && b.y < f.station.y - 2.5) {
+      if (f.station.holder === f) f.station.holder = null;
+      f.onWall = false;
+      f.station = null;
+    }
   }
 
   private advance(f: Fighter, dt: number): void {

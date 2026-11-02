@@ -82,8 +82,8 @@ export interface Storm {
 }
 
 /** A storm of the ring: `att` and `def` give the numbers of archers and foot on each side. */
-export function storm(seed: string, att: Kits, def: Kits, over: Partial<SiegeSetup> = {}, wall: 'wall' | 'palisade' = 'wall'): Storm {
-  const r = combatRig({ seed, preset: 'small' });
+export function storm(seed: string, att: Kits, def: Kits, over: Partial<SiegeSetup> = {}, wall: 'wall' | 'palisade' = 'wall', player?: 'attacker' | 'defender'): Storm {
+  const r = combatRig({ seed, preset: 'small', player: !!player });
   const fort = fortify(r, wall);
   const na = att.archers + att.foot, nd = def.archers + def.foot;
   const men = adultMen(r.sim, na + nd, 17, 45);
@@ -93,9 +93,14 @@ export function storm(seed: string, att: Kits, def: Kits, over: Partial<SiegeSet
   D.forEach((p, i) => r.combat.arena.setKitOverride(p.id, i < def.foot ? (i % 2 ? SWORD : SPEAR) : BOW));
   const camp = { x: fort.cx, z: fort.cz + fort.half + 70 };
   const setup: SiegeSetup = { settlement: fort.sid, attackers: 0, defenders: 1, rams: 1, ladders: 3, engines: 0, camp, ...over };
+  const pid = r.sim.state.run.playerId;
+  if (player) r.player!.placeAt(player === 'attacker' ? camp.x : fort.cx, player === 'attacker' ? camp.z : fort.cz + 20, player === 'attacker' ? Math.PI : 0);
+  const at = player ? { x: r.player!.body()!.x, z: r.player!.body()!.z } : camp;
+  const sa = player === 'attacker' ? [pid, ...A.map((p) => p.id)] : A.map((p) => p.id);
+  const sd = player === 'defender' ? [pid, ...D.map((p) => p.id)] : D.map((p) => p.id);
   const id = r.combat.engage(
-    [{ faction: 'house:1', people: A.map((p) => p.id) }, { faction: 'house:2', people: D.map((p) => p.id) }],
-    { at: camp, reason: 'storm', siege: setup, yieldAllowed: true },
+    [{ faction: 'house:1', people: sa }, { faction: 'house:2', people: sd }],
+    { at, reason: 'storm', siege: setup, yieldAllowed: true },
   );
   return { r, fort, attackers: A.map((p) => p.id), defenders: D.map((p) => p.id), id, setup };
 }
