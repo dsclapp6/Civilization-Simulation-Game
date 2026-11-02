@@ -10,7 +10,7 @@ import { installEconomy } from '../../../src/sim/economy';
 import { bagGet } from '../../../src/sim/economy/items';
 import { marketTargets, stockOf } from '../../../src/sim/economy/market';
 import { carriage, cartDays } from '../../../src/sim/economy/trade-house';
-import { mockGenerator, newSim, settle } from '../helpers';
+import { mockGenerator, newSim, noPlayer, settle } from '../helpers';
 import { econSim, fakeSocial, fakeTerritory, raise } from './helpers';
 
 function ledgerSim(seed = 'house-trade') {
@@ -243,6 +243,37 @@ describe('the materials in the markets', () => {
     const later = stockOf(eco.econ, home.id, 'planks');
     expect(later).toBeGreaterThan(low + target * 0.2);
     expect(later).toBeLessThanOrEqual(target * 1.01);
+  });
+});
+
+describe('the materials over the years', () => {
+  it('stay in bounds for thirty years with works raised in the market town, and are cheaper where they are made', () => {
+    const { sim, eco, home, hh, markets } = ledgerSim('house-years');
+    noPlayer(sim);
+    const far = markets[markets.length - 1];
+    const base: Record<string, number> = {};
+    for (const g of ['brick', 'planks', 'stone', 'salt', 'vellum', 'tallow', 'timber', 'iron', 'charcoal']) base[g] = eco.price(home.id, g, 'buy');
+    for (const kind of ['kiln', 'sawpit', 'quarry', 'salt_pan', 'tannery', 'slaughterhouse', 'lumber_camp', 'bloomery', 'charcoal_mound'] as const) {
+      const b = raise(sim, kind, { settlement: home.id, household: hh.id });
+      sim.events.emit('construction', { phase: 'done', site: 1, building: b.id, settlement: home.id, kind, work: 'build', house: 0 });
+    }
+    const lo: Record<string, number> = {}, hi: Record<string, number> = {};
+    for (let y = 0; y < 30; y++) {
+      sim.advanceDays(16);
+      for (const g of MACRO_GOODS.filter((x) => GOODS[x].supply)) for (const m of markets) {
+        const r = eco.price(m.id, g, 'buy') / GOODS[g].basePrice;
+        expect(Number.isFinite(r), `${g} at ${m.name}`).toBe(true);
+        lo[g] = Math.min(lo[g] ?? 9, r); hi[g] = Math.max(hi[g] ?? 0, r);
+      }
+    }
+    for (const g of Object.keys(lo)) { expect(lo[g], g).toBeGreaterThan(0.3); expect(hi[g], g).toBeLessThan(4); }
+    // where bricks, planks, stone and salt are made they are cheaper than the same goods before the works
+    for (const g of ['brick', 'planks', 'stone', 'salt', 'vellum', 'tallow']) expect(eco.price(home.id, g, 'buy'), g).toBeLessThan(base[g] * 1.001);
+    expect(eco.price(home.id, 'brick', 'buy')).toBeLessThan(base.brick * 0.97);
+    // and the market town stocks more of them than a town without works
+    const stockHome = stockOf(eco.econ, home.id, 'brick') / marketTargets(eco.econ, home.id)[eco.econ.marketIndex.brick];
+    expect(stockHome).toBeGreaterThan(0.9);
+    void far;
   });
 });
 

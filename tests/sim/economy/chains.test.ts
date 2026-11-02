@@ -143,6 +143,23 @@ describe('the works of the land', () => {
     expect(keeperHh.purse).toBeLessThan(200);
   });
 
+  it('every works of the land and the slaughterhouse offers its day labour, to someone who is not its keeper', () => {
+    const { sim, eco, player, hh } = setup('chain-jobs');
+    const keepers = [...sim.state.households.values()].filter((h) => h.id !== hh.id && h.settlement === hh.settlement && h.members.length > 0 && sim.state.persons.get(h.head) && !sim.state.persons.get(h.head)!.death);
+    expect(keepers.length).toBeGreaterThan(1);
+    // (a keeper's quarry and clay pit share one post: the pit's; so they are kept by two households here)
+    const titles: Record<string, string> = { quarry: 'Hand at the pit', clay_pit: 'Hand at the pit', mine: 'Miner', lumber_camp: 'Lumberjack', salt_pan: 'Salt boiler', slaughterhouse: "Slaughterman's hand" };
+    for (const [kind, title] of Object.entries(titles)) {
+      const keeperHh = kind === 'clay_pit' ? keepers[1] : keepers[0];
+      const b = raise(sim, kind as never, { settlement: hh.settlement, household: keeperHh.id });
+      const post = eco.jobs(hh.settlement, player.id).find((j) => j.building === b.id);
+      expect(post, kind).toBeTruthy();
+      expect(post!.title, kind).toBe(title);
+      expect(post!.wage, kind).toBeGreaterThan(1);
+      expect(post!.requirements.length, kind).toBeGreaterThan(0);
+    }
+  });
+
   it('a works still being raised offers neither work nor jobs', () => {
     const { sim, eco, player, hh } = setup('chain-site');
     const keeperHh = [...sim.state.households.values()].find((h) => h.id !== hh.id && h.settlement === hh.settlement && h.members.length > 0)!;

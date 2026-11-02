@@ -19,8 +19,8 @@ interface MarketSupply { demand: Float64Array; made: Float64Array; target: Float
 interface SourceInfo { stone: boolean; clay: boolean; iron: boolean; salt: boolean }
 
 interface Census {
-  /** The state it was counted at: the construction events seen, the number of buildings, the territory's version. */
-  rev: number; size: number; terr: number;
+  /** The state it was counted at: the construction events seen, the number of buildings, the territory service (and its version). */
+  rev: number; size: number; terr: number; terrRef: unknown;
   /** Only ever goes up: the caches of targets compare against it. */
   stamp: number;
   /** Settlement → good → units a day when staffed. */
@@ -60,9 +60,9 @@ function sourcesOf(E: Econ, s: Settlement, by: Record<string, number>, own: read
  * family moves house) and none of them changes what a works makes. A burnt works still counts until it is pulled down.
  */
 function census(E: Econ): Census {
-  const rev = E.worksRev, size = E.state.buildings.size, terr = E.sim.services.territory?.version() ?? 0;
+  const rev = E.worksRev, size = E.state.buildings.size, terrRef = E.sim.services.territory, terr = terrRef?.version() ?? 0;
   const hit = cache.get(E);
-  if (hit && hit.rev === rev && hit.size === size && hit.terr === terr) return hit;
+  if (hit && hit.rev === rev && hit.size === size && hit.terr === terr && hit.terrRef === terrRef) return hit;
   const by = new Map<number, Record<string, number>>();
   const sources = new Map<number, SourceInfo>();
   for (const s of E.world.settlements) {
@@ -84,7 +84,7 @@ function census(E: Econ): Census {
   }
   const stamp = (stamps.get(E) ?? 0) + 1;
   stamps.set(E, stamp);
-  const next: Census = { rev, size, terr, stamp, by, sources, markets: new Map() };
+  const next: Census = { rev, size, terr, terrRef, stamp, by, sources, markets: new Map() };
   cache.set(E, next);
   return next;
 }

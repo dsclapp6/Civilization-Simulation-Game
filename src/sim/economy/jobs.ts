@@ -277,15 +277,17 @@ export function jobsAt(E: Econ, sid: number, forPerson: PersonId): JobOffer[] {
 
   // ---- the works of the land and the slaughterhouse: day labour for whoever keeps them (the lord, if nobody does) ----
   for (const post of SITE_POSTS) {
-    const b = buildingsOf(E, sid, post.kinds)[0];
-    if (!b) continue;
-    const keeperHh = b.household ? E.state.households.get(b.household) : undefined;
-    const keeper = keeperHh ? E.state.persons.get(keeperHh.head) : lord?.person;
-    if (!keeper || keeper.death || keeper.id === p.id) continue;
-    specs.push({
-      kind: post.id, career: 'labourer', stage: 0, title: post.title, terms: 'day', wage: post.wage, employer: keeper.id, building: b.id,
-      requirements: [req('Aged 14 or more', age >= 14), strong(post.str)],
-    });
+    const hired = new Set<number>(); // one post for each keeper (a job is the employer's and the kind of work)
+    for (const b of buildingsOf(E, sid, post.kinds)) {
+      const keeperHh = b.household ? E.state.households.get(b.household) : undefined;
+      const keeper = keeperHh ? E.state.persons.get(keeperHh.head) : lord?.person;
+      if (!keeper || keeper.death || keeper.id === p.id || hired.has(keeper.id)) continue;
+      hired.add(keeper.id);
+      specs.push({
+        kind: post.id, career: 'labourer', stage: 0, title: post.title, terms: 'day', wage: post.wage, employer: keeper.id, building: b.id,
+        requirements: [req('Aged 14 or more', age >= 14), strong(post.str)],
+      });
+    }
   }
 
   // ---- craft: masters with room for an apprentice or a journeyman ----
