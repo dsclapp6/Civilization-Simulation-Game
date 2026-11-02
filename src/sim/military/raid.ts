@@ -61,7 +61,7 @@ export class RaidSystem {
   afterBattle(a: Army, attWon: boolean): void {
     if (!a.raid || !this.M.armyById.has(a.id)) return;
     if (attWon) a.task = 'raid';
-    else { a.raid = undefined; a.intent = 'return'; }
+    else { a.raid = undefined; a.intent = 'return'; if (this.M.armyById.has(a.id)) giveOrder(this.M, a, { kind: 'return' }); }
   }
 
   /** Hourly while an army raids. */
