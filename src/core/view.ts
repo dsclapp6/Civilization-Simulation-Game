@@ -148,6 +148,8 @@ export interface AnimalDrawItem {
   male?: boolean;
   /** For horses carrying riders the character's MountLook is used instead. */
   highlight: 0 | 1 | 2;
+  /** Civilization pass (CIV §8): led on a halter by this character draw item (the renderer draws the rope hand → head). */
+  ledBy?: number;
 }
 
 export interface ProjectileDrawItem {
@@ -164,7 +166,9 @@ export interface ProjectileDrawItem {
 }
 
 export interface FxEvent {
-  kind: 'dust' | 'blood' | 'sparks' | 'smoke' | 'fire' | 'splash' | 'chips' | 'chaff' | 'impact' | 'hearth_smoke';
+  kind: 'dust' | 'blood' | 'sparks' | 'smoke' | 'fire' | 'splash' | 'chips' | 'chaff' | 'impact' | 'hearth_smoke'
+    /** Civilization pass: quenching hot iron, brine boiling at the salt pans. */
+    | 'steam';
   x: number;
   y: number;
   z: number;
