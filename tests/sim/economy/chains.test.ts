@@ -50,6 +50,18 @@ describe('the works of the land', () => {
     expect(rich).toBeGreaterThan(thin * 1.2);
   });
 
+  it('clay is dug where the clay lies: with the territory module to say, a pit on other ground has nothing to give', () => {
+    const { sim, player, hh } = setup('chain-barren');
+    const pit = raise(sim, 'clay_pit', { settlement: hh.settlement, household: hh.id });
+    workMorning(sim);
+    expect(find(optionsFor(sim, { kind: 'building', id: pit.id }), 'dig.clay')!.enabled).toBe(true); // no module: an ordinary bank
+    fakeTerritory(sim, [{ kind: 'clay', x: pit.x + 900, z: pit.z, radius: 30, richness: 0.8 }]);
+    const o = find(optionsFor(sim, { kind: 'building', id: pit.id }), 'dig.clay')!;
+    expect(o.enabled).toBe(false);
+    expect(o.reason).toMatch(/no clay/i);
+    void player;
+  });
+
   it('a mine yields iron, silver or gold by the deposit under it, and iron where nothing is known', () => {
     const run = (deposit: 'iron' | 'silver' | 'gold' | null): { id: string; good: string; n: number } => {
       const { sim, player, hh } = setup(`chain-mine-${deposit}`);

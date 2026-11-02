@@ -309,6 +309,7 @@ export function labourUnits(E: Econ, hh: Household): number {
   }
   for (const h of E.save.helpers) {
     if (h.hh !== hh.id) continue;
+    if (h.task === 'build' && liveSiteOf(E, hh)) continue; // a hand hired to build is not at the plough
     const w = E.state.persons.get(h.w);
     if (w && !w.death) l += 1;
   }

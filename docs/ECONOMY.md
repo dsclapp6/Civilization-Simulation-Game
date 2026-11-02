@@ -247,7 +247,9 @@ quarry 4.5d (its old rate). Yield per bout = base × `0.35 + 0.8 × richness` ×
 decides the product: the keeper's household digs for itself; a **hired hand** (`jobs`: "Hand at the pit", "Miner", "Lumberjack",
 "Salt boiler", "Slaughterman's hand", day labour for the keeper — the lord if nobody keeps it) is paid a day's wage a bout
 and the product goes to the keeper's stores; anyone at a works nobody keeps gives the lord a fifth; another household's works
-is closed to a stranger. A mine's prop may give way (bruise) for hands below Mining 4.
+is closed to a stranger. A mine's prop may give way (bruise) for hands below Mining 4. Clay is dug where the clay lies: with the
+territory module present, a pit on ground with no clay deposit says "There is no clay in this ground" (without it, an ordinary
+bank). Day-labour posts are one for each keeper and kind of work (a quarry and a clay pit of one keeper share the pit's post).
 
 ### Materials: stock-and-flow with a local supply (`supply.ts`)
 
@@ -292,6 +294,25 @@ Silver and gold ore stay index-priced (the mint's demand is unbounded; a glut sa
 * **Buildings raised in play** are ordinary buildings: workplaces, jobs, recipes, barns and shops use only those with
   `construction >= 1`; the supply census listens to `construction` events; listings carry prices for the new kinds when they stand vacant.
 
+### For the UI and the zone (wave B)
+
+* **Playing steps back**: an option's `steps` run in order over its `seconds` by cumulative `share`; each step sets the body's
+  `anim`, `mainHand` and `offHand` and, on entering, plays its `sfx` cue once (`bellows`, `hammer`, `quench`, `saw`, `chop`, `cut`,
+  `dig`, `stir`, `fire`, and three new ones: `grind`, `scrape`, `knead`); the step's `label` ("Heat the bar") is the line to show
+  under the progress bar. The outcome (`gains`, `message`) still arrives once, at the end. Options with steps: every `craft.*`
+  (and `craft.masterpiece`), `dig.*`, `stock.slaughter.*`, `stock.butcher.*`.
+* **Action ids new in the economy**: `stock.slaughter.<animal>`, `stock.butcher.<animal>`, `stock.slaughter.none`, `dig.clay`,
+  `dig.silver`, `dig.gold`, `dig.timber` (and `dig.stone`, `dig.ore` as before), `craft.fire_bricks`, `craft.boil_salt`,
+  `craft.make_vellum`, `craft.salt_meat`. The objectives' summary verbs (`verb.stock.slaughter`, `verb.stock.butcher`, `verb.dig.*`)
+  fall back to the default wording until the text file has them.
+* A craft option's `preview` says how the bench is paid for ("you hire the bench for 1d") and how risky the work is
+  ("beyond your skill: 44 % the work is spoiled"); a disabled one says why (`reason`).
+* Trade panels: the board of a market lists the twelve materials (the ones it has in stock); `EconomyApi.market(settlement).lines`
+  carries `stock`; `stockAt`, `deliveries` and `procure` / `sell` serve the builder's and ruler's panels ("Waiting for 12 planks —
+  on the way from Dromore market, 1 day" is `deliveries(household)` plus the market's name).
+* The zone: a killed beast is gone from `holding(household).livestock` at once; `stock.slaughter` touches the household
+  (`householdRevision`), so a redraw keyed on it sees the change.
+
 ## Links
 
 * Social hooks (`setHooks`): `giveHook`, `itemInfoHook`, `priceTipsHook`, `dressTierHook`, `apprenticeHook`.
@@ -307,6 +328,13 @@ Large mock world (about 12 000 people), economy systems per game hour: average 1
 machine (the tests allow more because they share cores); one hour is one frame, so at 1x (1500 frames an hour) the
 average frame pays 0.001 ms and at 8x (190 frames an hour) 0.008 ms. A hundred years of the tiny world take 5 s of the whole simulation.
 Prices over 100 years: wheat 0.5 to 3.2 times base through the years (bad harvests), averaging 0.6 to 1.2.
+
+Civilization pass (twelve more stock-and-flow goods, the supply model, household trade): the same large world, alternating runs of
+the old and new code on the same machine, 1.4 and 1.5 ms against 1.4 and 1.9 ms an hour (the spread is the machine's); the
+full continent for ten years (`npx tsx tools/fullsim.ts --years 10`) goes exactly as it did (the NPC households' path is
+untouched): 14 477 people in year 1 and 14 036 in year 10, prosperity 1.04 to 1.07, 7 famines, 51 battles. The materials'
+prices over the years (27 markets of the real world) sit at 0.7 to 1.7 of their base prices (the standing premium of the goods of
+the ground and the forest factor of timber) and do not move without the works or the carts that move them.
 
 ## Known gaps
 

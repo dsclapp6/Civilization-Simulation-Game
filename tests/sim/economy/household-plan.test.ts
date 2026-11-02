@@ -41,6 +41,11 @@ describe('the household task BUILD', () => {
     expect(spot!.kind).toBe('building');
     expect(spot!.x).toBeCloseTo(home.x + 12, 3);
     expect(spot!.anim).toBe('work_hammer');
+    // a hand hired to build is not at the plough either
+    const labourBefore = labourUnits(eco.econ, hh);
+    eco.econ.save.helpers.push({ w: mkPerson(sim, { age: 25, sex: 'm' }).id, e: player.id, hh: hh.id, wage: 2, task: 'build', since: 0 });
+    expect(labourUnits(eco.econ, hh)).toBeCloseTo(labourBefore, 6);
+    eco.econ.save.helpers.pop();
     // the site done or cancelled: back to the ordinary day
     fakeConstruction(sim, [site(hh.id, hh.settlement, home.id, home.x, home.z, 'done')]);
     expect(onBuild(eco.econ, member, hh)).toBe(false);

@@ -56,11 +56,16 @@ export const DIG_BUILDINGS: ReadonlySet<string> = new Set(['quarry', 'mine', 'cl
 
 export interface DigData { act: 'dig'; building: number; what: DigWhat }
 
-/** What a works of this kind turns out, with the richness of the ground under it. */
-export function digSite(E: Econ, b: BuildingState): { what: DigWhat; richness: number } | null {
+/** What a works of this kind turns out, with the richness of the ground under it (`barren`: why there is nothing to dig). */
+export function digSite(E: Econ, b: BuildingState): { what: DigWhat; richness: number; barren?: string } | null {
   switch (b.kind) {
     case 'quarry': return { what: 'stone', richness: depositUnder(E, b.x, b.z, ['stone'])?.richness ?? DEFAULT_RICHNESS };
-    case 'clay_pit': return { what: 'clay', richness: depositUnder(E, b.x, b.z, ['clay'])?.richness ?? 0.6 };
+    case 'clay_pit': {
+      // clay is dug where the clay lies: with the territory module to say so, a pit on other ground has nothing to give
+      const d = depositUnder(E, b.x, b.z, ['clay']);
+      if (!d && E.sim.services.territory) return { what: 'clay', richness: 0, barren: 'There is no clay in this ground' };
+      return { what: 'clay', richness: d?.richness ?? 0.6 };
+    }
     case 'lumber_camp': return { what: 'timber', richness: Math.max(0.2, E.world.forestAt(b.x, b.z)) };
     case 'mine': { const m = mineKind(E, b.x, b.z); return { what: m.kind === 'gold' ? 'gold' : m.kind === 'silver' ? 'silver' : 'iron', richness: m.richness }; }
     default: return null;
@@ -100,6 +105,7 @@ export function listDig(E: Econ, p: Person, b: BuildingState, out: ActionOption[
   const base = { target, range: 7 };
   const terms = digTerms(E, p, b);
   if (!terms.ok) { out.push(disabled({ id: spec.id, label: spec.label, ...base }, terms.reason)); return; }
+  if (site.barren) { out.push(disabled({ id: spec.id, label: spec.label, ...base }, site.barren)); return; }
   const tool = toolFor(E, p, spec.tool);
   if (!tool) { out.push(disabled({ id: spec.id, label: spec.label, ...base }, `Needs ${spec.tool === 'axe' ? 'an' : 'a'} ${spec.tool}`)); return; }
   const speed = speedOf(E, p, spec.skill, 'str', tool.quality);
@@ -124,6 +130,7 @@ export function digBout(E: Econ, p: Person, d: DigData): ActionOutcome {
   const spec = SPECS[site.what];
   const terms = digTerms(E, p, b);
   if (!terms.ok) return { ok: false, message: terms.reason };
+  if (site.barren) return { ok: false, message: `${site.barren}.` };
   const tool = toolFor(E, p, spec.tool);
   const lvl = skillLevel(p.skills[spec.skill]);
   const per = digYield(E, p, b, site.what, site.richness);
