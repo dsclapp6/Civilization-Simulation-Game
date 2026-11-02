@@ -16,6 +16,10 @@ function peasantWithParcel(r: Rig): { p: ReturnType<typeof peasantWithGarden>['p
   const parcel: LandParcel = { id: r.sim.world.parcels.length, settlement: v.id, use: 'garden', poly };
   (r.sim.world.parcels as LandParcel[]).push(parcel);
   (r.sim.world.settlements.find((s) => s.id === v.id)!.parcels as number[]).push(parcel.id);
+  // (and a neighbour's garden next door, which the territory does not call his)
+  const next: LandParcel = { id: r.sim.world.parcels.length, settlement: v.id, use: 'garden', poly: poly.map((q) => ({ x: q.x + 40, z: q.z })) };
+  (r.sim.world.parcels as LandParcel[]).push(next);
+  (r.sim.world.settlements.find((s) => s.id === v.id)!.parcels as number[]).push(next.id);
   return { p: base.p, hh: base.hh, poly, x: base.x, z: base.z };
 }
 
@@ -35,20 +39,10 @@ describe('the area a person may build on', () => {
     expect(r.cons.check(p.id, 'henhouse', v.x, v.z + 200, 0).ok).toBe(false);
   });
 
-  it('is the yards round his buildings when no garden parcels are known', () => {
+  it('is nothing for a household no garden parcel is held for (the yards round a house are not "his own plot")', () => {
     const r = rig('area-b', { roads: [] });
-    const v = village(r.sim);
-    const { p, hh } = peasantWithGarden(r, 2);
-    const home = r.sim.state.buildings.get(hh.home)!;
-    const area = r.cons.buildArea!(p.id);
-    expect(area.length).toBeGreaterThanOrEqual(1);
-    expect(inside(area, home.x, home.z)).toBe(true);
-    for (const poly of area) {
-      const xs = poly.map((q) => q.x), zs = poly.map((q) => q.z);
-      expect(Math.max(...xs) - Math.min(...xs)).toBeLessThan(60);
-      expect(Math.max(...zs) - Math.min(...zs)).toBeLessThan(60);
-    }
-    expect(inside(area, v.x, v.z)).toBe(false);
+    const { p } = peasantWithGarden(r, 2); // a patch of ground the territory calls his, but no parcel to draw
+    expect(r.cons.buildArea!(p.id)).toHaveLength(0);
   });
 
   it('is the whole lands of each settlement a lord holds: a circle of the territory\'s radius without an outline', () => {

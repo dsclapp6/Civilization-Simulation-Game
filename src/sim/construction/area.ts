@@ -1,19 +1,16 @@
 // The land a person may build on, as polygons (world m) for builder mode's tint (`renderer.setBuildArea`): the whole lands of each
 // settlement they have authority over (a lord, a baron, a steward for his lord), the land round the outposts they hold, and for a
-// household head with no say over the place the household's own plots — its garden parcels, else the yards round its buildings.
-// Cached by person and by what can change it (the territory's version, the module's version, the day, their holdings).
-import { BUILDINGS } from '../../content/types';
+// household head with no say over the place the household's own plots — the garden parcels the territory holds for it (the only
+// ground `check` takes as a household's own). Cached by person and by what can change it (the territory's version, the module's
+// version, the day, their holdings).
 import type { P2 } from '../../core/math';
 import type { PersonId } from '../state';
 import { OUTPOST_REACH } from './check';
 import type { Construction } from './core';
-import { footprintCorners } from './geometry';
 import { scopeInfo, type ScopeInfo } from './scope';
 
 /** Points of the circle that stands in for lands the territory service gives no outline of. */
 export const AREA_POINTS = 24;
-/** Metres a household's yard reaches round its own buildings (where no garden parcels are known). */
-const YARD = 10;
 /** Radius (m) of the lands of a settlement of each kind when there is no territory service at all. */
 const FALLBACK_RADIUS: Record<string, number> = { city: 3000, town: 2500, village: 2000 };
 
@@ -64,7 +61,7 @@ function parcelById(C: Construction): Map<number, { poly: Polygon; use: string }
   return m;
 }
 
-/** The household's own ground: the garden parcels the territory says it holds, else the yards round the buildings it keeps. */
+/** The household's own ground: the garden parcels the territory says it holds (what `check` calls "your own plot"). */
 function ownPlots(C: Construction, si: ScopeInfo): Polygon[] {
   const own = si.own;
   if (!own) return [];
@@ -82,12 +79,6 @@ function ownPlots(C: Construction, si: ScopeInfo): Polygon[] {
       const land = t.landAt(cx, cz);
       if (land.household === own.id && (land.kind === 'garden' || land.kind === 'town')) out.push(q.poly);
     }
-  }
-  if (out.length > 0) return out;
-  for (const b of C.state.buildingsAt.get(own.settlement) ?? []) {
-    if (b.household !== own.id && b.id !== own.home) continue;
-    const def = BUILDINGS[b.kind];
-    out.push(footprintCorners(b.x, b.z, def.w + YARD * 2, def.d + YARD * 2, b.rot));
   }
   return out;
 }

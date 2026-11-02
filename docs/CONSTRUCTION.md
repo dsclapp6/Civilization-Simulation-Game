@@ -123,17 +123,20 @@ on the holy day, when too hungry or hurt, or with nothing to build with it says 
 **Outposts.** In the wild, a baron or greater places a *camp, mine, quarry, saltpan, lumber camp, dock, tent, tower, palisade or
 motte* with a name (`PlaceOptions.outpost`; a default is made: "Dromore Quarry"). The outpost record (`OutpostView`: id, name,
 parent settlement — the nearest the founder holds — position, deposit id, founded day, House) is created with the first site and
-dropped if that site is cancelled. Land within 600 m of it (the reach the territory service gives an outpost) is the founder's: anything a lord could raise at home can be raised
-there, and the buildings belong to the parent settlement for the economy (`BuildingState.settlement`, so homes there are lived in
+dropped if that site is cancelled. Land within 600 m of it (the reach the territory service gives an outpost) is the founder's:
+anything a lord could raise at home can be raised there, and the buildings belong to the parent settlement for the economy (`BuildingState.settlement`, so homes there are lived in
 and mines worked by the parent's people).
 
 **Where the builder may build** (`area.ts`, `buildArea(person)`). The polygons (world m) builder mode tints with
 `renderer.setBuildArea`: the whole lands of every settlement in `scope(person).settlements` — the territory service's
 `landsPolygon(settlement)` when it has one (one outline or several; anything that is not a list of points is ignored), else a circle
 of 24 points of `landsRadius(settlement)` round the settlement's centre (3000 m for a city, 2500 a town, 2000 a village, 1200 any
-other, when there is no territory service at all; neighbouring circles overlap, so the renderer should tint the union) — the 600 m circles round the outposts the person's House or places hold, and, for a household head with
-no say over his own place (a peasant, a master), the household's own plots: the garden parcels the territory says it holds
-(`landAt(...).household`), else the yards (10 m) round its buildings. Someone who is not a head and has no authority gets `[]`.
+other, when there is no territory service at all; neighbouring circles overlap, so the renderer should tint the union) — the 600 m
+circles round the outposts the person's House or places hold, and, for a household head with no say over his own place (a peasant,
+a master), the household's own plots: the garden parcels the territory says it holds
+(`landAt(...).household` at the parcel's centre, kind garden or town) — the only ground `check` takes as a household's own, so the
+tint and the ghost agree. Someone who is not a head and has no authority, or a household with no garden parcel held (it lives in a
+home raised in play, say), gets `[]`.
 The same array comes back until the territory's `version()`, the module's `version()`, the day, the places or outposts held or the
 household's home change (`tests/sim/construction/area.test.ts`).
 
@@ -166,8 +169,8 @@ other yearly figures stayed as they were. A placement with `suggestSpot`: 1–15
 `types.ts`: `BuildRequirement.deposits?`, `.max?`; `BuildScope.rank?`, `.role?`, `.agentFor?`; `PlaceOptions` (`outpost`, `priority`,
 `occupant`, `hired`) taken by `place`; `PlacementCheck.outpost?`, `.cost?`; `SiteView.level?`, `.builder?`, `.stage?`, `.hired?`,
 `.cost?`, `.materials?`; `OutpostView.house?`; `ConstructionApi.onSite?`, `.setHired?`, `.canManage?`, `.quote?`, `.buildArea?` (optional, so
-fakes need not implement them; the module always does). `buildArea(person: PersonId): ReadonlyArray<readonly P2[]>` is the one the
-coordinator asked for: the polygons where the person may build, cached per person and version. It reads the **optional**
+fakes need not implement them; the module always does). `buildArea(person: PersonId): ReadonlyArray<readonly P2[]>` is the one added
+for builder mode's tint: the polygons where the person may build, cached per person and version. It reads the **optional**
 `TerritoryApi.landsPolygon?(settlement)` that the territory module adds (looked up by property, not typed, so the module compiles
 and runs before and without it).
 
@@ -175,6 +178,9 @@ and runs before and without it).
 
 * **Territory (A1):** the module asks `landAt` at a footprint's centre and corners (kind, settlement, `title`, `household` of a
   garden or town plot), `depositAt(x, z, kind)`, and reads `version()`; it reads `construction.outposts()` (now with `house`).
+  A1 gives `household` only to garden parcels (from the household of the parcel's home plot) and to strips; town streets and the
+  ground round homes raised in play carry household 0, so a household in such a home has no "own plot" and nothing to tint (if
+  they should be able to raise a shed in their yard, `ownLand` in `check.ts` is the one function to widen).
   `buildArea` uses `landsPolygon?(settlement)` (one `P2[]` as A1 gives it, or a list of them) when it is there and `landsRadius`
   when not; a castle that shares its village's outline (the same array) is listed once. Outposts: A1's `outpostPolygons()` claims
   about 600 m round an outpost and construction lets the founder raise within `OUTPOST_REACH` = 600 m of it (`check.ts`; the same
