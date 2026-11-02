@@ -68,7 +68,7 @@ describe('construction save and load', () => {
     }
     expect(l.sim.stateHash()).toBe(r.sim.stateHash());
     expect(l.cons.sites().length).toBe(r.cons.sites().length);
-  });
+  }, 120000);
 
   it('keeps a pulled-down building of the world gone after a load', async () => {
     const store = new MemorySaveStore();

@@ -142,6 +142,27 @@ describe('working on a building', () => {
     expect(o.reason).toBeTruthy();
   });
 
+  it('takes in the goods the player has just brought home when he stands at the site', () => {
+    const r = rig('act-i');
+    const { p, hh, building, site } = playerPeasant(r);
+    const rec = r.cons.core.sitesById.get(site)!;
+    // nothing delivered yet
+    for (const g of Object.keys(rec.have)) delete rec.have[g];
+    rec.done = 0;
+    for (const g of Object.keys(hh.stores)) delete hh.stores[g];
+    const blocked = options(r, p.id, building)[0];
+    expect(blocked.enabled).toBe(false);
+    expect(blocked.reason).toMatch(/planks|nothing to build/i);
+    // he fetches planks and straw; the next time he looks at the site they are in it (it looks again every ten game minutes)
+    hh.stores['planks'] = 8; hh.stores['straw'] = 10;
+    expect(options(r, p.id, building)[0].enabled).toBe(false); // still the same stretch: not looked at again
+    setTime(r.sim, 0.45 + 1 / 24);
+    const open = options(r, p.id, building)[0];
+    expect(open.enabled, open.reason).toBe(true);
+    expect(rec.have['planks']).toBe(8);
+    expect(hh.stores['planks']).toBeUndefined();
+  });
+
   it('is paid a day\'s wage in bouts when the work is another household\'s', () => {
     const r = rig('act-g');
     const v = village(r.sim);

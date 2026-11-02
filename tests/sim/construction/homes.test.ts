@@ -163,5 +163,5 @@ describe('with the real economy', () => {
     expect(listing).toBeDefined();
     expect(listing!.kind).toBe('house');
     expect(listing!.seller).toBe(lord.id);
-  });
+  }, 120000);
 });

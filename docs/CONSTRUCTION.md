@@ -7,7 +7,7 @@ headless: the territory, economy (`procure`), realm and advancement services are
 any may be missing.
 
 Files: `data.ts` (the content, typed) · `scope.ts` (who may build where) · `check.ts` (is this a valid site, where to put it) ·
-`geometry.ts` (footprints, overlap tests, the cell index) · `catalogue.ts` · `sites.ts` (place/upgrade/repair/demolish/cancel,
+`area.ts` (where the builder's tint goes) · `geometry.ts` (footprints, overlap tests, the cell index) · `catalogue.ts` · `sites.ts` (place/upgrade/repair/demolish/cancel,
 views) · `progress.ts` (materials, labour, the morning plan, completion) · `actions.ts` (the player's own bouts) · `save.ts` ·
 `core.ts` (shared runtime) · `index.ts` (wiring). Content: `src/content/construction.json`. Tests: `tests/sim/construction/`.
 
@@ -43,7 +43,7 @@ and — additive — `rank`, `role` and `agentFor`.
 | role | how | pays | outposts |
 |---|---|---|---|
 | `head` | any household head (a grown person who is not a child, a prisoner, or a non-head): the household's own land | the household | no |
-| `lord` | holder (or regent) of a manor, town, abbey or see title: that place; rank of the title | the holder's household (a regent builds with the ward's money) | no |
+| `lord` | holder (or regent) of a manor, town, abbey or see title: that place; rank of the title | the holder's household (a regent builds with the ward's money; a holder under 16 with a living regent does not build himself: the regent acts) | no |
 | `baron` | holder of a barony, county, kingdom (a county's seat, a kingdom's capital) or abbey: every place held, **and** the wild | the holder's household | yes |
 | `steward` | an office (steward, bailiff, castellan; the reeve for farm, civic and village works only; a mayor or alderman for civic works): that place, at the rank of the office | the lord's household for stewards, bailiffs, castellans and reeves; the person's own for a mayor | no |
 
@@ -94,7 +94,9 @@ priority:
    reference price; the head's pocket tops up the purse the economy pays from, and what is not spent goes back). The site
    remembers what was ordered and when it should arrive and does not order twice; it says what it waits for ("Waiting for 12
    planks: on the way from Dromore market, 1 day" / "none in store" / "the market is short"). Without `procure` the stores are all
-   it has. Goods that come in during the day are taken at once.
+   it has. Goods that come in during the day are taken at once, and a site the player stands at (or asks about) looks again at the
+   stores and the market at most once in ten game minutes (`refreshSupply`), so goods he has just brought home or bought do not
+   wait for the morning.
 2. **Labour**, up to what the materials in hand allow (labour may go as far as the worth of the delivered materials is of the
    whole): the household's members on the **`'build'` task** (the economy's `householdPlan`), the manor's **week-work share**
    (`realm.worksShare(settlement)` of the serfs' days owed, on the lord's own works) and **paid labourers** — adults of the place
@@ -125,6 +127,16 @@ dropped if that site is cancelled. Land within 300 m of it is the founder's: any
 there, and the buildings belong to the parent settlement for the economy (`BuildingState.settlement`, so homes there are lived in
 and mines worked by the parent's people).
 
+**Where the builder may build** (`area.ts`, `buildArea(person)`). The polygons (world m) builder mode tints with
+`renderer.setBuildArea`: the whole lands of every settlement in `scope(person).settlements` — the territory service's
+`landsPolygon(settlement)` when it has one (one outline or several; anything that is not a list of points is ignored), else a circle
+of 24 points of `landsRadius(settlement)` round the settlement's centre (2000/2500/3000 m by the kind of place when there is no
+territory service at all) — the 300 m circles round the outposts the person's House or places hold, and, for a household head with
+no say over his own place (a peasant, a master), the household's own plots: the garden parcels the territory says it holds
+(`landAt(...).household`), else the yards (10 m) round its buildings. Someone who is not a head and has no authority gets `[]`.
+The same array comes back until the territory's `version()`, the module's `version()`, the day, the places or outposts held or the
+household's home change (`tests/sim/construction/area.test.ts`).
+
 ## 5. Saved data and events
 
 `state.ext['construction']` (created on first use): `{ v, nextSite, nextOutpost, sites[], outposts[], razed[], stats }`. Everything
@@ -147,19 +159,23 @@ construction stages are keyed to `BuildingView.construction`, which the module w
 `check` 25–55 µs (real generated continent, 10 kinds, territory call excluded; budget 0.2 ms). Hourly work with 50 open sites:
 0.04–0.15 ms per game hour on average, the morning plan 1–6 ms in four shards (budget 0.5 ms per hour). Ten years of the whole continent (`tools/fullsim.ts`
 with a planner placing ~660 works) cost 4.77 ms per game hour against 4.75 without the module; population, prosperity and the
-other yearly figures stayed as they were. A placement with `suggestSpot`: 1–15 ms. `tests/sim/construction/construction.perf.test.ts` (`PERF=1`).
+other yearly figures stayed as they were. A placement with `suggestSpot`: 1–15 ms. `buildArea` from its cache: ~3 µs (a fresh one is a handful of 24-point circles). `tests/sim/construction/construction.perf.test.ts` (`PERF=1`).
 
 ## 7. Contract changes (all additive)
 
 `types.ts`: `BuildRequirement.deposits?`, `.max?`; `BuildScope.rank?`, `.role?`, `.agentFor?`; `PlaceOptions` (`outpost`, `priority`,
 `occupant`, `hired`) taken by `place`; `PlacementCheck.outpost?`, `.cost?`; `SiteView.level?`, `.builder?`, `.stage?`, `.hired?`,
-`.cost?`, `.materials?`; `OutpostView.house?`; `ConstructionApi.onSite?`, `.setHired?`, `.canManage?`, `.quote?` (optional, so fakes need
-not implement them).
+`.cost?`, `.materials?`; `OutpostView.house?`; `ConstructionApi.onSite?`, `.setHired?`, `.canManage?`, `.quote?`, `.buildArea?` (optional, so
+fakes need not implement them; the module always does). `buildArea(person: PersonId): ReadonlyArray<readonly P2[]>` is the one the
+coordinator asked for: the polygons where the person may build, cached per person and version. It reads the **optional**
+`TerritoryApi.landsPolygon?(settlement)` that the territory module adds (looked up by property, not typed, so the module compiles
+and runs before and without it).
 
 ## 8. Hand-offs
 
 * **Territory (A1):** the module asks `landAt` at a footprint's centre and corners (kind, settlement, `title`, `household` of a
   garden or town plot), `depositAt(x, z, kind)`, and reads `version()`; it reads `construction.outposts()` (now with `house`).
+  `buildArea` uses `landsPolygon?(settlement)` (one `P2[]` or a list of them) when it is there and `landsRadius` when not.
   Own-land building needs `landAt(...).household` set for gardens/town plots and kind `garden` or `town`.
 * **Core sim (not the module's to edit; for the integrator):** `succession.pickHome` and `family.HomeAllocator` choose "an empty
   home" by `!b.household` without looking at `b.construction`; the module works round it for homes it builds (above). They should
@@ -173,7 +189,9 @@ not implement them).
 * **Agents (A5):** `workersAt(site)` and `onSite(person)`; sites are ordinary buildings with `construction < 1` and, for an
   upgrade or repair, `SiteView.progress`. The module removes demolished buildings from `state.buildings` and `buildingsAt` (the
   same array, spliced) and bumps `buildingRevision`.
-* **Wave B, builder's mode:** `catalogue(person, settlement)` for the menu (`-1` = the wild), `check` every frame for the ghost
+* **Wave B, builder's mode:** `buildArea(person)` for the tint (`renderer.setBuildArea(construction.buildArea?.(me) ?? [])`; ask again
+  when `construction.version()` or the territory's changes, or simply each frame: it is a cache hit),
+  `catalogue(person, settlement)` for the menu (`-1` = the wild), `check` every frame for the ghost
   (the result has the footprint and the reason), `place(.., { outpost, occupant, hired, priority })`, `suggestSpot` for "place for
   me", `sites(settlement)` + `site(id)` for the queue and the site card (`status`, `note`, `missing`, `labourLeft`, `eta`,
   `stage`, `workers`), `upgrade / repair / demolish` with `quote` for their price, `cancel`, `setPriority`, `setHired`,

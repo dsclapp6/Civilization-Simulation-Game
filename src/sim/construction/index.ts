@@ -8,6 +8,7 @@ import type { P2 } from '../../core/math';
 import type { Simulation } from '../sim';
 import type { PersonId } from '../state';
 import type { Wave3Deps } from '../wave3deps';
+import { buildArea } from './area';
 import { evaluate, suggest } from './check';
 import { catalogue } from './catalogue';
 import { constructionProvider } from './actions';
@@ -141,6 +142,7 @@ export function installConstruction(sim: Simulation, deps: Wave3Deps): Construct
     },
     setHired: (person, site, hired) => setHired(C, person, site, hired),
     quote: (person, work, building) => quoteWork(C, person, work, building),
+    buildArea: (person) => buildArea(C, person),
     canManage: (person, site) => { const rec = C.sitesById.get(site); return !!rec && canManageSite(C, person, rec); },
   };
 

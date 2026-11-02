@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { BUILDING_KINDS } from '../../../src/content/types';
 import type { Person } from '../../../src/sim/state';
 import { mkHousehold, mkHouse, mkPerson } from '../builders';
-import { houseOf, manorLord, peasantWithGarden, rig, village, type Rig } from './helpers';
+import { houseOf, manorLord, peasantWithGarden, rig, setTime, village, type Rig } from './helpers';
 
 /** Gives a fake advancement service: only the listed techniques are commanded. */
 function techs(r: Rig, have: string[] = []): void {
@@ -166,6 +166,16 @@ describe('scope by rank', () => {
     expect(sc.household).toBe(lord.household);
     // while the child is the one who holds it, the child builds nothing
     expect(r.cons.scope(lord.id).role).not.toBe('lord');
+    // nor does a holder of fifteen, while a regent still acts for him
+    setTime(r.sim, 0.4, Math.floor(r.sim.absDay) + 1); // (scopes are worked out afresh each day)
+    lord.birthDay = r.sim.absDay - 15 * 16;
+    r.sim.state.touch(lord);
+    expect(r.cons.scope(lord.id).role).not.toBe('lord');
+    expect(r.cons.scope(uncle.id).role).toBe('lord');
+    // at sixteen the regency is over
+    setTime(r.sim, 0.4, Math.floor(r.sim.absDay) + 1);
+    lord.birthDay = r.sim.absDay - 16 * 16 - 1;
+    expect(r.cons.scope(lord.id).role).toBe('lord');
   });
 });
 

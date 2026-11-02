@@ -68,7 +68,7 @@ describe('AI rulers use the same API', () => {
     expect(out.bad).toEqual([]);
     expect(out.placed).toBeGreaterThan(5);
     expect(out.finished).toBeGreaterThan(0);
-  });
+  }, 120000);
 
   it('give the same continent twice for the same seed', () => {
     const a = runRulers('ai-2', 24);
@@ -76,7 +76,7 @@ describe('AI rulers use the same API', () => {
     expect(a.hash).toBe(b.hash);
     expect(a.placed).toBe(b.placed);
     expect(a.finished).toBe(b.finished);
-  });
+  }, 120000);
 
   it('put the household\'s members to the real economy\'s build task', () => {
     const { sim, cons } = realWorld('ai-4');

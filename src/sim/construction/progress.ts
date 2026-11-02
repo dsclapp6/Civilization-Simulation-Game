@@ -195,6 +195,22 @@ function supply(C: Construction, rec: SiteRec, payer: Household, ctx?: PlanCtx):
   return { text, coming, stuck };
 }
 
+/**
+ * Someone stands at a site with nothing to build with: what the stores hold now is taken in (and what is missing ordered), at most
+ * once in ten game minutes, so goods the player has just brought home or bought do not wait for the morning.
+ */
+export function refreshSupply(C: Construction, rec: SiteRec): void {
+  const hour = Math.floor(C.absDay * 144);
+  if (rec.closed !== 0 || C.supplyHour.get(rec.id) === hour) return;
+  C.supplyHour.set(rec.id, hour);
+  const payer = C.household(rec.household);
+  if (!payer) return;
+  const sup = supply(C, rec, payer);
+  if (sup.text) rec.note = sup.text;
+  C.touch();
+  C.bump();
+}
+
 /** Worker-days the job may still take given the materials in hand. */
 export function capacity(rec: SiteRec): number {
   const left = rec.labour - rec.done;

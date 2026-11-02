@@ -13,7 +13,7 @@ import type { Person } from '../state';
 import type { Construction } from './core';
 import { stoneWork } from './data';
 import { progressOf, stageOf } from './sites';
-import { capacity, putIn, wageOfSite } from './progress';
+import { capacity, putIn, refreshSupply, wageOfSite } from './progress';
 import type { SiteRec } from './save';
 
 /** Seconds a bout takes at speed 1, as in the economy's other work (≈ half a game hour). */
@@ -140,6 +140,7 @@ export function constructionProvider(C: Construction): ActionProvider {
       const steps = stepsFor(rec);
       const own = p.household === rec.household;
       const wage = own ? 0 : wageOfSite(rec);
+      if (rec.labour - rec.done > 0.01 && capacity(rec) <= 0.01) refreshSupply(C, rec);
       const reason = blockedFor(C, p, rec);
       const pct = Math.round(progressOf(rec) * 100);
       const o: ActionOption = {

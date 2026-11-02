@@ -189,4 +189,11 @@ export interface ConstructionApi {
   canManage?(person: PersonId, site: number): boolean;
   /** What improving, mending or pulling down a building would cost (and whether this person may order it), without ordering it. */
   quote?(person: PersonId, work: 'upgrade' | 'repair' | 'demolish', building: number): Result & { cost?: BuildCost; level?: number };
+  /**
+   * Where this person may build, as polygons (world m) for builder mode's tint (`GameRenderer.setBuildArea`): the lands of every
+   * settlement in `scope(person).settlements` (the territory service's `landsPolygon(settlement)` when it has one, else a circle of
+   * its `landsRadius`), the land round the outposts they hold, and — for a household head with no say over the place — the
+   * household's own plots. Cached: the same array comes back until the territory, the sites, the day or their holdings change.
+   */
+  buildArea?(person: PersonId): ReadonlyArray<readonly P2[]>;
 }

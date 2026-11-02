@@ -121,8 +121,9 @@ function compute(C: Construction, p: Person, held: Title[], regentOf: Title[]): 
   for (const t of titles) {
     const place = demesnePlace(C, t);
     if (place < 0 || !C.settlementById.has(place)) continue;
-    // a regent builds with the ward's money, in the ward's name
+    // a regent builds with the ward's money, in the ward's name; a holder under sixteen leaves it to him
     const holder = t.holder ? C.living(t.holder) : undefined;
+    if (holder && holder.id === p.id && ageYears(p, C.absDay) < 16 && t.regent && t.regent !== p.id && C.living(t.regent)) continue;
     const payerPerson = holder && holder.id !== p.id ? holder : p;
     const payer = householdOf(C, payerPerson) ?? own;
     if (!payer) continue;

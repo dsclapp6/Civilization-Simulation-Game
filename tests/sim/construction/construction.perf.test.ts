@@ -72,6 +72,27 @@ describe('construction budgets', () => {
     void BUILDINGS;
   });
 
+  it('gives the build area of a lord from the cache in microseconds', () => {
+    const { sim, cons } = setup();
+    // the holder with the most places in his scope: an earl or a king's baron
+    let best = 0, who = 0;
+    for (const t of sim.state.titles.values()) {
+      if (!t.holder) continue;
+      const n = cons.scope(t.holder).settlements.length;
+      if (n > best) { best = n; who = t.holder; }
+    }
+    expect(best).toBeGreaterThanOrEqual(2);
+    const first = cons.buildArea!(who);
+    expect(first.length).toBeGreaterThanOrEqual(best);
+    const N = 20000;
+    const t0 = performance.now();
+    for (let i = 0; i < N; i++) cons.buildArea!(who);
+    const hit = (performance.now() - t0) / N;
+    console.log(`buildArea: ${(hit * 1000).toFixed(2)} µs per call from the cache (${best} places, ${first.length} polygons)`);
+    expect(cons.buildArea!(who)).toBe(first);
+    expect(hit).toBeLessThan(0.05);
+  });
+
   it('does the hourly work of fifty sites in under 0.5 ms', () => {
     const { sim, cons } = setup();
     const st = sim.state;
