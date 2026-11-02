@@ -123,7 +123,7 @@ on the holy day, when too hungry or hurt, or with nothing to build with it says 
 **Outposts.** In the wild, a baron or greater places a *camp, mine, quarry, saltpan, lumber camp, dock, tent, tower, palisade or
 motte* with a name (`PlaceOptions.outpost`; a default is made: "Dromore Quarry"). The outpost record (`OutpostView`: id, name,
 parent settlement — the nearest the founder holds — position, deposit id, founded day, House) is created with the first site and
-dropped if that site is cancelled. Land within 300 m of it is the founder's: anything a lord could raise at home can be raised
+dropped if that site is cancelled. Land within 600 m of it (the reach the territory service gives an outpost) is the founder's: anything a lord could raise at home can be raised
 there, and the buildings belong to the parent settlement for the economy (`BuildingState.settlement`, so homes there are lived in
 and mines worked by the parent's people).
 
@@ -131,7 +131,7 @@ and mines worked by the parent's people).
 `renderer.setBuildArea`: the whole lands of every settlement in `scope(person).settlements` — the territory service's
 `landsPolygon(settlement)` when it has one (one outline or several; anything that is not a list of points is ignored), else a circle
 of 24 points of `landsRadius(settlement)` round the settlement's centre (3000 m for a city, 2500 a town, 2000 a village, 1200 any
-other, when there is no territory service at all; neighbouring circles overlap, so the renderer should tint the union) — the 300 m circles round the outposts the person's House or places hold, and, for a household head with
+other, when there is no territory service at all; neighbouring circles overlap, so the renderer should tint the union) — the 600 m circles round the outposts the person's House or places hold, and, for a household head with
 no say over his own place (a peasant, a master), the household's own plots: the garden parcels the territory says it holds
 (`landAt(...).household`), else the yards (10 m) round its buildings. Someone who is not a head and has no authority gets `[]`.
 The same array comes back until the territory's `version()`, the module's `version()`, the day, the places or outposts held or the
@@ -175,7 +175,10 @@ and runs before and without it).
 
 * **Territory (A1):** the module asks `landAt` at a footprint's centre and corners (kind, settlement, `title`, `household` of a
   garden or town plot), `depositAt(x, z, kind)`, and reads `version()`; it reads `construction.outposts()` (now with `house`).
-  `buildArea` uses `landsPolygon?(settlement)` (one `P2[]` or a list of them) when it is there and `landsRadius` when not.
+  `buildArea` uses `landsPolygon?(settlement)` (one `P2[]` as A1 gives it, or a list of them) when it is there and `landsRadius`
+  when not; a castle that shares its village's outline (the same array) is listed once. Outposts: A1's `outpostPolygons()` claims
+  about 600 m round an outpost and construction lets the founder raise within `OUTPOST_REACH` = 600 m of it (`check.ts`; the same
+  constant gives `buildArea`'s circles). If A1 changes its reach, change that one constant.
   Own-land building needs `landAt(...).household` set for gardens/town plots and kind `garden` or `town`.
 * **Core sim (not the module's to edit; for the integrator):** `succession.pickHome` and `family.HomeAllocator` choose "an empty
   home" by `!b.household` without looking at `b.construction`; the module works round it for homes it builds (above). They should

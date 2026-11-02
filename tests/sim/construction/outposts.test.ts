@@ -56,7 +56,10 @@ describe('outposts', () => {
     const res = r.cons.place(earl.id, 'hovel', dep.x + 60, dep.z + 60, 0);
     expect(res.ok, res.reason).toBe(true);
     expect(r.cons.outposts()).toHaveLength(1);
-    // anything fits in its land that the founder could build at home, but only near it
+    // anything fits in its land that the founder could build at home, but only near it: the 600 m the territory gives an outpost
+    const id = r.cons.outposts()[0].id;
+    expect(r.cons.check(earl.id, 'hovel', dep.x + 500, dep.z, 0).outpost?.id).toBe(id);
+    expect(r.cons.check(earl.id, 'hovel', dep.x + 700, dep.z, 0).outpost?.id ?? 0).not.toBe(id);
     const far = r.cons.check(earl.id, 'hovel', dep.x + 900, dep.z, 0);
     expect(far.outpost?.id ?? 0).toBe(0);
   });

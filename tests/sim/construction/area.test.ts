@@ -126,8 +126,8 @@ describe('the area a person may build on', () => {
     const after = r.cons.buildArea!(earl.id);
     expect(after).toHaveLength(before.length + 1);
     expect(inside(after, W.x, W.z)).toBe(true);
-    expect(inside(after, W.x + 250, W.z)).toBe(true);
-    expect(inside(after, W.x + 400, W.z)).toBe(false);
+    expect(inside(after, W.x + 500, W.z)).toBe(true);
+    expect(inside(after, W.x + 700, W.z)).toBe(false);
     // the knight of the village has no part in it
     expect(inside(r.cons.buildArea!(manorLord(r.sim, v.id).id), W.x, W.z)).toBe(false);
   });

@@ -13,8 +13,8 @@ import { noScopeReason, rankReason, scopeInfo, lordTitleAt, type Auth, type Scop
 import type { OutpostRec } from './save';
 import type { PlacementCheck } from './types';
 
-/** How far from an outpost's centre its land reaches (m). */
-export const OUTPOST_REACH = 300;
+/** How far from an outpost's centre its land reaches (m): the same ~600 m the territory service calls the outpost's own. */
+export const OUTPOST_REACH = 600;
 const RIVER_REACH = 25;
 const WATER_RING = 14;
 const RISE_NEEDED = 1.5;

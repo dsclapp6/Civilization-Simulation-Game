@@ -5,7 +5,7 @@ import { hash3, pointInPolygon } from '../../core/math';
 import { CHUNKS_PER_SIDE, CHUNK_SIZE } from '../../world/types';
 import { formatMoney } from '../money';
 import type { BuildingState, Household, PersonId } from '../state';
-import { evaluate, depositAt, nearestHeld, type Standing } from './check';
+import { evaluate, depositAt, nearestHeld, OUTPOST_REACH, type Standing } from './check';
 import type { Construction } from './core';
 import { footprintCorners } from './geometry';
 import {
@@ -310,13 +310,16 @@ export function repairCost(kind: BuildingKind, level: number, damage: number): B
   return { goods, labour: Math.max(0.5, Math.round(base.labour * REPAIR.labour * d * 2) / 2), pence: Math.round(base.pence * REPAIR.pence * d) };
 }
 
+/** The outpost a building stands at: the nearest of its settlement's within reach (0 = none). */
 function outpostIdOf(C: Construction, b: BuildingState): number {
+  let best = 0, bd = OUTPOST_REACH * OUTPOST_REACH;
   for (const o of C.save.outposts) {
     if (o.settlement !== b.settlement) continue;
     const dx = b.x - o.x, dz = b.z - o.z;
-    if (dx * dx + dz * dz <= 300 * 300) return o.id;
+    const d = dx * dx + dz * dz;
+    if (d <= bd) { bd = d; best = o.id; }
   }
-  return 0;
+  return best;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -415,8 +418,7 @@ function dropEmptyOutpost(C: Construction, rec: SiteRec): void {
   if (!o) return;
   for (const s of C.save.sites) if (s !== rec && s.outpost === o.id && !(s.closed !== 0 && s.status === 'cancelled')) return;
   for (const b of C.state.buildingsAt.get(o.settlement) ?? []) {
-    const dx = b.x - o.x, dz = b.z - o.z;
-    if (dx * dx + dz * dz <= 300 * 300 && b.plot < 0 && b.id !== rec.building) return;
+    if (b.plot < 0 && b.id !== rec.building && outpostIdOf(C, b) === o.id) return;
   }
   C.save.outposts.splice(C.save.outposts.indexOf(o), 1);
 }
