@@ -10,6 +10,7 @@ import {
 import { alehouse, guildhall, marketCross, marketHall, marketStall, tavern, warehouse } from './social';
 import { abbeyChurch, cathedral, chapel, church, cloister, infirmary } from './church';
 import { gallows, school, stocks, well } from './civic';
+import { clayPit, gaol, lumberCamp, saltPan, slaughterhouse } from './civ';
 import { archeryButts, barracks, curtainWall, gatehouse, greatHall, keepStone, motte, palisade, tent, trainingYard, wallTower } from './defence';
 
 export type Recipe = (ctx: Ctx, def: BuildingDef) => void;
@@ -25,7 +26,6 @@ export const RECIPES: Record<BuildingKind, Recipe> = {
   well, stocks, gallows, school,
   palisade, wall: curtainWall, tower: wallTower, gatehouse, motte, keep_stone: keepStone,
   great_hall: greatHall, barracks, archery_butts: archeryButts, training_yard: trainingYard, tent,
-  // civilization pass: stand-ins until their own models are made (wave B, src/assets)
-  slaughterhouse: (c, d) => tannery(c, d), clay_pit: (c, d) => quarry(c, d), salt_pan: (c, d) => quarry(c, d),
-  lumber_camp: (c, d) => sawpit(c, d), gaol: (c, d) => granary(c, d),
+  // civilization pass (docs/CIV.md §5, §7, §8): the new works and the lock-up
+  slaughterhouse, clay_pit: clayPit, salt_pan: saltPan, lumber_camp: lumberCamp, gaol,
 };

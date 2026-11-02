@@ -309,6 +309,16 @@ export function createFxLayer(u: SharedUniforms, envRef: () => AssetEnvironment)
           write(alpha, sp);
         }
         break;
+      case 'steam':
+        // quenching iron, brine boiling: a burst of white vapour that rises fast, billows out and is gone in a breath
+        for (let i = 0; i < N(6); i++) {
+          at(e, 0.3); sp.vx = (rnd() - 0.5) * 0.35; sp.vy = 1.1 + rnd() * 0.9; sp.vz = (rnd() - 0.5) * 0.35;
+          col(rnd() < 0.5 ? 0xf4f6f8 : 0xe2e7ec); sp.a = 0.42 + rnd() * 0.12;
+          sp.life = 1.2 + rnd() * 1.0; sp.s0 = 0.22 * Math.sqrt(k); sp.s1 = (1.3 + rnd() * 0.5) * Math.sqrt(k);
+          sp.grav = -0.45; sp.drag = 1.3; sp.wind = 0.7; sp.shape = SHAPE.soft; sp.delay = i * 0.04;
+          write(alpha, sp);
+        }
+        break;
       case 'hearth_smoke':
         for (let i = 0; i < N(1); i++) {
           // wood smoke: a dense blue-grey plume that thins as it spreads (alpha falls with growth)

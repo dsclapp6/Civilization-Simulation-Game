@@ -22,7 +22,7 @@ export interface AnimPart {
 }
 
 export interface FlagSpec { pos: V3; w: number; h: number; color: number; color2?: number; kind: 'banner' | 'pennant' | 'standard'; }
-export interface EmitterSpec { kind: 'sparks' | 'smoke' | 'splash' | 'fire' | 'hearth_smoke' | 'dust'; pos: V3; rate: number; }
+export interface EmitterSpec { kind: 'sparks' | 'smoke' | 'splash' | 'fire' | 'hearth_smoke' | 'dust' | 'steam'; pos: V3; rate: number; }
 
 export interface RecipeOut {
   doors: P2[];

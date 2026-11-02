@@ -17,7 +17,7 @@ export const SCATTER_KINDS: ScatterKind[] = [
   'bush', 'bramble', 'reeds', 'fern', 'grass_tuft', 'flowers',
   'rock_small', 'rock_large', 'boulder', 'stump', 'log', 'deadtree',
 ];
-export const FX_KINDS: FxEvent['kind'][] = ['dust', 'blood', 'sparks', 'smoke', 'fire', 'splash', 'chips', 'chaff', 'impact', 'hearth_smoke'];
+export const FX_KINDS: FxEvent['kind'][] = ['dust', 'blood', 'sparks', 'smoke', 'fire', 'splash', 'chips', 'chaff', 'impact', 'hearth_smoke', 'steam'];
 export const CATEGORIES: BuildingCategory[] = ['home', 'farm', 'work', 'social', 'trade', 'church', 'civic', 'defence', 'camp'];
 
 export interface Label { text: string; pos: THREE.Vector3; sub?: string; }
