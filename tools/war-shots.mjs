@@ -59,7 +59,8 @@ async function freshPage() {
   page.on('pageerror', (e) => console.log(`[pageerror] ${e.message}`));
   page.on('crash', () => console.log('[page crashed]'));
 }
-const base = `http://localhost:${PORT}/?seed=${encodeURIComponent(seed)}&quality=${quality}&shots=1`;
+const men = opt('men', '32');
+const base = `http://localhost:${PORT}/?seed=${encodeURIComponent(seed)}&quality=${quality}&shots=1&men=${men}`;
 
 async function load(extra = 'autostart=1&time=0.42') {
   await freshPage();
@@ -69,6 +70,8 @@ async function load(extra = 'autostart=1&time=0.42') {
   await page.evaluate(() => window.__game.freeze(true));
   // the first-minutes guide, the toasts and the message feed would cover the scene
   await page.addStyleTag({ content: '.mu-toasts, .mu-guide, .mu-feed, .mu-whatnow { display: none !important; }' });
+  // nameplates over every head cost the renderer dearly in a crowd; the picture is clearer without them
+  if (!process.env.WAR_LABELS) await page.evaluate(() => window.__game.host.setSettings({ labels: false }));
 }
 /** Afternoon light (the calendar day stays where it is). */
 const afternoon = () => page.evaluate(() => { const c = window.__m.sim.clock; const d = Math.floor(c.absDay); const t = c.absDay - d; c.state.absDay = d + (t > 0.45 ? 1 : 0) + 0.45; });
@@ -76,7 +79,7 @@ async function shot(name, { settle = true } = {}) {
   if (process.env.WAR_DEBUG) console.log('war: shot', name, 'begins');
   // the renderer's own settle() builds everything in view in one blocking call, which on a shared box with little memory to spare can
   // take the tab down; drawing frames lets it stream within its usual budget, with a pause for the garbage collector between them
-  if (settle) for (let i = 0; i < 24; i++) { await page.evaluate(() => window.__game.draw()); await page.waitForTimeout(60); }
+  if (settle) for (let i = 0; i < 5; i++) { const t0 = Date.now(); await page.evaluate(() => window.__game.draw()); if (process.env.WAR_DEBUG) console.log('war: draw', i, Date.now() - t0, 'ms'); await page.waitForTimeout(60); }
   if (process.env.WAR_DEBUG) console.log('war: shot', name, 'streamed');
   // the HUD is the UI's frame: draw (the camera moves), let the UI update from that camera (banners are projected), draw again
   await page.evaluate(() => { const g = window.__game; g.draw(); g.tick(0.07); g.draw(); });
@@ -99,6 +102,9 @@ async function prepare() {
     const player = () => st.persons.get(st.run.playerId);
     // the calendar moves with the frames (a saver may hold the hooks back in tight loops): 8x speed, a day is 75 s of it
     const passHours = (n) => { sim.dispatch({ type: 'setSpeed', speed: 8 }); g.advance((n * 600) / 24 / 8 + 0.15); sim.dispatch({ type: 'setSpeed', speed: 1 }); };
+    // a smaller line in the detail fight: the renderer builds every man of it at the first frame, and on a shared box that is what runs it out of memory
+    const { CFG } = await import('/src/sim/military/config.ts');
+    CFG.detailMax = Number(new URLSearchParams(location.search).get('men') ?? 32);
     window.__m = { g, s, sim, mil, M, st, w, player, passHours };
   });
 }
@@ -143,6 +149,33 @@ async function waitForRoom(limitMB = Number(process.env.WAR_ROOM_MB ?? 8200), ma
   console.log(`war: memory in use ${Math.round(used())} MB (waited ${Math.round((Date.now() - t0) / 1000)} s)`);
 }
 
+// memory probe: the page idle and frozen, then with a battle running; prints the JS heap every 20 s (the process memory is watched from outside)
+async function idleScene(battle) {
+  await load();
+  await prepare();
+  const heap = () => page.evaluate(() => Math.round(performance.memory.usedJSHeapSize / 1e6));
+  console.log('war: idle heap', await heap());
+  for (let i = 0; i < 4; i++) { await page.waitForTimeout(20000); console.log('war: idle heap', await heap()); }
+  if (battle) {
+    await page.evaluate(() => { const { mil, st, sim, M } = window.__m; const houses = [...st.houses.values()].filter((h) => (h.kind === 'noble' || h.kind === 'royal') && !h.extinct).sort((a, b) => mil.forces(b.id).strength - mil.forces(a.id).strength); sim.switchTo(houses[0].head); mil.callLevy(); });
+    for (let i = 0; i < 4; i++) { await page.waitForTimeout(20000); console.log('war: after levy heap', await heap()); }
+  }
+}
+
+// memory probe 2: the player stands at the battle field, nothing else (is it the place or the men that costs the memory?)
+async function placeScene() {
+  await load();
+  await prepare();
+  const b = await page.evaluate(() => { const p = window.__m.s.services.player.body(); return { x: p.x, z: p.z }; });
+  const spot = await findField(b.x + 600, b.z + 600);
+  console.log('war: place spot', JSON.stringify(spot));
+  await page.evaluate((spot) => { window.__m.s.services.player.placeAt(spot.x, spot.z, 0); window.__game.advance(0.5); }, spot);
+  await page.waitForTimeout(8000);
+  for (let i = 0; i < 6; i++) { await page.evaluate(() => window.__game.draw()); console.log('war: drew', i); await page.waitForTimeout(3000); }
+  await shot('probe', { settle: false });
+  await page.waitForTimeout(8000);
+}
+
 /** A scene that fails (the tab crashed, a hook missing) is tried again from a fresh page, then reported; the next scene still runs. */
 async function scene(name, fn, tries = 6) {
   for (let i = 1; i <= tries; i++) {
@@ -152,6 +185,9 @@ async function scene(name, fn, tries = 6) {
 }
 
 try {
+  if (want('place')) await placeScene();
+  if (want('idle')) await idleScene(false);
+  if (want('idlelevy')) await idleScene(true);
   // ---------------------------------------------------------------------------------------------- a field battle, the player commanding
   if (want('battle', 'wheel', 'tactical', 'orders')) await scene('battle', async () => {
     await load();
@@ -200,9 +236,9 @@ try {
     console.log('war: projection', JSON.stringify(await page.evaluate(() => {
       const { mil, s } = window.__m; const b = s.services.player.body(); const cam = s.renderer.getCamera(); const r = s.controls;
       const d = cam.getWorldDirection(new cam.position.constructor());
-      const row = (g) => { const p = r.project(g.x, 2, g.z); return [g.key, Math.round(g.x), Math.round(g.z), p ? [Math.round(p.x), Math.round(p.y)] : null]; };
+      const row = (g) => { const hy = window.__m.w.heightAt(g.x, g.z); const p = r.project(g.x, hy + 4.2, g.z); return [g.key, Math.round(g.x), Math.round(g.z), Math.round(hy), p ? [Math.round(p.x), Math.round(p.y)] : null]; };
       const pb = r.project(b.x, b.y + 1.5, b.z);
-      return { cam: [cam.position.x, cam.position.y, cam.position.z].map(Math.round), dir: [d.x, d.y, d.z].map((v) => +v.toFixed(2)), yaw: +s.renderer.getCameraYaw().toFixed(2), body: [Math.round(b.x), Math.round(b.z), +b.yaw.toFixed(2)], bodyScreen: pb ? [Math.round(pb.x), Math.round(pb.y)] : null, own: mil.battleGroups('own').map(row), enemy: mil.battleGroups('enemy').map(row), win: [innerWidth, innerHeight] };
+      return { cam: [cam.position.x, cam.position.y, cam.position.z].map(Math.round), dir: [d.x, d.y, d.z].map((v) => +v.toFixed(2)), yaw: +s.renderer.getCameraYaw().toFixed(2), body: [Math.round(b.x), Math.round(b.y), Math.round(b.z), +b.yaw.toFixed(2), Math.round(window.__m.w.heightAt(b.x, b.z))], bodyScreen: pb ? [Math.round(pb.x), Math.round(pb.y)] : null, own: mil.battleGroups('own').map(row), enemy: mil.battleGroups('enemy').map(row), win: [innerWidth, innerHeight] };
     })));
     console.log('war: banners', JSON.stringify(await page.evaluate(() => [...document.querySelectorAll('.mu-bt-banner')].map((e) => [e.textContent, e.style.display, e.style.left, e.style.top, e.style.getPropertyValue('--lift')]))));
     if (want('wheel', 'orders')) {

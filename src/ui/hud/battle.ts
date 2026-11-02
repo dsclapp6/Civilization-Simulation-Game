@@ -152,13 +152,10 @@ export function ensureBattleStyle(): void {
 export class BannerLayer {
   readonly el = h('div.mu-bt-banners');
   private readonly items = new Map<string, HTMLElement>();
-  private groundY: (x: number, z: number) => number = () => 0;
+  constructor(private readonly ctx: HudPartCtx, private readonly draggable = false) {}
 
-  constructor(private readonly ctx: HudPartCtx, private readonly draggable = false) {
-    const g = ctx.game();
-    // the world's own height: the zone's navigation knows the ground only where it has loaded it (and answers 0 elsewhere)
-    if (g) this.groundY = (x, z) => g.sim.world.heightAt(x, z);
-  }
+  /** The world's own height (the zone's navigation knows the ground only where it has loaded it). The game is looked up each time: the HUD is built before a run exists. */
+  private groundY(x: number, z: number): number { return this.ctx.game()?.sim.world.heightAt(x, z) ?? 0; }
 
   /** Puts a banner over each group at its place on the screen; hides those behind the camera or off it. */
   update(own: readonly BattleGroupView[], enemy: readonly BattleGroupView[], selected: GroupKey | null): void {
