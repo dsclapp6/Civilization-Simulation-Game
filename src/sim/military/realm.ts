@@ -25,9 +25,9 @@ export class Realm {
   constructor(private readonly M: Mil) {}
 
   /** Drops the cache (a title moved, a war began). */
-  invalidate(): void { this.day = -99; }
+  invalidate(): void { this.day = -99; this.M.alertStamp++; }
   /** Only who is at war with whom changed (a war, a stance, a feud): the lords and domains stand, the enmity memos go. */
-  invalidateEnmity(): void { this.chains.clear(); this.enemies.clear(); this.hostiles.clear(); }
+  invalidateEnmity(): void { this.chains.clear(); this.enemies.clear(); this.hostiles.clear(); this.M.alertStamp++; }
 
   private fresh(): void {
     const now = this.M.sim.absDay;

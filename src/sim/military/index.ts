@@ -16,7 +16,9 @@ import { dailyCampaign, defendHour, hourlyArmies, queueHour, thinkHour } from '.
 import { CareerSystem } from './career';
 import { CFG } from './config';
 import { ForceCache, armsQuality, levySizeFor, recruitTests } from './forces';
-import { captiveOf, captiveView, payRansom, ransomValue, tickCaptives, adoptCaptive } from './harm';
+import { AlertSystem } from './alert';
+import { battleGroupsOf, orderGroupOf } from './command';
+import { captiveOf, captiveView, freeCaptive, holdCaptive, payRansom, ransomValue, tickCaptives, adoptCaptive } from './harm';
 import { installMarkers } from './markers';
 import { RaidSystem } from './raid';
 import { Realm } from './realm';
@@ -46,6 +48,7 @@ export function installMilitary(sim: Simulation, deps: Wave3Deps): MilitaryRunti
   M.sieges = new SiegeSystem(M);
   M.raids = new RaidSystem(M);
   M.career = new CareerSystem(M);
+  M.alerts = new AlertSystem(M);
   const offs: Array<() => void> = [];
   const muster = new MusterView(M);
 
@@ -123,6 +126,10 @@ export function installMilitary(sim: Simulation, deps: Wave3Deps): MilitaryRunti
   const prevHostile = sim.hostileNear;
   sim.hostileNear = () => M.data.battles.some((b) => b.fight !== 0 && b.result === '') || prevHostile();
   offs.push(installMarkers(M));
+  // gates and breaches for the renderer (and anything else that draws): cheap, the list is rebuilt only when it can have changed
+  sim.view.setSource('forts', () => M.alerts.forts());
+  sim.view.setSource('fortsVersion', () => M.alerts.version());
+  offs.push(() => { sim.view.setSource('forts', undefined); sim.view.setSource('fortsVersion', undefined); });
 
   const toView = (id: number): ArmyView | undefined => { const a = M.army(id); return a ? viewOf(M, a) : undefined; };
 
@@ -207,6 +214,14 @@ export function installMilitary(sim: Simulation, deps: Wave3Deps): MilitaryRunti
       M.career.joinSelf(a);
       return { ok: true };
     },
+
+    // ---- civilization pass, wave B: alert and forts, captives taken outside battle, troop groups (docs/WAR.md) ----
+    alertOf: (settlement) => M.alerts.alertOf(settlement),
+    fortState: (building) => M.alerts.fortState(building),
+    battleGroups: (side) => battleGroupsOf(M, side),
+    orderGroup: (group, order) => orderGroupOf(M, group, order),
+    takeCaptive: (captive, captor, opts) => holdCaptive(M, captive, captor, opts),
+    release: (captive, reason) => freeCaptive(M, captive, reason),
   };
   void toView; void nearestSettlementId; void ageYears; void setRank; void dist; void UNIT_CHAR;
   // A detail fight cannot resume after a load (it lived in the arena): its battle is settled by the macro model at once, with the

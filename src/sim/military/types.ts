@@ -1,7 +1,8 @@
 // Military module (wave 3): saved records and the full API behind `sim.services.military`.
 // The cross-module surface (ArmyView, MilitaryApi) lives in sim/wave3.ts; everything here is additive.
+import type { FortView } from '../../core/view';
 import type { HouseId, PersonId } from '../state';
-import type { ArmyView, MilitaryApi } from '../wave3';
+import type { AlertLevel, ArmyView, BattleGroupView, GroupKey, GroupOrder, MilitaryApi } from '../wave3';
 
 /** Kinds of fighting man. Crossbowmen are town militia and mercenaries; mercenaries are hired on contract. */
 export type UnitKind = 'levy' | 'archer' | 'crossbow' | 'man_at_arms' | 'sergeant' | 'knight' | 'mercenary';
@@ -346,4 +347,12 @@ export interface MilitaryRuntime extends MilitaryApi {
   joinArmy(army: number, person?: PersonId): Result;
   /** Call the levy of the player's own manors (a lord). */
   callLevy(): Result;
+
+  // ---- civilization pass, wave B (docs/WAR.md): the contract's optional members, always present here ----
+  alertOf(settlement: number): AlertLevel;
+  fortState(building: number): FortView | null;
+  battleGroups(side?: 'own' | 'enemy'): readonly BattleGroupView[];
+  orderGroup(group: GroupKey, order: GroupOrder): Result;
+  takeCaptive(captive: PersonId, captor: PersonId, opts?: { settlement?: number; reason?: string }): Result;
+  release(captive: PersonId, reason: 'escaped' | 'pardoned' | 'served' | 'ransomed'): void;
 }
