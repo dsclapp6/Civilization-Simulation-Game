@@ -41,6 +41,8 @@ export class SettlementPlaces {
   constructor(readonly settlement: Settlement, private readonly state: GameState, private readonly world: WorldModel) {
     this.buildings = state.buildingsAt.get(settlement.id) ?? [];
     for (const b of this.buildings) {
+      // a building raised in play is a place of daily life only once it is finished (until then it is a site: sites.ts)
+      if (b.plot < 0 && b.construction < 1) continue;
       let list = this.byKind.get(b.kind);
       if (!list) { list = []; this.byKind.set(b.kind, list); }
       list.push(b);
@@ -128,6 +130,7 @@ const EMPTY_P2: readonly P2[] = [];
 export class Places {
   private readonly cache = new Map<number, SettlementPlaces>();
   private revision = -1;
+  private buildingCount = -1;
   private readonly byId: Map<number, Settlement>;
   /** For each settlement without a market: the nearest settlement that has one (within reach), or −1. */
   private readonly marketTown = new Map<number, number>();
@@ -138,7 +141,10 @@ export class Places {
   }
 
   of(settlementId: number): SettlementPlaces | null {
-    if (this.revision !== this.state.buildingRevision) { this.cache.clear(); this.revision = this.state.buildingRevision; }
+    // (a building put up or pulled down changes the count even when nobody touched the revision)
+    if (this.revision !== this.state.buildingRevision || this.buildingCount !== this.state.buildings.size) {
+      this.cache.clear(); this.revision = this.state.buildingRevision; this.buildingCount = this.state.buildings.size;
+    }
     let p = this.cache.get(settlementId);
     if (!p) {
       const s = this.byId.get(settlementId);

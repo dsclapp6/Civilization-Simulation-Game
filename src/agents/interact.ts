@@ -52,6 +52,7 @@ interface Index {
   buildings: CellIndex | null;
   buildingList: BuildingState[];
   buildingRev: number;
+  buildingCount: number;
 }
 const indexes = new WeakMap<object, Index>();
 
@@ -66,13 +67,14 @@ function indexFor(z: Zone): Index {
         for (const q of world.parcels[i].poly) { if (q.x < x0) x0 = q.x; if (q.x > x1) x1 = q.x; if (q.z < z0) z0 = q.z; if (q.z > z1) z1 = q.z; }
         b[0] = x0; b[1] = z0; b[2] = x1; b[3] = z1;
       }),
-      buildings: null, buildingList: [], buildingRev: -1,
+      buildings: null, buildingList: [], buildingRev: -1, buildingCount: -1,
     };
     indexes.set(z, ix);
   }
   const st = z.state;
-  if (ix.buildingRev !== st.buildingRevision) {
+  if (ix.buildingRev !== st.buildingRevision || ix.buildingCount !== st.buildings.size) {
     ix.buildingRev = st.buildingRevision;
+    ix.buildingCount = st.buildings.size;
     ix.buildingList = [...st.buildings.values()];
     const list = ix.buildingList;
     ix.buildings = new CellIndex(32, list.length, (i, b) => {
@@ -149,7 +151,8 @@ export function findInteractables(zone: Zone, x: number, z: number, yaw: number,
     // the point is always the door, so a caller checking its action range against (x, z) agrees with `distance`
     void dFoot;
     if (dd > range) return;
-    push({ kind: 'building', id: b.id }, door.x, door.z, dd, buildingName(names, b), 0.5);
+    const name = buildingName(names, b);
+    push({ kind: 'building', id: b.id }, door.x, door.z, dd, b.construction < 1 ? `${name} (being built)` : name, 0.5);
   });
   // trees and rocks
   zone.nav.obstacles.forSolids(x - range, z - range, x + range, z + range, (ch, i) => {

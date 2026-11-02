@@ -21,6 +21,7 @@ import { Nav } from './nav';
 import { canJog, runSpeed, walkSpeed } from './pace';
 import { makePlate, type PlateContext } from './plates';
 import { Places } from './places';
+import { SiteWork } from './sites';
 import { newIntent, Schedule, type Intent } from './schedule';
 import { propsFor } from './props';
 import type {
@@ -122,7 +123,10 @@ export class Zone {
     this.economy = deps.economy;
     this.nav = new Nav(sim.world, sim.state, sim.view);
     this.places = new Places(sim.state, sim.world);
-    this.sched = new Schedule({ state: sim.state, world: sim.world, places: this.places, economy: deps.economy });
+    this.sched = new Schedule({
+      state: sim.state, world: sim.world, places: this.places, economy: deps.economy,
+      sites: new SiteWork(() => sim.services.construction, deps.economy, () => sim.absDay),
+    });
     this.fauna = new AnimalSystem(this);
     this.plateCtx = { state: sim.state, world: sim.world, social: deps.social };
     // conversations refuse people the schedules have asleep indoors (SocialApi.setHooks merges into the current hooks)

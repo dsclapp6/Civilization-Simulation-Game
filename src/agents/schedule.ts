@@ -23,6 +23,7 @@ import type { Strip, WorldModel } from '../world/types';
 import { doorStand, frontPoint, type DoorPoint } from './geometry';
 import { DETOUR, MAX_HURRY, WALK_BASE, walkSpeed } from './pace';
 import { Places, type SettlementPlaces } from './places';
+import { siteSpot, type SiteSpot, type SiteWork } from './sites';
 import type { Activity, Whereabouts } from './types';
 
 // ---------------------------------------------------------------------------------------------
@@ -155,7 +156,7 @@ const WORK: Partial<Record<CareerId, Work>> = {
   tailor: W('home', 'work_spin', 'Sewing', { main: 'distaff', shelter: true }),
   baker: W('door', 'work_knead', 'Baking', { kinds: ['bakehouse'], shelter: true }),
   miller: W('door', 'work_lift', 'At the mill', { kinds: ['watermill', 'windmill', 'fulling_mill'], carry: 'sack' }),
-  butcher: W('home', 'work_hammer', 'Butchering', { main: 'dagger', shelter: true }),
+  butcher: W('door', 'work_hammer', 'Butchering', { kinds: ['slaughterhouse'], main: 'dagger', shelter: true }),
   cooper: W('door', 'work_hammer', 'Coopering', { kinds: ['carpenter', 'sawpit'], main: 'hammer', shelter: true }),
   cobbler: W('home', 'work_hammer', 'Mending shoes', { main: 'hammer', shelter: true }),
   potter: W('home', 'work_knead', 'Throwing pots', { shelter: true }),
@@ -207,6 +208,8 @@ export interface ScheduleDeps {
   world: WorldModel;
   places: Places;
   economy: EconomyApi;
+  /** Who works on which construction site today (absent without the construction module). */
+  sites?: SiteWork;
 }
 
 interface DayTimes {
@@ -239,6 +242,8 @@ export class Schedule {
   private readonly world: WorldModel;
   private readonly places: Places;
   private readonly economy: EconomyApi;
+  private readonly sites: SiteWork | undefined;
+  private readonly siteJob: SiteSpot = { x: 0, z: 0, yaw: 0, anim: 'idle', main: 'none', off: 'none', carry: 'none', label: '', haul: false, bx: 0, bz: 0 };
   private readonly times: DayTimes = { sr: 0, ss: 0, wake: 0, chore: 0, mealA: 0, mealB: 0, workEnd: 0, bed: 0, massA: 0, massB: 0, gatherA: 0, afterB: 0 };
   private readonly wx: WeatherSample = { cloud: 0, rain: 0, snow: 0, fog: 0, windX: 0, windZ: 0, temperature: 10 };
   private wxKey = NaN;
@@ -250,7 +255,7 @@ export class Schedule {
   private readonly pt: P2 = { x: 0, z: 0 };
 
   constructor(deps: ScheduleDeps) {
-    this.state = deps.state; this.world = deps.world; this.places = deps.places; this.economy = deps.economy;
+    this.state = deps.state; this.world = deps.world; this.places = deps.places; this.economy = deps.economy; this.sites = deps.sites;
   }
 
   // ---- public ----
@@ -859,6 +864,14 @@ export class Schedule {
   ): void {
     void f; void T;
     const c = p.career;
+    // a construction site they work at today: the day goes to the building (docs/CIV.md §5)
+    if (age >= 12 && this.sites) {
+      const site = this.sites.siteOf(p, day + f);
+      if (site) {
+        if (wet > 0.6) { this.atHome(o, home, true, 'home', 'Waiting out the weather'); return; }
+        if (this.applySite(p, o, site, day)) return;
+      }
+    }
     // the economy decides when it can
     const spot = this.economySpot(p, day);
     if (spot && spot.kind !== 'none') {
@@ -890,6 +903,18 @@ export class Schedule {
         o.indoors = !!home;
       }
     }
+  }
+
+  /** Puts the person at their place on the site and at its work. */
+  private applySite(p: Person, o: Intent, site: import('../sim/construction/types').SiteView, day: number): boolean {
+    const j = siteSpot(p, site, day, this.siteJob);
+    o.activity = 'work'; o.label = j.label; o.building = -1; o.indoors = false;
+    o.x = j.x; o.z = j.z; o.yaw = j.yaw;
+    o.anim = j.anim; o.main = j.main; o.off = j.off; o.carry = j.carry;
+    o.mode = j.haul ? Mode.Errand : Mode.Stay;
+    if (j.haul) { o.bx = j.bx; o.bz = j.bz; }
+    o.group = -1;
+    return true;
   }
 
   /** Economy work spot, cached per person per day. */
@@ -1052,6 +1077,14 @@ export class Schedule {
         return true;
       }
       case 'wood': {
+        // a lumber camp in the settlement's lands is where the woodward works
+        const camp = sp.first('lumber_camp');
+        if (camp) {
+          const cd = BUILDINGS[camp.kind];
+          frontPoint(camp, (hash01(key, 14) - 0.5) * (cd.w - 3), (hash01(key, 15) - 0.5) * (cd.d - 3), this.door2, 0);
+          o.x = this.door2.x; o.z = this.door2.z; o.yaw = hash01(key, 17) * 6.28; o.building = camp.id;
+          return true;
+        }
         const wl = sp.woodlots.length ? sp.woodlots[Math.floor(hash01(key, 13) * sp.woodlots.length) % sp.woodlots.length] : null;
         if (wl) { polyPoint(wl.poly, hash01(key, 14), 0.3 + 0.4 * hash01(key, 15), this.pt); o.x = this.pt.x; o.z = this.pt.z; }
         else { const a = hash01(key, 16) * 6.28; o.x = s.x + Math.cos(a) * (s.radius + 60); o.z = s.z + Math.sin(a) * (s.radius + 60); }
