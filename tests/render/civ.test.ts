@@ -1,4 +1,4 @@
-// Civilization pass, wave B render (docs/render/CIV.md): quest marks, the builder's land tint and ghost, the overview
+// Civilization pass, wave B render (docs/ART.md §14): quest marks, the builder's land tint and ghost, the overview
 // camera, orders on the ground, deposits in the world, siege works — their logic (what is drawn, when it is rebuilt).
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
