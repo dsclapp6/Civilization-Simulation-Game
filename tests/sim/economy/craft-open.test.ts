@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ActionOption } from '../../../src/sim/actions';
 import { skillLevel, xpForLevel } from '../../../src/sim/people';
-import { RECIPES, RECIPE_LIST } from '../../../src/sim/economy/data';
+import { RECIPES, RECIPE_LIST, STEP_PLANS } from '../../../src/sim/economy/data';
 import { bagGet } from '../../../src/sim/economy/items';
 import { REACH, benchFee, spoilChance } from '../../../src/sim/economy/work-craft';
 import { econSim, find, makeApprentice, optionsFor, perform, raise } from './helpers';
@@ -118,6 +118,26 @@ describe('crafting open to all', () => {
     expect(r.ok, r.message).toBe(true);
     expect(bagGet(player.inventory, 'brick') + bagGet(hh.stores, 'brick')).toBeGreaterThan(0);
     expect(optionsFor(sim, { kind: 'building', id: site.id }).filter((x) => x.id.startsWith('craft.'))).toEqual([]);
+  });
+
+  it('the step plans use only the body\'s animations, held items and the sound cues the UI knows', () => {
+    const anims = new Set(['idle', 'walk', 'carry_walk', 'work_hoe', 'work_scythe', 'work_sickle', 'work_sow', 'work_hammer', 'work_axe', 'work_pick', 'work_saw', 'work_dig', 'work_stir', 'work_lift', 'work_spin', 'work_knead', 'work_milk']);
+    const held = new Set(['none', 'sickle', 'scythe', 'hoe', 'pitchfork', 'flail', 'spade', 'axe', 'pick', 'hammer', 'tongs', 'saw', 'chisel', 'distaff', 'basket', 'bucket', 'sack', 'staff', 'crook', 'book', 'cup', 'torch', 'ladle', 'dagger', 'mace']);
+    const cues = new Set(['bellows', 'hammer', 'quench', 'saw', 'chop', 'cut', 'dig', 'stir', 'fire', 'grind', 'scrape', 'knead']);
+    expect(Object.keys(STEP_PLANS).length).toBeGreaterThan(20);
+    for (const [id, steps] of Object.entries(STEP_PLANS)) {
+      expect(steps.length, id).toBeGreaterThanOrEqual(2);
+      for (const st of steps) {
+        expect(anims.has(st.anim), `${id}: ${st.anim}`).toBe(true);
+        expect(held.has(st.held), `${id}: ${st.held}`).toBe(true);
+        if (st.off) expect(held.has(st.off), `${id}: off ${st.off}`).toBe(true);
+        if (st.sfx) expect(cues.has(st.sfx), `${id}: cue ${st.sfx}`).toBe(true);
+        expect(st.share).toBeGreaterThan(0);
+      }
+    }
+    // the forge is the one the owner described: heat, draw out, quench, grind
+    expect(STEP_PLANS.forge.map((x) => x.label)).toEqual(['Heat the bar', 'Draw it out', 'Quench', 'Grind and finish']);
+    expect(STEP_PLANS.forge.map((x) => x.sfx)).toEqual(['bellows', 'hammer', 'quench', 'grind']);
   });
 
   it('every recipe has visible steps at every works that makes it', () => {

@@ -234,6 +234,7 @@ export function sellGoods(E: Econ, householdId: number, good: string, qty: numbe
   hh.purse = round2(hh.purse + income);
   E.state.touchHousehold(hh);
   E.touchSave();
+  E.touchMarkets();
   E.ledgerLine(hh.id, `Sold ${round2(sold)} ${GOODS[good].unit} at ${E.settlementById.get(mid)?.name ?? 'market'}`, income);
   return { sold: round2(sold), income, settlement: mid };
 }

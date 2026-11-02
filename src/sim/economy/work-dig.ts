@@ -127,15 +127,16 @@ export function digBout(E: Econ, p: Person, d: DigData): ActionOutcome {
   const tool = toolFor(E, p, spec.tool);
   const lvl = skillLevel(p.skills[spec.skill]);
   const per = digYield(E, p, b, site.what, site.richness);
-  // whole units of the common goods, fractions of the rare ones
-  let n = site.what === 'silver' || site.what === 'gold' ? round2(per * (0.8 + 0.4 * E.rng('roll').next())) : Math.max(1, stoch(E, per));
+  // whole units of the common goods, hundredths of a basket of the rare ores (the bags keep hundredths; the luck evens out)
+  const rare = site.what === 'silver' || site.what === 'gold';
+  let n = rare ? stoch(E, per * 100) / 100 : Math.max(1, stoch(E, per));
   const gains: NonNullable<ActionOutcome['gains']> = [];
   let kept = n;
   if (terms.mode === 'lord') {
     const lordShare = round2(n * 0.2);
     const lordHH = terms.keeper;
     if (lordHH && lordShare > 0) { bagAdd(lordHH.stores, spec.good, lordShare); E.state.touchHousehold(lordHH); }
-    kept = Math.max(site.what === 'silver' || site.what === 'gold' ? 0 : 1, round2(n - lordShare));
+    kept = Math.max(rare ? 0 : 1, round2(n - lordShare));
   }
   if (terms.mode === 'hired') {
     // the master's bag, and a day's wage for the hour
@@ -162,9 +163,8 @@ export function digBout(E: Econ, p: Person, d: DigData): ActionOutcome {
     E.notify('A prop gives way: you are bruised and shaken.', 'warn', p.id);
   }
   if (terms.mode !== 'hired') gains.unshift({ label: GOODS[spec.good]?.name ?? spec.good, amount: kept, ref: spec.good });
-  else gains.unshift({ label: GOODS[spec.good]?.name ?? spec.good, amount: n, ref: spec.good });
   gains.push({ label: spec.skill, ref: spec.skill });
   if (site.what === 'stone') gains.push({ label: 'masonry', ref: 'masonry' });
-  n = terms.mode === 'hired' ? n : kept;
-  return { ok: true, message: `You bring out ${n < 1 ? round2(n) : n} ${spec.noun}.`, gains };
+  const brought = terms.mode === 'hired' ? n : kept;
+  return { ok: true, message: `You bring out ${brought < 1 ? round2(brought) : brought} ${spec.noun}${terms.mode === 'hired' ? " for your master" : ''}.`, gains };
 }

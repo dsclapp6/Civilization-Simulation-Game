@@ -116,8 +116,8 @@ export function listButchery(E: Econ, p: Person, hh: Household, target: TargetRe
       if (block) { o.enabled = false; o.reason = block; }
       out.push(o);
     }
-    // butcher: the carcass in the pack or the larder, at a place with a block
-    if (beast.carcass && where.block) {
+    // butcher: the carcass in the pack or the larder, at a place with a block (a cow or an ox is jointed only at the slaughterhouse)
+    if (beast.carcass && where.block && (house || beast.home)) {
       const held = carcassesHeld(E, p, beast.carcass);
       if (held.length > 0) {
         offered++;

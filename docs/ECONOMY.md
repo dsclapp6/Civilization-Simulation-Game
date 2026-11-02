@@ -34,7 +34,7 @@ ten times slower in real time. What had to be retuned is everything counted *per
 
 Money is pence (`formatMoney` writes it as £ s d). Texts for the player use `pd()` from `data.ts`.
 
-## Goods (`src/content/goods.json`, ~95 goods)
+## Goods (`src/content/goods.json`, ~110 goods)
 
 Quality is part of the item key: `sickle#2` is a good sickle (tiers 0 crude, 1 common, 2 good, 3 fine, 4 master).
 Tier multipliers for the price are 0.55, 1, 2.5, 6, 15 by default. Grain only has `#0` (chaffy, unwinnowed) and the
@@ -51,9 +51,11 @@ household's stores as head counts and is never carried.
 | sickle / scythe | 4d / 30d | | ox / horse / cow | 150d / 300d / 120d |
 | clothes (set) | 24d | | longbow / sword | 36d / 96d |
 
-Fourteen *macro* goods (wheat, rye, barley, oats, peas, beans, bread, ale, vegetables, cheese, eggs, meat, fish,
-firewood) have a stock at each market and a price that follows scarcity; everything else is index-priced
-(base price × quality × a slow glut term from what the player sold).
+Twenty-six *macro* goods have a stock at each market and a price that follows scarcity: fourteen foods and fuels (wheat,
+rye, barley, oats, peas, beans, bread, ale, vegetables, cheese, eggs, meat, fish, firewood) and, since the civilization
+pass, twelve building materials and raw goods (timber, planks, stone, brick, iron, nails, straw, charcoal, salt, candle,
+vellum, tallow; see "Materials" below). Everything else is index-priced (base price × quality × a slow glut term from
+what the player sold, or the want left by what a household bought).
 
 ## Markets (`market.ts`)
 
@@ -166,13 +168,138 @@ summed by `perkSum`/`perkTotal`.
 * `drainFloaters` (`floatfeed.ts`): "+8 sheaves cut", "+3d", "Farming +2" over the player for a completed action, "Farming 3!"
   for a level, "−4d" / "+2 eggs" for a trade, "♥ +3" over the person whose opinion moved; a few a second.
 
+## Civilization pass: hands-on production, new chains, household trade
+
+The design is `docs/CIV.md` §7–8 and §5–6 (what builders and rulers buy). Everything below is data in `recipes.json`,
+`goods.json` and `careers.json` plus six modules of `src/sim/economy`: `butchery.ts`, `steps.ts`, `work-craft.ts`,
+`work-dig.ts`, `supply.ts` and `trade-house.ts`. The NPC households' own path (`householdDay`) is as it was: nothing a
+player does or a building raised in play adds is read there except through the markets.
+
+### Slaughter and butchery (`butchery.ts`, the `stock` provider)
+
+Animals are head counts in a household's stores (`pig`, `sheep`, `goat`, `chicken`, `cow`, `ox`); the zone redraws the herd from
+`holding(household).livestock`, so a beast killed is a beast gone. Two steps, each its own action with visible steps:
+
+| action | where | what |
+|---|---|---|
+| `stock.slaughter.<animal>` | a pig at the sty, sheep and goats at the fold, fowl at the hen-house, any of them at the home (`STOCK_SITES`); every beast, **cow and ox included, at the slaughterhouse** | the beast leaves the herd; a **carcass** hangs in the larder. A fowl is dressed in one go (meat at once) |
+| `stock.butcher.<animal>` | the same places (where there is a block) | the carcass is jointed: **meat by the beast's weight**, a hide, **tallow** |
+
+* `recipes.json` `"beasts"`: live weight, pounds of meat (chicken 1.4, goat 22, sheep 24, pig 55, cow 180, ox 260), hide
+  (a cattle hide is 1; a pig 0.25, a sheep 0.15), tallow, bouts to kill and to joint. The whole beast is worth about what it
+  costs alive (0.8 to 1.4 of its price) — no money machine, no loss.
+* A carcass is a quality good (`pig_carcass#2`): the tier comes from the beast's condition (fattest in autumn, leanest in
+  spring, thinner after a fodder shortage `~f`) and the hand's Husbandry; meat on the carcass follows the tier (×0.75 lean … ×1.4
+  prime) and the cutter's skill (and the `husbandry yield` perks). A carcass hangs in the larder with a `~h:<key>` marker of the
+  day and **rots after its `spoilDays` (2.5 to 3)**: joint it, and salt the meat.
+* The slaughterhouse (`buildings.json`, raised in play) is used free by the household that keeps it, for a fee (¼d a small beast,
+  0.8d a large one) to the keeper (the lord's household if nobody keeps it) by anyone else. Cancelling half way kills nothing.
+* Salting is a recipe (`craft.salt_meat`: 12 lb meat + 2 lb salt → 11 lb `salt_meat`, which keeps 120 days) at the slaughterhouse,
+  the tavern or the home; candles are dipped from tallow (`craft.dip_candles`: 1 lb → 8 candles).
+* **Selling**: a butcher (`careers.json`) buys live beasts, meat, hides, tallow, salt meat and carcasses; markets buy meat and
+  tallow (both stock-and-flow goods); the slaughterhouse's shop sells carcasses, tallow and salt meat. The player's own household
+  does not sell its meat behind his back (`sellSurplus`) unless someone is sent to market.
+* XP and floaters: Husbandry (8 base a bout); the outcomes list `gains` (meat, tallow, hide, carcass, wages/fees) so the float feed
+  shows "+52 lb meat", "+9 lb tallow", "Husbandry +2".
+
+### Crafting open to all (`work-craft.ts`)
+
+Any recipe may be attempted at a works the person may use (`placeFor`):
+
+| works | terms |
+|---|---|
+| one's own (the household's workshop, one's own hearth) | free; tools lent by a workshop but not by a home |
+| the master's, as his employee | the work is his (his stores, a day's wage), with **the ladder's gates** (`stage`): an apprentice does not work a journeyman's recipe in his master's name |
+| **another's workshop** | **hire the bench**: a fee of 0.3d × the recipe's bouts (×1.15 a level) to the keeper's purse; the work is one's own; the workshop lends its anvil, bench, loom, press (not needles or distaffs) |
+| a works nobody keeps (kiln, saw pit, charcoal mound, bloomery) | free |
+| a building still being raised (`construction < 1`) | nothing |
+
+* **Reach and novices**: every recipe up to `REACH` (6) levels beyond one's skill is listed, the ones nearest the skill first (24 at
+  a bench). Beyond one's skill by `gap` levels a batch **spoils with chance `0.08 + 0.12 gap`** (at most 0.85) — most of the material
+  is lost, something is learnt (0.7 of the experience) and the outcome says so — and a batch that comes out uses `1 + 0.05 gap` of
+  the material and its quality is `0.1 gap` lower. A hand fit for the recipe (gap 0) never spoils it. The preview says "beyond
+  your skill: 44 % the work is spoiled". Quality otherwise as before (skill, tool, perks, `craft.quality`).
+* The masterpiece, the apprentices' tasks and jobs are as they were. Option ids are unchanged (`craft.<recipe>`), so the
+  advancement module's `player.actions` patterns still match.
+* **Steps** (`steps.ts`, `recipes.json` `"plans"`): every craft bout carries `ActionOption.steps`, shares adding to 1: the
+  forge heats the bar, draws it out, quenches and grinds (`bellows`, `hammer`, `quench`, `grind` cues); the kiln is loaded,
+  fired and drawn; the tannery soaks, scrapes and stretches; the saw pit sets, pulls and stacks; the mash tun mashes, boils and
+  barrels; the bakehouse, the loom, the salt pans, the charcoal mound, the bloomery, the masonry bench and the butcher's block
+  have theirs. A recipe names its plan (`plan`) or takes its building's (`buildingPlans`), else a plain three steps. The digs
+  (`dig_stone`, `dig_ore`, `dig_clay`, `dig_timber`) and the slaughter plans (`slaughter`, `wring`, `butcher`) are named in code.
+  Cues beyond the contract's list: `grind`, `scrape`, `knead`.
+
+### Works of the land and the new chains (`work-dig.ts`, recipes)
+
+| works | action / recipe | yields |
+|---|---|---|
+| quarry | `dig.stone` | stone, as before (`quarry` + a stone deposit's richness) |
+| mine | `dig.ore` / `dig.silver` / `dig.gold` | iron ore, silver ore or gold ore **by the deposit under it** (`sim.services.territory.depositAt`, gold then silver then iron); iron where nothing is known |
+| clay pit | `dig.clay` | loads of clay |
+| lumber camp | `dig.timber` | a log (and bundles of firewood) in three bouts' time |
+| kiln | `craft.fire_bricks` (clay 4 + firewood 6 → 24 bricks), `craft.fire_pots` (now with clay) | bricks, pots |
+| tannery | `craft.make_vellum` (a hide → 10 sheets; Tailoring 3) | vellum |
+| salt pans | `craft.boil_salt` (firewood 5 → 10 lb; follows the salt deposit's richness) | salt |
+| slaughterhouse | the butchery above, salting, candles | |
+
+An hour (a bout's time) at the clay pit, the iron or silver or gold seam comes to the same 1.6d of goods, the lumber camp 4 to 5d, the
+quarry 4.5d (its old rate). Yield per bout = base × `0.35 + 0.8 × richness` × `(1 + 0.04 × skill)` × perks. Whose works it is
+decides the product: the keeper's household digs for itself; a **hired hand** (`jobs`: "Hand at the pit", "Miner", "Lumberjack",
+"Salt boiler", "Slaughterman's hand", day labour for the keeper — the lord if nobody keeps it) is paid a day's wage a bout
+and the product goes to the keeper's stores; anyone at a works nobody keeps gives the lord a fifth; another household's works
+is closed to a stranger. A mine's prop may give way (bruise) for hands below Mining 4.
+
+### Materials: stock-and-flow with a local supply (`supply.ts`)
+
+The twelve materials have a stock at every market (`goods.json` `"macro": true` + `"supply": {use, cover, relax}`). A market's
+**target stock** is `cover` days of what its hinterland uses (`use` per head per day) **plus what its works make**
+(`recipes.json` `"workplaces"`: saw pit 24 planks a day, lumber camp 12 logs, quarry 14 blocks, kiln 28 bricks (30 % without clay
+in reach), bloomery 4 bars, charcoal mound 3 sacks, salt pans 40 lb, tannery 1.2 sheets of vellum, slaughterhouse 5 lb of tallow;
++40 % a level; the old world's smithies, carpenters and mills are not listed, its prices were struck with them). Each day the
+stock closes `relax` of the gap to the target (the wider world; `relax` is also the supply's rate: a town can refill 3 to 15 percent
+of its gap a day), merchants carry materials between neighbouring markets (stone and bricks lose most on the road), and
+`price = base × local factor × season × scarcity^0.5 × supply factor` where the supply factor is **down to 30 % off where the works
+make far more than is used** and **a fifth up for goods of the ground (stone, bricks from clay, iron, salt) when no works and no
+deposit of that kind is in reach** of the market's lands (deposits from the territory module; without it, none are known).
+The census of works is rebuilt when a building is added or a `construction` event (`placed`, `done`, `cancelled`) arrives — the
+day a kiln is done it counts — and never otherwise (a family moving house changes no stock). A material a market is out of is not on
+its board unless you hold some to sell. Price gossip ignores the materials' standing premiums (only shifts of 60 % or more).
+Silver and gold ore stay index-priced (the mint's demand is unbounded; a glut sags the price as for any manufacture).
+
+### Household trade (`trade-house.ts`; `EconomyApi.procure?`, `sell?`, `deliveries?`, `stockAt?`)
+
+* `procure(household, good, qty, {settlement?, maxPrice?}) → {got, cost, settlement, days}` — buys at the market the household
+  trades with, then the five nearest others in turn, or only at the one named. Stock-and-flow goods: the price **walks up the
+  amount** as the shelves empty (`midPriceAt`), a market never sells its last tenth, plus the carter's fee
+  `(2 % + distance/40 km) × (1 + weight/20 kg)` (at most 35 %). Index goods: bought as common quality at the shop price, 25 pieces
+  (10 of a quality tool, 4 beasts) a market, the price rising with what was bought (a *want* that fades like a glut). The purse
+  pays; the goods are **on the cart** (`E.save.carts`) for `0.3 + distance/12 km` days and arrive in the stores on the hour
+  (a note to the player if it is his household). Partial when stock, purse or `maxPrice` run short; a besieged market sells nothing.
+* `sell(household, good, qty, {settlement?, minPrice?}) → {sold, income, settlement}` — from the stores (the lowest quality first)
+  into the market; the price sags along the amount, the carter's fee comes off, the stalls hold at most 3× their target; income to
+  the purse at once.
+* `deliveries(household)` lists what is on the road (good, qty, arrival day, market); `stockAt(settlement, good)` the market's stock.
+
+### The field plan, the build order, buildings raised in play
+
+* **Crop plan**: `sowingNow` takes the crop `sim.services.realm.cropPlan(settlement)[field]` sets for a field's next sowing when it
+  fits (a winter corn in the autumn sowing, a spring crop in the spring); `'fallow'`, nothing, or a crop that does not fit leaves the
+  rotation's old choice. The household farm (`macroSow`) and the player's first-offered sowing (`farm.sow`) both read it.
+* **`HouseholdTask 'build'`**: `setTask(head, member, 'build')` is accepted; while the household has a live site
+  (`sim.services.construction.sites(settlement)` with `household` = theirs, not done or cancelled) the member's day goes to it —
+  `workSpot` is the site (hammer) — and they add nothing to the field labour; a head on the site earns nothing of his trade in
+  those days. With no site the order stands in the plan but the day is as it would have been.
+* **Buildings raised in play** are ordinary buildings: workplaces, jobs, recipes, barns and shops use only those with
+  `construction >= 1`; the supply census listens to `construction` events; listings carry prices for the new kinds when they stand vacant.
+
 ## Links
 
 * Social hooks (`setHooks`): `giveHook`, `itemInfoHook`, `priceTipsHook`, `dressTierHook`, `apprenticeHook`.
   Opinion reasons are the phrases `dialogue.json` words.
 * `drop(person, key, qty)` and `give(person, 0, key, qty)` throw goods away.
-* Save: `x:econ`, `x:econ.markets`, `x:farm` sections plus entity fields; reloading and continuing gives the same
-  `stateHash()`.
+* Save: `x:econ` (now with `carts`, the goods on the road), `x:econ.markets` (stocks of the 26 stock-and-flow goods; an older save's
+  arrays are remapped by name), `x:farm` sections plus entity fields; reloading and continuing gives the same `stateHash()`
+  (tested with a carcass in the larder, goods on the road, a kiln raised in play and a build order).
 
 ## Measured
 
@@ -183,6 +310,9 @@ Prices over 100 years: wheat 0.5 to 3.2 times base through the years (bad harves
 
 ## Known gaps
 
-Animal-targeted work uses buildings and parcels rather than zone animals; boon-work and tolls are listed but
-simplified; NPC clothing is not modelled (`dressTierHook` falls back to rank); a village without a market sells
-through the nearest market town only.
+Animal-targeted work uses buildings and parcels rather than zone animals (leading a beast to the slaughterhouse is the
+agents' *Lead*: the household's beasts are counted, not placed); boon-work and tolls are listed but simplified; NPC clothing is
+not modelled (`dressTierHook` falls back to rank); a village without a market sells through the nearest market town only. The
+macro households neither use nor make the building materials (the markets' supply model stands for them), and cull sheep and pigs
+for meat and hides only (no tallow). The new works (clay pit, salt pans, lumber camp, slaughterhouse, quarry, mine) are not on any
+generated plot: they come into play by building them or with the territory module's deposits.
