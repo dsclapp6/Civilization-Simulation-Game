@@ -46,7 +46,11 @@ owning settlement (or of the House that holds the land) who is in the zone, grow
 * **Coming**: they are summoned into the zone at the **edge of sight** (168 m from the player, just inside the zone's no-warp radius of
   190 m, along the way from the lord's hall; the leader where he stands if he was the witness) and ordered to `approach` the player: riders
   at a **gallop** (10 m/s), men on foot at a jog; the leader stops 3.4 m from him, the men fan out behind. Nobody is hurried, nobody
-  warps: `sim.hostileNear` is chained so that fast speed and sleeping are refused while the patrol rides.
+  warps: `sim.hostileNear` is chained so that fast speed and sleeping are refused while the patrol rides. A leader who is held up (he has
+  gone less than 6 m in 6 s and is still over 15 m from the man: a pond's edge, a snag in the path) is sent, with his men, to a point
+  round the way by another bearing — three times; then, if he can see the man (`nav.lineClear`) and is within 70 m, he calls out from where
+  he is (and flight is measured from where the man stood, not from the leader), else the patrol gives up and is gone. Found by playing:
+  in one village the planner passed a thin stream that the exact terrain test did not.
 * **Halt**: when the leader is up with him he says the line of CIV §4 — *"Halt. You are on the lands of Sir Hugh. State your business or
   be gone."* (variants: *"Halt! This is Sir Hugh's park. What business have you here?"*, *"Halt. The castle is shut…"*, *"Poaching in Sir
   Hugh's park! You'll answer for this."*; at war *"Yield! You are on the lands of House Avenel, at war with you!"*; to a man warned
@@ -94,7 +98,8 @@ whether he is serving it, the warning of the rope, failed escapes, whether the m
   0.014 (Strength − 10) + 0.018 stealth − the guard (1.5 % per armed man of the place, 4 % in a building) − 7 % per failed try`,
   7–82 %. Away: wanted on those lands for 8 days. Caught: **worse** — 3 more days, the fine ×1.5 + 4d, a beating, the lord's opinion −8.
   And **Live as someone else** (B6's panel) and *Sleep or wait*, which the card links to.
-* **Every dawn** (`dailyCaptives`): a man the warning was given to may be hanged (below); a sentence being served runs down; **the
+* **Every dawn** (`dailyCaptives`): bread and water — a prisoner's hunger is kept at 0.35 at least, so nobody starves in the lord's keeping;
+  a man the warning was given to may be hanged (below); a sentence being served runs down; **the
   family pays** a fine or ransom after 2 days if it can raise it and someone cares (a spouse, a child, a parent, a friend at +15, the
   head of a great House); **the lord loses patience** after 6 days and sets a sentence; a prisoner of war the military no longer keeps
   is let go after 30 days; one the military has freed by its own rules is freed here.
@@ -135,12 +140,34 @@ clips (`bound_walk` while led, `bound` standing in the cell), is taken off the s
 prisoner is in his cell; a man who was being led is put in the cell). The law itself uses `led` and `held`; `escorted` walks the body
 to a point and is there for other modules.
 
+## Pictures
+
+`node tools/village-law-shots.mjs` (Vite on :5193; `--out=` to put them elsewhere) plays each situation in the whole game, the real law,
+territory and zone, and writes `docs/agents/law-*.png`:
+
+| picture | shows |
+|---|---|
+| `law-plaque` | the HUD plaque on the lord's closes: *Lands of Sir Brian · private — The lord's closes at Moymor.* |
+| `law-riders` | the patrol gallops in (a leader and a man on horses, lances up), 17 m off, with *Riders are coming* |
+| `law-halt-world`, `law-halt` | the riders drawn up about him, the leader's words over his head and on the plaque; the card with the six answers |
+| `law-escort` | the men close behind him, *Off the land in 40 s — 4 m to the edge, south* |
+| `law-led`, `law-led-front` | bound and led on foot behind the leader to the manor's lock-up (the bound-walk clip), the plaque says where and why |
+| `law-cell`, `law-bound` | the prisoner's card (held by whom since when, the fine, the ways out); the body at the door of the lock-up, *You are a prisoner* on the prompt |
+| `law-alert` | a walled city on alarm: men on the wall-walk and the tower, at the heights of the building recipes |
+| `law-horse` | the household's horse trots in at a call, *Your horse is coming — About 3 s* |
+| `law-steps-1…3` | a smith's bout with steps (heat the bar, draw it out, quench): the body plays each step's clip and holds its items |
+
+The FX of the steps (steam, sparks, chips, dust, smoke, fire) are emitted into the view's FX queue (`tests/player/civ.test.ts`); drawing them
+is the renderer's. The shut gates and the breaches reach the navigation through `view.forts()`; drawing them is the renderer's too.
+
 ## Tunables and tests
 
-All numbers are in `LAW` (`config.ts`). Tests: `tests/sim/law/` — `patrol` (the halt, leave, business, bribe, fine), `captivity` (yield,
-refuse, war, the cell, pay, serve, escape, the rope), `watch` (who sees whom), `ai` (the daily cases), `save` (round trips with the
-player held; a patrol out at save time), `military` (the module's calls, with a fake that keeps captives), `ui` (the cards and the
-plaque as pure models); `tests/agents/{patrol,alert,horse,prisoner}.test.ts` and `tests/player/civ.test.ts` for the bodies.
+All numbers are in `LAW` (`config.ts`). Tests: `tests/sim/law/` — `patrol` (the halt, leave, business, bribe, fine, the lord who stays home,
+a leader held up), `captivity` (yield, refuse, war, the cell, rations, pay, serve, escape, the rope), `watch` (who sees whom), `ai` (the daily
+cases), `save` (round trips with the player held; a patrol out at save time), `military` (the module's calls, with a fake that keeps captives),
+`ui` (the cards and the plaque as pure models); `tests/agents/{patrol,alert,horse,prisoner,lawzone}.test.ts` (the last is the real zone,
+territory and law together: it found the sight test that said no from beside a wall, the riders the road made faster than a gallop, and the
+riders that stuck at a pond's edge) and `tests/player/civ.test.ts` for the bodies.
 
 ## Contract notes
 

@@ -4,8 +4,8 @@
 // sentences, fines, AI trespassers handled off-screen) with the zone side in src/agents (watchers, patrols, escorts, the walk
 // to the gaol) and src/player (the restraint). Registered as `sim.services.law`. Saved in state.ext['law'], deterministic.
 //
-// Builder B3 added, additively: optional fields on `PatrolView` and `CaptivityView`, the optional `LawApi.wanted` / `lastOffence`
-// and `LawRuntime` (what `installLaw` returns, with the hooks tests and tools use). Nothing was renamed or removed.
+// Builder B3 added, additively: optional fields on `PatrolView` and `CaptivityView`, the optional `LawApi.wanted` and `LawRuntime`
+// (what `installLaw` returns, with the hooks tests and tools use). Nothing was renamed or removed.
 import type { P2 } from '../../core/math';
 import type { HouseId, PersonId } from '../state';
 import type { TrespassCause, TrespassLevel } from '../territory/types';

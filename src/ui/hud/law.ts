@@ -87,14 +87,15 @@ export function plaque(i: PlaqueInput): Plaque | null {
 
 const STYLE_ID = 'mu-law-hud-style';
 const CSS = `
-.mu-hud > .mu-law-plaque { left: 50%; bottom: 172px; transform: translateX(-50%); max-width: 520px; min-width: 260px; padding: 8px 14px 9px; display: flex; align-items: center; gap: 12px; pointer-events: none; }
+.mu-hud > .mu-law-plaque { left: 50%; bottom: 168px; transform: translateX(-50%); max-width: 620px; min-width: 260px; padding: 7px 14px 8px; display: flex; align-items: center; gap: 12px; pointer-events: none; }
 .mu-law-plaque.mu-hide { display: none; }
+.mu-law-plaque > div { flex: 1 1 auto; min-width: 0; }
 .mu-law-plaque .mu-law-ico { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: rgba(26, 17, 9, 0.92); color: #f2c14e; box-shadow: 0 0 0 1px rgba(255, 244, 205, 0.55); }
 .mu-law-plaque.vermilion .mu-law-ico { color: #ff8f7c; animation: mu-throb 1.6s ease-in-out infinite; }
 .mu-law-plaque.green .mu-law-ico { color: #9fd47c; }
-.mu-law-plaque .mu-law-title { font-weight: 700; font-size: 16px; letter-spacing: 0.01em; }
+.mu-law-plaque .mu-law-title { font-weight: 700; font-size: 15.5px; letter-spacing: 0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mu-law-plaque.vermilion .mu-law-title { color: #7c1d12; }
-.mu-law-plaque .mu-law-sub { font-size: 13px; color: var(--ink-2); font-style: italic; }
+.mu-law-plaque .mu-law-sub { font-size: 12.5px; color: var(--ink-2); font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mu-law-plaque .mu-btn { pointer-events: auto; margin-left: 6px; flex: none; }
 `;
 

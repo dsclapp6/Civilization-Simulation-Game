@@ -1,6 +1,6 @@
 // Screenshots of the law and the watch in the whole game, for visual review: the plaque of the lord's land, the patrol riding in, the halt and
-// its card, the escort off the land, the walk to the lock-up in bonds, the prisoner's card, a walled city on alert (the watch on its walls, by
-// day and at night), and the horse that comes at a call. Starts Vite on :5193 (--port=N), plays each situation in headless Chromium (software
+// its card, the escort off the land, the walk to the lock-up in bonds, the prisoner's card, a walled city on alert (the watch on its walls)
+// and the horse that comes at a call. Starts Vite on :5193 (--port=N), plays each situation in headless Chromium (software
 // GL: slow but correct) and writes docs/agents/law-<scene>.png.
 //
 //   node tools/village-law-shots.mjs                       # all scenes
@@ -8,7 +8,7 @@
 //   node tools/village-law-shots.mjs --quality=medium --size=1280x720 --seed=millennia --out=/tmp/shots
 //
 // Scenes (each builds on the one before it where it can): plaque, riders, halt (halt-world, halt), escort, led, cell (cell, bound), alert
-// (alert), night (night, after alert), horse.
+// (alert), horse, steps (steps-1 … steps-3).
 // The game is driven through `window.__game` (src/app/game.ts) with the real-time loop frozen; the law, the territory and the zone are the
 // real modules, the alert level of a city is a stand-in for the war module (`military.alertOf`).
 import { spawn } from 'node:child_process';
@@ -65,9 +65,15 @@ async function load(extra = 'autostart=1&season=1&day=2&time=0.42') {
 const advance = (seconds, input = {}) => page.evaluate(([s, i]) => window.__game.advance(s, i), [seconds, input]);
 /** The whole frame (UI, HUD, panels) for a moment, without drawing: lets the interface catch up with the world. */
 const tick = (seconds) => page.evaluate((n) => window.__game.tick(n), seconds);
-async function shot(name) {
+async function shot(name, { panel = false } = {}) {
   await page.evaluate(() => window.__game.settle());
   await tick(0.4);
+  // (the notices of the day and the first-minutes hints are not what these pictures are of; nor is the law's card, but where it is)
+  await page.evaluate((keep) => {
+    document.querySelectorAll('.mu-toast, .mu-guide').forEach((e) => e.remove());
+    if (!keep && window.__ui.isOpen('law')) window.__ui.closePanel('law');
+  }, panel);
+  await tick(0.2);
   await page.evaluate(() => window.__game.draw());
   const file = resolve(OUT, `law-${name}.png`);
   await page.screenshot({ path: file });
@@ -108,7 +114,7 @@ async function stand() {
       for (let i = 0; i < 40; i++) s.sim.step(1 / 20);
       return { ...g.info };
     }
-    let overall = null, overallScore = -1;
+    let overall = null, overallScore = -Infinity;
     for (const v of places.slice(0, 10)) {
       const manor = (st.buildingsAt.get(v.id) ?? []).find((b) => b.kind === 'manor_house' && b.construction >= 1);
       if (!manor) continue;
@@ -116,26 +122,29 @@ async function stand() {
       player.placeAt(manor.x + 30, manor.z + 30, 0);
       zone.resync();
       for (let i = 0; i < 40; i++) s.sim.step(1 / 20);
-      for (let r = 30; r <= 130; r += 10) {
-        for (let k = 0; k < 24; k++) {
-          const x = manor.x + Math.sin(k * 0.262) * r, z = manor.z + Math.cos(k * 0.262) * r;
-          if (terr.trespass(me(), x, z).level !== 'private' || !zone.nav.walkable(x, z)) continue;
+      // the lord's land round the manor, on a grid: private ground, in the open, clear of trees, far from the edge of it, in sight of the manor
+      for (let gz = -300; gz <= 300; gz += 20) {
+        for (let gx = -300; gx <= 300; gx += 20) {
+          const x = manor.x + gx, z = manor.z + gz, r = Math.hypot(gx, gz);
+          if (r < 25 || terr.trespass(me(), x, z).level !== 'private' || !zone.nav.walkable(x, z)) continue;
           const e = terr.exitFrom ? terr.exitFrom(me(), x, z) : null;
           const d = e ? Math.hypot(e.x - x, e.z - z) : 0;
-          // in the open (nothing between him and the manor, the way the men come) and well inside the lord's land
-          const open = zone.nav.lineClear(x, z, manor.x, manor.z) && zone.nav.lineClear(x, z, x + (manor.x - x) * 0.5, z + (manor.z - z) * 0.5);
-          const score = (open ? 1000 : 0) + Math.min(d, 110) + Math.min(r, 90) * 0.1;
-          if (score > overallScore) { overallScore = score; overall = { village: v.name, manor: { x: manor.x, z: manor.z }, x, z, exit: d, open }; }
+          if (d < 12) continue;
+          let trees = 0;
+          zone.nav.obstacles.forSolids(x - 26, z - 26, x + 26, z + 26, () => { trees++; });
+          const open = zone.nav.lineClear(x, z, manor.x, manor.z);
+          const score = (open ? 600 : 0) + (trees === 0 ? 800 : -trees * 6) + Math.min(d, 90) * 2 - Math.max(0, r - 160) * 0.5;
+          if (score > overallScore) { overallScore = score; overall = { village: v.name, manor: { x: manor.x, z: manor.z }, x, z, exit: d, open, trees }; }
         }
       }
-      if (overallScore >= 1100) break;
+      if (overallScore >= 1500) break;
     }
     if (!overall) return null;
     const b = overall;
     const yaw = Math.atan2(b.manor.x - b.x, b.manor.z - b.z);
     player.placeAt(b.x, b.z, yaw);
     zone.resync();
-    const info = { village: b.village, manor: { x: Math.round(b.manor.x), z: Math.round(b.manor.z) }, x: Math.round(b.x), z: Math.round(b.z), exit: Math.round(b.exit), open: b.open, lord: terr.trespass(me(), b.x, b.z).reason };
+    const info = { village: b.village, manor: { x: Math.round(b.manor.x), z: Math.round(b.manor.z) }, x: Math.round(b.x), z: Math.round(b.z), exit: Math.round(b.exit), open: b.open, trees: b.trees, lord: terr.trespass(me(), b.x, b.z).reason };
     window.__l.stage = { x: b.x, z: b.z, yaw, info };
     return info;
   });
@@ -188,30 +197,6 @@ async function lookAtWatch(name) {
   await shot(name);
 }
 
-/** In the streets: the camera on the nearest man who carries a torch. */
-async function lookAtTorch(name) {
-  const r = await page.evaluate(() => {
-    const { player, zone } = window.__l;
-    const pb = player.body();
-    const dist = (a) => Math.hypot(a.x - pb.x, a.z - pb.z);
-    const lit = zone.agentsArr.filter((a) => a.draw.mainHand === 'torch' && a.elev < 1).sort((a, b) => dist(a) - dist(b));
-    const a = lit[0];
-    if (!a) return null;
-    const yaw = a.yaw + Math.PI;
-    let px = a.x + Math.sin(yaw) * 9, pz = a.z + Math.cos(yaw) * 9;
-    const out = { x: 0, z: 0 };
-    if (!zone.nav.walkable(px, pz) && zone.nav.nearestWalkable(px, pz, 10, out)) { px = out.x; pz = out.z; }
-    player.placeAt(px, pz, Math.atan2(a.x - px, a.z - pz));
-    zone.resync();
-    return { man: a.person.first, career: a.person.career, activity: a.activity, yaw: Math.atan2(a.x - px, a.z - pz), watchers: lit.length };
-  });
-  console.log(`${name} torch`, JSON.stringify(r));
-  if (!r) throw new Error('no torches in the streets');
-  await advance(1.5);
-  await camera(r.yaw, 0.35, -0.3);
-  await shot(name);
-}
-
 try {
   await load();
   await prepare();
@@ -241,7 +226,7 @@ try {
       return { ok, men: pv ? pv.men.length : 0, mounted: pv ? pv.mounted : false, at: lead ? { dx: Math.round(lead.x - b.x), dz: Math.round(lead.z - b.z) } : null };
     });
     console.log('patrol', JSON.stringify(info));
-    // they gallop in: when the leader is fifty metres off, the camera is on him (high enough to see over the hedges)
+    // they gallop in: when the leader is seventeen metres off, the camera is on him (high enough to see over the hedges)
     const d = await page.evaluate(() => {
       const { law, me, body, zone, g } = window.__l;
       let t = 0, dd = 999, yaw = 0;
@@ -250,12 +235,12 @@ try {
         const pv = law.patrolFor(me());
         const lead = pv ? zone.agent(pv.leader) : null;
         const b = body();
-        if (lead) { dd = Math.hypot(lead.x - b.x, lead.z - b.z); yaw = Math.atan2(lead.x - b.x, lead.z - b.z); if (dd < 50) break; }
+        if (lead) { dd = Math.hypot(lead.x - b.x, lead.z - b.z); yaw = Math.atan2(lead.x - b.x, lead.z - b.z); if (dd < 17) break; }
       }
       return { t, dd: Math.round(dd), yaw };
     });
     console.log('riders at', JSON.stringify(d));
-    await camera(d.yaw, 0.8, 0.5);
+    await camera(d.yaw + 0.35, 0.25, 0.4);
     await shot('riders');
   });
 
@@ -278,7 +263,7 @@ try {
     await shot('halt-world');
     await page.evaluate(() => window.__ui.openPanel({ panel: 'ext', name: 'law', data: { mode: 'patrol' } }));
     await tick(1);
-    await shot('halt');
+    await shot('halt', { panel: true });
   });
 
   await scene('escort', async () => {
@@ -358,7 +343,8 @@ try {
       const b = body();
       return lead ? Math.atan2(lead.x - b.x, lead.z - b.z) : 0;
     });
-    await camera(yawLead, 0.7, 0.3);
+    // from the side: the leader ahead, the prisoner after him, the men behind
+    await camera(yawLead + 1.45, 0.4, 0.8);
     await shot('led');
     // and from the front: the bound hands and the bound walk
     await camera(yawLead + Math.PI, 0.35, -0.3);
@@ -378,7 +364,7 @@ try {
     const open = await page.evaluate(() => window.__ui.openPanels());
     if (!open.includes('law')) await page.evaluate(() => window.__ui.openPanel({ panel: 'ext', name: 'law', data: { mode: 'captive' } }));
     await tick(1);
-    await shot('cell');
+    await shot('cell', { panel: true });
     // the world as the prisoner sees it: bound at the door of the lock-up
     await page.evaluate(() => window.__ui.closePanel('law'));
     await tick(0.5);
@@ -393,7 +379,26 @@ try {
     await advance(1);
   });
 
+  /** Nothing of the law left over: no patrol, no restraint, no card, the weapon away, the pace of the world as it was. */
+  async function clean() {
+    await page.evaluate(() => {
+      const { sim, me, law, lawMod, player } = window.__l;
+      // (a working morning: the holy day is not a day for the smith's bench)
+      const c = sim.state.clock;
+      c.absDay = Math.floor(c.absDay / 4) * 4 + 1 + 0.42;
+      c.firedHour = Math.floor(c.absDay * 24);
+      lawMod.lawContext(sim).patrol.clear();
+      lawMod.lawContext(sim).watch.reset();
+      if (!law.captivity(me())) player.restrain(null);
+      if (player.drawn && player.drawn()) player.setDrawn(false);
+      if (sim.state.clock.actionTime) sim.dispatch({ type: 'setActionTime', on: false });
+      if (window.__ui.isOpen('law')) window.__ui.closePanel('law');
+    });
+    await tick(0.3);
+  }
+
   await scene('alert', async () => {
+    await clean();
     const info = await page.evaluate(() => {
       const { st, w, sim, player, zone } = window.__l;
       // a walled city (or castle) with the most wall in it
@@ -430,35 +435,8 @@ try {
     await lookAtWatch('alert');
   });
 
-  await scene('night', async () => {
-    await page.evaluate(() => {
-      const { sim, zone } = window.__l;
-      const c = sim.state.clock;
-      c.absDay = Math.floor(c.absDay) + 0.04;
-      c.firedHour = Math.floor(c.absDay * 24);
-      zone.resync();
-    });
-    await advance(30);
-    // by night at the alarm the wall is manned (the second half of the garrison rests)...
-    await lookAtWatch('night');
-    // ...and at the watch the night watch is doubled, torch in hand: the bailey of the castle with the most men-at-arms
-    const castle = await page.evaluate(() => {
-      const { st, w, player, zone } = window.__l;
-      const arms = new Set(['knight', 'sergeant', 'man_at_arms', 'soldier', 'archer', 'squire']);
-      const men = (id) => (st.residentsOf(id) ?? []).filter((p) => arms.has(p.career)).length;
-      const pick = w.settlements.filter((x) => x.kind === 'castle').sort((a, b) => men(b.id) - men(a.id))[0];
-      window.__l.level = 'watch';
-      window.__l.target = pick.id;
-      player.placeAt(pick.x, pick.z, 0);
-      zone.resync();
-      return { name: pick.name, men: men(pick.id) };
-    });
-    console.log('night-watch castle', JSON.stringify(castle));
-    await advance(45);
-    await lookAtTorch('night-watch');
-  });
-
   await scene('horse', async () => {
+    await clean();
     const info = await page.evaluate(() => {
       const { sim, st, w, me, player, zone, face } = window.__l;
       const p = st.persons.get(me());
@@ -507,6 +485,7 @@ try {
 
   // hands-on work you can watch (CIV §8): a smith at his forge; the body plays each step and the work throws up steam and sparks
   await scene('steps', async () => {
+    await clean();
     const info = await page.evaluate(() => {
       const { sim, st, w, player, zone, face, s } = window.__l;
       // a smith of a place that has a smithy, and the smithy
@@ -547,6 +526,9 @@ try {
     });
     console.log('steps start', JSON.stringify(started));
     if (started.error) throw new Error(`${started.error} ${JSON.stringify(started.reasons || [])}`);
+    // the camera in front of him, low and close: the sparks and the steam are at his hands
+    const by = await page.evaluate(() => window.__l.body().yaw);
+    await camera(by + Math.PI - 0.5, 0.3, -0.9);
     // one shot in each step that throws something up
     const seen = new Set();
     for (let i = 0; i < 40 && seen.size < 3; i++) {
@@ -557,7 +539,6 @@ try {
       if (seen.has(key)) continue;
       seen.add(key);
       console.log('step', JSON.stringify(h));
-      await page.evaluate(() => window.__l.s.renderer.zoom(0.6));
       await shot(`steps-${seen.size}`);
     }
   });
