@@ -19,6 +19,7 @@ import { settlementCard } from '../../sim/api';
 import { fullName } from '../../sim/state';
 import { arrivedAt, showPlace } from '../core/finder';
 import type { PinStore } from '../core/pins';
+import { foldButton, isCollapsed } from '../core/collapse';
 import { Dial } from './dial';
 import type { Toasts } from './toasts';
 import type { Guide } from './guide';
@@ -117,6 +118,10 @@ export class Hud {
 
   // feed, dock, travel, overlays
   private readonly feedEl = h('div.mu-feed');
+  /** The lines themselves; the bar under them folds the feed away to a count of messages. */
+  private readonly feedList = h('div.mu-feed-list');
+  private readonly feedCount = h('span.mu-feed-bar-count');
+  private readonly feedBar = h('div.mu-feed-bar.mu-hide');
   private readonly feedLines = new Map<number, { el: HTMLElement; count: HTMLElement; shown: number }>();
   private readonly dockEl = h('div.mu-dock.mu-plate');
   private readonly dockBtns = new Map<string, HTMLButtonElement>();
@@ -196,6 +201,10 @@ export class Hud {
   private needScratch: NeedView[] = [];
 
   constructor(private readonly deps: HudDeps) {
+    const feedFold = foldButton('feed', 'the messages', () => { this.lastFeedSig = ''; this.paintFeedFold(); });
+    this.feedBar.append(icon('scroll', 12), this.feedCount, feedFold);
+    this.feedBar.addEventListener('click', () => feedFold.click());
+    this.feedEl.append(this.feedList, this.feedBar);
     this.tracker = new Tracker({
       game: () => deps.game(), nav: this.nav, nameOf: (id) => deps.nameOf(id),
       openJournal: () => deps.open({ panel: 'journal' }), whatNow: () => this.whatNow.toggle(),
@@ -394,7 +403,7 @@ export class Hud {
 
   /** Clears transient state (new run, back to menu). */
   reset(): void {
-    this.feedEl.replaceChildren();
+    this.feedList.replaceChildren();
     this.feedLines.clear();
     this.gainsEl.replaceChildren();
     this.lastFeedSig = '';
@@ -665,7 +674,7 @@ export class Hud {
         if (!rec) {
           rec = this.makeFeedLine(l);
           this.feedLines.set(l.id, rec);
-          this.feedEl.appendChild(rec.el);
+          this.feedList.appendChild(rec.el);
         }
         if (rec.shown !== l.count) {
           rec.shown = l.count;
@@ -676,6 +685,7 @@ export class Hud {
         }
       }
       for (const [id, rec] of this.feedLines) if (!live.has(id)) { rec.el.remove(); this.feedLines.delete(id); }
+      this.paintFeedFold();
     }
     for (const l of lines) {
       const rec = this.feedLines.get(l.id);
@@ -684,6 +694,16 @@ export class Hud {
       const css = op >= 1 ? '' : String(Math.round(op * 20) / 20);
       if (rec.el.style.opacity !== css) rec.el.style.opacity = css;
     }
+  }
+
+  /** Folded: the lines are hidden and the bar says how many are waiting; open: the bar offers to fold them. */
+  private paintFeedFold(): void {
+    const folded = isCollapsed('feed');
+    const n = this.deps.feed.list().length;
+    this.feedList.classList.toggle('mu-hide', folded);
+    this.feedEl.classList.toggle('folded', folded);
+    this.feedBar.classList.toggle('mu-hide', n === 0 && !folded);
+    this.feedCount.textContent = folded ? (n ? `${n} ${n === 1 ? 'message' : 'messages'}` : 'Messages') : 'Fold messages';
   }
 
   private makeFeedLine(l: FeedLine): { el: HTMLElement; count: HTMLElement; shown: number } {

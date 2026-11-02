@@ -1,5 +1,6 @@
 // The hint card of the first-minutes guide (see core/guide.ts for what it says and when). A small parchment note
 // under the player plate: one hint at a time, gone when answered, dismissable, and switched off in the settings.
+import { foldButton, isCollapsed } from '../core/collapse';
 import { ageYears } from '../../sim/state';
 import { dayFlags } from '../core/hudModel';
 import type { SimEvents } from '../../sim/events';
@@ -132,6 +133,7 @@ export class Guide {
       h('div.mu-guide-head', null,
         h('span.mu-guide-ico', null, icon(def.icon, 18)),
         h('span.mu-guide-title', null, def.title),
+        foldButton('hints', 'the hint', (c) => this.el.classList.toggle('folded', c)),
         h('button.mu-guide-x', { type: 'button', tip: 'Got it', 'aria-label': 'Dismiss this hint', onclick: () => this.finish() }, icon('cross', 12))),
       h('p', null, def.text),
       def.keys?.length ? h('div.mu-guide-keys', null, def.keys.map((x) => h('span.mu-key', null, x))) : null,
@@ -140,6 +142,7 @@ export class Guide {
         h('button.mu-guide-off', { type: 'button', onclick: () => this.deps.disable() }, 'Hide all hints')),
     ];
     this.el.replaceChildren(...kids.filter((x): x is HTMLElement => x !== null));
+    this.el.classList.toggle('folded', isCollapsed('hints'));
     this.el.classList.remove('mu-hide', 'quiet');
     this.el.classList.remove('in');
     void this.el.offsetWidth;

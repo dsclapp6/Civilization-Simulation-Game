@@ -1,6 +1,7 @@
 // The objective tracker (under the player plate): the task being tracked, which step is next and how to do it,
 // how far it is and which way, and two buttons — the journal (O) and "What now?" (Y). It is the answer to
 // "what am I supposed to be doing?" and sits where the eye already is.
+import { foldButton, isCollapsed } from '../core/collapse';
 import { h } from '../core/dom';
 import { icon } from '../core/icons';
 import { relativeYaw, sideWord, where } from '../core/nav';
@@ -49,8 +50,11 @@ export class Tracker {
   constructor(private readonly deps: TrackerDeps) {
     this.where.append(this.whereArrow, this.whereText);
     this.prog.append(this.progBar.el, this.progText);
+    // folded, the card keeps its title (the task) and hides the step, hint, distance and reward
+    const fold = foldButton('tracker', 'the task card', (c) => this.el.classList.toggle('folded', c));
+    this.el.classList.toggle('folded', isCollapsed('tracker'));
     this.body.append(
-      h('div.mu-tracker-top', null, this.src, this.pips),
+      h('div.mu-tracker-top', null, this.src, h('span.mu-row.mu-gap-4', null, this.pips, fold)),
       this.title, this.step, this.hint, this.prog, this.where, this.reward,
     );
     this.el.append(

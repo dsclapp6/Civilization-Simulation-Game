@@ -254,3 +254,34 @@
 .mu-guide-off { background: none; border: none; padding: 0; color: var(--ink-3); font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }
 .mu-guide-off:hover { color: var(--vermilion); }
 @keyframes mu-guide-in { from { opacity: 0; transform: translateX(-12px); } to { opacity: 0.97; transform: none; } }
+
+/* ---- folding the pop-ups away (core/collapse.ts): notices, messages, the task card, hints ---- */
+.mu-fold {
+  flex: none; width: 20px; height: 20px; display: inline-grid; place-items: center; padding: 0; border: 1px solid transparent; border-radius: 3px;
+  background: none; color: var(--ink-3); cursor: pointer; pointer-events: auto;
+}
+.mu-fold:hover { background: rgba(255, 244, 205, 0.7); border-color: var(--rule); color: var(--ink); }
+.mu-toasts-list { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
+.mu-toasts-bar, .mu-feed-bar {
+  display: inline-flex; align-items: center; gap: 6px; padding: 2px 4px 2px 9px; border-radius: 12px; font-size: 12px; font-weight: 700;
+  letter-spacing: 0.03em; cursor: pointer; pointer-events: auto; user-select: none;
+  background: rgba(31, 19, 9, 0.72); color: var(--cream); box-shadow: 0 0 0 1px rgba(214, 170, 70, 0.7);
+}
+.mu-toasts-bar .mu-fold, .mu-feed-bar .mu-fold { color: var(--gold-hi); width: 18px; height: 18px; }
+.mu-toasts-bar .mu-fold:hover, .mu-feed-bar .mu-fold:hover { background: rgba(255, 244, 205, 0.15); border-color: transparent; color: var(--cream); }
+.mu-toasts:not(.folded) .mu-toasts-bar { opacity: 0.75; }
+.mu-toasts:not(.folded) .mu-toasts-bar:hover { opacity: 1; }
+.mu-toasts.folded .mu-toasts-bar { box-shadow: 0 0 0 1px rgba(214, 170, 70, 0.95), 0 0 10px rgba(214, 170, 70, 0.45); }
+.mu-toast-x {
+  position: absolute; top: 3px; right: 3px; width: 18px; height: 18px; display: grid; place-items: center; padding: 0; border: none; border-radius: 3px;
+  background: none; color: var(--ink-3); cursor: pointer; pointer-events: auto; opacity: 0.55;
+}
+.mu-toast-x:hover { opacity: 1; background: rgba(255, 244, 205, 0.7); color: var(--ink); }
+.mu-feed-list { display: flex; flex-direction: column; gap: 3px; }
+.mu-feed-bar { align-self: flex-start; margin-top: 4px; opacity: 0.7; }
+.mu-feed-bar:hover, .mu-feed.folded .mu-feed-bar { opacity: 1; }
+.mu-tracker.folded .mu-tracker-step, .mu-tracker.folded .mu-tracker-hint, .mu-tracker.folded .mu-tracker-prog,
+.mu-tracker.folded .mu-tracker-where, .mu-tracker.folded .mu-tracker-reward, .mu-tracker.folded .mu-tracker-foot,
+.mu-tracker.folded .mu-tracker-empty { display: none; }
+.mu-tracker.folded .mu-tracker-title { margin-bottom: 0; font-size: 15px; }
+.mu-guide.folded p, .mu-guide.folded .mu-guide-keys, .mu-guide.folded .mu-guide-foot { display: none; }
