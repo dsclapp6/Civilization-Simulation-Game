@@ -175,6 +175,8 @@ export class Econ {
   readonly targets = new Map<number, Float64Array>();
   /** Market id → the supply stamp its targets were built at. */
   readonly targetStamp = new Map<number, number>();
+  /** Counts the construction events that can change what the works of the world make (placed, done, cancelled); supply.ts counts the works again when it moves. Not saved. */
+  worksRev = 0;
   /** Optional probe for calibration tools: (what, rank tier, pence). */
   probe: ((what: string, tier: number, value: number) => void) | null = null;
   /** Prices fixed for the length of one settlement's tick (see market.beginTick). */

@@ -256,7 +256,9 @@ export function installEconomy(sim: Simulation, deps: EconomyDeps): EconomyRunti
       if (!view) return [];
       const tips: PriceTip[] = [];
       for (const l of view.lines) {
-        if (MACRO_INDEX[parseItemKey(l.key).good] === undefined || Math.abs(l.trend) < 0.15) continue;
+        const g = parseItemKey(l.key).good;
+        // news of prices: the foods when they stray a seventh, the materials only when a shortage or a glut is plain (their usual premium and local factors are no news)
+        if (MACRO_INDEX[g] === undefined || Math.abs(l.trend) < (GOODS[g].supply ? 0.6 : 0.15)) continue;
         tips.push({ good: parseItemKey(l.key).good, trend: l.trend, price: l.buy });
       }
       return tips;

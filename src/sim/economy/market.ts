@@ -514,8 +514,9 @@ const RAW_FOR_KIND: Record<string, readonly string[]> = {
   weaver: ['wool', 'yarn', 'flax'], bakehouse: ['flour', 'wheat', 'rye', 'firewood'], brewhouse: ['barley', 'malt', 'firewood'],
   watermill: ['wheat', 'rye', 'barley', 'oats', 'peas', 'beans'], windmill: ['wheat', 'rye', 'barley', 'oats', 'peas', 'beans'],
   alehouse: ['barley', 'malt', 'firewood'], tavern: ['barley', 'malt', 'firewood', 'bread', 'cheese', 'meat'],
-  quarry: ['stone'], mine: ['iron_ore'], bloomery: ['iron_ore', 'charcoal'], charcoal_mound: ['firewood'], kiln: ['firewood'],
-  sawpit: ['timber'], stable: ['hay', 'oats'],
+  quarry: ['stone'], mine: ['iron_ore', 'silver_ore', 'gold_ore'], bloomery: ['iron_ore', 'charcoal'], charcoal_mound: ['firewood'], kiln: ['firewood', 'clay'],
+  sawpit: ['timber'], stable: ['hay', 'oats'], clay_pit: ['clay'], lumber_camp: ['timber'], salt_pan: ['salt', 'firewood'],
+  slaughterhouse: ['pig', 'sheep', 'goat', 'cow', 'ox', 'chicken', 'meat', 'hide', 'salt', 'pig_carcass', 'sheep_carcass', 'goat_carcass', 'cow_carcass', 'ox_carcass'],
 };
 
 // ---------------------------------------------------------------------------------------------
