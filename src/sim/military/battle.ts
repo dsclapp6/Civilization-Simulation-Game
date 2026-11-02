@@ -2,6 +2,7 @@
 // Leadership, terrain, fortifications and morale decide; casualties fall on real people through `combat.harm`
 // (deaths, wounds, captures with ransom). When the player is in the line a detail battle of a representative
 // subset (≤ 60 a side) runs near him through `combat.engage`, while the rest resolves macro-style.
+import { applyPlan, defaultPlan } from './plan';
 import { dist } from '../../core/math';
 import { skillLevel } from '../people';
 import { adjustOpinion, type HouseId, type Person, type PersonId } from '../state';
@@ -333,6 +334,8 @@ function fieldFighters(M: Mil, rec: BattleRec, a: Army, d: Army, exclude?: Reado
   const fa = fightersOf(M, [a], exclude), fd = fightersOf(M, [d], exclude);
   fa.stance = a.stance; fd.stance = d.stance;
   fd.bonus = rec.fort;
+  // a storm goes as its plan has it (the attacking army's companies and their tasks)
+  if (rec.siege >= 0) applyPlan(a.plan ?? defaultPlan(M, a), a, fa, fd);
   return [fa, fd];
 }
 

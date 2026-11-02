@@ -4,14 +4,17 @@
 // player, combat or politics needed — the others are looked up lazily on `sim.services`).
 import { dist } from '../../core/math';
 import { setRank } from '../succession';
-import { ageYears, type HouseId, type PersonId } from '../state';
+import { NONE, ageYears, type HouseId, type Person, type PersonId } from '../state';
+import { createPerson } from '../people';
 import type { ArmyView } from '../wave3';
 import type { Wave3Deps } from '../wave3deps';
 import type { Simulation } from '../sim';
 import {
-  armiesOf, detailOf, disband, giveOrder, nearestSettlementId, raise, removeMen, settlementPoint, upkeepDay, viewOf,
+  addMan, armiesOf, detailOf, disband, giveOrder, nearestSettlementId, raise, removeMen, settlementPoint, upkeepDay, viewOf,
 } from './armies';
-import { battleInfo, checkContacts, onFightEnded, stepBattles } from './battle';
+import { battleInfo, checkContacts, defendersOf, onFightEnded, stepBattles } from './battle';
+import { defaultPlan, planEffect } from './plan';
+import { fortBonus } from './siege';
 import { dailyCampaign, defendHour, hourlyArmies, queueHour, thinkHour } from './campaign';
 import { CareerSystem } from './career';
 import { CFG } from './config';
@@ -23,7 +26,7 @@ import { Realm } from './realm';
 import { SiegeSystem } from './siege';
 import { Mil } from './store';
 import { MusterView } from './musterview';
-import { UNIT_CHAR, CHAR_UNIT, type MilitaryRuntime } from './types';
+import { UNIT_CHAR, CHAR_UNIT, type MilitaryRuntime, type UnitKind } from './types';
 
 const contexts = new WeakMap<Simulation, Mil>();
 /** Offices that come with a title (politics `officeFor`): the others change nothing about who rules what. */
@@ -176,6 +179,69 @@ export function installMilitary(sim: Simulation, deps: Wave3Deps): MilitaryRunti
     hireMercenaries(house, count, kind) {
       return hire(M, house, count, kind);
     },
+    stormNow(armyId) {
+      const a = M.army(armyId);
+      if (!a) return { ok: false, reason: 'No such army' };
+      let rec = M.data.sieges.find((s) => s.army === armyId);
+      if (!rec) {
+        // just arrived before the walls: the siege begins, and the storm at once
+        const sid = a.target?.settlement ?? nearestSettlementId(M, a.x, a.z);
+        if (sid === undefined) return { ok: false, reason: 'There is nothing here to storm' };
+        rec = M.sieges.begin(a, sid) ?? undefined;
+        if (!rec) return { ok: false, reason: 'The place cannot be besieged' };
+      }
+      M.sieges.assault(rec, a);
+      return { ok: true };
+    },
+    assaultPlan(armyId) {
+      const a = M.army(armyId);
+      if (!a) return null;
+      if (!a.plan) a.plan = defaultPlan(M, a);
+      const sid = M.data.sieges.find((s) => s.army === armyId)?.settlement ?? a.target?.settlement ?? nearestSettlementId(M, a.x, a.z);
+      if (sid === undefined) return { plan: a.plan, note: '', defenders: 0, walls: 1, target: -1 };
+      const def = defendersOf(M, sid, M.realm.holderOf(sid));
+      const walls = fortBonus(M, sid);
+      return { plan: a.plan, note: planEffect(a.plan, a, def.people.length, walls).note, defenders: def.people.length, walls, target: sid };
+    },
+    setCompanyTask(armyId, company, task) {
+      const a = M.army(armyId);
+      const c = a?.plan?.companies.find((x) => x.id === company);
+      if (!a || !c) return { ok: false, reason: 'No such company' };
+      c.task = task; M.touch();
+      return { ok: true };
+    },
+    moveMen(armyId, from, to, kind, n) {
+      const a = M.army(armyId);
+      const f = a?.plan?.companies.find((x) => x.id === from), t = a?.plan?.companies.find((x) => x.id === to);
+      if (!a || !f || !t) return { ok: false, reason: 'No such company' };
+      const k = Math.min(n, f.men[kind] ?? 0);
+      if (k <= 0) return { ok: false, reason: 'None of them there' };
+      f.men[kind] = (f.men[kind] ?? 0) - k; t.men[kind] = (t.men[kind] ?? 0) + k; M.touch();
+      return { ok: true };
+    },
+    setCaptain(armyId, company, captain) {
+      const a = M.army(armyId);
+      const c = a?.plan?.companies.find((x) => x.id === company);
+      if (!a || !c) return { ok: false, reason: 'No such company' };
+      if (captain !== a.commander && !a.men.includes(captain)) return { ok: false, reason: 'He is not with the army' };
+      c.captain = captain; M.touch();
+      return { ok: true };
+    },
+    reinforce(armyId, counts) {
+      const a = M.army(armyId);
+      if (!a) return 0;
+      let n = 0;
+      for (const p of freshMen(M, a.house, a.home, counts)) { addMan(M, a, p.person, p.kind); n++; }
+      M.touch();
+      return n;
+    },
+    garrison(sid, counts) {
+      const house = M.realm.holderOf(sid);
+      if (!house) return 0;
+      const n = freshMen(M, house, sid, counts).length;
+      M.touch();
+      return n;
+    },
     armsQuality: (person) => { const p = M.person(person); return p ? armsQuality(M, p) : 0; },
 
     // ---- battles, sieges, raids, ransom ----
@@ -224,6 +290,36 @@ export function installMilitary(sim: Simulation, deps: Wave3Deps): MilitaryRunti
 }
 
 /** Mercenary companies for hire (SPEC §13): free swords taken on at a signing fee and a daily wage. */
+/** New fighting men of a House, living at a place in a garrison household of their own (careers by kind). */
+function freshMen(M: Mil, house: HouseId, sid: number, counts: Partial<Record<UnitKind, number>>): Array<{ person: Person; kind: UnitKind }> {
+  const st = M.state;
+  const s = M.settlementById.get(sid);
+  const h = st.houses.get(house);
+  if (!s || !h) return [];
+  const rng = M.sim.rng('military.muster');
+  const hh = st.addHousehold({ id: st.households.alloc(), kind: 'garrison', head: NONE, members: [], home: -1, settlement: sid, purse: 0, stores: {} });
+  const CAREER: Record<UnitKind, Person['career']> = {
+    levy: 'soldier', archer: 'archer', crossbow: 'archer', man_at_arms: 'man_at_arms', sergeant: 'sergeant', knight: 'knight', mercenary: 'man_at_arms',
+  };
+  const out: Array<{ person: Person; kind: UnitKind }> = [];
+  for (const [kind, n] of Object.entries(counts) as Array<[UnitKind, number]>) {
+    for (let i = 0; i < (n ?? 0); i++) {
+      const tier = kind === 'knight' ? 5 : kind === 'sergeant' ? 3 : 2;
+      const p = createPerson(st, rng, {
+        culture: s.culture, sex: 'm', age: 19 + rng.range(0, 18), day: M.day, settlement: sid, settlementName: s.name, household: hh,
+        house, career: CAREER[kind], stage: kind === 'knight' ? 2 : 1, tier: tier as Person['rankTier'], estate: kind === 'knight' ? 'noble' : 'free', money: 4,
+      });
+      // drilled men: arms skills fitting their kind
+      p.skills.melee = Math.max(p.skills.melee, kind === 'levy' ? 600 : kind === 'archer' || kind === 'crossbow' ? 900 : 2200);
+      if (kind === 'archer' || kind === 'crossbow') p.skills.archery = Math.max(p.skills.archery, 2600);
+      if (kind === 'knight' || kind === 'sergeant') p.skills.riding = Math.max(p.skills.riding, 2000);
+      if (!hh.head) st.setHead(hh, p);
+      out.push({ person: p, kind });
+    }
+  }
+  return out;
+}
+
 function hire(M: Mil, house: HouseId, count: number, kind: 'archer' | 'man_at_arms' | 'crossbow' = 'man_at_arms'): number {
   const h = M.state.houses.get(house);
   if (!h || count <= 0) return 0;

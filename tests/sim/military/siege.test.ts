@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { militaryContext } from '../../../src/sim/military';
 import { foodStock, wallIntegrity, fortBonus } from '../../../src/sim/military/siege';
+import { planEffect } from '../../../src/sim/military/plan';
 import type { AdvancementApi } from '../../../src/sim/wave3';
 import { mkPerson } from '../builders';
 import { declareWar, fakeCombat, fakePolitics, milSim } from './helpers';
@@ -138,5 +139,36 @@ describe('sieges', () => {
     mil.order(id, { kind: 'return' });
     expect(mil.siegeAt(castle.id)).toBeNull();
     expect(phases).toContain('lifted');
+  });
+});
+
+describe('the assault plan (companies, captains, tasks)', () => {
+  it('250 against 300: the army and the garrison are brought to strength, and a plan with bows on the walls and a manned ram beats one without', () => {
+    const t = setupSiege('plan-a');
+    const { mil, castle, id, M } = t;
+    const A = M.army(id)!;
+    // bring the host to 250 and the garrison to 300
+    const need = 250 - A.men.length;
+    if (need > 0) mil.reinforce!(id, { levy: Math.round(need * 0.55), archer: Math.round(need * 0.25), man_at_arms: need - Math.round(need * 0.55) - Math.round(need * 0.25) });
+    expect(A.men.length).toBeGreaterThanOrEqual(250);
+    const plan0 = mil.assaultPlan!(id)!;
+    const have = plan0.defenders;
+    if (have < 300) mil.garrison!(castle.id, { man_at_arms: Math.round((300 - have) * 0.5), archer: Math.round((300 - have) * 0.25), levy: 300 - have - Math.round((300 - have) * 0.5) - Math.round((300 - have) * 0.25) });
+    const p = mil.assaultPlan!(id)!;
+    expect(p.defenders).toBeGreaterThanOrEqual(295);
+    expect(p.plan.companies.map((c) => c.task)).toEqual(expect.arrayContaining(['loose', 'ram', 'charge']));
+    // what the plan does against walls: a good plan lowers their worth far more than a bad one
+    const good = planEffect(p.plan, A, p.defenders, 1.8);
+    const bad = planEffect({ companies: p.plan.companies.map((c) => ({ ...c, task: 'charge' as const })) }, A, p.defenders, 1.8);
+    expect(good.fort).toBeLessThan(bad.fort);
+    expect(good.note).toMatch(/ram/);
+    // orders: retask a company, move men between companies, name a captain
+    const ram = p.plan.companies.find((c) => c.task === 'ram')!;
+    const main = p.plan.companies.find((c) => c.task === 'charge')!;
+    expect(mil.setCompanyTask!(id, ram.id, 'reserve').ok).toBe(true);
+    expect(mil.moveMen!(id, main.id, ram.id, 'levy', 5).ok).toBe(true);
+    expect(mil.setCaptain!(id, ram.id, A.commander).ok).toBe(true);
+    // the storm can be ordered at once
+    expect(mil.stormNow!(id).ok).toBe(true);
   });
 });
