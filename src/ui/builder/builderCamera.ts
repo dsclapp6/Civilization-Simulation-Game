@@ -1,7 +1,8 @@
 // Builder mode's camera: the renderer's overview camera (`setOverview`, then `orbit` / `zoom` / `pan` drive it) when the renderer
 // has one, else a bird's-eye camera of our own placed with `setCameraPose` (cameraModel.ts). Which one is decided by looking:
-// a renderer with an overview camera changes its camera mode or moves the picture within a third of a second of being asked;
-// one without does neither (the controls hand the call to nothing).
+// a renderer with an overview camera ends up looking down on a wide stretch of ground (the middle half of the screen spans
+// scores of metres); one without goes on showing what the player's own camera showed — a few metres across, still or moving
+// with the player (the controls hand the call to nothing).
 import type { OverviewView } from '../../render/types';
 import type { UiRendererControls } from '../types';
 import {
@@ -24,7 +25,7 @@ export class BuilderCamera {
   kind: CameraKind = 'pending';
   private cam: CamState;
   private readonly plan: OverviewView & { distance: number };
-  private before: { mode: string | undefined; sx: number; sy: number; has: boolean } = { mode: undefined, sx: 0, sy: 0, has: false };
+  private before: Sight = { point: null, span: 0 };
   private t0 = 0;
   private readonly watch: Watch = newWatch();
   private dirty = false;
@@ -40,8 +41,7 @@ export class BuilderCamera {
   enter(): void {
     const r = this.ports.renderer();
     if (!r) return;
-    const p = r.project(this.plan.x, this.ports.heightAt(this.plan.x, this.plan.z), this.plan.z);
-    this.before = { mode: r.cameraMode?.(), sx: p?.x ?? 0, sy: p?.y ?? 0, has: !!p };
+    this.before = this.sight(r);
     this.t0 = this.ports.clock();
     Object.assign(this.watch, newWatch());
     this.kind = 'pending';
@@ -105,10 +105,19 @@ export class BuilderCamera {
     }
   }
 
+  /** What the camera shows now: where the middle of the land lies on the screen and how much ground the middle of the screen spans. */
+  private sight(r: UiRendererControls): Sight {
+    const { w, h } = this.ports.viewport();
+    const a = r.screenToGround(w * 0.25, h * 0.55);
+    const b = r.screenToGround(w * 0.75, h * 0.55);
+    return {
+      point: r.project(this.plan.x, this.ports.heightAt(this.plan.x, this.plan.z), this.plan.z),
+      span: a && b ? Math.hypot(a.x - b.x, a.z - b.z) : 0,
+    };
+  }
+
   private probe(r: UiRendererControls): void {
-    const mode = r.cameraMode?.();
-    const p = r.project(this.plan.x, this.ports.heightAt(this.plan.x, this.plan.z), this.plan.z);
-    const verdict = cameraVerdict(this.watch, mode, this.before.mode, p, this.before.has ? { x: this.before.sx, y: this.before.sy } : null, this.ports.clock() - this.t0);
+    const verdict = cameraVerdict(this.watch, this.sight(r), this.before, this.plan.distance, this.ports.clock() - this.t0);
     if (verdict === 'overview') { this.kind = 'overview'; return; }
     if (verdict === 'none') {
       // no overview camera: place our own, starting where the player's camera looks
@@ -148,29 +157,39 @@ export class BuilderCamera {
   state(): Readonly<CamState> { return this.cam; }
 }
 
-/** What the probe has seen of the picture since the overview was asked for. */
-export interface Watch { last: { x: number; y: number } | null; still: number; frames: number }
+/** What the camera shows at one moment: the screen position of the middle of the land and the metres of ground the middle half of the screen spans. */
+export interface Sight { point: { x: number; y: number } | null; span: number }
 
-export function newWatch(): Watch { return { last: null, still: 0, frames: 0 }; }
+/** What the probe has seen since the overview was asked for. */
+export interface Watch { last: { x: number; y: number } | null; still: number; wide: number; frames: number }
+
+export function newWatch(): Watch { return { last: null, still: 0, wide: 0, frames: 0 }; }
+
+/** Frames that look wide before the overview camera is believed; frames of an unmoved picture (and seconds) before 'none'; and the longest wait. */
+export const VERDICT = { wideFrames: 3, stillFrames: 12, stillSeconds: 0.5, lateFrames: 60, lateSeconds: 1.3 } as const;
+
+/** How much ground the middle half of the screen must span for a camera to be a bird's-eye one (the player's own shows a dozen metres). */
+export function wideSpan(distance: number): number { return Math.max(24, Math.min(60, distance * 0.3)); }
 
 /**
- * Did the renderer's overview camera take over? Judged by looking, one frame at a time, and biased toward "yes" (a renderer that
- * has the camera must not have ours laid over it): its camera mode changed, or the picture moved (a glide to a bird's-eye view
- * moves it; a camera that has nothing to do stands perfectly still). Only a picture that has not moved for a dozen frames and half
- * a second says 'none'. 'wait' while it is not yet clear.
+ * Did the renderer's overview camera take over? Judged by looking, one frame at a time. A bird's-eye camera sees scores of metres
+ * across the middle of the screen, a good deal more than the camera it replaced, and it keeps seeing them: that is 'overview'. A
+ * picture that has not moved for a dozen frames and half a second says 'none' (the call went to nothing); so does a picture that
+ * goes on moving as the player's camera does while he walks, once the glide of an overview camera (under a second) has surely
+ * been and gone. 'wait' while it is not yet clear. (A camera that is merely moving is not taken for an overview camera.)
  */
-export function cameraVerdict(
-  w: Watch, modeNow: string | undefined, modeBefore: string | undefined,
-  now: { x: number; y: number } | null, before: { x: number; y: number } | null, seconds: number,
-): 'overview' | 'none' | 'wait' {
+export function cameraVerdict(w: Watch, seen: Sight, before: Sight | null, distance: number, seconds: number): 'overview' | 'none' | 'wait' {
   w.frames++;
-  if (modeNow !== undefined && modeNow !== modeBefore) return 'overview';
-  const ref = w.last ?? before;
-  const step = ref && now ? Math.hypot(now.x - ref.x, now.y - ref.y) : ref || now ? 99 : 0;
-  w.last = now;
-  if (step > 4) { w.still = 0; return 'overview'; }
+  const ref = w.last ?? before?.point ?? null;
+  const step = ref && seen.point ? Math.hypot(seen.point.x - ref.x, seen.point.y - ref.y) : ref || seen.point ? 99 : 0;
+  w.last = seen.point;
+  if (seen.span >= wideSpan(distance) && seen.span >= (before?.span ?? 0) * 1.5) w.wide++;
+  else w.wide = 0;
+  if (w.wide >= VERDICT.wideFrames) return 'overview';
   if (step < 1.2) w.still++;
-  if (w.still >= 12 && seconds >= 0.5) return 'none';
+  else w.still = 0;
+  if (w.still >= VERDICT.stillFrames && seconds >= VERDICT.stillSeconds) return 'none';
+  if (w.frames >= VERDICT.lateFrames && seconds >= VERDICT.lateSeconds) return 'none';
   return 'wait';
 }
 

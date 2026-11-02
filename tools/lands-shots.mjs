@@ -51,7 +51,16 @@ for (const [W, H] of sizes) {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error' && !/GPU stall|ReadPixels|WebGL/.test(m.text())) errors.push(m.text()); });
-  const frames = (n = 6) => page.evaluate((k) => { for (let i = 0; i < k; i++) { window.__game.tick(0.1); window.__game.draw(); } }, n);
+  /** `n` tenths of a second of the whole loop, then the picture drawn once (picking and the ghost use the last drawn frame). */
+  const frames = (n = 6) => page.evaluate((k) => { for (let i = 0; i < k; i++) window.__game.tick(0.1); window.__game.draw(); window.__game.tick(0.05); window.__game.draw(); }, n);
+  /** The same with the picture drawn after every step: for what watches the renderer move (the builder's camera probe, a glide). */
+  const live = (n = 20) => page.evaluate((k) => { for (let i = 0; i < k; i++) { window.__game.tick(0.05); window.__game.draw(); } }, n);
+  /** The builder's camera takes a moment: the verdict (the renderer's overview camera or our own) and its glide; a drawn frame is a sixtieth of a second to the camera. */
+  const lift = async () => {
+    await live(24);
+    for (let i = 0; i < 60 && (await page.evaluate(() => document.querySelector('.mu-bld-root')?.dataset.camera)) === 'pending'; i++) await live(10);
+    await live(50);
+  };
   const settleMap = async () => { await frames(4); await page.evaluate(() => { window.__game.settle(); window.__game.draw(); }); await frames(6); };
   const ui = () => page.evaluate(() => window.__ui.openPanels());
   const esc = async () => { await page.waitForTimeout(130); await page.keyboard.press('Escape'); await frames(2); };
@@ -133,10 +142,12 @@ for (const [W, H] of sizes) {
     // ---------------------------------------------------------------- the banner
     if (only.has('hud')) {
       await page.evaluate(() => window.__ui.showBanner());
-      await frames(30);
-      await page.locator('.mu-banner').hover().catch(() => undefined);
+      await frames(3);
+      // the banner's own animation runs in real time and lasts six seconds: hold it where it is fully there
+      await page.evaluate(() => { for (const a of document.querySelector('.mu-banner').getAnimations()) { a.pause(); a.currentTime = 1500; } });
+      await page.mouse.move(W / 2, H / 2 + 120);
       await shot('banner');
-      await page.mouse.move(W / 2, H / 2);
+      await frames(70); // its six seconds of the interface's time go by
     }
 
     // ---------------------------------------------------------------- live as the king of Basseance
@@ -145,7 +156,8 @@ for (const [W, H] of sizes) {
 
     if (only.has('builder')) {
       await page.keyboard.press('KeyB');
-      await frames(40);
+      await lift();
+      await frames(10);
       await shot('builder-catalogue');
       await page.locator('.mu-bld-row[data-kind="cottage"]').click();
       await page.mouse.move(Math.round(W * 0.42), Math.round(H * 0.36));
@@ -163,7 +175,8 @@ for (const [W, H] of sizes) {
       }, W);
       if (spot) { await page.mouse.move(spot.x, spot.y); await frames(5); await shot('builder-red'); }
       await page.getByRole('button', { name: 'Place for me' }).click();
-      await frames(20);
+      await live(24);
+      await frames(4);
       await shot('builder-suggest');
       await page.getByRole('button', { name: 'Stake it out' }).click();
       await frames(6);
@@ -189,15 +202,22 @@ for (const [W, H] of sizes) {
       if (target) { await page.mouse.click(target.x, target.y); await frames(6); await shot('builder-building'); }
       await esc();
       await esc();
-      // an outpost in the wild
-      const dep = await page.evaluate(() => { const w = window.__game.session.sim.world; return (w.deposits || []).find((x) => x.settlement < 0 && x.kind === 'iron') || (w.deposits || []).find((x) => x.settlement < 0); });
+      // an outpost in the wild, over a deposit with nothing but wild land round it
+      const dep = await page.evaluate(() => {
+        const sm = window.__game.session.sim; const t = sm.services.territory;
+        const clear = (x) => t.landAt(x.x, x.z).kind === 'wild' && [0, 1, 2, 3, 4, 5, 6, 7].every((i) => t.landAt(x.x + Math.cos(i * Math.PI / 4) * 90, x.z + Math.sin(i * Math.PI / 4) * 90).kind === 'wild');
+        const wild = (sm.world.deposits || []).filter((x) => x.settlement < 0 && clear(x));
+        return wild.find((x) => x.kind === 'iron') || wild[0];
+      });
       if (dep) {
         await page.evaluate(() => { const s = window.__game.session.sim; const h = s.state.households.get(s.state.persons.get(s.state.run.playerId).household); h.purse = 5e6; for (const g of ['timber', 'planks', 'stone', 'nails', 'iron', 'straw']) h.stores[g] = 5000; });
-        await page.evaluate((d) => window.__ui.openPanel({ panel: 'ext', name: 'builder', data: { at: { x: d.x, z: d.z }, kind: 'mine' } }), dep);
-        await frames(40);
-        await page.mouse.move(Math.round(W * 0.34), Math.round(H * 0.5));
+        await page.evaluate((dd) => window.__ui.openPanel({ panel: 'ext', name: 'builder', data: { at: { x: dd.x, z: dd.z }, kind: dd.kind === 'stone' ? 'quarry' : dd.kind === 'clay' ? 'clay_pit' : dd.kind === 'salt' ? 'salt_pan' : 'mine' } }), dep);
+        await lift();
+        await page.evaluate(() => { window.__game.settle(); window.__game.draw(); });
+        await frames(10);
+        await page.mouse.move(Math.round(W / 2), Math.round(H / 2));
         await frames(4);
-        await page.mouse.click(Math.round(W * 0.34), Math.round(H * 0.5));
+        await page.mouse.click(Math.round(W / 2), Math.round(H / 2));
         await frames(4);
         await shot('builder-outpost');
         await page.locator('.mu-bld-name input').fill('Lone Hill Camp');

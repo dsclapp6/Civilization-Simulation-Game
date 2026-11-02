@@ -37,10 +37,13 @@ something changes). The world keeps running (the panel is `pauses: 'never'`; the
 is held (`captures: true`), so keys and the mouse belong to the builder.
 
 *Which camera.* The renderer's overview camera exists in the contract, but a renderer without it (or the controls of an older host)
-simply does nothing when asked. The builder therefore *looks*: if within a dozen frames and half a second the renderer neither
-changed its camera mode nor moved the picture, it lays a bird's-eye camera of its own with `setCameraPose` (`builderCamera.ts`,
-`cameraModel.ts`, same keys, same limits: the look-at stays in the circle, zoom 20 m to 2.2 × the radius). A renderer that has the
-overview camera is never overridden (the test is biased toward "it has it"; see *Hand-offs*).
+simply does nothing when asked. The builder therefore *looks* (`builderCamera.ts`, `cameraVerdict`): a bird's-eye camera shows scores
+of metres of ground across the middle half of the screen (`screenToGround` at a quarter and three quarters of the width), the
+player's own a dozen, so a view that is wide and stays wide for three frames is the renderer's overview camera. A picture that has
+not moved for a dozen frames and half a second (the call went to nothing), or one that only moves as the follow camera does while
+the player walks, once 60 frames and 1.3 s have gone (more than any glide), makes the builder lay a bird's-eye camera of its own
+with `setCameraPose` (`cameraModel.ts`, same keys, same limits: the look-at stays in the circle, zoom 20 m to 2.2 × the radius). A
+camera that merely moves is never taken for the overview camera.
 
 **The catalogue** (`catalogue(me, where)`). Every kind of building (63), by category (homes, farm, crafts, food and drink, church,
 civic, defence, resources, military), the ones you may raise first. Each row: name, cost in one line (worker-days, goods, cash), and for

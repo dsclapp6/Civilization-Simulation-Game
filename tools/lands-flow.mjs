@@ -1,7 +1,7 @@
 // End-to-end flow of the lands UI in the real game (civilization pass, wave B1): builder mode, ruler mode, "Rule this town" and
 // the map's deposits, borders and people lists, in headless Chromium.
 //
-//   node tools/lands-flow.mjs [--seed=flow]            (port 5182; starts its own Vite if nothing is listening)
+//   node tools/lands-flow.mjs [--seed=flow] [--from=king]   (port 5182; starts its own Vite if nothing is listening)
 //
 // The loop is driven through `window.__game` (src/app/game.ts): `tick(seconds)` runs whole frames — the real UI and the simulation —
 // without drawing, `draw()` renders (the builder's picking and the ghost need a drawn frame). The live-as panel is another
@@ -18,6 +18,7 @@ const PORT = 5182;
 const args = process.argv.slice(2);
 const opt = (name, def) => { const a = args.find((x) => x.startsWith(`--${name}=`)); return a ? a.slice(name.length + 3) : def; };
 const seed = opt('seed', 'flow');
+const fromKing = opt('from', '') === 'king';
 
 async function serverUp() { try { return (await fetch(`http://localhost:${PORT}/`)).ok; } catch { return false; } }
 async function serverIsOurs() {
@@ -59,12 +60,18 @@ const stillCamera = () => page.evaluate(() => {
   let prev = null;
   for (let i = 0; i < 500; i++) {
     g.tick(0.1);
-    if (i % 3 === 0) g.draw();
+    g.draw();
     const p = s.controls.project(st.x, sm.world.heightAt(st.x, st.z), st.z);
     if (prev && p && Math.hypot(p.x - prev.x, p.y - prev.y) < 0.3 && i > 15) break;
     prev = p;
   }
 });
+/** The builder's camera takes a moment: the verdict (the renderer's overview camera or our own) and its glide; a drawn frame is a sixtieth of a second to the camera. */
+const lift = async () => {
+  await live(24);
+  for (let i = 0; i < 60 && (await dataset())?.camera === 'pending'; i++) await live(10);
+  await live(50);
+};
 const esc = async () => { await page.waitForTimeout(130); await page.keyboard.press('Escape'); await frames(2); };
 const dataset = () => page.evaluate(() => { const r = document.querySelector('.mu-bld-root'); return r ? { ...r.dataset } : null; });
 const text = (sel) => page.locator(sel).first().textContent();
@@ -100,104 +107,132 @@ try {
   });
   await frames(10);
 
-  // ======================================================================== a child cannot build: the card says why
-  console.log('-- builder mode, a child');
-  const me0 = await sim(() => { const s = window.__game.session.sim; const p = s.state.persons.get(s.state.run.playerId); return { id: p.id, age: Math.floor((s.absDay - p.birthDay) / 16), settlement: p.settlement }; });
-  await page.keyboard.press('KeyB');
-  await frames(4);
-  let s = await ui();
-  check('B opens builder mode', s.panels.join() === 'builder', JSON.stringify(s));
-  check('a child gets a card that says why, not the overhead camera', (await page.locator('.mu-bld-why').count()) === 1 && /young/i.test(await text('.mu-bld-why')), await text('.mu-panels .mu-win-body').catch(() => ''));
-  check('and what would let a person build', (await page.locator('.mu-bld-ways li').count()) >= 4);
-  const ruleBtn = page.locator('.mu-panels .mu-win').getByRole('button', { name: /^Rule / });
-  check('with a way to Rule the town nearby', (await ruleBtn.count()) >= 1, await page.locator('.mu-panels .mu-win-body').innerText());
-  check('the camera stays where it was', (await sim(() => window.__game.session.renderer.getCameraMode())) === 'follow');
-  await ruleBtn.first().click();
-  await frames(3);
-  const asked = await sim(() => window.__liveAs.slice());
-  const ruler0 = await sim((st) => window.__game.session.services.realm.rulerOf(st), me0.settlement);
-  check('Rule this town asks the live-as panel for the ruler, with the reason "rule"', asked.length === 1 && asked[0].id === ruler0 && asked[0].data && asked[0].data.reason === 'rule', JSON.stringify(asked));
-  await esc();
-  s = await ui();
-  check('Esc closes the stand-in', !s.panels.includes('liveAs'), JSON.stringify(s));
+  let s = null;
+  // `--from=king` skips what comes before the king (the child's cards, the map, the banner) when only the rest is being worked on
+  if (!fromKing) {
+    // ======================================================================== a child cannot build: the card says why
+    console.log('-- builder mode, a child');
+    const me0 = await sim(() => { const s = window.__game.session.sim; const p = s.state.persons.get(s.state.run.playerId); return { id: p.id, age: Math.floor((s.absDay - p.birthDay) / 16), settlement: p.settlement }; });
+    await page.keyboard.press('KeyB');
+    await frames(4);
+    s = await ui();
+    check('B opens builder mode', s.panels.join() === 'builder', JSON.stringify(s));
+    check('a child gets a card that says why, not the overhead camera', (await page.locator('.mu-bld-why').count()) === 1 && /young/i.test(await text('.mu-bld-why')), await text('.mu-panels .mu-win-body').catch(() => ''));
+    check('and what would let a person build', (await page.locator('.mu-bld-ways li').count()) >= 4);
+    const ruleBtn = page.locator('.mu-panels .mu-win').getByRole('button', { name: /^Rule / });
+    check('with a way to Rule the town nearby', (await ruleBtn.count()) >= 1, await page.locator('.mu-panels .mu-win-body').innerText());
+    check('the camera stays where it was', (await sim(() => window.__game.session.renderer.getCameraMode())) === 'follow');
+    await ruleBtn.first().click();
+    await frames(3);
+    const asked = await sim(() => window.__liveAs.slice());
+    const ruler0 = await sim((st) => window.__game.session.services.realm.rulerOf(st), me0.settlement);
+    check('Rule this town asks the live-as panel for the ruler, with the reason "rule"', asked.length === 1 && asked[0].id === ruler0 && asked[0].data && asked[0].data.reason === 'rule', JSON.stringify(asked));
+    await esc();
+    s = await ui();
+    check('Esc closes the stand-in', !s.panels.includes('liveAs'), JSON.stringify(s));
 
-  // ---- the ruler's seat for someone who rules nothing
-  console.log('-- ruler mode, a child');
-  await page.keyboard.press('KeyU');
-  await frames(4);
-  s = await ui();
-  check('U opens the seat for a child as a card', s.panels.join() === 'ruler' && (await page.locator('.mu-rul-win').count()) === 0, JSON.stringify(s));
-  check('the card says you rule nothing and offers a town to rule', /rule nothing|hold no land/i.test(await page.locator('.mu-panels .mu-win').innerText()) && (await page.locator('.mu-panels .mu-win').getByRole('button', { name: /^Rule / }).count()) >= 1);
-  await esc();
+    // ---- the ruler's seat for someone who rules nothing
+    console.log('-- ruler mode, a child');
+    await page.keyboard.press('KeyU');
+    await frames(4);
+    s = await ui();
+    check('U opens the seat for a child as a card', s.panels.join() === 'ruler' && (await page.locator('.mu-rul-win').count()) === 0, JSON.stringify(s));
+    check('the card says you rule nothing and offers a town to rule', /rule nothing|hold no land/i.test(await page.locator('.mu-panels .mu-win').innerText()) && (await page.locator('.mu-panels .mu-win').getByRole('button', { name: /^Rule / }).count()) >= 1);
+    await esc();
 
-  // ======================================================================== the map (as the child)
-  console.log('-- the map');
-  await page.keyboard.press('KeyM');
-  await frames(4);
-  await page.evaluate(() => { window.__game.settle(); window.__game.draw(); });
-  await frames(6);
-  check('M opens the map', (await ui()).panels.join() === 'map');
-  const borders = await page.evaluate(() => { const c = document.querySelector('.mu-map-borders'); if (!c) return null; const g = c.getContext('2d'); const d = g.getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 16) if (d[i] > 0) n++; return { w: c.width, h: c.height, painted: n }; });
-  check('the borders are painted on the map', borders && borders.painted > 500, JSON.stringify(borders));
-  const deps = await page.locator('.mu-map-dep:not(.mu-hide)').count();
-  const depTotal = await sim(() => window.__game.session.sim.world.deposits.length);
-  check('the deposits are drawn as icons (those on the screen)', deps > 20 && deps <= depTotal, `${deps} of ${depTotal}`);
-  await page.locator('.mu-map-layer', { hasText: 'Iron ore' }).click();
-  await frames(3);
-  const deps2 = await page.locator('.mu-map-dep:not(.mu-hide)').count();
-  check('switching the iron filter off hides the iron deposits', deps2 < deps, `${deps} -> ${deps2}`);
-  await page.locator('.mu-map-layer', { hasText: 'Iron ore' }).click();
-  await frames(2);
-  check('the tooltip of a deposit names its kind, richness and whose lands', await page.evaluate(() => { const e = document.querySelector('.mu-map-dep:not(.mu-hide)'); const t = e && e.getAttribute('data-tip'); return !!t && /deposit: (thin|fair|good|rich)/.test(t) && /lands|wild/.test(t); }));
-  const depPt = await page.evaluate(() => {
-    for (const e of document.querySelectorAll('.mu-map-dep:not(.mu-hide)')) {
-      const b = e.getBoundingClientRect();
-      if (b.left > 540 && b.right < 940 && b.top > 90 && b.bottom < 600 && e.contains(document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2))) return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
-    }
-    return null;
-  });
-  check('a deposit icon can be clicked on the map', !!depPt);
-  if (depPt) await page.mouse.click(depPt.x, depPt.y);
-  await frames(2);
-  check('clicking a deposit shows its card', /deposit/.test(await text('.mu-map-place-name')), await text('.mu-map-detail'));
-  await page.locator('.mu-map-row').nth(2).click();
-  await frames(2);
-  check('a settlement card tells whose lands they are', (await page.locator('.mu-map-detail .mu-dot').count()) >= 1);
-  const ruleOnMap = page.locator('.mu-map-detail').getByRole('button', { name: /^Rule / });
-  check('and offers Rule this town', (await ruleOnMap.count()) === 1);
-  await page.locator('.mu-map-detail').getByRole('button', { name: 'People here' }).click();
-  await frames(2);
-  const people = await page.locator('.mu-map-prow').count();
-  check('People here lists the people of the place', people >= 10, String(people));
-  check('with the ruler first', /rules here/.test(await text('.mu-map-prow')), await text('.mu-map-prow'));
-  const firstName = (await page.locator('.mu-map-prow b').nth(4).textContent()).split(' ')[0];
-  await page.locator('.mu-map-people input[type=search]').fill(firstName);
-  await frames(2);
-  const filtered = await page.locator('.mu-map-prow').count();
-  check('the search narrows the list by name', filtered >= 1 && filtered < people, `${people} -> ${filtered}`);
-  await page.locator('.mu-map-people input[type=search]').fill('');
-  await page.locator('.mu-map-people .mu-chip', { hasText: 'Church' }).first().click().catch(() => undefined);
-  await frames(2);
-  await sim(() => { window.__liveAs.length = 0; });
-  await page.locator('.mu-map-prow').first().getByRole('button', { name: 'Live as' }).click();
-  await frames(3);
-  const lived = await sim(() => window.__liveAs.slice());
-  check('Live as opens the live-as panel with that person', lived.length === 1 && typeof lived[0].id === 'number' && lived[0].data && lived[0].data.reason === 'choose', JSON.stringify(lived));
-  s = await ui();
-  check('and the map gave way to it', !s.panels.includes('map'), JSON.stringify(s));
-  await esc();
+    // ======================================================================== the map (as the child)
+    console.log('-- the map');
+    await page.keyboard.press('KeyM');
+    await frames(4);
+    await page.evaluate(() => { window.__game.settle(); window.__game.draw(); });
+    await frames(6);
+    check('M opens the map', (await ui()).panels.join() === 'map');
+    const borders = await page.evaluate(() => { const c = document.querySelector('.mu-map-borders'); if (!c) return null; const g = c.getContext('2d'); const d = g.getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 16) if (d[i] > 0) n++; return { w: c.width, h: c.height, painted: n }; });
+    check('the borders are painted on the map', borders && borders.painted > 500, JSON.stringify(borders));
+    const deps = await page.locator('.mu-map-dep:not(.mu-hide)').count();
+    const depTotal = await sim(() => window.__game.session.sim.world.deposits.length);
+    check('the deposits are drawn as icons (those on the screen)', deps > 20 && deps <= depTotal, `${deps} of ${depTotal}`);
+    await page.locator('.mu-map-layer', { hasText: 'Iron ore' }).click();
+    await frames(3);
+    const deps2 = await page.locator('.mu-map-dep:not(.mu-hide)').count();
+    check('switching the iron filter off hides the iron deposits', deps2 < deps, `${deps} -> ${deps2}`);
+    await page.locator('.mu-map-layer', { hasText: 'Iron ore' }).click();
+    await frames(2);
+    check('the tooltip of a deposit names its kind, richness and whose lands', await page.evaluate(() => { const e = document.querySelector('.mu-map-dep:not(.mu-hide)'); const t = e && e.getAttribute('data-tip'); return !!t && /deposit: (thin|fair|good|rich)/.test(t) && /lands|wild/.test(t); }));
+    const depPt = await page.evaluate(() => {
+      for (const e of document.querySelectorAll('.mu-map-dep:not(.mu-hide)')) {
+        const b = e.getBoundingClientRect();
+        if (b.left > 540 && b.right < 940 && b.top > 90 && b.bottom < 600 && e.contains(document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2))) return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
+      }
+      return null;
+    });
+    check('a deposit icon can be clicked on the map', !!depPt);
+    if (depPt) await page.mouse.click(depPt.x, depPt.y);
+    await frames(2);
+    check('clicking a deposit shows its card', /deposit/.test(await text('.mu-map-place-name')), await text('.mu-map-detail'));
+    await page.locator('.mu-map-row').nth(2).click();
+    await frames(2);
+    check('a settlement card tells whose lands they are', (await page.locator('.mu-map-detail .mu-dot').count()) >= 1);
+    const ruleOnMap = page.locator('.mu-map-detail').getByRole('button', { name: /^Rule / });
+    check('and offers Rule this town', (await ruleOnMap.count()) === 1);
+    await page.locator('.mu-map-detail').getByRole('button', { name: 'People here' }).click();
+    await frames(2);
+    const people = await page.locator('.mu-map-prow').count();
+    check('People here lists the people of the place', people >= 10, String(people));
+    check('with the ruler first', /rules here/.test(await text('.mu-map-prow')), await text('.mu-map-prow'));
+    const firstName = (await page.locator('.mu-map-prow b').nth(4).textContent()).split(' ')[0];
+    await page.locator('.mu-map-people input[type=search]').fill(firstName);
+    await frames(2);
+    const filtered = await page.locator('.mu-map-prow').count();
+    check('the search narrows the list by name', filtered >= 1 && filtered < people, `${people} -> ${filtered}`);
+    await page.locator('.mu-map-people input[type=search]').fill('');
+    await page.locator('.mu-map-people .mu-chip', { hasText: 'Church' }).first().click().catch(() => undefined);
+    await frames(2);
+    await sim(() => { window.__liveAs.length = 0; });
+    await page.locator('.mu-map-prow').first().getByRole('button', { name: 'Live as' }).click();
+    await frames(3);
+    const lived = await sim(() => window.__liveAs.slice());
+    check('Live as opens the live-as panel with that person', lived.length === 1 && typeof lived[0].id === 'number' && lived[0].data && lived[0].data.reason === 'choose', JSON.stringify(lived));
+    s = await ui();
+    check('and the map gave way to it', !s.panels.includes('map'), JSON.stringify(s));
+    await esc();
 
-  // ======================================================================== the banner
-  console.log('-- the banner');
-  await sim(() => { window.__ui.showBanner(); });
-  await frames(30);
-  const banner = await page.evaluate(() => { const b = document.querySelector('.mu-banner'); return b ? { on: b.classList.contains('on'), act: b.classList.contains('act'), text: b.innerText } : null; });
-  check('the settlement banner offers Rule this town', banner && banner.on && banner.act && /Rule /.test(banner.text), JSON.stringify(banner));
-  await sim(() => { window.__liveAs.length = 0; });
-  await page.locator('.mu-banner .mu-btn').click();
-  await frames(3);
-  check('and the button asks for the ruler', (await sim(() => window.__liveAs.length)) === 1);
-  await esc();
+    // ======================================================================== the banner
+    console.log('-- the banner');
+    s = await ui();
+    check('nothing is left open before the banner', s.panels.length === 0, JSON.stringify(s));
+    // The interface's clock is the one `tick` drives, so "six seconds" are sixty tenths here, whatever the machine does.
+    const bannerState = () => page.evaluate(() => { const b = document.querySelector('.mu-banner'); return b ? { on: b.classList.contains('on'), act: b.classList.contains('act'), text: b.innerText } : null; });
+    const bannerSpot = () => page.evaluate(() => {
+      const b = document.querySelector('.mu-banner .mu-btn');
+      if (!b) return null;
+      const r = b.getBoundingClientRect();
+      const x = r.x + r.width / 2, y = r.y + r.height / 2;
+      const top = document.elementFromPoint(x, y);
+      return { x, y, hit: !!top && b.contains(top), top: top ? `${top.tagName}.${top.className}` : '' };
+    });
+    await sim(() => { window.__liveAs.length = 0; window.__ui.showBanner(); });
+    await frames(2);
+    const banner = await bannerState();
+    check('the settlement banner offers Rule this town', banner && banner.on && banner.act && /Rule /.test(banner.text), JSON.stringify(banner));
+    let spot = await bannerSpot();
+    check('and nothing covers its button', spot && spot.hit, JSON.stringify(spot));
+    // pointing at the banner keeps it on the screen past its six seconds; leaving lets it go
+    await page.mouse.move(spot.x, spot.y);
+    await frames(80);
+    check('the banner stays while the cursor is on it', (await bannerState())?.on === true);
+    await page.mouse.move(640, 600);
+    await frames(30);
+    check('and goes when the cursor leaves it', (await bannerState())?.on === false);
+    await sim(() => { window.__ui.showBanner(); });
+    await frames(2);
+    spot = await bannerSpot();
+    await page.mouse.click(spot.x, spot.y);
+    await frames(3);
+    const bannerAsked = await sim(() => window.__liveAs.slice());
+    check('the button asks the live-as panel for the ruler, with the reason "rule"', bannerAsked.length === 1 && typeof bannerAsked[0].id === 'number' && bannerAsked[0].data && bannerAsked[0].data.reason === 'rule', JSON.stringify({ bannerAsked, spot }));
+    await esc();
+  }
 
   // ======================================================================== live as the ruler (the king of Basseance)
   await sim(() => { const s = window.__game.session.sim; const me = s.state.persons.get(s.state.run.playerId); s.switchTo(s.services.realm.rulerOf(me.settlement)); });
@@ -208,8 +243,8 @@ try {
   console.log('-- builder mode');
   await sim(() => { window.__calls.ghost.length = 0; window.__calls.area.length = 0; window.__calls.overview.length = 0; window.__calls.pose.length = 0; window.__calls.mode.length = 0; });
   await page.keyboard.press('KeyB');
-  await live(24);
-  await frames(20);
+  await lift();
+  await frames(10);
   s = await ui();
   check('B opens builder mode over the world (not a page that pauses)', s.panels.join() === 'builder' && s.captures && !(await sim(() => window.__game.session.sim.clock.paused)), JSON.stringify(s));
   let d = await dataset();
@@ -415,7 +450,7 @@ try {
   if (dep) {
     await sim((dd) => { const s = window.__game.session.sim; const h = s.state.households.get(s.state.persons.get(s.state.run.playerId).household); h.purse = 5e6; for (const g of ['timber', 'planks', 'stone', 'nails', 'iron', 'straw']) h.stores[g] = 5000; }, dep);
     await sim((dd) => window.__ui.openPanel({ panel: 'ext', name: 'builder', data: { at: { x: dd.x, z: dd.z }, kind: dd.kind === 'stone' ? 'quarry' : dd.kind === 'clay' ? 'clay_pit' : dd.kind === 'salt' ? 'salt_pan' : 'mine' } }), dep);
-    await live(24);
+    await lift();
     await page.evaluate(() => { window.__game.settle(); window.__game.draw(); });
     await frames(10);
     d = await dataset();
@@ -570,7 +605,7 @@ try {
   const perFrame = (fn) => page.evaluate((src) => { const f = new Function(`return (${src})`)(); const out = []; for (let r = 0; r < 5; r++) out.push(f()); out.sort((a, b) => a - b); return out[2]; }, fn.toString());
   const idle = await perFrame(() => { const t = performance.now(); window.__game.tick(1); return (performance.now() - t) / 30; });
   await page.keyboard.press('KeyB');
-  await live(24);
+  await lift();
   await page.locator('.mu-bld-row[data-kind="cottage"]').click();
   await page.mouse.move(520, 280);
   await frames(5);
@@ -605,7 +640,7 @@ try {
   await frames(2);
 } catch (err) {
   failures++;
-  console.log(`FAIL the flow stopped: ${err && err.stack ? err.stack.split('\n').slice(0, 4).join(' | ') : err}`);
+  console.log(`FAIL the flow stopped: ${err && err.message ? String(err.message).split('\n').slice(0, 14).join(' | ') : err}${err && err.stack ? ` @ ${String(err.stack).split('\n').filter((l) => /lands-flow/.test(l)).slice(0, 2).join(' ')}` : ''}`);
 }
 
 check('no browser errors', errors.length === 0, errors.slice(0, 4).join(' | '));

@@ -1,7 +1,7 @@
 // Builder mode's camera: the pose of our own bird's-eye camera, dragging the ground, zoom and turn limits, the movement keys, and how
 // the probe decides whether the renderer's overview camera took over — and the camera driver against a renderer that has one and one that has not.
 import { describe, expect, it } from 'vitest';
-import { BuilderCamera, cameraVerdict, newWatch, type CameraPorts } from '../../../src/ui/builder/builderCamera';
+import { BuilderCamera, cameraVerdict, newWatch, VERDICT, wideSpan, type CameraPorts, type Sight } from '../../../src/ui/builder/builderCamera';
 import {
   CAM_LIMITS, clampToCircle, dragged, heldPan, initialCam, keyPanPixels, orbited, poseFor, stepToCentre, zoomed, type CamState,
 } from '../../../src/ui/builder/cameraModel';
@@ -102,29 +102,56 @@ describe('the movement keys', () => {
 });
 
 describe('did the renderer\'s overview camera take over?', () => {
-  it('yes when the camera mode changes', () => {
-    expect(cameraVerdict(newWatch(), 'overview', 'follow', { x: 1, y: 1 }, { x: 1, y: 1 }, 0)).toBe('overview');
-  });
+  const seen = (x: number, y: number, span: number): Sight => ({ point: { x, y }, span });
+  const own = seen(100, 100, 12); // the player's camera: a dozen metres across the middle of the screen
 
-  it('yes when the picture moves, at once', () => {
+  it('yes when the camera looks down on a wide stretch of ground, and keeps doing so', () => {
     const w = newWatch();
-    expect(cameraVerdict(w, 'follow', 'follow', { x: 100, y: 100 }, { x: 100, y: 100 }, 0)).toBe('wait');
-    expect(cameraVerdict(w, 'follow', 'follow', { x: 130, y: 100 }, { x: 100, y: 100 }, 0.05)).toBe('overview');
-    // the point leaving or entering the screen is movement too
-    expect(cameraVerdict(newWatch(), 'follow', 'follow', null, { x: 1, y: 1 }, 0)).toBe('overview');
+    expect(cameraVerdict(w, seen(300, 200, 40), own, 150, 0.3)).toBe('wait');
+    expect(cameraVerdict(w, seen(500, 300, 70), own, 150, 0.4)).toBe('wait'); // wide: the first of three frames
+    expect(cameraVerdict(w, seen(640, 360, 85), own, 150, 0.5)).toBe('wait');
+    expect(cameraVerdict(w, seen(640, 360, 86), own, 150, 0.6)).toBe('overview');
   });
 
-  it('no only after a dozen still frames and half a second', () => {
+  it('a camera that merely moves is not an overview camera', () => {
+    // the follow camera settling after a change of character, or moving with a player who walks: the picture moves, the span stays small
+    const w = newWatch();
+    let v = 'wait';
+    for (let i = 0; i < VERDICT.lateFrames - 1; i++) v = cameraVerdict(w, seen(100 + i * 9, 100, 11 + (i % 3)), own, 150, 0.2);
+    expect(v).toBe('wait');
+    // a wide look that does not last is not believed either
+    for (let i = 0; i < 20; i++) cameraVerdict(w, seen(100 + i * 9, 100, i % 2 ? 90 : 12), own, 150, 0.5);
+    // once the glide of an overview camera must have been and gone, it says none
+    expect(cameraVerdict(w, seen(900, 100, 12), own, 150, 0.5)).toBe('wait');
+    expect(cameraVerdict(w, seen(950, 100, 12), own, 150, VERDICT.lateSeconds)).toBe('none');
+  });
+
+  it('a picture that has not moved for a dozen frames and half a second says none', () => {
     const w = newWatch();
     let v: string = 'wait';
-    for (let i = 0; i < 11; i++) v = cameraVerdict(w, 'follow', 'follow', { x: 100, y: 100 }, { x: 100, y: 100 }, 1);
+    for (let i = 0; i < VERDICT.stillFrames - 1; i++) v = cameraVerdict(w, own, own, 150, 1);
     expect(v).toBe('wait');
-    expect(cameraVerdict(w, 'follow', 'follow', { x: 100, y: 100 }, { x: 100, y: 100 }, 0.2)).toBe('wait');
-    expect(cameraVerdict(w, 'follow', 'follow', { x: 100, y: 100 }, { x: 100, y: 100 }, 0.6)).toBe('none');
+    expect(cameraVerdict(w, own, own, 150, 0.2)).toBe('wait');
+    expect(cameraVerdict(w, own, own, 150, 0.6)).toBe('none');
     // a point that is off-screen both times is as still as one that stays on it
     const w2 = newWatch();
-    for (let i = 0; i < 12; i++) v = cameraVerdict(w2, undefined, undefined, null, null, 1);
+    for (let i = 0; i < VERDICT.stillFrames; i++) v = cameraVerdict(w2, { point: null, span: 0 }, { point: null, span: 0 }, 150, 1);
     expect(v).toBe('none');
+  });
+
+  it('a camera that already looked wide (the map) is not taken for an overview camera by looking as wide', () => {
+    const w = newWatch();
+    const wide = seen(640, 360, 80);
+    let v = 'wait';
+    for (let i = 0; i < 5; i++) v = cameraVerdict(w, wide, wide, 150, 0.2);
+    expect(v).toBe('wait');
+  });
+
+  it('how wide is wide: scores of metres, a share of the distance asked for', () => {
+    expect(wideSpan(120)).toBeCloseTo(36, 6);
+    expect(wideSpan(170)).toBeCloseTo(51, 6);
+    expect(wideSpan(20)).toBe(24);
+    expect(wideSpan(2000)).toBe(60);
   });
 });
 
@@ -134,24 +161,26 @@ interface Fake extends UiRendererControls {
   calls: string[];
   mode: 'follow' | 'free';
   point: { x: number; y: number };
+  /** Metres of ground per pixel on the screen: a few centimetres from the player's camera, a dozen from a bird's-eye one. */
+  scale: number;
   poses: Array<{ position: { x: number; y: number; z: number }; lookAt: { x: number; y: number; z: number }; seconds?: number }>;
 }
 
 /** A renderer that has an overview camera (it changes its mode and the picture when asked) or does not (the call does nothing). */
 function fakeRenderer(hasOverview: boolean): Fake {
   const f: Fake = {
-    calls: [], mode: 'follow', point: { x: 100, y: 100 }, poses: [],
+    calls: [], mode: 'follow', point: { x: 100, y: 100 }, scale: 0.01, poses: [],
     setQuality: () => undefined,
     setCameraMode(m) { f.calls.push(`mode:${m}`); f.mode = m === 'free' ? 'free' : 'follow'; },
     focusMap: () => undefined,
     project: () => ({ ...f.point }),
-    screenToGround: (x, y) => ({ x: x / 10, z: y / 10 }),
+    screenToGround: (x, y) => ({ x: x * f.scale, z: y * f.scale }),
     cameraYaw: () => 0.25,
     cameraMode: () => f.mode,
     setCameraPose(position, lookAt, seconds) { f.calls.push('pose'); f.poses.push({ position, lookAt, seconds }); f.mode = 'free'; },
     setOverview(v) {
       f.calls.push(v ? 'overview:on' : 'overview:off');
-      if (hasOverview && v) { f.mode = 'free'; f.point = { x: 640, y: 360 }; }
+      if (hasOverview && v) { f.mode = 'free'; f.point = { x: 640, y: 360 }; f.scale = 0.1; }
     },
     orbit: () => { f.calls.push('orbit'); },
     zoom: () => { f.calls.push('zoom'); },
