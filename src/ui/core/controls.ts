@@ -53,6 +53,7 @@ export const CONTROL_GROUPS: readonly ControlGroup[] = [
       { keys: [k(K.input.weapon)], what: 'Draw or put away your weapon. While it is drawn the mouse looks around; a fight draws it by itself. Esc frees the mouse.' },
       { keys: ['LMB'], what: 'Strike (weapon drawn). A tap is a quick blow; hold it for a heavy overhead stroke. The click that takes the mouse is never a blow.' },
       { keys: ['RMB'], what: 'Guard with a weapon or shield (weapon drawn). With a bow: draw and aim along the camera.' },
+      { keys: [k(K.input.strike), k(K.input.guard)], what: 'Fight from the keyboard alone (weapon drawn): J strikes (hold for a heavy blow, or to draw a bow and loose on release), K guards; while the mouse rests you turn to face the nearest foe. W A S D and Space as ever.' },
       { keys: ['RMB then LMB'], what: 'Bow: hold RMB to draw, click LMB to loose. The reticle in the middle of the screen is where the arrow goes.' },
       { keys: [k(K.input.dodge)], what: 'Roll out of a blow; for a moment nothing can touch you.' },
       { keys: [k(K.input.sprint), 'LMB'], what: 'On a horse with a lance: gallop at someone and hold LMB to couch the lance.' },
@@ -131,7 +132,7 @@ export const COMBAT_HELP: readonly HelpSection[] = [
     title: 'Blows and guards',
     paragraphs: [
       'There is no health bar that refills: blows leave wounds, and wounds bleed, fester and mend over days. The red drop under your health shows the blood you have left; bind your wounds on the Wounds page of the character sheet (Tab, or the mark under your name) or ask a healer. Stamina pays for every swing, guard and roll: when you are out of breath you can only walk.',
-      'Tap the left mouse button for a quick blow, hold it for a heavy one that costs more breath. Hold the right button to guard; a shield helps a great deal, and armour turns edges. Space rolls out of the way.',
+      'Tap the left mouse button (or J) for a quick blow, hold it for a heavy one that costs more breath. Hold the right button (or K) to guard; a shield helps a great deal, and armour turns edges. Space rolls out of the way.',
     ],
   },
   {

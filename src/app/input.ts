@@ -132,9 +132,10 @@ export class InputLayer {
       { down: this.down, pressed: this.pressed, released: this.released },
       {
         cameraYaw: r ? r.getCameraYaw() : 0,
-        // the buttons strike and guard only when the mouse is looking (never for the click that took it)
-        attack: combat && this.locked && this.modes.attack,
-        block: combat && this.locked && this.modes.block,
+        // the buttons strike and guard only when the mouse is looking (never for the click that took it); with the
+        // weapon drawn, J and K do the same from the keyboard alone
+        attack: (combat && this.locked && this.modes.attack) || (this.host.drawn() && this.down.has(KEYMAP.input.strike)),
+        block: (combat && this.locked && this.modes.block) || (this.host.drawn() && this.down.has(KEYMAP.input.guard)),
         aim: r && mode === 'follow' ? this.cameraRay(r) : null,
         riding: !!this.host.mounted?.(),
       },
@@ -293,7 +294,11 @@ export class InputLayer {
     if (out.click) this.host.pointerClick(out.click.x, out.click.y);
   }
 
+  /** When the mouse last moved (performance.now ms): fighting from the keyboard turns to the foe only while it rests. */
+  lastMouseMove = -1e9;
+
   private onMouseMove(e: MouseEvent): void {
+    if (Math.abs(e.movementX) + Math.abs(e.movementY) > 2) this.lastMouseMove = performance.now();
     this.ptr.x = e.clientX; this.ptr.y = e.clientY; this.ptr.onView = this.onView(e); this.ptr.seen = true;
     if (this.host.captured() || !this.host.inGame()) return;
     const r = this.host.renderer();

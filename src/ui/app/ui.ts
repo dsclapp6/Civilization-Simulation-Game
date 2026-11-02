@@ -1,5 +1,6 @@
 // The UI controller: screens (menu / loading / game), the panel stack, hotkeys, the HUD and the wiring
 // from simulation events to the feed, toasts and the death / game-over screens.
+import { KEYMAP } from '../../player/types';
 import type { Difficulty } from '../../core/domain';
 import type { UiRequest } from '../../sim/actions';
 import { familyOf } from '../../sim/kin';
@@ -791,6 +792,8 @@ export class UiApp implements GameUIExt {
       return;
     }
     if (this.screen !== 'game' || !this.bound) return;
+    // with steel out, J and K strike and guard (the input layer's), not the ledger and the realm pages
+    if ((e.code === KEYMAP.input.strike || e.code === KEYMAP.input.guard) && this.bound.game.player.drawn?.() && !this.stack.top()) return;
     if (intent.type === 'escape') {
       if (this.handleEscape()) { e.preventDefault(); e.stopPropagation(); }
       return;
