@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEPOSIT_COLOR, DEPOSIT_KINDS, DEPOSIT_NAME, DEPOSIT_USE, ROLE_GROUPS, cssColor, defaultLayers, depositShown, depositTip, groupCounts, houseColor, onScreen,
-  peopleOfSettlement, richnessWords, roleGroup, rgba, searchPeople, whoseLands, type PeopleRow, type RoleGroup,
+  peopleOfSettlement, peopleRows, richnessWords, roleGroup, rgba, searchPeople, whoseLands, type RoleGroup,
 } from '../../src/ui/core/mapModel';
 import { generateWorld } from '../../src/world/generate';
 import { newSim } from '../sim/helpers';
@@ -126,14 +126,16 @@ describe('who lives there', () => {
     expect(searchPeople(rows, '', 'all', 5).total).toBe(rows.length);
   });
 
-  it('sorts the ruler, then the greater, then by name', () => {
-    const rows: PeopleRow[] = [
-      { id: 1, name: 'Zed', role: 'Farmer', group: 'farmer', age: 30, sex: 'm', rank: 1, household: 1, ruler: false },
-      { id: 2, name: 'Amy', role: 'Farmer', group: 'farmer', age: 30, sex: 'f', rank: 1, household: 2, ruler: false },
-      { id: 3, name: 'Hugh', role: 'Lord', group: 'lord', age: 50, sex: 'm', rank: 5, household: 3, ruler: false },
-    ];
-    expect(searchPeople(rows, '', 'all').rows.map((r) => r.id)).toEqual([1, 2, 3]);
-    // (sorting is peopleRows's job: searchPeople keeps the order it is given)
-    expect(searchPeople(rows, 'farmer', 'all').rows.map((r) => r.id)).toEqual([1, 2]);
+  it('sorts the ruler first, then the greater, then by name', () => {
+    const person = (id: number, first: string, rankTier: number, career = 'farmer'): Parameters<typeof peopleRows>[0][number] => ({ id, first, byname: 'Fowler', sex: 'm', career, offices: [], age: 30, rankTier, household: id });
+    const rows = peopleRows([person(1, 'Zed', 1), person(2, 'Amy', 1), person(3, 'Hugh', 5, 'knight'), person(4, 'Mark', 3, 'smith'), person(5, 'Bert', 1)], (p) => p.career, new Set([4]), 5);
+    expect(rows.map((r) => r.id)).toEqual([5, 3, 4, 2, 1]);
+    expect(rows[0].ruler).toBe(true);
+    // a title makes a lord of anyone
+    expect(rows.find((r) => r.id === 4)?.group).toBe('lord');
+    expect(rows.find((r) => r.id === 3)?.group).toBe('knight');
+    // search keeps the order it is given, narrows by words of the calling, and counts what it left out
+    expect(searchPeople(rows, 'farmer', 'all').rows.map((r) => r.id)).toEqual([5, 2, 1]);
+    expect(searchPeople(rows, '', 'all', 2)).toMatchObject({ total: 5 });
   });
 });
