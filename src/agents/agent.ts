@@ -7,7 +7,7 @@ import type { Person, PersonId } from '../sim/state';
 import { MAX_WAYPOINTS } from './nav/path';
 import type { Plate } from './plates';
 import { Mode, type ModeId } from './schedule';
-import type { Activity, AgentOrder, ZoneAgent } from './types';
+import type { Activity, AgentGait, AgentOrder, ZoneAgent } from './types';
 
 /** Movement states. */
 export const St = {
@@ -115,6 +115,25 @@ export class Agent implements ZoneAgent {
   /** Terrain speed factor under the feet (refreshed a few times a second). */
   tf = 1;
   wading = false;
+
+  // ---- a post on a wall or a tower (a town on alert, docs/CIV.md §9) ----
+  /** Height above the ground at which the agent stands now (m), and: walking to the foot of the stair to go up to a post. */
+  elev = 0;
+  wantUp = false;
+  /** Where the post is (the top of the wall above the foot of the stair the agent walks to). */
+  postX = 0;
+  postZ = 0;
+
+  // ---- riding (the patrol, civilization pass): drawn on a horse, moving at the horse's gaits (pace.ts) ----
+  mounted = false;
+  mountCoat = 0x5a3a22;
+  /** The speed asked of the horse now (m/s), and the order's top gait. */
+  rideTo = 0;
+  gait: AgentGait = 'walk';
+  /** The order that tracks a person: where it last aimed, and the seconds to the next fresh path. */
+  apX = 0;
+  apZ = 0;
+  apT = 0;
 
   // ---- micro behaviour ----
   ph: number = Ph.Work;

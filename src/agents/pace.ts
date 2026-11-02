@@ -2,8 +2,9 @@
 // hurt are slower), a load slows them, they hurry up to MAX_HURRY times that and break into a run (2.8–3.6 m/s) only when badly late and
 // able, or in danger. One place for the numbers so the schedule (when to set out) and the bodies (how fast they go) agree.
 import { clamp, hash01 } from '../core/math';
-import type { CarryLook } from '../core/view';
+import type { AnimState, CarryLook, HorseAnim } from '../core/view';
 import { hasFlag, type Person } from '../sim/state';
+import type { AgentGait } from './types';
 
 /** An unhurried adult's walking pace (m/s) before agility, age, health and build. */
 export const WALK_BASE = 1.3;
@@ -81,4 +82,35 @@ export const DETOUR = 1.12;
 export function gaitSpeed(wanted: number): number {
   if (wanted <= WALK_TOP) return wanted;
   return wanted < 2.35 ? WALK_TOP : Math.max(RUN_MIN, Math.min(wanted, RUN_MAX));
+}
+
+// ---------------------------------------------------------------------------------------------
+// Riding (civilization pass, docs/CIV.md §3): a horse walks 1.7, trots 3.5, canters 6 and gallops 10 m/s. The patrol and the lord's
+// riders move at these; the player's horse (src/player/movement.ts) uses the same numbers.
+// ---------------------------------------------------------------------------------------------
+
+export const HORSE_WALK = 1.7;
+export const HORSE_TROT = 3.5;
+export const HORSE_CANTER = 6;
+export const HORSE_GALLOP = 10;
+/** Speed changes of a horse (m/s per second): it gathers itself up more slowly than it slows. */
+export const HORSE_ACCEL = 4.2;
+export const HORSE_DECEL = 7;
+
+/** The speed of a gait on a horse. */
+export function horseSpeed(g: AgentGait): number {
+  switch (g) {
+    case 'gallop': return HORSE_GALLOP;
+    case 'canter': return HORSE_CANTER;
+    case 'trot': case 'jog': return HORSE_TROT;
+    default: return HORSE_WALK;
+  }
+}
+
+/** The clips of a rider and his horse at a ground speed (the canter is drawn with the gallop clip: the cycle follows `moveSpeed`). */
+export function rideClips(speed: number): { rider: AnimState; horse: HorseAnim } {
+  if (speed < 0.15) return { rider: 'ride_idle', horse: 'idle' };
+  if (speed <= 2.6) return { rider: 'ride_walk', horse: 'walk' };
+  if (speed <= 4.8) return { rider: 'ride_trot', horse: 'trot' };
+  return { rider: 'ride_gallop', horse: 'gallop' };
 }

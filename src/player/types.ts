@@ -117,8 +117,11 @@ export interface PlayerHud {
   mounted: boolean;
   /** Interact prompt for what the player faces ("E  Reap · strip of barley"). */
   prompt: { label: string; targetLabel: string; enabled: boolean; reason?: string } | null;
-  /** The timed action in progress. */
-  action: { label: string; progress: number; seconds: number } | null;
+  /**
+   * The timed action in progress. Civilization pass: a bout with visible steps (`ActionOption.steps`) says which one it is in — the
+   * action bar shows its label and the sound model plays its `sfx` cue once when `index` changes.
+   */
+  action: { label: string; progress: number; seconds: number; step?: { index: number; count: number; label: string; sfx?: string } } | null;
   travel: TravelState | null;
   /** A hostile is within the fast-speed refusal radius. */
   danger: boolean;
@@ -138,6 +141,11 @@ export interface PlayerHud {
   drawn?: boolean;
   /** Click-to-act in progress: where the body is walking to and what it will do there. */
   going?: { label: string; action: string | null; x: number; z: number } | null;
+  // ---- civilization pass ----
+  /** What binds the body (captivity, an escort): the HUD says "Bound and led to the gaol of Dromore". */
+  restraint?: Restraint | null;
+  /** Seconds the horse call has been held (F held with no horse near), and the horse is coming: the HUD shows it. */
+  horseCall?: { eta: number } | null;
 }
 
 /** The fighting state the HUD shows. */

@@ -27,6 +27,11 @@ export const PLAN_MARGIN = 1.1;
 // ---- bodies ----
 export const ADULT_RADIUS = 0.28;
 export const CHILD_RADIUS = 0.22;
+/**
+ * A rider and his horse (the body that collides). It must stay under sqrt(PLAN_MARGIN² − 1) = 0.46 m, the width the path planner
+ * keeps clear for a body going straight between two free cells: a wider rider clips the corners of the paths he is given and sticks.
+ */
+export const RIDER_RADIUS = 0.42;
 
 // ---- budgets ----
 /** Per-frame budget (ms) of the incremental nav-tile builder. */

@@ -24,7 +24,8 @@ import { doorStand, frontPoint, type DoorPoint } from './geometry';
 import { DETOUR, MAX_HURRY, WALK_BASE, walkSpeed } from './pace';
 import { Places, type SettlementPlaces } from './places';
 import { siteSpot, type SiteSpot, type SiteWork } from './sites';
-import type { Activity, Whereabouts } from './types';
+import type { AlertLevel } from '../sim/wave3';
+import type { Activity, WallStation, Whereabouts } from './types';
 
 // ---------------------------------------------------------------------------------------------
 // Intent: what a person is doing and where, right now
@@ -90,13 +91,15 @@ export interface Intent {
   /** Where the person enters/leaves the settlement when `away` flips (a gate). */
   exitX: number;
   exitZ: number;
+  /** Civilization pass: height above the ground the person stands at (a post on a wall or a tower); 0 on the ground. */
+  elev: number;
 }
 
 export function newIntent(): Intent {
   return {
     activity: 'idle', label: '', settlement: -1, building: -1, indoors: false, away: false, leaving: false, x: 0, z: 0, yaw: 0,
     anim: 'idle', main: 'none', off: 'none', carry: 'none', back: 'none', seat: 0, mode: Mode.Stay, radius: 0, bx: 0, bz: 0,
-    group: -1, from: 0, until: 0, leave: 0, prevX: 0, prevZ: 0, travel: 1, arrive: 0, exitX: NaN, exitZ: NaN,
+    group: -1, from: 0, until: 0, leave: 0, prevX: 0, prevZ: 0, travel: 1, arrive: 0, exitX: NaN, exitZ: NaN, elev: 0,
   };
 }
 
@@ -105,13 +108,13 @@ function assign(o: Intent, s: Intent): void {
   o.activity = s.activity; o.label = s.label; o.settlement = s.settlement; o.building = s.building; o.indoors = s.indoors; o.away = s.away;
   o.leaving = s.leaving; o.x = s.x; o.z = s.z; o.yaw = s.yaw; o.anim = s.anim; o.main = s.main; o.off = s.off; o.carry = s.carry; o.back = s.back;
   o.seat = s.seat; o.mode = s.mode; o.radius = s.radius; o.bx = s.bx; o.bz = s.bz; o.group = s.group; o.from = s.from; o.until = s.until;
-  o.exitX = s.exitX; o.exitZ = s.exitZ;
+  o.exitX = s.exitX; o.exitZ = s.exitZ; o.elev = s.elev;
 }
 
 function reset(o: Intent): void {
   o.activity = 'idle'; o.label = ''; o.building = -1; o.indoors = false; o.away = false; o.leaving = false; o.yaw = 0;
   o.anim = 'idle'; o.main = 'none'; o.off = 'none'; o.carry = 'none'; o.back = 'none'; o.seat = 0; o.mode = Mode.Stay;
-  o.radius = 0; o.bx = 0; o.bz = 0; o.group = -1; o.travel = 1; o.arrive = 0; o.exitX = NaN; o.exitZ = NaN;
+  o.radius = 0; o.bx = 0; o.bz = 0; o.group = -1; o.travel = 1; o.arrive = 0; o.exitX = NaN; o.exitZ = NaN; o.elev = 0;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -198,6 +201,8 @@ const MARKET_SELLERS: ReadonlySet<CareerId> = new Set<CareerId>([
   'merchant', 'shopkeeper', 'peddler', 'baker', 'butcher', 'weaver', 'tailor', 'cobbler', 'potter', 'chandler', 'cooper', 'tanner', 'saddler',
 ]);
 const ARMS: ReadonlySet<CareerId> = new Set<CareerId>(['soldier', 'archer', 'man_at_arms', 'sergeant']);
+const EMPTY_POSTS: readonly WallStation[] = [];
+const POST_SPLIT = new WeakMap<readonly WallStation[], { high: WallStation[]; low: WallStation[] }>();
 
 // ---------------------------------------------------------------------------------------------
 // The schedule
@@ -210,6 +215,12 @@ export interface ScheduleDeps {
   economy: EconomyApi;
   /** Who works on which construction site today (absent without the construction module). */
   sites?: SiteWork;
+  /** Civilization pass (wave B): where a prisoner is held (the law module's record; absent without it). */
+  held?: (person: number) => { settlement: number; building: number } | null;
+  /** How a settlement stands: 'peace' | 'watch' | 'alarm' | 'assault' (the military module's `alertOf`; absent = peace). */
+  alert?: (settlement: number) => AlertLevel;
+  /** The posts on a settlement's fortifications (walls, towers, gates) where the watch stands on alert. */
+  posts?: (settlement: number) => readonly WallStation[];
 }
 
 interface DayTimes {
@@ -243,6 +254,9 @@ export class Schedule {
   private readonly places: Places;
   private readonly economy: EconomyApi;
   private readonly sites: SiteWork | undefined;
+  private readonly held: ScheduleDeps['held'];
+  private readonly alert: ScheduleDeps['alert'];
+  private readonly posts: ScheduleDeps['posts'];
   private readonly siteJob: SiteSpot = { x: 0, z: 0, yaw: 0, anim: 'idle', main: 'none', off: 'none', carry: 'none', label: '', haul: false, bx: 0, bz: 0 };
   private readonly times: DayTimes = { sr: 0, ss: 0, wake: 0, chore: 0, mealA: 0, mealB: 0, workEnd: 0, bed: 0, massA: 0, massB: 0, gatherA: 0, afterB: 0 };
   private readonly wx: WeatherSample = { cloud: 0, rain: 0, snow: 0, fog: 0, windX: 0, windZ: 0, temperature: 10 };
@@ -256,6 +270,7 @@ export class Schedule {
 
   constructor(deps: ScheduleDeps) {
     this.state = deps.state; this.world = deps.world; this.places = deps.places; this.economy = deps.economy; this.sites = deps.sites;
+    this.held = deps.held; this.alert = deps.alert; this.posts = deps.posts;
   }
 
   // ---- public ----
@@ -321,16 +336,19 @@ export class Schedule {
     this.fromUntil(o, day, 0, 1);
     const marketTown = this.marketGoer(p, day, age);
     const ownMarket = !!sp && sp.settlement.market && isMarketDay(day, p.settlement);
-    if (f < T.wake || f >= T.bed) {
+    const alert: AlertLevel = this.alert && !p.flags.captive ? this.alert(p.settlement) : 'peace';
+    if (p.flags.captive) {
+      // a prisoner neither works nor travels: he is in the cell he was put in (or away, held in another place) until he is freed
+      this.fromUntil(o, day, 0, 1);
+      this.prisoner(p, o, home);
+    } else if (alert !== 'peace' && this.alerted(p, o, day, f, T, age, alert, home, sp)) {
+      // ---- the place is on alert (CIV §9): the watch on the walls, the militia mustered, the people indoors under assault ----
+    } else if (f < T.wake || f >= T.bed) {
       // ---- night: asleep (or the watch) ----
-      this.sleep(p, o, day, f, T, age, sp, home);
+      this.sleep(p, o, day, f, T, age, sp, home, alert);
     } else if (this.bedridden(p, age)) {
       this.fromUntil(o, day, T.wake, T.bed);
       this.atHome(o, home, true, 'sleep', 'Ill in bed');
-    } else if (p.flags.captive) {
-      // a prisoner neither works nor travels: held where he was taken, until the ransom is paid
-      this.fromUntil(o, day, T.wake, T.bed);
-      this.atHome(o, home, true, 'home', 'Held prisoner');
     } else if (age < 3) {
       this.fromUntil(o, day, T.wake, T.bed);
       this.atHome(o, home, true, 'home', 'Indoors with the family');
@@ -582,14 +600,14 @@ export class Schedule {
 
   // ---- states of the day ----
 
-  private sleep(p: Person, o: Intent, day: number, f: number, T: DayTimes, age: number, sp: SettlementPlaces | null, home: BuildingState | null): void {
+  private sleep(p: Person, o: Intent, day: number, f: number, T: DayTimes, age: number, sp: SettlementPlaces | null, home: BuildingState | null, alert: AlertLevel = 'peace'): void {
     if (f >= T.bed) this.fromUntil(o, day, T.bed, 1 + T.wake); else this.fromUntil(o, day, T.wake - 1, T.wake);
     // the night watch: a quarter of the soldiers of a garrison or walled town walk the streets with a torch
     const walled = !!sp && (sp.settlement.kind === 'castle' || sp.settlement.kind === 'town' || sp.settlement.kind === 'city');
     const watchDay = f >= T.bed ? day : day - 1;
     // a share of the garrison, plus a few burgesses taking their turn (the town watch was made of citizens)
     const watchman = walled && age >= 18 && age < 55 && p.sex === 'm' && p.estate !== 'clergy'
-      && (ARMS.has(p.career) ? hash01(p.id, watchDay * 5 + 11) < 0.4 : p.rankTier <= 3 && hash01(p.id, watchDay * 5 + 12) < 0.04);
+      && (ARMS.has(p.career) ? hash01(p.id, watchDay * 5 + 11) < (alert === 'peace' ? 0.4 : 0.8) : p.rankTier <= 3 && hash01(p.id, watchDay * 5 + 12) < (alert === 'peace' ? 0.04 : 0.1));
     if (watchman) {
       this.watch(p, o, sp!, home);
       return;
@@ -603,6 +621,74 @@ export class Schedule {
       return;
     }
     this.atHome(o, home, true, 'sleep', 'Asleep at home');
+  }
+
+  /** A prisoner: indoors in the cell he was put in when it is in his own place, away when he is held in another (docs/LAW.md). */
+  private prisoner(p: Person, o: Intent, home: BuildingState | null): void {
+    const held = this.held ? this.held(p.id) : null;
+    if (held && held.settlement !== p.settlement) {
+      o.away = true; o.activity = 'home'; o.label = 'Held prisoner';
+      return;
+    }
+    const cell = held && held.building >= 0 ? this.state.buildings.get(held.building) : undefined;
+    if (cell) {
+      doorStand(cell, this.door);
+      o.x = this.door.x; o.z = this.door.z; o.yaw = this.door.yaw; o.building = cell.id; o.indoors = true;
+      o.activity = 'home'; o.label = 'Held prisoner';
+      return;
+    }
+    this.atHome(o, home, true, 'home', 'Held prisoner');
+  }
+
+  /**
+   * A place on alert (docs/CIV.md §9). 'watch': the night watch is doubled (see `sleep`); 'alarm': the garrison is on the walls, day and
+   * night, and the militia (fit men of the place) musters there; 'assault': the same, and everyone else is indoors, sheltering. The posts
+   * are the fortifications' stations (Zone.wallStations) — a place with none keeps its ordinary guards. True when the person's day is set.
+   */
+  private alerted(p: Person, o: Intent, day: number, f: number, T: DayTimes, age: number, alert: AlertLevel, home: BuildingState | null, sp: SettlementPlaces | null): boolean {
+    const posts = this.posts ? this.posts(p.settlement) : EMPTY_POSTS;
+    const garrison = ARMS.has(p.career) || p.career === 'knight' || p.career === 'squire';
+    const fit = p.sex === 'm' && age >= 16 && age <= 55 && p.estate !== 'clergy' && !MONASTIC.has(p.career);
+    // the militia: fit men of a place that has walls to stand on (half of them at the alarm, most when the storm comes)
+    const militia = !garrison && fit && posts.length > 0 && p.rankTier <= 3 && hash01(p.id, day * 3 + 92) < (alert === 'alarm' ? 0.45 : 0.7);
+    if (alert === 'assault' && !garrison && !militia) {
+      // the bells ring: the people go indoors. The militia stands the walls; everyone else shelters at home.
+      this.fromUntil(o, day, 0, 1);
+      this.atHome(o, home, true, 'home', 'Sheltering from the assault');
+      return true;
+    }
+    if (alert === 'watch') return false;
+    if (posts.length === 0) return false;
+    if (!garrison && !militia) return false;
+    // (the youngest, the sick and the old of the garrison stay where they are)
+    if (p.health.hp < 0.5 || age < 16 || this.bedridden(p, age)) return false;
+    // by night they keep the watch on the walls as well; only a rest is allowed them (the second half of the garrison sleeps)
+    const night = f < T.wake || f >= T.bed;
+    if (night && hash01(p.id, day * 3 + 93) < 0.3) return false;
+    this.fromUntil(o, day, 0, 1);
+    this.post(p, o, posts, militia);
+    return true;
+  }
+
+  /** Puts a man on his post: archers and crossbowmen on towers and over the gate, the rest along the wall-walks. */
+  private post(p: Person, o: Intent, posts: readonly WallStation[], militia: boolean): void {
+    const archer = p.career === 'archer' || (militia && hash01(p.id, 94) < 0.35);
+    // (the partition of a settlement's posts is made once per list)
+    let split = POST_SPLIT.get(posts);
+    if (!split) {
+      split = { high: posts.filter((s) => s.kind === 'tower' || s.kind === 'gate'), low: posts.filter((s) => s.kind === 'wall' || s.kind === 'palisade' || s.kind === 'gate') };
+      POST_SPLIT.set(posts, split);
+    }
+    const pick = archer ? split.high : split.low;
+    const list = pick.length > 0 ? pick : posts;
+    const s = list[Math.floor(hash01(p.id, 95) * list.length) % list.length];
+    o.activity = 'guard'; o.label = archer ? 'Manning the tower' : 'On the wall';
+    o.x = s.x; o.z = s.z; o.yaw = s.yaw; o.building = -1; o.indoors = false;
+    o.elev = Math.max(0, s.y - this.world.heightAt(s.x, s.z));
+    o.anim = 'idle'; o.mode = Mode.Stay;
+    o.main = archer ? (p.career === 'archer' ? 'longbow' : 'crossbow') : 'spear';
+    o.off = archer ? 'none' : 'shield_heater'; o.back = archer ? 'quiver' : 'none';
+    o.group = -1;
   }
 
   private watch(p: Person, o: Intent, sp: SettlementPlaces, home: BuildingState | null): void {

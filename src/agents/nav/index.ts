@@ -1,7 +1,7 @@
 // The navigation service (NavApi): ground height including bridge decks, walkability, speed by
 // terrain, sliding collision for agents and the player, A* path finding, door points.
 import { BUILDINGS } from '../../content/types';
-import type { SimView } from '../../core/view';
+import type { FortView, SimView } from '../../core/view';
 import type { P2 } from '../../core/math';
 import type { GameState } from '../../sim/state';
 import type { WorldModel } from '../../world/types';
@@ -113,6 +113,19 @@ export class Nav implements NavApi {
     this.grid.update(fx, fz, budgetMs);
   }
 
+  /**
+   * The fortifications' state from the military module (`view.forts()`): a shut gate is solid for people, a broken gate and a breach of
+   * half the wall or more are passable. The tiles round whatever changed are rebuilt now.
+   */
+  applyForts(forts: readonly FortView[]): boolean {
+    if (!this.obstacles.applyForts(forts)) return false;
+    if (this.obstacles.refreshBuildings()) {
+      const d = this.obstacles.dirty;
+      for (let i = 0; i < d.length; i += 4) this.grid.invalidateRect(d[i], d[i + 1], d[i + 2], d[i + 3]);
+    }
+    return true;
+  }
+
   /** Builds everything around the focus now (loading screens, resync after a teleport). */
   prepare(fx: number, fz: number): void {
     this.grid.setCentre(fx, fz);
@@ -220,6 +233,25 @@ export class Nav implements NavApi {
 
   nearestWalkable(x: number, z: number, maxDist: number, out: P2): boolean {
     return this.finder.nearestWalkable(x, z, maxDist, out);
+  }
+
+  /**
+   * Can one point see the other: is the straight line clear of buildings, walls and tree trunks? (Not the planning grid's `finder.lineClear`,
+   * which keeps a margin for bodies and says no from a cell beside a wall.) A metre and a half at each end is the standing place — a man
+   * leaning on a wall, at a door, under a tree sees and is seen — and two people within a few metres always see one another.
+   */
+  lineClear(x0: number, z0: number, x1: number, z1: number): boolean {
+    const dx = x1 - x0, dz = z1 - z0;
+    const len = Math.sqrt(dx * dx + dz * dz);
+    if (len < 3.5) return true;
+    const n = Math.ceil(len / 0.6);
+    const edge = 1.5 / len;
+    for (let k = 1; k < n; k++) {
+      const t = k / n;
+      if (t < edge || t > 1 - edge) continue;
+      if (this.obstacles.blocked(x0 + dx * t, z0 + dz * t, 0.25)) return false;
+    }
+    return true;
   }
 
   doorOf(buildingId: number): { x: number; z: number; yaw: number } | null {

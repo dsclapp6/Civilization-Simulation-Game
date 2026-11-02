@@ -14,7 +14,7 @@ import { kinshipLabel } from '../sim/api';
 import { AnimalSystem } from './animals';
 import { Agent, St } from './agent';
 import { endOrder, replan, updateAgent } from './behaviour';
-import { ADULT_RADIUS, CHILD_RADIUS, ENTER_RADIUS, LEAVE_RADIUS, NAV_BUILD_BUDGET_MS, PATH_BUDGET_MS, SPAWN_BUDGET_MS } from './config';
+import { ADULT_RADIUS, CHILD_RADIUS, ENTER_RADIUS, LEAVE_RADIUS, NAV_BUILD_BUDGET_MS, PATH_BUDGET_MS, RIDER_RADIUS, SPAWN_BUDGET_MS } from './config';
 import { SpatialHash } from './hash';
 import { findInteractables } from './interact';
 import { Nav } from './nav';
@@ -24,8 +24,10 @@ import { Places } from './places';
 import { SiteWork } from './sites';
 import { newIntent, Schedule, type Intent } from './schedule';
 import { propsFor } from './props';
+import { buildStations } from './stations';
+import type { AlertLevel } from '../sim/wave3';
 import type {
-  Activity, AgentOrder, InteractCandidate, MarkedPerson, MoveResult, Whereabouts, ZoneAgent, ZoneAnimal,
+  Activity, AgentOrder, InteractCandidate, MarkedPerson, MoveResult, SummonOpts, WallStation, Whereabouts, ZoneAgent, ZoneAnimal,
 } from './types';
 import { MAX_AGENTS } from './types';
 
@@ -130,6 +132,10 @@ export class Zone {
     this.sched = new Schedule({
       state: sim.state, world: sim.world, places: this.places, economy: deps.economy,
       sites: new SiteWork(() => sim.services.construction, deps.economy, () => sim.absDay),
+      // civilization pass (wave B): prisoners are in their cells, a place on alert keeps its watch on the walls
+      held: (person) => { const c = sim.services.law?.captivity(person); return c ? { settlement: c.settlement, building: c.led ? -1 : c.building } : null; },
+      alert: (settlement) => this.alertOf(settlement),
+      posts: (settlement) => this.wallStations(settlement),
     });
     this.fauna = new AnimalSystem(this);
     this.plateCtx = { state: sim.state, world: sim.world, social: deps.social };
@@ -200,6 +206,7 @@ export class Zone {
     this.nav.update(this.focusX, this.focusZ, NAV_BUILD_BUDGET_MS * speedScale, this.stepCount % 40 === 0);
     this.updatePlayer(dt);
     if (this.stepCount % 20 === 3) this.refreshQuestFolk();
+    if (this.stepCount % 20 === 9) this.syncAlerts();
     // bodies
     const tA = performance.now();
     this.rebuildGrid();
@@ -324,6 +331,59 @@ export class Zone {
     if (this.hidden.size > 600) for (const [id, t] of this.hidden) if (t < this.now) this.hidden.delete(id);
   }
 
+  // ---------------------------------------------------------------------------------------------
+  // towns on alert (docs/CIV.md §9): how a place stands, its fortifications, the posts of its watch
+  // ---------------------------------------------------------------------------------------------
+
+  private readonly alerts = new Map<number, { t: number; level: AlertLevel }>();
+  private readonly postCache = new Map<number, { key: number; list: WallStation[] }>();
+  private fortsSeen = -1;
+
+  /** How a settlement stands now (the military module's answer, looked at once a second at most): 'peace' without the module. */
+  alertOf(settlement: number): AlertLevel {
+    const hit = this.alerts.get(settlement);
+    if (hit && this.zoneT - hit.t < 1 && this.zoneT >= hit.t) return hit.level;
+    let level: AlertLevel = 'peace';
+    try { level = this.sim.services.military?.alertOf?.(settlement) ?? 'peace'; } catch { level = 'peace'; }
+    if (hit && hit.level !== level) this.alertChanged(settlement);
+    this.alerts.set(settlement, { t: this.zoneT, level });
+    return level;
+  }
+
+  /** The level of a place changed: its people look at their day again at once (the bell rings, the watch goes to the walls). */
+  private alertChanged(settlement: number): void {
+    for (const a of this.agentsArr) if (a.person.settlement === settlement && a.control === 'ai') a.replanAt = 0;
+  }
+
+  /** The posts on a settlement's fortifications (stable until its buildings change). */
+  wallStations(settlement: number): readonly WallStation[] {
+    const key = this.sim.state.buildingRevision * 1009 + this.sim.state.buildings.size;
+    const hit = this.postCache.get(settlement);
+    if (hit && hit.key === key) return hit.list;
+    const list = buildStations(this.sim.state, this.sim.world, settlement);
+    if (this.postCache.size > 400) this.postCache.clear();
+    this.postCache.set(settlement, { key, list });
+    return list;
+  }
+
+  /** Once a second: the fortifications' state from the view (gates shut or broken, breaches) into the navigation, and the levels of the places near. */
+  private syncAlerts(): void {
+    const view = this.sim.view;
+    const v = view.fortsVersion ? view.fortsVersion() : 0;
+    if (v !== this.fortsSeen) {
+      this.fortsSeen = v;
+      this.nav.applyForts(view.forts ? view.forts() : []);
+    }
+    // the places whose people are in the zone, so a change reaches them within the second
+    const done = new Set<number>();
+    for (const a of this.agentsArr) {
+      const s = a.person.settlement;
+      if (done.has(s)) continue;
+      done.add(s);
+      this.alertOf(s);
+    }
+  }
+
   /** Looks at one person; adds an agent if they are outdoors within range. Returns true if added. */
   private consider(p: Person, force: boolean): boolean {
     const I = this.tmpIntent;
@@ -345,12 +405,14 @@ export class Zone {
       far.dead = true;
     }
     const out = this.tmpP;
-    if (!this.nav.nearestWalkable(x, z, 8, out)) return false;
-    this.add(p, out.x, out.z, d);
+    // a post on a wall or a tower is where it is (the ground beside it would put the man at the foot of the wall)
+    const post = I.travel >= 1 && I.elev > 0;
+    if (post) { out.x = x; out.z = z; } else if (!this.nav.nearestWalkable(x, z, 8, out)) return false;
+    this.add(p, out.x, out.z, d, post ? I.elev : 0);
     return true;
   }
 
-  private add(p: Person, x: number, z: number, dist: number): Agent {
+  private add(p: Person, x: number, z: number, dist: number, elev = 0): Agent {
     const view = this.sim.view;
     const cached = view.appearance.get(this.state, p, this.now);
     const draw: CharacterDrawItem = {
@@ -358,7 +420,8 @@ export class Zone {
       mainHand: 'none', offHand: 'none', back: 'none', carry: 'none', anim: 'idle', animTime: hash01(p.id, 6) * 5, moveSpeed: 0, highlight: 0,
     };
     const a = new Agent(p, draw);
-    a.x = x; a.z = z; a.y = draw.y; a.yaw = draw.yaw;
+    a.elev = elev;
+    a.x = x; a.z = z; a.y = draw.y + elev; draw.y = a.y; a.yaw = draw.yaw;
     a.age = ageYears(p, this.now);
     a.tier = p.rankTier;
     a.radius = a.age < 12 ? CHILD_RADIUS : ADULT_RADIUS;
@@ -527,8 +590,9 @@ export class Zone {
       this.sched.intent(p, this.now, I);
       let x = I.x, z = I.z;
       if (I.travel < 1) { x = I.prevX + (I.x - I.prevX) * I.travel; z = I.prevZ + (I.z - I.prevZ) * I.travel; }
-      if (!this.nav.nearestWalkable(x, z, 8, out)) continue;
-      this.add(p, out.x, out.z, found[i].d);
+      const post = I.travel >= 1 && I.elev > 0;
+      if (post) { out.x = x; out.z = z; } else if (!this.nav.nearestWalkable(x, z, 8, out)) continue;
+      this.add(p, out.x, out.z, found[i].d, post ? I.elev : 0);
     }
     this.rebuildGrid();
     this.fauna.resync();
@@ -706,9 +770,12 @@ export class Zone {
     a.control = 'script'; a.order = order; a.orderT = 0;
     a.st = St.Idle; a.pathN = a.pathI = 0; a.overlay = '';
     a.draw.carry = 'none';
+    // an order that tracks a person starts with a fresh path
+    a.apT = 0; a.apX = a.apZ = 1e9;
+    this.nav.queue.cancel(person);
   }
 
-  summon(person: PersonId, x: number, z: number, yaw = 0): void {
+  summon(person: PersonId, x: number, z: number, yaw = 0, opts?: SummonOpts): void {
     const p = this.state.persons.get(person);
     if (!p || p.death || (this.player && this.player.person === person)) return;
     let a = this.byPerson.get(person);
@@ -716,13 +783,32 @@ export class Zone {
     a.summoned = true; a.control = 'script'; a.order = null; a.orderT = 0;
     a.x = x; a.z = z; a.y = this.nav.groundY(x, z); a.yaw = yaw;
     a.st = St.Idle; a.pathN = a.pathI = 0; a.overlay = '';
+    a.vel = 0; a.msm = 0; a.rideTo = 0;
     this.nav.queue.cancel(person);
+    this.dress(a, opts);
+  }
+
+  /** How a summoned person looks: on a horse (drawn under them, ridden at the order's gait) and what they hold. */
+  private dress(a: Agent, o: SummonOpts | undefined): void {
+    a.mounted = !!o?.mounted;
+    if (o?.coat !== undefined) a.mountCoat = o.coat;
+    a.radius = a.mounted ? RIDER_RADIUS : a.age < 12 ? CHILD_RADIUS : ADULT_RADIUS;
+    const d = a.draw;
+    if (o?.main !== undefined) d.mainHand = o.torch ? 'torch' : o.main;
+    else if (o?.torch) d.mainHand = 'torch';
+    if (o?.off !== undefined) d.offHand = o.off;
+    d.carry = 'none';
+    if (a.mounted) { d.anim = 'ride_idle'; d.mount = { coat: a.mountCoat, anim: 'idle', animTime: d.animTime }; }
+    else d.mount = undefined;
   }
 
   dismiss(person: PersonId): void {
     const a = this.byPerson.get(person);
     if (!a || !a.summoned) return;
     a.summoned = false; a.dead = true;
+    // a rider gone from the street does not reappear at his post a moment later in plain sight
+    if (a.mounted) this.hide(person, this.now + 0.05);
+    a.mounted = false; a.draw.mount = undefined;
   }
 
   summonAnimal(kind: AnimalKind, x: number, z: number, hostile: boolean): number { return this.fauna.summon(kind, x, z, hostile); }
@@ -734,6 +820,7 @@ export class Zone {
   releaseLed(id: number): boolean { return this.fauna.unlead(id); }
   ledBy(person: PersonId): readonly ZoneAnimal[] { return this.fauna.ledBy(person); }
   releaseAnimal(id: number, x: number, z: number, yaw: number): void { this.fauna.release(id, x, z, yaw); }
+  callHorse(person: PersonId): { ok: boolean; reason?: string; eta?: number; animal?: number } { return this.fauna.callHorse(person); }
 
   say(person: PersonId, text: string, seconds = 3): void {
     const a = this.byPerson.get(person);

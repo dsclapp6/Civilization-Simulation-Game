@@ -3,7 +3,8 @@
 Entry point: `installAgents(sim, { economy, social }): Zone` (a `ZoneApi`). It registers the `agents.zone`
 per-step system (order 60), feeds the view sources `characters` and `animals`, chains `sim.hostileNear`
 (hostile animal within `FAST_SPEED_HOSTILE_RADIUS`) and sets the social module's `awakeHook`. Dev page:
-`?mode=village` (`src/agents/dev/villageViewer.ts`); screenshots: `node tools/village-shots.mjs` → `docs/agents/`.
+`?mode=village` (`src/agents/dev/villageViewer.ts`); screenshots: `node tools/village-shots.mjs` → `docs/agents/` (the village scenes) and
+`node tools/village-law-shots.mjs` → `docs/agents/law-*.png` (the law, the watch, the riders and the called horse in the whole game; docs/LAW.md).
 
 The zone is a pure observer: it writes nothing to the simulation state and uses no random stream (visual
 variation comes from `hash01`), so saves are unaffected (tested: state hash equal with and without it,
@@ -150,6 +151,58 @@ strip · stubble", "Common pasture", "Oak".
   back that day. Ids are stable by kind (`1 000 000 + household × 64 + KIND_BASE + index`) so one kind changing does not renumber the
   others. Slaughter and sale (economy) therefore need only change the household's stores.
 
+## Riders, orders and the patrol (`pace.ts`, `behaviour.ts`, `agent.ts`; docs/CIV.md §3–4; the law's side in docs/LAW.md)
+
+* **Riders**: `summon(person, x, z, yaw, { mounted, coat, main, off, torch })` makes the person an agent drawn on a horse
+  (`CharacterDrawItem.mount` = coat + clip; the body that collides is the horse's, `RIDER_RADIUS` 0.42 m: under the 0.46 m the path planner keeps clear, or a rider clips the corners of his path). A horse **walks 1.7, trots 3.5,
+  canters 6, gallops 10 m/s** (`HORSE_*`; the player's horse uses the same numbers, `src/player/movement.ts`). The ground slows a horse and
+  never quickens it (a road does not make a gallop faster than 10 m/s); it gathers itself up at 4.2 m/s² and slows at 7; a shove from a
+  neighbour adds at most 5 % and 0.2 m/s to a step. Clips follow the ground speed (`rideClips`): `ride_idle` under 0.15 m/s, `ride_walk` to
+  2.6, `ride_trot` to 4.8, `ride_gallop` above (the canter is drawn with the gallop clip; the cycle follows `moveSpeed`).
+* **Orders** (`ZoneApi.command`; an order stays until another order or `dismiss`): `goto {x, z, run?, gait?}`; `follow {leader, distance}` (a man
+  at the leader's pace; a rider at his speed ×1.05 plus 0.6 per metre he lags, never above a canter, standing when he stands);
+  `approach {target, distance, gait, side}` goes up to a person who may be moving, tracking him, as fast as ordered when far and slowing
+  as he closes (a horse: gallop beyond 70 m, canter beyond 28, trot beyond 12, then a walk; a man: a jog beyond 14 m, then a walk), and
+  halts `distance` metres off to one side (−1, 0, 1), facing him; `face`, `perform`, `flee`, `resume`.
+* **No warps in sight**: a patrol is summoned at 168 m from the player (inside `SEEN_RADIUS`), so nothing is carried and nobody is hurried.
+  Tested in `tests/agents/patrol.test.ts` (gaits, ride up and halt, follow a walker at his pace, ride off and be dismissed) and, with the
+  real law and territory, `tests/agents/lawzone.test.ts` (the fastest rider step in a patrol is a gallop; no step above 0.85 m).
+* **Sight**: `NavApi.lineClear(x0, z0, x1, z1)` is whether one point can see the other — buildings, walls and trunks only, a metre and a
+  half at each end being the standing place; two people within 3.5 m always see one another. (The path planner's own `finder.lineClear`
+  keeps a margin for bodies and is for smoothing paths, not for seeing.) The law's watch uses it for who sees a trespasser.
+
+## Towns on alert (`stations.ts`, `schedule.ts`, `zone.ts`, `nav/obstacles.ts`; docs/CIV.md §9)
+
+* **Posts**: `ZoneApi.wallStations(settlement)` lists where the watch stands on a place's finished, standing fortifications — two to a wall
+  section along the wall-walk (7 m above the ground, 9 m at level 2), two at the rim of each tower (11 m / 14 m), two over each gatehouse
+  (11.5 m; 6.6 m for the timber gate of level 1), two behind the stakes of a palisade (a 1.95 m platform at level 2; none at level 1, the
+  men stand on the ground) — facing out. The heights are the building recipes' (`src/assets/buildings/recipes/defence.ts`), as the door
+  offsets are. The list is made once per settlement and kept until its buildings change.
+* **Levels** (`military.alertOf?(settlement)`, looked at once a second; absent = peace): `'watch'` doubles the night watch (torches in the
+  streets); `'alarm'` puts the garrison (soldiers, men-at-arms, archers, knights, squires) on the posts, day and night — archers and
+  crossbowmen on the towers and over the gate, the rest along the walls, spear and shield — with the militia beside them (about 45 % of the
+  fit men of 16–55 and rank 3 or less, chosen by a hash per day; 30 % of the garrison rests at night); `'assault'`: 70 % of those men are
+  militia and everyone else is indoors, "Sheltering from the assault". An unwalled place keeps its ordinary guards. A change of level
+  reaches the people of the place within the second. Men go up the way they would: to the foot of the wall, in, and out on the top a few
+  seconds later (the scan shows them on their posts, at the height of the walk); coming off alert they go down the same way. Nobody is
+  carried up in sight (`tests/agents/alert.test.ts`).
+* **Gates and breaches** (`FortView` from `view.forts()`/`fortsVersion()`, applied by `Obstacles.applyForts`): a shut gate is solid; a
+  broken gate and a breach of half the wall or more are passable; a lesser breach is not. People standing in a gate that shuts are pushed
+  out of the solid (never into it), and the navigation tiles round the change are rebuilt at once.
+
+## Prisoners and the called horse (`schedule.ts`, `animals.ts`)
+
+* A person the law holds (`ScheduleDeps.held` = `law.captivity`) neither works nor travels nor goes to church: he is indoors at the door of his
+  cell at every hour of every day, or away (not in the zone) if he is held in another place; with no cell yet (he is being led) the schedule
+  only keeps him from his day while the law's walk (the leader's `goto`) takes him there. `tests/agents/prisoner.test.ts`.
+* **Hold F** (`ZoneApi.callHorse(person)`): the household's horse — any `horse…` in its stores, including the quality-tagged `horse#1`, which the
+  herd signature (`animalSignature`) used not to see — trots to its owner from where it stands in the zone; if it is stabled for the night
+  or outside the zone it comes in from the edge of sight (`CALL_EDGE` 170 m) after the time its ride takes, and stands by him. Refused,
+  with the reason, when the household keeps no horse or it is beyond the whistle (`CALL_REACH` 900 m). `eta` goes to the HUD. A horse the
+  player mounts is claimed and stops answering; a horse bought at a market is the household's already (its stores) and is rideable.
+  `tests/agents/horse.test.ts`.
+* **Led animals** carry their leader: `AnimalDrawItem.ledBy` is the leader's draw item id (the halter rope; the renderer draws it).
+
 ## Navigation (`nav/`)
 
 Torus window of 256×256 cells of 2 m (512 m) built in 32 m tiles, incrementally (≤ 1.8 ms/frame, at most one cold
@@ -178,4 +231,12 @@ searches (walking everything in sight needs more of them than the old instant tr
 budget).
 Civilization pass (walking at the speed of people, sites, led animals), four runs each, the old and the new code side by side on the same
 machine: 300 agents + 150 animals 1.0–1.4 ms per sub-step at 1× (before: 1.1–1.8) and 2.7–3.8 ms/frame at 8× (before: 2.6–3.2).
-Tests: `tests/agents/` (schedule, nav, zone, pace, walking, walkcheck, sites, lead, plates, perf).
+Wave B (riders, alert, prisoners, the called horse), on a machine shared with five other builders (load average 10–20: read the medians, not
+the means, and compare only what ran side by side). The biggest town (300 agents + 150 animals), the base commit and this one run
+alternately, 4 × 4 windows of 600 sub-steps: median whole step **1.43 ms against 1.44**, the zone's agents + scan **1.10 ms against 1.13**
+— no change in the peaceful scene. A walled city (Schwarzburg, 304 agents, 458 posts): median 0.91 ms at peace, 0.87 on alarm (the
+garrison and the militia on the walls and towers), 0.96 under assault (everyone else indoors). Four riders galloping through the crowd, in
+and out of the same windows: +0.03 to +0.05 ms per sub-step (1.50 → 1.53, 1.51 → 1.53, 0.97 → 1.02 ms). The sight test of the watch is a
+walk of 0.6 m steps along the line against the building boxes and trunks, for at most ten candidates twice a second while someone
+trespasses. `tests/agents/agents.perf.test.ts` (run with `PERF=1`) prints these.
+Tests: `tests/agents/` (schedule, nav, zone, pace, walking, walkcheck, sites, lead, plates, patrol, alert, horse, prisoner, lawzone, perf).

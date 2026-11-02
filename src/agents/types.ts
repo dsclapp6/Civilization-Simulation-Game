@@ -65,13 +65,39 @@ export interface ZoneAnimal {
   readonly leader?: PersonId;
 }
 
+/**
+ * How a scripted agent moves (civilization pass, wave B): on foot 'walk' (their own pace), 'jog' (a run, 2.8–3.6 m/s); on a horse
+ * 'walk' 1.7, 'trot' 3.5, 'canter' 6, 'gallop' 10 m/s (docs/CIV.md §3).
+ */
+export type AgentGait = 'walk' | 'jog' | 'trot' | 'canter' | 'gallop';
+
 export type AgentOrder =
-  | { kind: 'goto'; x: number; z: number; run?: boolean }
+  | { kind: 'goto'; x: number; z: number; run?: boolean; gait?: AgentGait }
+  /** Follows a person: on foot at their pace, on a horse at the leader's speed (never faster than the horse allows). */
   | { kind: 'follow'; leader: PersonId; distance?: number }
+  /**
+   * Civilization pass (the patrol): goes up to a person who may be moving, tracking them, at the gait (a horse rides at it, a
+   * man jogs), and halts `distance` metres from them, to one `side` (−1 left, 0 straight on, 1 right); the order stays until
+   * another order or `dismiss`, and the agent keeps near the target if they move.
+   */
+  | { kind: 'approach'; target: PersonId; distance?: number; gait?: AgentGait; side?: number }
   | { kind: 'face'; target: PersonId }
   | { kind: 'perform'; anim: AnimState; mainHand?: HeldItem; seconds: number }
   | { kind: 'flee'; from: P2 }
   | { kind: 'resume' };
+
+/** Civilization pass: how a summoned person looks and is mounted (the patrol rides up on horses). */
+export interface SummonOpts {
+  /** On a horse: drawn under them, ridden at the order's gait; the body that collides is the horse's. */
+  mounted?: boolean;
+  /** The horse's coat. */
+  coat?: number;
+  /** What they hold. */
+  main?: HeldItem;
+  off?: HeldItem;
+  /** A torch in the hand (night). */
+  torch?: boolean;
+}
 
 export interface MoveResult {
   x: number;
@@ -97,6 +123,8 @@ export interface NavApi {
   nearestWalkable(x: number, z: number, maxDist: number, out: P2): boolean;
   /** Point just outside a building's door, facing out (yaw), or null. */
   doorOf(buildingId: number): { x: number; z: number; yaw: number } | null;
+  /** Additive (civilization pass): is the straight line between two points clear of walls, buildings and trunks (what can be seen)? */
+  lineClear?(x0: number, z0: number, x1: number, z1: number): boolean;
 }
 
 /** Something the player can interact with, as found near a point. */
@@ -142,7 +170,7 @@ export interface ZoneApi {
    * Make a person an agent at (x, z) regardless of their schedule (encounters, bandits, a patrol,
    * a messenger), kept until `dismiss`. They follow `command` orders; unordered they idle/face the player.
    */
-  summon?(person: PersonId, x: number, z: number, yaw?: number): void;
+  summon?(person: PersonId, x: number, z: number, yaw?: number, opts?: SummonOpts): void;
   dismiss?(person: PersonId): void;
   /** Spawn a temporary animal (wolf pack, stray beast) at (x, z); returns its id. */
   summonAnimal?(kind: AnimalKind, x: number, z: number, hostile: boolean): number;
@@ -191,6 +219,12 @@ export interface ZoneApi {
   claimAnimal?(id: number): boolean;
   /** The player dismounted: the animal is a household animal again, standing here. */
   releaseAnimal?(id: number, x: number, z: number, yaw: number): void;
+  /**
+   * Civilization pass (hold F): the person's household horse comes to them at a trot — from where it stands in the zone, from the stable
+   * at the edge of sight when it was stabled or left far off. `eta` is the seconds it will take; refused (with a reason) when the
+   * household keeps no horse or it is too far to hear the whistle (about 900 m).
+   */
+  callHorse?(person: PersonId): { ok: boolean; reason?: string; eta?: number; animal?: number };
 
   // ---- civilization pass, wave B (docs/CIV.md §9); optional ----
   /** Where defenders stand on a settlement's fortifications: along the wall-walks, on the towers, over the gate (heights from

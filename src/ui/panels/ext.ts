@@ -8,4 +8,7 @@ import './military';
 // civilization pass, wave B: the battle's command HUD (group bar, banners, order wheel; registered through src/ui/core/extHud.ts)
 // and the tactical view (the ext panel 'battle'), which imports it
 import './battle';
+// civilization pass, wave B: the law (patrols, captivity) and its HUD plaque
+import './law';
+import '../hud/law';
 export {};
