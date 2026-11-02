@@ -18,6 +18,7 @@ import type { Settlement } from '../../world/types';
 import type { Econ, MarketRec } from './core';
 import { GOODS, GOOD_LIST, MACRO_GOODS, MACRO_INDEX, basePriceOf, careerEcon, keyOf, qualityOf, pd } from './data';
 import { RATION, STAPLE_GRAINS, dailyUse, marketBuyShare, typicalTier } from './diet';
+import { materialTarget, supplyFactor, supplyStamp } from './supply';
 import { bagAdd, bagGet } from './items';
 import { addOwned, canCarry, capacityOf, ownedQty, takeOwned, weightOf } from './own';
 import { perkSum, perkTotal } from './perks';
@@ -43,20 +44,32 @@ const RELAX: Record<string, number> = {
   cheese: 0.08, eggs: 1, meat: 0.6, fish: 1, firewood: 1,
 };
 /** Goods merchants carry between neighbouring markets (storable and worth the cart). */
-const CARRIED: readonly string[] = ['wheat', 'rye', 'barley', 'oats', 'peas', 'beans', 'cheese', 'fish', 'firewood'];
+const CARRIED_FOODS: readonly string[] = ['wheat', 'rye', 'barley', 'oats', 'peas', 'beans', 'cheese', 'fish', 'firewood'];
+/** Materials the carters take from market to market too (bulky ones lose more on the road); straw is not worth the cart. */
+const CARRIED_MATERIALS: readonly string[] = ['timber', 'planks', 'stone', 'brick', 'iron', 'nails', 'charcoal', 'salt', 'candle', 'vellum', 'tallow'];
+const CARRIED: readonly string[] = [...CARRIED_FOODS, ...CARRIED_MATERIALS];
+/** Staples the long-distance grain merchants bring to a market in want. */
+const RELIEF: readonly string[] = ['wheat', 'rye', 'barley', 'oats', 'peas', 'beans'];
+/** Share of a load lost on the road per kg a unit weighs, for the bulky goods (stone and bricks cost most to move). */
+const ROAD_LOSS_PER_KG = 0.004;
 /** Seasonal price factors (spring, summer, autumn, winter). */
 const SEASONAL: Record<string, readonly [number, number, number, number]> = {
   wheat: [1.1, 0.92, 0.95, 1.03], rye: [1.1, 0.92, 0.95, 1.03], barley: [1.1, 0.92, 0.95, 1.03], oats: [1.08, 0.92, 0.95, 1.03],
   peas: [1.1, 0.92, 0.95, 1.03], beans: [1.1, 0.92, 0.95, 1.03], bread: [1.05, 0.96, 0.97, 1.02], ale: [1, 1.1, 1, 0.95],
   vegetables: [1.2, 0.8, 0.85, 1.5], cheese: [1.1, 0.95, 0.9, 1.05], eggs: [0.85, 0.9, 1.1, 1.4], meat: [1.1, 1, 0.8, 0.95],
   fish: [1.15, 0.9, 0.95, 1], firewood: [0.85, 0.7, 1, 1.6],
+  // materials: thatch is cheap after the harvest, candles and charcoal dear in the dark months
+  straw: [1.4, 0.9, 0.7, 1.15], charcoal: [0.95, 0.85, 1, 1.25], candle: [0.9, 0.8, 1, 1.3],
 };
 
 // ---------------------------------------------------------------------------------------------
 // Market state
 // ---------------------------------------------------------------------------------------------
 
-/** Target stock per macro good for the market at `mid`: a number of days of the hinterland's use (not cached). */
+/**
+ * Target stock per macro good for the market at `mid`: the foods' a number of days of what the hinterland buys, the
+ * materials' a number of days of what it uses plus what its works make (supply.ts). Not cached.
+ */
 function computeTargets(E: Econ, mid: number): Float64Array {
   const arr = new Float64Array(MACRO_GOODS.length);
   for (const sid of E.hinterland.get(mid) ?? [mid]) {
@@ -67,18 +80,23 @@ function computeTargets(E: Econ, mid: number): Float64Array {
     const share = marketBuyShare(s.kind);
     const tier = typicalTier(s.kind);
     const urban = share > 0.5;
-    for (let i = 0; i < MACRO_GOODS.length; i++) arr[i] += pop * share * dailyUse(MACRO_GOODS[i], tier, urban);
+    for (let i = 0; i < MACRO_GOODS.length; i++) if (!GOODS[MACRO_GOODS[i]].supply) arr[i] += pop * share * dailyUse(MACRO_GOODS[i], tier, urban);
   }
-  for (let i = 0; i < MACRO_GOODS.length; i++) arr[i] = Math.max(3, arr[i] * (COVER[MACRO_GOODS[i]] ?? 5));
+  for (let i = 0; i < MACRO_GOODS.length; i++) {
+    const g = MACRO_GOODS[i];
+    arr[i] = GOODS[g].supply ? materialTarget(E, mid, g) : Math.max(3, arr[i] * (COVER[g] ?? 5));
+  }
   return arr;
 }
 
-/** Target stock per macro good for the market at `mid`: a number of days of the hinterland's use. */
+/** Target stock per macro good for the market at `mid` (rebuilt when the works of the world have changed). */
 export function marketTargets(E: Econ, mid: number): Float64Array {
+  const stamp = supplyStamp(E);
   let arr = E.targets.get(mid);
-  if (arr) return arr;
+  if (arr && E.targetStamp.get(mid) === stamp) return arr;
   arr = computeTargets(E, mid);
   E.targets.set(mid, arr);
+  E.targetStamp.set(mid, stamp);
   return arr;
 }
 
@@ -101,7 +119,7 @@ export function marketRec(E: Econ, mid: number): MarketRec {
  */
 function marketStocks(E: Econ, mid: number): { stock: ArrayLike<number>; target: Float64Array } {
   const rec = E.mk.m[String(mid)];
-  const target = E.targets.get(mid) ?? computeTargets(E, mid);
+  const target = marketTargets(E, mid);
   if (rec) return { stock: rec.s, target };
   return { stock: Array.from(target, (v) => Math.round(v * 100) / 100), target };
 }
@@ -142,21 +160,30 @@ function localFactor(E: Econ, sid: number, good: string): number {
   return arr[GOOD_ORDER[good]] ?? 1;
 }
 
+/** How scarce a stock-and-flow good is for a stock against its target: 0.5 (glut) … 2.6 (bare shelves). */
+export function scarcityOf(target: number, stock: number): number {
+  return Math.max(0.5, Math.min(2.6, Math.pow(target / Math.max(stock, 0.1 * target), 0.5)));
+}
+
+/** Reference price (no spread, no transport) of a stock-and-flow good at a settlement if its market held `stock`. */
+export function midPriceAt(E: Econ, sid: number, good: string, stock: number): number {
+  const def = GOODS[good];
+  const mi = MACRO_INDEX[good];
+  const mid = E.marketFor(sid);
+  if (!def || mi === undefined || mid < 0) return def ? def.basePrice * localFactor(E, sid, good) : 0;
+  const target = marketStocks(E, mid).target[mi];
+  const season = SEASONAL[good]?.[toDate(E.day).season] ?? 1;
+  return def.basePrice * localFactor(E, sid, good) * season * scarcityOf(target, stock) * (def.supply ? supplyFactor(E, mid, good) : 1);
+}
+
 /** Reference price (no spread, no transport) of a good at a settlement. */
 export function midPrice(E: Econ, sid: number, good: string): number {
   const def = GOODS[good];
   if (!def) return 0;
-  const lf = localFactor(E, sid, good);
   const mi = MACRO_INDEX[good];
-  if (mi === undefined) return def.basePrice * lf;
   const mid = E.marketFor(sid);
-  if (mid < 0) return def.basePrice * lf;
-  const m = marketStocks(E, mid);
-  const target = m.target[mi];
-  const stock = m.stock[mi];
-  const scarcity = Math.max(0.5, Math.min(2.6, Math.pow(target / Math.max(stock, 0.1 * target), 0.5)));
-  const season = SEASONAL[good]?.[toDate(E.day).season] ?? 1;
-  return def.basePrice * lf * season * scarcity;
+  if (mi === undefined || mid < 0) return def.basePrice * localFactor(E, sid, good);
+  return midPriceAt(E, sid, good, marketStocks(E, mid).stock[mi]);
 }
 
 /** Fraction added to prices for goods carried from the market town to a village (and shaved off what the village gets). */
@@ -179,16 +206,17 @@ export function postedPrice(E: Econ, sid: number, key: ItemKey, side: 'buy' | 's
 
 const round3 = (v: number): number => Math.round(v * 1000) / 1000;
 
-function glutFactor(E: Econ, sid: number, good: string): number {
+/** What the sellers of a manufactured good have piled up (positive: a glut that sags the price) or bought away (negative: a want that firms it). */
+export function glutFactor(E: Econ, sid: number, good: string): number {
   if (MACRO_INDEX[good] !== undefined) return 1;
   const mid = E.marketFor(sid);
   if (mid < 0) return 1;
   const g = E.mk.m[String(mid)]?.g[good] ?? 0;
-  return 1 / (1 + g);
+  return 1 / (1 + Math.max(-0.6, g));
 }
 
 /** How much the market of a settlement can absorb of one manufactured good before prices sag (pence). */
-function depthOf(E: Econ, sid: number): number {
+export function depthOf(E: Econ, sid: number): number {
   const s = E.settlementById.get(sid);
   const base = s?.kind === 'city' ? 900 : s?.kind === 'town' ? 320 : s?.kind === 'village' ? 70 : 40;
   return base * (1 + E.techBonus(sid, 'market.depth'));
@@ -203,12 +231,12 @@ export function marketDay(E: Econ, mid: number): void {
     const def = GOODS[g];
     let s = rec.s[i];
     if (def.spoilDays && def.spoilDays < 100) s *= Math.exp(-1 / def.spoilDays);
-    s += (RELAX[g] ?? 0.05) * (target[i] - s);
+    s += (def.supply?.relax ?? RELAX[g] ?? 0.05) * (target[i] - s);
     rec.s[i] = Math.max(0, Math.round(s * 100) / 100);
   }
   for (const k of Object.keys(rec.g)) {
     const v = rec.g[k] * 0.82;
-    if (v < 0.01) delete rec.g[k]; else rec.g[k] = Math.round(v * 1000) / 1000;
+    if (Math.abs(v) < 0.01) delete rec.g[k]; else rec.g[k] = Math.round(v * 1000) / 1000;
   }
   E.touchMarkets();
 }
@@ -273,8 +301,10 @@ export function marketFlowsDay(E: Econ): void {
       const want = ((ff - ft) / 2) * Math.min(tf[i], tt[i]) * 0.3;
       const q = Math.min(want, from.s[i] - 0.35 * tf[i]);
       if (q < 0.3) continue;
+      // the bulky goods lose more on the road: stone and bricks cost the most to move
+      const lost = Math.min(0.3, loss + ROAD_LOSS_PER_KG * (GOODS[g].supply ? GOODS[g].weight : 0));
       from.s[i] = Math.round((from.s[i] - q) * 100) / 100;
-      to.s[i] = Math.round((to.s[i] + q * (1 - loss)) * 100) / 100;
+      to.s[i] = Math.round((to.s[i] + q * (1 - lost)) * 100) / 100;
     }
   }
   reliefCarts(E);
@@ -288,9 +318,9 @@ export function marketFlowsDay(E: Econ): void {
  */
 function reliefCarts(E: Econ): void {
   const ids = E.marketIds;
-  for (const g of CARRIED) {
+  for (const g of RELIEF) {
     const i = MACRO_INDEX[g];
-    if (i === undefined || g === 'cheese' || g === 'fish' || g === 'firewood') continue;
+    if (i === undefined) continue;
     for (const b of ids) {
       const rb = marketRec(E, b);
       const tb = marketTargets(E, b)[i];
@@ -398,7 +428,7 @@ function tagsOf(E: Econ, sid: number): Set<string> {
   const tags = new Set<string>();
   const s = E.settlementById.get(sid);
   if (s?.market) tags.add('market');
-  for (const b of E.state.buildingsAt.get(sid) ?? []) tags.add(b.kind);
+  for (const b of E.state.buildingsAt.get(sid) ?? []) if (b.construction >= 1) tags.add(b.kind);
   return tags;
 }
 
@@ -484,8 +514,9 @@ const RAW_FOR_KIND: Record<string, readonly string[]> = {
   weaver: ['wool', 'yarn', 'flax'], bakehouse: ['flour', 'wheat', 'rye', 'firewood'], brewhouse: ['barley', 'malt', 'firewood'],
   watermill: ['wheat', 'rye', 'barley', 'oats', 'peas', 'beans'], windmill: ['wheat', 'rye', 'barley', 'oats', 'peas', 'beans'],
   alehouse: ['barley', 'malt', 'firewood'], tavern: ['barley', 'malt', 'firewood', 'bread', 'cheese', 'meat'],
-  quarry: ['stone'], mine: ['iron_ore'], bloomery: ['iron_ore', 'charcoal'], charcoal_mound: ['firewood'], kiln: ['firewood'],
-  sawpit: ['timber'], stable: ['hay', 'oats'],
+  quarry: ['stone'], mine: ['iron_ore', 'silver_ore', 'gold_ore'], bloomery: ['iron_ore', 'charcoal'], charcoal_mound: ['firewood'], kiln: ['firewood', 'clay'],
+  sawpit: ['timber'], stable: ['hay', 'oats'], clay_pit: ['clay'], lumber_camp: ['timber'], salt_pan: ['salt', 'firewood'],
+  slaughterhouse: ['pig', 'sheep', 'goat', 'cow', 'ox', 'chicken', 'meat', 'hide', 'salt', 'pig_carcass', 'sheep_carcass', 'goat_carcass', 'cow_carcass', 'ox_carcass'],
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -582,6 +613,8 @@ export function partnerLines(E: Econ, partner: TradePartnerRef, actor: Person | 
       }
     } else {
       const line = stockLine(E, v, g, actor);
+      // a material the market is out of is not on the board (unless the actor has some to sell)
+      if (line && def.supply && v.isMarket && line.stock < 0.5 && !(actor && ownedQty(E, actor, g) > 0)) continue;
       if (line) out.push(line);
     }
   }

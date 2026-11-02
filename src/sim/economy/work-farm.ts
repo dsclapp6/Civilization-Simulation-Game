@@ -545,7 +545,7 @@ function spreadManure(E: Econ, p: Person, d: ManureData, f: number): ActionOutco
 
 function listBuilding(E: Econ, p: Person, id: number, out: ActionOption[]): void {
   const b = E.state.buildings.get(id);
-  if (!b) return;
+  if (!b || b.construction < 1) return; // a barn or mill still being raised does no work yet
   const target: TargetRef = { kind: 'building', id };
   const hh = E.hhOf(p);
   const own = !!hh && (hh.home === id || b.household === hh.id);

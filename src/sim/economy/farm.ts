@@ -16,6 +16,7 @@ import {
   CALENDAR, CROPS, SPRING_CROP_LIST, WINTER_CROPS, dropExtra, extraOf, fieldRole, growStrip, peekExtra, roleOn,
   type StripExtra,
 } from '../farming';
+import type { SiteView } from '../construction/types';
 import type { Household, Person, StripState } from '../state';
 import type { Econ } from './core';
 import { GRAIN_PER_UNIT_DAY } from './diet';
@@ -163,6 +164,21 @@ export function cropFor(sid: number, field: number, role: 0 | 1 | 2, year: numbe
   return SPRING_CROP_LIST[Math.floor(h * SPRING_CROP_LIST.length) % SPRING_CROP_LIST.length];
 }
 
+/**
+ * The crop the realm's field plan sets for a field's next sowing (civilization pass: the ruler or the reeve chooses what each
+ * of the three fields sows; `sim.services.realm.cropPlan`), or null where there is no plan, the field is left to fallow, or the
+ * crop does not fit the sowing (a winter corn in spring): the rotation's old choice then stands.
+ */
+export function plannedCrop(E: Econ, settlement: number, field: number, role: 1 | 2): CropKind | null {
+  const realm = E.sim.services.realm;
+  if (!realm) return null;
+  let crop: CropKind | 'fallow' | undefined;
+  try { crop = realm.cropPlan(settlement)?.[field as 0 | 1 | 2]; } catch { return null; }
+  if (!crop || crop === 'fallow' || !CROPS[crop]) return null;
+  const fits = role === 2 ? WINTER_CROPS.includes(crop) : SPRING_CROP_LIST.includes(crop);
+  return fits ? crop : null;
+}
+
 /** Days from `d` (day of year) until the main harvest begins (about day 4.5). */
 export function daysToHarvest(d: number): number {
   const x = 4.5 - d;
@@ -179,12 +195,11 @@ export function sowingNow(E: Econ, strip: StripState, at: number = E.day): { cro
   const d = dayInYear(at);
   const y = yearOf(at);
   if (role === 1 && d >= CALENDAR.springSow[0] && d < CALENDAR.springSow[1] + 1) {
-    return { crop: cropFor(strip.settlement, strip.field, 1, y), late: Math.max(0, d - 1.8) };
+    return { crop: plannedCrop(E, strip.settlement, strip.field, 1) ?? cropFor(strip.settlement, strip.field, 1, y), late: Math.max(0, d - 1.8) };
   }
   if (role === 2 && d >= CALENDAR.winterSow[0] && d < CALENDAR.winterSow[1]) {
-    return { crop: cropFor(strip.settlement, strip.field, 2, y), late: Math.max(0, d - 10.4) };
+    return { crop: plannedCrop(E, strip.settlement, strip.field, 2) ?? cropFor(strip.settlement, strip.field, 2, y), late: Math.max(0, d - 10.4) };
   }
-  void E;
   return null;
 }
 
@@ -267,16 +282,35 @@ export function taskLabel(task: StripTask, strip: StripState): string {
 // Households' labour
 // ---------------------------------------------------------------------------------------------
 
+/** The household's building site under way, if the construction module has one (civilization pass; it may be absent in a test). */
+export function liveSiteOf(E: Econ, hh: Household): SiteView | null {
+  const construction = E.sim.services.construction;
+  if (!construction) return null;
+  let sites: readonly SiteView[];
+  // all sites, not only those of the household's settlement: a lord's works may stand at an outpost in the wild
+  try { sites = construction.sites(); } catch { return null; }
+  for (const s of sites) if (s.household === hh.id && s.status !== 'done' && s.status !== 'cancelled') return s;
+  return null;
+}
+
+/** Is this person, by the head's order, working on the household's site today (so that no other work comes of their day)? */
+export function onBuild(E: Econ, p: Person, hh: Household | undefined): boolean {
+  if (!hh || E.save.plan[String(p.id)] !== 'build') return false;
+  return liveSiteOf(E, hh) !== null;
+}
+
 /** Field labour a household can put on its land (the player's own hands are not counted: they work by action). */
 export function labourUnits(E: Econ, hh: Household): number {
   let l = 0;
   for (const id of hh.members) {
     const p = E.state.persons.get(id);
     if (!p || p.death || E.isPlayer(id) || E.isHired(id)) continue;
+    if (onBuild(E, p, hh)) continue; // at the household's building site: no field work that day
     l += labourOf(E, p);
   }
   for (const h of E.save.helpers) {
     if (h.hh !== hh.id) continue;
+    if (h.task === 'build' && liveSiteOf(E, hh)) continue; // a hand hired to build is not at the plough
     const w = E.state.persons.get(h.w);
     if (w && !w.death) l += 1;
   }

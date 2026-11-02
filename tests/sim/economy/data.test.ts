@@ -46,7 +46,16 @@ describe('economy content', () => {
         for (let i = 1; i < g.qualityPrice.length; i++) expect(g.qualityPrice[i], g.id).toBeGreaterThan(g.qualityPrice[i - 1]);
       }
     }
-    expect(MACRO_GOODS.length).toBe(14);
+    // fourteen foods and fuels, and (civilization pass) twelve building materials and raw goods with a supply model
+    expect(MACRO_GOODS.filter((g) => !GOODS[g].supply).length).toBe(14);
+    expect(MACRO_GOODS.filter((g) => GOODS[g].supply).length).toBe(12);
+    for (const g of MACRO_GOODS) if (GOODS[g].supply) {
+      const s = GOODS[g].supply!;
+      expect(s.use, g).toBeGreaterThan(0);
+      expect(s.cover, g).toBeGreaterThan(1);
+      expect(s.relax, g).toBeGreaterThan(0);
+      expect(s.relax, g).toBeLessThan(0.5);
+    }
     expect(basePriceOf('wheat')).toBe(1);
     expect(basePriceOf('sickle#3')).toBeGreaterThan(basePriceOf('sickle#1') * 3);
     expect(describeItem('eggs', 3)).toBe('3 dozen eggs');

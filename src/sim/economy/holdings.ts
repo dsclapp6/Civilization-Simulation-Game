@@ -97,6 +97,9 @@ const PRICES: Partial<Record<BuildingKind, readonly [number, number]>> = {
   smithy: [90, 8], carpenter: [80, 7], bakehouse: [70, 6], brewhouse: [60, 5], weaver: [70, 6], tannery: [100, 9],
   windmill: [300, 24], watermill: [500, 36], kiln: [40, 4], sawpit: [30, 3], market_stall: [20, 2], alehouse: [120, 10],
   tavern: [300, 24], warehouse: [200, 16], cowshed: [30, 2.5], stable: [60, 5], barn: [50, 4],
+  // the works of the land and the slaughterhouse (civilization pass), when they stand vacant
+  slaughterhouse: [120, 10], clay_pit: [60, 5], salt_pan: [150, 12], lumber_camp: [100, 8], quarry: [200, 16], mine: [400, 30],
+  bloomery: [150, 12], charcoal_mound: [20, 2],
 };
 
 export const STRIP_RENT = 3;

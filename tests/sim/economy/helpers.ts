@@ -1,6 +1,11 @@
 // Helpers for the economy tests: a simulation with the economy installed, a player who heads a
 // farm household, and a driver that runs player actions to completion.
-import { ageYears, type Household, type Person } from '../../../src/sim/state';
+import { ageYears, type BuildingState, type Household, type Person } from '../../../src/sim/state';
+import type { BuildingKind } from '../../../src/content/types';
+import type { ConstructionApi, SiteView } from '../../../src/sim/construction/types';
+import type { RealmApi } from '../../../src/sim/realm/types';
+import type { TerritoryApi } from '../../../src/sim/territory/types';
+import type { Deposit, ResourceKind } from '../../../src/world/types';
 import type { ActionOption, TargetRef } from '../../../src/sim/actions';
 import { installEconomy, type EconomyRuntime } from '../../../src/sim/economy';
 import { refreshTrained } from '../../../src/sim/people';
@@ -301,4 +306,74 @@ export function runBot(bot: FarmBot, days: number, opts: BotOptions = {}): numbe
     if (!acted) sim.advanceHours(6);
   }
   return sim.absDay - start;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Civilization pass: buildings raised in play, fake neighbours (territory, construction, realm)
+// ---------------------------------------------------------------------------------------------
+
+/** Raises a finished (or part-built) building the way the construction module does: a real BuildingState, plot -1. */
+export function raise(sim: Simulation, kind: BuildingKind, o: { settlement?: number; household?: number; construction?: number; level?: number; at?: { x: number; z: number } } = {}): BuildingState {
+  const st = sim.state;
+  const sid = o.settlement ?? playerOf(sim).settlement;
+  const s = sim.world.settlements.find((x) => x.id === sid) ?? sim.world.settlements[0];
+  const n = st.nextBuildingId++;
+  const b: BuildingState = {
+    id: n, plot: -1, kind, level: o.level ?? 1, settlement: s.id, construction: o.construction ?? 1, damage: 0, onFire: false, owner: 0,
+    household: o.household ?? 0, occupied: false, x: o.at?.x ?? s.x + 30 + (n % 7) * 3, z: o.at?.z ?? s.z + 30 + (n % 5) * 3, rot: 0, culture: 'anglo', seed: n,
+  };
+  st.buildings.set(b.id, b);
+  let list = st.buildingsAt.get(s.id);
+  if (!list) { list = []; st.buildingsAt.set(s.id, list); }
+  list.push(b);
+  st.touchBuilding(b);
+  return b;
+}
+
+/** A territory service that knows the deposits it is given (the rest of its contract is the placeholder's). */
+export function fakeTerritory(sim: Simulation, deposits: Array<Omit<Deposit, 'id' | 'settlement'> & { settlement?: number }>): TerritoryApi {
+  const all: Deposit[] = deposits.map((d, id) => ({ settlement: -1, ...d, id }));
+  const near = (x: number, z: number, r: number, kind?: ResourceKind): Deposit[] => all.filter((d) => (!kind || d.kind === kind) && Math.hypot(d.x - x, d.z - z) <= r + d.radius);
+  const api: TerritoryApi = {
+    landAt: () => ({ kind: 'wild', settlement: -1, house: 0, title: 0, household: 0, strip: -1, parcel: -1, building: -1 }),
+    trespass: () => ({ level: 'none', land: api.landAt(0, 0), reason: '' }),
+    settlementOf: (x, z) => sim.world.settlementAt(x, z)?.id ?? -1,
+    landsRadius: () => 2500,
+    resources: (settlement) => ({ settlement, deposits: all, forest: 0, fertility: 0, coast: false, river: false, yields: [] }),
+    deposits: () => all,
+    depositsNear: near,
+    depositAt: (x, z, kind) => near(x, z, 0, kind)[0] ?? null,
+    version: () => all.length,
+  };
+  sim.services.territory = api;
+  return api;
+}
+
+/** A construction service with the sites it is given. */
+export function fakeConstruction(sim: Simulation, sites: SiteView[]): ConstructionApi {
+  const api = {
+    sites: (settlement?: number) => sites.filter((s) => settlement === undefined || s.settlement === settlement),
+    site: (id: number) => sites.find((s) => s.id === id) ?? null,
+    siteOf: (b: number) => sites.find((s) => s.building === b) ?? null,
+    workersAt: () => [],
+    outposts: () => [],
+    version: () => sites.length,
+  } as unknown as ConstructionApi;
+  sim.services.construction = api;
+  return api;
+}
+
+/** A realm service that answers the crop plan (and nothing else of value). */
+export function fakeRealm(sim: Simulation, plan: Record<number, Record<0 | 1 | 2, string>>): RealmApi {
+  const api = { cropPlan: (settlement: number) => plan[settlement] ?? { 0: 'fallow', 1: 'fallow', 2: 'fallow' }, worksShare: () => 0, version: () => 0 } as unknown as RealmApi;
+  sim.services.realm = api;
+  return api;
+}
+
+/** Gives the player a household with the animals given, in the village where the family farms. */
+export function stockPlayer(sim: Simulation, animals: Record<string, number>, o: { age?: number; strength?: number } = {}): { player: Person; hh: Household } {
+  const { player, hh } = makeFarmer(sim, { age: o.age ?? 20, strips: 1, strength: o.strength ?? 12 });
+  for (const [k, v] of Object.entries(animals)) hh.stores[k] = v;
+  sim.state.touchHousehold(hh);
+  return { player, hh };
 }

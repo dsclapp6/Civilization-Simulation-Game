@@ -6,6 +6,7 @@ import perksJson from '../../content/perks.json';
 import recipesJson from '../../content/recipes.json';
 import type { Sex, SkillId, StatId } from '../../core/domain';
 import type { AnimState, HeldItem } from '../../core/view';
+import { BUILDINGS } from '../../content/types';
 import type { CareerId } from '../careers';
 import { formatMoney } from '../money';
 import { CROPS } from '../farming';
@@ -150,14 +151,35 @@ export interface RecipeDef {
   xp: number;
   anim: AnimState;
   held: HeldItem;
+  /** The visible steps of a bout (`plans` below); absent: the building's own (`buildingPlans`). */
+  plan?: string;
+  /** The yield follows the richness of this kind of deposit under the building (salt pans). */
+  deposit?: string;
 }
 export interface ApprenticeTask { id: string; name: string; anim: AnimState; held: HeldItem; str: number; end: number }
 
-const rawRecipes = recipesJson as unknown as { recipes: Record<string, Omit<RecipeDef, 'id'>>; apprenticeTasks: Record<string, ApprenticeTask[]> };
+/** One step of a craft bout as the content writes it (`held`/`off` become the step's main and off hand). */
+export interface StepDef { share: number; label: string; anim: AnimState; held: HeldItem; off?: HeldItem; sfx?: string }
+/** A beast at the block (recipes.json "beasts"). */
+export interface BeastDef { kg: number; meat: number; hide: number; tallow: number; carcass: string | null; work: number; cut: number; home: boolean }
+
+const rawRecipes = recipesJson as unknown as {
+  recipes: Record<string, Omit<RecipeDef, 'id'>>;
+  apprenticeTasks: Record<string, ApprenticeTask[]>;
+  plans: Record<string, StepDef[]>;
+  buildingPlans: Record<string, string>;
+  beasts: Record<string, BeastDef>;
+  workplaces: Record<string, Record<string, number>>;
+};
 export const RECIPES: Record<string, RecipeDef> = {};
 for (const [id, r] of Object.entries(rawRecipes.recipes)) RECIPES[id] = { id, ...r };
 export const RECIPE_LIST: readonly RecipeDef[] = Object.values(RECIPES);
 export const APPRENTICE_TASKS: Readonly<Record<string, ApprenticeTask[]>> = rawRecipes.apprenticeTasks;
+export const STEP_PLANS: Readonly<Record<string, readonly StepDef[]>> = rawRecipes.plans;
+export const BUILDING_PLANS: Readonly<Record<string, string>> = rawRecipes.buildingPlans;
+export const BEASTS: Readonly<Record<string, BeastDef>> = rawRecipes.beasts;
+/** What the macro economy's works turn out in a day when staffed (units of a stock-and-flow good), by building kind. */
+export const WORKPLACES: Readonly<Record<string, Readonly<Record<string, number>>>> = rawRecipes.workplaces;
 
 /** Recipes that can be made at a building kind (or at home). */
 export function recipesAt(kind: string, home: boolean): RecipeDef[] {
@@ -183,6 +205,23 @@ export function validateData(): string[] {
   for (const r of RECIPE_LIST) {
     for (const g of [...Object.keys(r.inputs), ...Object.keys(r.outputs)]) if (!GOODS[g]) bad.push(`recipe ${r.id}: unknown good ${g}`);
     if (r.tool && !GOODS[r.tool]) bad.push(`recipe ${r.id}: unknown tool ${r.tool}`);
+  }
+  for (const r of RECIPE_LIST) {
+    if (r.plan && !STEP_PLANS[r.plan]) bad.push(`recipe ${r.id}: unknown plan ${r.plan}`);
+    for (const b of r.building) if (b !== 'home' && !(b in BUILDINGS)) bad.push(`recipe ${r.id}: unknown building ${b}`);
+  }
+  for (const [id, steps] of Object.entries(STEP_PLANS)) {
+    const total = steps.reduce((a, st) => a + st.share, 0);
+    if (Math.abs(total - 1) > 1e-6) bad.push(`plan ${id}: the shares add up to ${total}`);
+  }
+  for (const [b, plan] of Object.entries(BUILDING_PLANS)) if (!STEP_PLANS[plan]) bad.push(`building ${b}: unknown plan ${plan}`);
+  for (const [id, b] of Object.entries(BEASTS)) {
+    if (!GOODS[id]) bad.push(`beast ${id}: unknown good`);
+    if (b.carcass && !GOODS[b.carcass]) bad.push(`beast ${id}: unknown carcass ${b.carcass}`);
+  }
+  for (const [b, out] of Object.entries(WORKPLACES)) {
+    if (!(b in BUILDINGS)) bad.push(`workplace ${b}: unknown building`);
+    for (const g of Object.keys(out)) if (!GOODS[g]?.macro) bad.push(`workplace ${b}: ${g} is not a stock-and-flow good`);
   }
   for (const [id, c] of Object.entries(CROPS)) {
     if (!GOODS[c.good]) bad.push(`crop ${id}: unknown good ${c.good}`);

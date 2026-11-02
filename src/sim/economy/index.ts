@@ -15,6 +15,7 @@ import { attachObligationEvents, obligationsDaily, obligationsOf } from './oblig
 import { addOwned, capacityOf, ownedQty, takeOwned, weightOf, canCarry } from './own';
 import { announcePerkChoices, choosePerk, openChoices } from './perks';
 import { initFresh, registerSystems } from './systems';
+import { cartsHourly, deliveriesOf, procureGoods, sellGoods, stockAtMarket } from './trade-house';
 import { FloatFeed } from './floatfeed';
 import { PropFeed } from './propfeed';
 import { StripFeed } from './stripfeed';
@@ -23,6 +24,7 @@ import { craftProvider } from './work-craft';
 import { farmProvider } from './work-farm';
 import { miscProvider, stockProvider } from './work-misc';
 import { giveKit } from './macro';
+import { attachConstructionEvents } from './supply';
 import { goodOf } from './data';
 import type { PersonId } from '../state';
 import type { EconomyApi, EquipSlot, InventoryView, ItemKey, ItemStack, Result } from './types';
@@ -47,7 +49,7 @@ export function installEconomy(sim: Simulation, deps: EconomyDeps): EconomyRunti
 
   const offs: Array<() => void> = [];
   offs.push(registerSystems(E, sim.scheduler, {
-    hourly: [playerHour],
+    hourly: [playerHour, cartsHourly],
     daily: [employmentDaily, obligationsDaily, holdingsDaily],
     seasonal: [seasonalNeeds],
     yearly: [],
@@ -58,6 +60,7 @@ export function installEconomy(sim: Simulation, deps: EconomyDeps): EconomyRunti
   offs.push(sim.actions.register(miscProvider(E)));
   offs.push(deps.social.registerTopic(economyTopics(E)));
   offs.push(attachObligationEvents(E));
+  offs.push(attachConstructionEvents(E));
   offs.push(announcePerkChoices(E));
   offs.push(sim.events.on('playerSwitched', (e) => {
     const np = E.person(e.to);
@@ -228,6 +231,12 @@ export function installEconomy(sim: Simulation, deps: EconomyDeps): EconomyRunti
     hire: (employer, worker, wage, task) => hire(E, employer, worker, wage, task),
     dismiss: (employer, worker) => dismiss(E, employer, worker),
 
+    // ---- household trade (civilization pass): construction's materials and the steward's trade orders ----
+    procure: (household, good, qty, opts) => procureGoods(E, household, good, qty, opts),
+    sell: (household, good, qty, opts) => sellGoods(E, household, good, qty, opts),
+    deliveries: (household) => deliveriesOf(E, household),
+    stockAt: (settlement, good) => stockAtMarket(E, settlement, good),
+
     // ---- skills and perks ----
     perk: (id) => PERK_BY_ID.get(id),
     perkChoices: (person) => { const p = E.person(person); return p ? openChoices(p) : []; },
@@ -247,7 +256,9 @@ export function installEconomy(sim: Simulation, deps: EconomyDeps): EconomyRunti
       if (!view) return [];
       const tips: PriceTip[] = [];
       for (const l of view.lines) {
-        if (MACRO_INDEX[parseItemKey(l.key).good] === undefined || Math.abs(l.trend) < 0.15) continue;
+        const g = parseItemKey(l.key).good;
+        // news of prices: the foods when they stray a seventh, the materials only when a shortage or a glut is plain (their usual premium and local factors are no news)
+        if (MACRO_INDEX[g] === undefined || Math.abs(l.trend) < (GOODS[g].supply ? 0.6 : 0.15)) continue;
         tips.push({ good: parseItemKey(l.key).good, trend: l.trend, price: l.buy });
       }
       return tips;

@@ -12,7 +12,7 @@ import { setRank, shiftFamilyRank } from '../succession';
 import { ageYears, NONE, type BuildingState, type Household, type Person, type PersonId } from '../state';
 import type { Econ, EmploymentSave } from './core';
 import { CAREER_ECON, ENTRY_TESTS, FIELD_INFO, careerEcon, pd } from './data';
-import { nextTask } from './farm';
+import { liveSiteOf, nextTask } from './farm';
 import { bagGet } from './items';
 import { manumissionPrice } from './obligations';
 import { countGoodOf } from './own';
@@ -29,6 +29,8 @@ const req = (label: string, met: boolean): Requirement => ({ label, met });
 const ids = {
   farmhand: 0, herd: 1, shepherd: 2, apprentice: 3, journeyman: 4, servant: 5, potboy: 6, shopboy: 7, novice: 8,
   archer: 9, manAtArms: 10, sergeant: 11, clerk: 12, healer: 13, woodhand: 14,
+  // civilization pass: day labour at the works of the land and the slaughterhouse
+  pitHand: 15, mineHand: 16, campHand: 17, saltHand: 18, slaughterHand: 19,
 } as const;
 type JobKindId = (typeof ids)[keyof typeof ids];
 
@@ -54,9 +56,10 @@ function clearEmployment(E: Econ, personId: PersonId): void {
   E.touchSave();
 }
 
+/** The finished buildings of the given kinds in a settlement (a site being raised is no workplace yet). */
 function buildingsOf(E: Econ, sid: number, kinds: readonly string[]): BuildingState[] {
   const out: BuildingState[] = [];
-  for (const b of E.state.buildingsAt.get(sid) ?? []) if (kinds.includes(b.kind)) out.push(b);
+  for (const b of E.state.buildingsAt.get(sid) ?? []) if (kinds.includes(b.kind) && b.construction >= 1) out.push(b);
   return out;
 }
 
@@ -222,6 +225,15 @@ function dependants(E: Econ, hh: Household, career: CareerId, stage: number): nu
   return n;
 }
 
+/** Day labour at a works: which buildings, what the post is called, what it pays and the strength it asks. */
+const SITE_POSTS: ReadonlyArray<{ id: JobKindId; kinds: readonly string[]; title: string; wage: number; str: number }> = [
+  { id: ids.pitHand, kinds: ['quarry', 'clay_pit'], title: 'Hand at the pit', wage: 2, str: 8 },
+  { id: ids.mineHand, kinds: ['mine'], title: 'Miner', wage: 2.4, str: 9 },
+  { id: ids.campHand, kinds: ['lumber_camp'], title: 'Lumberjack', wage: 2.2, str: 9 },
+  { id: ids.saltHand, kinds: ['salt_pan'], title: 'Salt boiler', wage: 2, str: 7 },
+  { id: ids.slaughterHand, kinds: ['slaughterhouse'], title: "Slaughterman's hand", wage: 2, str: 8 },
+];
+
 /** The posts on offer in a settlement, with what `forPerson` lacks for each. */
 export function jobsAt(E: Econ, sid: number, forPerson: PersonId): JobOffer[] {
   const s = E.settlementById.get(sid);
@@ -260,6 +272,21 @@ export function jobsAt(E: Econ, sid: number, forPerson: PersonId): JobOffer[] {
           requirements: [req('Aged 14 or more', age >= 14), strong(8)],
         });
       }
+    }
+  }
+
+  // ---- the works of the land and the slaughterhouse: day labour for whoever keeps them (the lord, if nobody does) ----
+  for (const post of SITE_POSTS) {
+    const hired = new Set<number>(); // one post for each keeper (a job is the employer's and the kind of work)
+    for (const b of buildingsOf(E, sid, post.kinds)) {
+      const keeperHh = b.household ? E.state.households.get(b.household) : undefined;
+      const keeper = keeperHh ? E.state.persons.get(keeperHh.head) : lord?.person;
+      if (!keeper || keeper.death || keeper.id === p.id || hired.has(keeper.id)) continue;
+      hired.add(keeper.id);
+      specs.push({
+        kind: post.id, career: 'labourer', stage: 0, title: post.title, terms: 'day', wage: post.wage, employer: keeper.id, building: b.id,
+        requirements: [req('Aged 14 or more', age >= 14), strong(post.str)],
+      });
     }
   }
 
@@ -607,6 +634,11 @@ export function landLadder(E: Econ, p: Person): void {
 export function aiTask(E: Econ, p: Person, hh: Household | undefined, age: number, sea: number): string {
   const set = E.save.plan[String(p.id)];
   if (set && set !== 'auto') return set;
+  return defaultTask(E, p, hh, age, sea);
+}
+
+/** The day's work of someone nobody has told what to do. */
+export function defaultTask(E: Econ, p: Person, hh: Household | undefined, age: number, sea: number): string {
   if (age < 8) return 'play';
   const field = CAREERS[p.career].field;
   if (age < 12) return p.sex === 'f' ? 'garden' : 'livestock';
@@ -651,7 +683,10 @@ export function workSpot(E: Econ, personId: PersonId, absDay: number): WorkSpot 
   const hh = state.households.get(p.household);
   const sid = p.settlement;
   const sea = Math.floor((((absDay % DAYS_PER_YEAR) + DAYS_PER_YEAR) % DAYS_PER_YEAR) / 4);
-  const task = aiTask(E, p, hh, age, sea);
+  let task = aiTask(E, p, hh, age, sea);
+  // told to build, with a site under way: the day goes to the site; with none, the day is as it would have been
+  const site = task === 'build' && hh ? liveSiteOf(E, hh) : null;
+  if (task === 'build' && !site) task = defaultTask(E, p, hh, age, sea);
   const ce = careerEcon(p.career);
   const emp = employmentOf(E, personId);
   const dayNo = Math.floor(absDay);
@@ -664,6 +699,10 @@ export function workSpot(E: Econ, personId: PersonId, absDay: number): WorkSpot 
   };
 
   switch (task) {
+    case 'build': {
+      if (!site) return null;
+      return { kind: 'building', id: site.building, x: site.x, z: site.z, anim: 'work_hammer', mainHand: 'hammer', label: `Building the ${BUILDINGS[site.kind]?.name.toLowerCase() ?? 'works'}` };
+    }
     case 'fields': {
       const s = E.settlementById.get(sid);
       if (s && s.strips.length > 0) {

@@ -55,6 +55,12 @@ export interface GoodDef {
   /** Clothing: warmth added to the wearer (0..1) and status shown to others. */
   warmth?: number;
   status?: number;
+  /**
+   * Civilization pass: the building materials and raw goods of the stock-and-flow model (`macro: true`) that are not food:
+   * `use` = units a head of the hinterland uses a day, `cover` = days of use (plus the local works' output) the market keeps
+   * in stock, `relax` = the share of the gap to that stock that the wider world closes each day (src/sim/economy/supply.ts).
+   */
+  supply?: { use: number; cover: number; relax: number };
 }
 
 export type ItemKey = string;
@@ -373,6 +379,10 @@ export interface EconomyApi {
   procure?(household: HouseholdId, good: string, qty: number, opts?: { settlement?: number; maxPrice?: number }): { got: number; cost: number; settlement: number; days: number };
   /** A household sells goods from its stores at a market: income to the purse (partial if the market will not take it all). */
   sell?(household: HouseholdId, good: string, qty: number, opts?: { settlement?: number; minPrice?: number }): { sold: number; income: number; settlement: number };
+  /** Goods a household has bought that are still on the cart (arrive in its stores at `arrive`, an absolute day). Additive (A4). */
+  deliveries?(household: HouseholdId): ReadonlyArray<{ good: string; qty: number; arrive: number; from: number }>;
+  /** Units of a good the market of a settlement has in stock now (0 where there is no market). Additive (A4). */
+  stockAt?(settlement: number, good: string): number;
   perk(id: string): PerkDef | undefined;
   perkChoices(person: PersonId): PerkChoice[];
   choosePerk(person: PersonId, perkId: string): Result;

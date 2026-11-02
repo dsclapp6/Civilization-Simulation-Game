@@ -17,9 +17,9 @@ import { employmentOf } from './jobs';
 import { buyFreedom, fleeToTown, manumissionPrice } from './obligations';
 import { POTTAGE, consume, eatAtHome } from './needs';
 import { openChoices, perkSum } from './perks';
-import { giveOutput } from './work-craft';
+import { butcher, listButchery, slaughter } from './butchery';
 import {
-  BOUT_DAYS, boutDone, disabled, giveXp, holyDayBlock, incapable, option, payBout, round1, round2, secondsFor, speedOf, stoch, toolFor,
+  BOUT_DAYS, boutDone, disabled, giveOutput, giveXp, holyDayBlock, incapable, option, payBout, round1, round2, secondsFor, speedOf, stoch, toolFor,
 } from './workkit';
 import { MARKET_BUILDINGS } from './market';
 import { parseItemKey, type ItemKey } from './types';
@@ -49,7 +49,7 @@ const STOCK_SITES: Readonly<Record<string, StockSite>> = {
 // Livestock
 // ---------------------------------------------------------------------------------------------
 
-interface StockData { act: 'feed' | 'muck' | 'milk' | 'shear' | 'slaughter' | 'herd'; animal?: string; bld: number }
+interface StockData { act: 'feed' | 'muck' | 'milk' | 'shear' | 'slaughter' | 'butcher' | 'herd'; animal?: string; bld: number }
 
 export function stockProvider(E: Econ): ActionProvider {
   return {
@@ -66,6 +66,13 @@ export function stockProvider(E: Econ): ActionProvider {
       if (target.kind === 'building') {
         const b = E.state.buildings.get(target.id);
         if (!b) return;
+        // the slaughterhouse: any beast of the household's, and the block for the carcasses
+        if (b.kind === 'slaughterhouse') {
+          if (b.construction >= 1 && (b.settlement === p.settlement || b.settlement === hh.settlement)) {
+            listButchery(E, p, hh, target, 8, out, { building: b.id, slaughterhouse: b, keeps: () => true, block: true });
+          }
+          return;
+        }
         const own = hh.home === b.id || b.household === hh.id;
         if (!(FARM_BUILDINGS.has(b.kind) || (own && HOME_KINDS.has(b.kind)))) return;
         if (b.settlement !== p.settlement) return;
@@ -91,6 +98,10 @@ export function stockProvider(E: Econ): ActionProvider {
       const can = (act: 'feed' | 'muck' | 'milk' | 'shear' | 'slaughter'): boolean => !here || here.acts.has(act);
       const push = (o: ActionOption): void => { if (block) { o.enabled = false; o.reason = block; } out.push(o); };
       const base = { target: t, range: pasture ? 18 : 8 };
+      // the knife and the block: a pig, sheep, goat or fowl killed where it is kept, and any carcass held jointed where there is a block
+      if (!pasture) {
+        listButchery(E, p, hh, t, base.range, out, { building: id, keeps: (animal) => kept(animal, bagGet(st, animal)) >= 1 && can('slaughter'), block: can('slaughter') });
+      }
       if (total < 1) {
         // nothing of the household's is kept here: a byre or a pen says so only when the household has no animals at all
         if ((!here || here.animals.size > 0) && cows + sheep + pigs + oxen + goats + hens + horses < 1) out.push(disabled({ id: 'stock.none', label: 'Tend the animals', ...base }, 'Your household keeps no animals'));
@@ -126,11 +137,6 @@ export function stockProvider(E: Econ): ActionProvider {
         if (done >= sheep) out.push(disabled({ id: 'stock.shear', label: 'Shear the sheep', ...base }, 'Every sheep has been clipped this year'));
         else push(option({ id: 'stock.shear', label: 'Shear the sheep', seconds: secondsFor(1.2, speed, 8, 40), anim: 'work_milk', mainHand: 'none', priority: 45,
           preview: `About ${round1(Math.min(sheep - done, 6) * 1.4)} lb of wool · Husbandry`, ...base, data: { act: 'shear', bld: id } as StockData }));
-      }
-      for (const [animal, n, lb] of [['pig', pigs, 11], ['sheep', sheep, 4], ['goat', goats, 3], ['chicken', hens, 0.3]] as const) {
-        if (n < 1 || !can('slaughter') || !kept(animal, n)) continue;
-        push(option({ id: `stock.slaughter.${animal}`, label: `Slaughter a ${animal}`, seconds: secondsFor(1.2, speedOf(E, p, 'husbandry', 'str', null), 8, 40), anim: 'work_lift', mainHand: 'none', priority: 5, repeat: false,
-          preview: `${lb} lb of meat and a hide · you lose a breeding animal · Husbandry`, ...base, data: { act: 'slaughter', animal, bld: id } as StockData }));
       }
     },
     check(_ctx, actor) {
@@ -188,19 +194,9 @@ export function stockProvider(E: Econ): ActionProvider {
           touch();
           return { ok: true, message: `You clip ${n} sheep: ${lb} lb of wool.`, gains };
         }
-        case 'slaughter': {
-          const a = d.animal as string;
-          if (bagGet(st, a) < 1) return { ok: false, message: 'There is no such beast.' };
-          bagAdd(st, a, -1);
-          const lb = ({ pig: 11, sheep: 4, goat: 3, chicken: 0.3 } as Record<string, number>)[a] ?? 3;
-          const meat = round2(lb * yieldM);
-          giveOutput(E, p, 'meat', meat);
-          if (a !== 'chicken') giveOutput(E, p, 'hide', a === 'sheep' || a === 'goat' ? 0.4 : 1);
-          boutDone(E, p, { skill: 'husbandry', xp: 8, heavy: 0.5, bouts: f });
-          gains.push({ label: 'Meat', amount: meat, ref: 'meat' });
-          touch();
-          return { ok: true, message: `The ${a} yields ${meat} lb of meat.`, gains };
-        }
+        // a beast is killed, a carcass jointed, only by finishing the job
+        case 'slaughter': return f < 0.999 ? { ok: false, message: 'You stop before the beast is dead.' } : slaughter(E, p, { act: 'slaughter', animal: d.animal as string, bld: d.bld });
+        case 'butcher': return f < 0.999 ? { ok: false, message: 'You stop before the carcass is jointed.' } : butcher(E, p, { act: 'butcher', animal: d.animal as string, bld: d.bld });
         case 'herd': {
           const emp = employmentOf(E, p.id);
           boutDone(E, p, { skill: 'husbandry', xp: 7, heavy: 0.3, end: 1.2, bouts: f });

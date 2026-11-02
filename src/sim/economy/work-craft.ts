@@ -1,7 +1,8 @@
-// Player work with hands and tools other than the plough (SPEC §6, §11): the crafts at their workshops
-// by rung (an apprentice fetches, pumps the bellows and strikes; a journeyman and a master make
-// things from recipes, with quality from skill, tool and perks), the masterpiece, felling and
-// gathering wood, quarrying stone and mining ore.
+// Player work with hands and tools other than the plough (SPEC §6, §11, docs/CIV.md §8): the crafts at their workshops,
+// open to everyone (a recipe may be attempted at any works one may use — one's own, an employer's, or a master's bench
+// hired for a fee — and the ladders of career and stage stay for jobs and the masterpiece only), the apprentice's
+// fetching and striking, the masterpiece, felling and gathering wood in the open, and the works of the land (work-dig.ts).
+// Quality comes from skill, tool and perks; a novice wastes material and may spoil the work, and learns from it either way.
 import { BUILDINGS, type BuildingKind } from '../../content/types';
 import { CHUNKS_PER_SIDE, type ScatterItem, type ScatterKind } from '../../world/types';
 import type { ActionOption, ActionOutcome, ActionProvider, TargetRef } from '../actions';
@@ -12,34 +13,45 @@ import { pickHome, setRank } from '../succession';
 import type { BuildingState, Household, Person } from '../state';
 import type { Econ } from './core';
 import { APPRENTICE_TASKS, CAREER_ECON, GOODS, RECIPES, TOOL_SPEED, careerEcon, keyOf, recipesAt, type RecipeDef, pd } from './data';
+import { DEFAULT_RICHNESS, depositUnder, richnessFactor } from './deposits';
 import { bagAdd, bagGet } from './items';
 import { employmentOf } from './jobs';
-import { capacityOf, carriedWeight, weightOf } from './own';
 import { perkSum } from './perks';
 import { RENT_PER_STRIP } from './macro';
 import { addFine, creditWeekWork } from './obligations';
+import { stepsFor } from './steps';
+import { DIG_BUILDINGS, digBout, listDig, type DigData } from './work-dig';
 import {
-  BOUT, BOUT_DAYS, boutDone, careOf, disabled, giveXp, haveOf, holyDayBlock, incapable, option, payBout, round1, round2, secondsFor, speedOf, stoch,
-  toolFor, wearOut,
+  BOUT, BOUT_DAYS, boutDone, careOf, disabled, giveOutput, giveXp, haveOf, holyDayBlock, incapable, option, payBout, round1, round2, secondsFor, speedOf, stoch,
+  toolFor, wearOut, type ToolRef,
 } from './workkit';
 import type { SkillId } from '../../core/domain';
 import type { Quality } from './types';
+
+export { giveOutput };
 
 // ---------------------------------------------------------------------------------------------
 // Data
 // ---------------------------------------------------------------------------------------------
 
-interface CraftData { act: 'craft'; recipe: string; building: number; source: 'own' | 'employer'; employerHh: number; toolQ: number; speed: number }
+type Source = 'own' | 'employer' | 'hired';
+interface CraftData { act: 'craft'; recipe: string; building: number; source: Source; employerHh: number; toolQ: number; speed: number }
 interface ApprenticeData { act: 'apprentice'; task: string; building: number }
 interface MasterData { act: 'masterpiece'; recipe: string; building: number }
 interface WoodData { act: 'fell' | 'gather' | 'quarry_rock'; scatter: number; kind: ScatterKind; scale: number }
-interface DigData { act: 'dig'; building: number; what: 'stone' | 'ore' }
 type CraftAct = CraftData | ApprenticeData | MasterData | WoodData | DigData;
 
 const TREES: ReadonlySet<ScatterKind> = new Set<ScatterKind>(['oak', 'beech', 'birch', 'ash', 'willow', 'pine', 'spruce', 'apple']);
 const DEADWOOD: ReadonlySet<ScatterKind> = new Set<ScatterKind>(['deadtree', 'stump', 'log', 'bush', 'bramble']);
 const ROCKS: ReadonlySet<ScatterKind> = new Set<ScatterKind>(['rock_small', 'rock_large', 'boulder']);
 const TIMBER_FACTOR: Partial<Record<ScatterKind, number>> = { oak: 1.2, beech: 1.1, pine: 1, spruce: 0.9, birch: 0.8, ash: 0.9, willow: 0.6, apple: 0.5 };
+
+/** Levels beyond a person's skill at which a recipe is still within their reach (to try, and very likely to spoil). */
+export const REACH = 6;
+/** Recipes shown at one bench (the ones nearest the person's skill first). */
+const SHOWN = 24;
+/** Small personal tools the workshop does not lend. */
+const PERSONAL_TOOLS: ReadonlySet<string> = new Set(['needle', 'distaff']);
 
 export function scatterAt(E: Econ, id: number): ScatterItem | null {
   const chunk = Math.floor(id / 4096);
@@ -53,44 +65,62 @@ export function scatterAt(E: Econ, id: number): ScatterItem | null {
 // Where a person may work, with what, and where the materials and the product go
 // ---------------------------------------------------------------------------------------------
 
-interface Place { ok: boolean; reason?: string; source: 'own' | 'employer'; employer?: Household; wage: number; mastery: boolean }
+export interface Place {
+  ok: boolean;
+  reason?: string;
+  source: Source;
+  /** The master's household, when the work is done in his name. */
+  employer?: Household;
+  wage: number;
+  /** On one's own account: skill alone decides, no stage gates. */
+  mastery: boolean;
+  /** The household that keeps the works and is paid for the use of its bench. */
+  owner?: Household;
+  /** The works lends its common tools (anvil, bench, loom, press). */
+  provides: boolean;
+}
 
-function placeFor(E: Econ, p: Person, b: BuildingState, r: RecipeDef | null): Place {
+/** The ladder rung a recipe asks of someone who works in a master's name (jobs keep their gates). */
+function stageGate(p: Person, r: RecipeDef): string | null {
+  if (r.stage < 0) return null;
+  if (CAREERS[p.career].field !== 'craft') return 'Only a craftsman bound to a master may work in his name';
+  if (p.careerStage < r.stage) return r.stage === 1 ? 'Apprentices fetch and carry: only a journeyman may work this in the master\'s name' : 'Only a master may work this in his own name';
+  return null;
+}
+
+/** Pence a master's bench costs for one batch (a share of what a day's work at it earns). */
+export function benchFee(r: RecipeDef, b: BuildingState): number {
+  return round2(Math.max(0.2, 0.3 * r.work * (1 + 0.15 * (b.level - 1))));
+}
+
+export function placeFor(E: Econ, p: Person, b: BuildingState, r: RecipeDef | null): Place {
+  if (b.construction < 1) return { ok: false, reason: 'It is still being built', source: 'own', wage: 0, mastery: false, provides: false };
   const hh = E.hhOf(p);
   const emp = employmentOf(E, p.id);
   const home = BUILDINGS[b.kind].cat === 'home';
   const isOwn = !!hh && (b.household === hh.id || (home && hh.home === b.id));
-  if (isOwn) return { ok: true, source: 'own', wage: 0, mastery: true };
-  if (emp && emp.employer && (emp.building === b.id || E.person(emp.employer)?.household === b.household) && b.household !== 0) {
+  if (isOwn) return { ok: true, source: 'own', wage: 0, mastery: true, provides: !home };
+  if (home) return { ok: false, reason: "That is somebody's home", source: 'own', wage: 0, mastery: false, provides: false };
+  const keeper = b.household !== 0 ? E.household(b.household) : undefined;
+  // in a master's employ, at his works: the work is his, with the ladder's gates and the wage
+  if (emp && emp.employer && keeper && (emp.building === b.id || E.person(emp.employer)?.household === b.household)) {
     const employerHh = E.household(E.person(emp.employer)?.household ?? 0);
-    return { ok: !!employerHh, source: 'employer', employer: employerHh, wage: emp.terms === 'day' || emp.terms === 'season' || emp.terms === 'year' ? emp.wage : 0, mastery: false, reason: 'No master to work for' };
+    if (employerHh && (!r || !stageGate(p, r))) {
+      return { ok: true, source: 'employer', employer: employerHh, wage: emp.terms === 'day' || emp.terms === 'season' || emp.terms === 'year' ? emp.wage : 0, mastery: false, provides: true };
+    }
   }
-  if (b.household === 0 && !home) {
-    // a public facility nobody keeps: the kiln, the saw pit, the charcoal mound, the bloomery
-    return { ok: true, source: 'own', wage: 0, mastery: true };
-  }
-  void r;
-  return { ok: false, source: 'own', wage: 0, mastery: false, reason: "Not your workshop: ask the master to take you on, or rent a place" };
+  // a works nobody keeps (the kiln, the saw pit, the charcoal mound, the bloomery): anyone's
+  if (!keeper) return { ok: true, source: 'own', wage: 0, mastery: true, provides: true };
+  // another's workshop: hire the bench for a fee, on one's own account
+  return { ok: true, source: 'hired', wage: 0, mastery: true, owner: keeper, provides: true };
 }
 
-function stageOk(p: Person, r: RecipeDef, place: Place): string | null {
-  if (r.stage < 0) return null;
-  if (place.mastery) {
-    // your own bench: the trade's skill is enough
-    return null;
-  }
-  const craft = CAREERS[p.career].field === 'craft';
-  if (!craft) return 'Only a craftsman bound to a master may work here';
-  if (p.careerStage < r.stage) return r.stage === 1 ? 'Apprentices fetch and carry: only a journeyman may make this' : 'Only a master may make this';
-  return null;
-}
-
-function bagOfSource(E: Econ, p: Person, place: Place): Array<Record<string, number>> {
+function bagsOf(E: Econ, p: Person, place: Place): Array<Record<string, number>> {
   const bags: Array<Record<string, number>> = [];
   if (place.source === 'employer' && place.employer) bags.push(place.employer.stores);
   bags.push(p.inventory);
   const hh = E.hhOf(p);
-  if (hh && place.source === 'own') bags.push(hh.stores);
+  if (hh && place.source !== 'employer') bags.push(hh.stores);
   return bags;
 }
 
@@ -114,19 +144,21 @@ function takeIn(bags: Array<Record<string, number>>, good: string, qty: number):
   return qty - need;
 }
 
-/** Puts a product in the pack if it can be carried, else in the household's stores. */
-export function giveOutput(E: Econ, p: Person, key: string, qty: number): 'pack' | 'stores' {
-  const w = weightOf(key, qty);
-  const hh = E.hhOf(p);
-  if (carriedWeight(p) + w <= capacityOf(p) + 1e-6 || !hh) {
-    bagAdd(p.inventory, key, qty);
-    E.state.touch(p);
-    return 'pack';
-  }
-  bagAdd(hh.stores, key, qty);
-  E.state.touchHousehold(hh);
-  return 'stores';
+/** The tool for a recipe: the one carried or kept in the house, else the works' own (a bench, an anvil, a loom), else a reason. */
+function toolAt(E: Econ, p: Person, r: RecipeDef, place: Place): { tool: ToolRef | null; toolQ: number; reason: string | null } {
+  if (!r.tool) return { tool: null, toolQ: 1, reason: null };
+  const tool = toolFor(E, p, r.tool);
+  if (tool) return { tool, toolQ: tool.quality, reason: null };
+  if (place.provides && !PERSONAL_TOOLS.has(r.tool)) return { tool: null, toolQ: 1, reason: null };
+  return { tool: null, toolQ: 1, reason: `Needs a ${GOODS[r.tool]?.name.toLowerCase() ?? r.tool}` };
 }
+
+/** How many levels beyond their skill the person is for a recipe (0: fit to do it). */
+export function gapOf(p: Person, r: RecipeDef): number { return Math.max(0, r.level - skillLevel(p.skills[r.skill])); }
+/** The chance a novice spoils a batch, by how far beyond their skill it is. */
+export function spoilChance(gap: number): number { return gap <= 0 ? 0 : Math.min(0.85, 0.08 + 0.12 * gap); }
+/** A novice also uses more material than a hand who knows the work. */
+const wasteFactor = (gap: number): number => 1 + 0.05 * gap;
 
 // ---------------------------------------------------------------------------------------------
 // Provider
@@ -141,7 +173,7 @@ export function craftProvider(E: Econ): ActionProvider {
       if (target.kind === 'building') listBuilding(E, p, target.id, out);
       else if (target.kind === 'scatter') listScatter(E, p, target.id, out);
     },
-    check(_ctx, actor, o) {
+    check(_ctx, actor) {
       const p = E.person(actor);
       if (!p) return 'Nobody there';
       return incapable(p) ?? holyDayBlock(E);
@@ -167,7 +199,7 @@ export function craftProvider(E: Econ): ActionProvider {
 
 function listBuilding(E: Econ, p: Person, id: number, out: ActionOption[]): void {
   const b = E.state.buildings.get(id);
-  if (!b) return;
+  if (!b || b.construction < 1) return;
   const target: TargetRef = { kind: 'building', id };
   const base = { target, range: 7 };
   const holy = holyDayBlock(E);
@@ -177,23 +209,8 @@ function listBuilding(E: Econ, p: Person, id: number, out: ActionOption[]): void
   const home = BUILDINGS[b.kind].cat === 'home' && !!hh && hh.home === id;
   const emp = employmentOf(E, p.id);
 
-  // quarry and mine
-  if (b.kind === 'quarry' || b.kind === 'mine') {
-    const pick = toolFor(E, p, 'pick');
-    const what = b.kind === 'quarry' ? 'stone' : 'ore';
-    const skill = b.kind === 'quarry' ? 'masonry' : 'mining';
-    if (!pick) { out.push(disabled({ id: `dig.${what}`, label: b.kind === 'quarry' ? 'Quarry stone' : 'Mine iron ore', ...base }, 'Needs a pick')); }
-    else {
-      const speed = speedOf(E, p, 'mining', 'str', pick.quality);
-      const o = option({
-        id: `dig.${what}`, label: b.kind === 'quarry' ? 'Quarry stone' : 'Mine iron ore', seconds: secondsFor(1, speed), anim: 'work_pick', mainHand: 'pick', carry: what === 'stone' ? 'stone' : 'none',
-        preview: `${what === 'stone' ? 'Blocks of stone' : 'Baskets of ore'} · ${emp && emp.building === id ? 'paid by the day' : 'a fifth goes to the lord'} · ${skill === 'masonry' ? 'Masonry and Mining' : 'Mining'}`,
-        priority: 40, ...base, data: { act: 'dig', building: id, what } as CraftAct,
-      });
-      if (block) { o.enabled = false; o.reason = block; }
-      out.push(o);
-    }
-  }
+  // the quarry, the mines, the clay pit and the lumber camp
+  if (DIG_BUILDINGS.has(b.kind)) listDig(E, p, b, out, target);
 
   // apprentices fetch, pump and strike
   if (emp?.terms === 'apprenticeship' && (emp.building === id || (b.household !== 0 && E.person(emp.employer)?.household === b.household))) {
@@ -209,48 +226,40 @@ function listBuilding(E: Econ, p: Person, id: number, out: ActionOption[]): void
     });
   }
 
-  // recipes
+  // recipes: any of them, at any works one may use
   const recipes = recipesAt(b.kind, home || (BUILDINGS[b.kind].cat === 'home' && b.household === (hh?.id ?? -1)));
   if (recipes.length > 0) {
-    const place = placeFor(E, p, b, null);
-    const lvlSkill = (r: RecipeDef): number => skillLevel(p.skills[r.skill]);
-    const sorted = recipes.slice().sort((a, c) => a.level - c.level);
-    let shown = 0;
-    for (const r of sorted) {
-      if (shown >= 14) break;
-      const my = lvlSkill(r);
+    const reachable = recipes.filter((r) => r.level - skillLevel(p.skills[r.skill]) <= REACH);
+    reachable.sort((a, c) => Math.abs(a.level - skillLevel(p.skills[a.skill])) - Math.abs(c.level - skillLevel(p.skills[c.skill])) || a.level - c.level || a.id.localeCompare(c.id));
+    const shown = reachable.slice(0, SHOWN).sort((a, c) => a.level - c.level || a.id.localeCompare(c.id));
+    for (const r of shown) {
+      const place = placeFor(E, p, b, r);
+      const gap = gapOf(p, r);
       let reason: string | null = null;
       if (!place.ok) reason = place.reason ?? 'Not your workshop';
-      else reason = stageOk(p, r, place);
-      if (!reason && my < r.level) reason = `Needs ${r.skill} ${r.level}`;
-      if (!reason && my + 4 < r.level) continue; // far out of reach: not listed
-      const bags = bagOfSource(E, p, place);
-      const tool = r.tool ? toolFor(E, p, r.tool) : null;
-      let toolQ = tool ? tool.quality : 1;
-      if (!reason && r.tool && !tool) {
-        // a master's workshop has its anvil, bench and loom for his men
-        if (place.source === 'employer' || BUILDINGS[b.kind].cat !== 'home') toolQ = 1;
-        else reason = `Needs a ${GOODS[r.tool]?.name.toLowerCase() ?? r.tool}`;
-        if (r.tool === 'hammer' || r.tool === 'saw' || r.tool === 'chisel') { if (!tool && place.source === 'own' && !place.mastery) reason = `Needs a ${r.tool}`; }
-        else if (!tool && place.source === 'own') reason = `Needs a ${GOODS[r.tool]?.name.toLowerCase() ?? r.tool}`;
-      }
+      const fee = place.source === 'hired' ? benchFee(r, b) : 0;
+      const toolInfo = toolAt(E, p, r, place);
+      if (!reason) reason = toolInfo.reason;
+      const bags = bagsOf(E, p, place);
       if (!reason) {
         for (const [g, q] of Object.entries(r.inputs)) {
-          const need = q * (1 - Math.min(0.5, perkSum(p, r.skill, 'save')));
+          const need = q * (1 - Math.min(0.5, perkSum(p, r.skill, 'save'))) * wasteFactor(gap);
           if (haveIn(bags, g) + 1e-6 < need) { reason = `Needs ${round1(need)} ${GOODS[g]?.unit ?? g}`; break; }
         }
       }
-      const speed = speedOf(E, p, r.skill, 'agi', toolQ) * (r.skill === 'smithing' || r.skill === 'carpentry' || r.skill === 'masonry' ? 1 : 1);
+      if (!reason && fee > 0 && !E.canAfford(p, fee)) reason = `The bench costs ${pd(fee)} to use`;
+      const speed = speedOf(E, p, r.skill, 'agi', toolInfo.toolQ);
       const outText = Object.entries(r.outputs).map(([g, q]) => `${q} ${GOODS[g]?.unit ?? g}`).join(', ');
+      const terms = place.source === 'employer' ? ' · for your master, paid by the day' : place.source === 'hired' ? ` · you hire the bench for ${pd(fee)}` : '';
+      const risk = gap > 0 ? ` · beyond your skill: ${Math.round(spoilChance(gap) * 100)}% the work is spoiled, and more material is used` : '';
       const o = option({
         id: `craft.${r.id}`, label: r.name, seconds: secondsFor(r.work, speed, 6, 120), anim: r.anim, mainHand: r.held,
-        preview: `Makes ${outText}${r.quality ? ` · quality from your skill (${r.skill} ${my})` : ''}${place.source === 'employer' ? ' · for your master, paid by the day' : ''}`,
-        priority: 30 - r.level, repeat: true, ...base,
-        data: { act: 'craft', recipe: r.id, building: id, source: place.source, employerHh: place.employer?.id ?? 0, toolQ, speed } as CraftAct,
+        preview: `Makes ${outText}${r.quality ? ` · quality from your skill (${r.skill} ${skillLevel(p.skills[r.skill])})` : ''}${terms}${risk}`,
+        priority: 30 - r.level - (gap > 0 ? 25 : 0), repeat: true, steps: stepsFor(r, b.kind), ...base,
+        data: { act: 'craft', recipe: r.id, building: id, source: place.source, employerHh: place.employer?.id ?? 0, toolQ: toolInfo.toolQ, speed } as CraftAct,
       });
       if (reason) { o.enabled = false; o.reason = reason; } else if (block) { o.enabled = false; o.reason = block; }
       out.push(o);
-      shown++;
     }
   }
 
@@ -290,7 +299,7 @@ function maybeMasterpiece(E: Econ, p: Person, b: BuildingState, out: ActionOptio
   if (!reason && fee > 0 && !E.canAfford(p, fee)) reason = `Admission to the guild by redemption costs ${pd(fee)}`;
   const o = option({
     id: 'craft.masterpiece', label: `Make your masterpiece (${r.name.toLowerCase()})`, seconds: secondsFor(r.work * 2.5, 1, 20, 120), anim: r.anim, mainHand: r.held,
-    preview: `The guild's masters judge it: fine work makes you a master${fee > 0 ? ` · ${pd(fee)} guild fee by redemption` : ''}`, priority: 55, repeat: false, ...base,
+    preview: `The guild's masters judge it: fine work makes you a master${fee > 0 ? ` · ${pd(fee)} guild fee by redemption` : ''}`, priority: 55, repeat: false, steps: stepsFor(r, b.kind), ...base,
     data: { act: 'masterpiece', recipe: sig, building: b.id } as CraftAct,
   });
   if (reason) { o.enabled = false; o.reason = reason; } else if (block) { o.enabled = false; o.reason = block; }
@@ -313,41 +322,79 @@ function qualityRoll(E: Econ, p: Person, r: RecipeDef, toolQ: number, bonus = 0)
   const lvl = skillLevel(p.skills[r.skill]);
   const s = (lvl / 20) * 2.4 + (toolQ - 1) * 0.45 + (p.trained.int - 10) * 0.04 + (p.trained.agi - 10) * 0.02 + perkSum(p, r.skill, 'quality') + bonus
     + E.techBonus(p.settlement, 'craft.quality') * 4 // the guild's standards (+0.05 → a fifth of a grade)
+    - 0.1 * gapOf(p, r) // a novice's work shows it
     + E.rng('quality').range(-0.45, 0.45);
   return Math.max(0, Math.min(4, Math.round(s))) as Quality;
+}
+
+/** The yield multiplier of a works whose output follows its deposit (a salt pan's brine), 1 at an ordinary seam. */
+function depositYield(E: Econ, b: BuildingState, r: RecipeDef): number {
+  if (!r.deposit) return 1;
+  const d = depositUnder(E, b.x, b.z, [r.deposit as 'salt']);
+  return richnessFactor(d?.richness ?? DEFAULT_RICHNESS) / richnessFactor(DEFAULT_RICHNESS);
 }
 
 function craftBatch(E: Econ, p: Person, d: CraftData): ActionOutcome {
   const r = RECIPES[d.recipe];
   const b = E.state.buildings.get(d.building);
-  if (!r || !b) return { ok: false, message: 'That can no longer be made.' };
+  if (!r || !b || b.construction < 1) return { ok: false, message: 'That can no longer be made.' };
   const place = placeFor(E, p, b, r);
   if (!place.ok) return { ok: false, message: place.reason };
-  const bags = bagOfSource(E, p, place);
+  const gap = gapOf(p, r);
+  if (gap > REACH) return { ok: false, message: `That is far beyond you: it needs ${r.skill} ${r.level}.` };
+  const bags = bagsOf(E, p, place);
   const save = Math.min(0.5, perkSum(p, r.skill, 'save'));
-  for (const [g, q] of Object.entries(r.inputs)) if (haveIn(bags, g) + 1e-6 < q * (1 - save)) return { ok: false, message: `You are short of ${GOODS[g]?.name.toLowerCase() ?? g}.` };
-  for (const [g, q] of Object.entries(r.inputs)) takeIn(bags, g, round2(q * (1 - save)));
-  const tool = r.tool ? toolFor(E, p, r.tool) : null;
-  const toolQ = tool ? tool.quality : d.toolQ;
+  const use = (1 - save) * wasteFactor(gap);
+  for (const [g, q] of Object.entries(r.inputs)) if (haveIn(bags, g) + 1e-6 < q * use) return { ok: false, message: `You are short of ${GOODS[g]?.name.toLowerCase() ?? g}.` };
+  const toolInfo = toolAt(E, p, r, place);
+  if (toolInfo.reason) return { ok: false, message: `${toolInfo.reason}.` };
   const gains: NonNullable<ActionOutcome['gains']> = [];
+  // the master's bench is hired for the batch whether or not it comes out well
+  if (place.source === 'hired' && place.owner) {
+    const fee = benchFee(r, b);
+    if (!E.spend(p, fee, `The bench at the ${BUILDINGS[b.kind].name.toLowerCase()}`, true)) return { ok: false, message: `The bench costs ${pd(fee)}.` };
+    E.credit(place.owner, fee);
+    gains.push({ label: 'Bench', amount: -fee, ref: 'money' });
+  }
+  const tool = toolInfo.tool;
+  const toolQ = toolInfo.toolQ;
+  const heavy = r.skill === 'smithing' || r.skill === 'masonry' ? 0.7 : r.skill === 'carpentry' ? 0.55 : 0.25;
+  // a novice may spoil the work: most of the material is lost, and something is learnt all the same
+  if (gap > 0 && E.rng('craft').next() < spoilChance(gap)) {
+    const lost = 0.6 * use;
+    let first = '';
+    for (const [g, q] of Object.entries(r.inputs)) {
+      const got = takeIn(bags, g, round2(q * lost));
+      if (got > 0.005) { gains.push({ label: GOODS[g]?.name ?? g, amount: -round2(got), ref: g }); first ||= (GOODS[g]?.name ?? g).toLowerCase(); }
+    }
+    E.state.touch(p);
+    boutDone(E, p, { skill: r.skill, xp: r.xp * 0.7, heavy, bouts: Math.min(3, r.work) });
+    wearOut(E, p, tool, 0.012 * r.work, r.skill);
+    gains.push({ label: r.skill, ref: r.skill });
+    return { ok: true, message: `You spoil the ${r.name.toLowerCase()}: ${first || 'the material'} is wasted. A little is learnt from it.`, gains };
+  }
+  for (const [g, q] of Object.entries(r.inputs)) takeIn(bags, g, round2(q * use));
   const dest = place.source === 'employer' && place.employer ? place.employer : null;
   const tier = r.quality ? qualityRoll(E, p, r, toolQ) : (1 as Quality);
+  const rich = depositYield(E, b, r);
+  const made: NonNullable<ActionOutcome['gains']> = [];
   for (const [g, q] of Object.entries(r.outputs)) {
-    const qty = Math.max(1, stoch(E, q * (1 + perkSum(p, r.skill, 'yield'))));
+    const qty = Math.max(1, stoch(E, q * rich * (1 + perkSum(p, r.skill, 'yield'))));
     const key = r.quality && GOODS[g]?.quality ? keyOf(g, tier) : g;
     if (dest) { bagAdd(dest.stores, key, qty); E.state.touchHousehold(dest); }
     else giveOutput(E, p, key, qty);
-    gains.push({ label: `${GOODS[g]?.name ?? g}${r.quality && GOODS[g]?.quality ? ` (${['crude', 'common', 'good', 'fine', 'masterwork'][tier]})` : ''}`, amount: qty, ref: key });
+    made.push({ label: `${GOODS[g]?.name ?? g}${r.quality && GOODS[g]?.quality ? ` (${['crude', 'common', 'good', 'fine', 'masterwork'][tier]})` : ''}`, amount: qty, ref: key });
   }
+  gains.unshift(...made);
   E.state.touch(p);
-  boutDone(E, p, { skill: r.skill, xp: r.xp, heavy: r.skill === 'smithing' || r.skill === 'masonry' ? 0.7 : r.skill === 'carpentry' ? 0.55 : 0.25, bouts: Math.min(3, r.work) });
+  boutDone(E, p, { skill: r.skill, xp: r.xp, heavy, bouts: Math.min(3, r.work) });
   wearOut(E, p, tool, 0.012 * r.work, r.skill);
   if (dest) {
     const pay = payBout(E, p, 'hired', place.wage, r.work, dest);
     if (pay > 0) gains.push({ label: 'Wages', amount: round2(pay), ref: 'money' });
   }
   gains.push({ label: r.skill, ref: r.skill });
-  const first = gains[0];
+  const first = made[0];
   return { ok: true, message: `${r.name}: ${first.amount} ${first.label.toLowerCase()}.`, gains };
 }
 
@@ -510,43 +557,6 @@ function woodWork(E: Econ, p: Person, d: WoodData): ActionOutcome {
   boutDone(E, p, { skill: 'mining', xp: 8, heavy: 1, bouts: 2 });
   wearOut(E, p, pick, 0.03, 'mining');
   return { ok: true, message: `You break out ${n} blocks of stone.`, gains: [{ label: 'Stone', amount: n, ref: 'stone' }, { label: 'Mining', ref: 'mining' }] };
-}
-
-function digBout(E: Econ, p: Person, d: DigData): ActionOutcome {
-  const b = E.state.buildings.get(d.building);
-  if (!b) return { ok: false };
-  const pick = toolFor(E, p, 'pick');
-  const skill = d.what === 'stone' ? 'masonry' : 'mining';
-  const lvl = skillLevel(p.skills.mining);
-  const yieldMult = 1 + perkSum(p, 'mining', 'yield');
-  const base = d.what === 'stone' ? 1.6 : 1.2;
-  let n = Math.max(1, stoch(E, base * (1 + 0.04 * lvl) * yieldMult));
-  const emp = employmentOf(E, p.id);
-  const employed = !!emp && emp.building === b.id;
-  const gains: NonNullable<ActionOutcome['gains']> = [];
-  if (!employed) {
-    const lordShare = Math.max(0, Math.round(n * 0.2 * 100) / 100);
-    const lord = E.lordOf(b.settlement);
-    if (lord?.household && lordShare > 0) { bagAdd(lord.household.stores, d.what === 'stone' ? 'stone' : 'iron_ore', lordShare); E.state.touchHousehold(lord.household); }
-    n = Math.max(1, Math.round((n - lordShare) * 100) / 100);
-  } else {
-    const pay = payBout(E, p, 'hired', emp.wage, 1, E.lordOf(b.settlement)?.household);
-    if (pay > 0) gains.push({ label: 'Wages', amount: round2(pay), ref: 'money' });
-  }
-  giveOutput(E, p, d.what === 'stone' ? 'stone' : 'iron_ore', n);
-  if (d.what === 'stone') { const was = E.notes.dug.get(b.id); E.notes.dug.set(b.id, { blocks: (was && E.day - was.day < 2 ? was.blocks : 0) + n, day: E.day }); E.notes.rev++; }
-  boutDone(E, p, { skill: d.what === 'stone' ? 'mining' : 'mining', xp: 8, heavy: 1, bouts: 1 });
-  if (d.what === 'stone') giveXpSkill(E, p, 'masonry', 3);
-  wearOut(E, p, pick, 0.025, 'mining');
-  // the dark has its dangers for the careless
-  if (d.what === 'ore' && lvl < 4 && E.rng('mine').next() < 0.012) {
-    p.health.hp = Math.max(0.1, p.health.hp - 0.12);
-    E.state.touch(p);
-    E.notify('A prop gives way: you are bruised and shaken.', 'warn', p.id);
-  }
-  gains.unshift({ label: d.what === 'stone' ? 'Stone' : 'Iron ore', amount: n, ref: d.what === 'stone' ? 'stone' : 'iron_ore' }, { label: skill, ref: skill });
-  void skill;
-  return { ok: true, message: `You hew out ${n} ${d.what === 'stone' ? 'blocks of stone' : 'baskets of ore'}.`, gains };
 }
 
 export { BOUT, BOUT_DAYS, careOf, haveOf, CAREER_ECON, TOOL_SPEED, bagGet, creditWeekWork, RENT_PER_STRIP };

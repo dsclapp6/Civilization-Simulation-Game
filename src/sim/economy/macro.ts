@@ -12,9 +12,9 @@ import { CAREERS } from '../careers';
 import { TIER_PURSE } from '../people';
 import { NONE, type Household, type Person, type SettlementState } from '../state';
 import type { Econ } from './core';
-import { CAREER_ECON, GOODS, careerEcon, keyOf } from './data';
+import { BEASTS, CAREER_ECON, GOODS, careerEcon, keyOf } from './data';
 import { GRAIN_PER_UNIT_DAY, RATION, STAPLE_GRAINS, dietOf, marketBuyShare } from './diet';
-import { daysToHarvest, farmDay, seedWanted } from './farm';
+import { daysToHarvest, farmDay, onBuild, seedWanted } from './farm';
 import { bagAdd } from './items';
 import { beginTick, endTick, marketBuy, marketDay, marketSell, postedPrice, tickPrice } from './market';
 import type { Quality } from './types';
@@ -28,6 +28,21 @@ const MISC = [0, 0.03, 0.05, 0.14, 0.5, 1.6, 4, 8, 15] as const;
 const PERISHABLE: ReadonlyArray<readonly [string, number]> = [
   ['vegetables', 12], ['bread', 5], ['ale', 24], ['eggs', 10], ['meat', 6], ['fish', 4], ['cheese', 90],
 ];
+
+/** A carcass hung in the larder keeps a couple of days (joint it, and salt the meat); then it is rotten, whatever its tier. */
+function rotCarcasses(E: Econ, st: Record<string, number>): void {
+  for (const b of Object.values(BEASTS)) {
+    if (!b.carcass) continue;
+    for (let q = 0; q <= 4; q++) {
+      const key: string = `${b.carcass}#${q}`;
+      if (!(st[key] > 0)) continue;
+      const mark = `~h:${key}`;
+      const hung = st[mark];
+      if (hung === undefined) { st[mark] = Math.round(E.day * 100) / 100; continue; }
+      if (E.day - hung >= (GOODS[b.carcass].spoilDays ?? 3)) { delete st[key]; delete st[mark]; }
+    }
+  }
+}
 
 /** Number of holy days in the `dt` days up to and including `day` (the fourth day of every season is holy). */
 function holyDaysIn(day: number, dt: number): number {
@@ -111,7 +126,9 @@ function householdDay(
   // ---- animals and garden ----
   produceFromLand(E, hh, st, units, sea, dt);
   const pBefore = hh.purse;
-  produceFromTrade(E, s, hh, head, workDays, playerHere);
+  // a head sent to the household's building site makes nothing of his trade in these days
+  const atSite = onBuild(E, head, hh);
+  if (!atSite) produceFromTrade(E, s, hh, head, workDays, playerHere);
   E.probe?.('trade', tier, hh.purse - pBefore);
   const pFood = hh.purse;
 
@@ -132,6 +149,7 @@ function householdDay(
   }
 
   // ---- decay, income and spending ----
+  rotCarcasses(E, st);
   for (const [g, days] of PERISHABLE) {
     const v = st[g];
     if (v) { const nv = v * Math.exp(-dt / days); if (nv < 0.02) delete st[g]; else st[g] = Math.round(nv * 100) / 100; }
@@ -141,7 +159,7 @@ function householdDay(
   {
     const ce = careerEcon(head.career);
     const stage = Math.min(3, head.careerStage);
-    let inc = head.flags.captive ? 0 : (ce.income[stage] ?? 0) * workDays; // a prisoner earns nothing
+    let inc = head.flags.captive || atSite ? 0 : (ce.income[stage] ?? 0) * workDays; // a prisoner earns nothing, nor a head at the building site
     if (ce.produces) inc *= 0.4;
     if (!playerHere) { hh.purse = Math.round((hh.purse + inc) * 100) / 100; E.probe?.('income', tier, inc); }
   }
@@ -362,6 +380,8 @@ function sellSurplus(E: Econ, s: Settlement, hh: Household, units: number, tier:
   for (const [g] of kinds) {
     const v = st[g] ?? 0;
     if (v < 1) continue;
+    // what the player's own hands butchered is not sold behind his back: he sends someone to market, or goes himself
+    if (!full && g === 'meat') continue;
     let own = 0;
     for (const [og, w] of diet.optional) if (og === g) own = (units * diet.optionalShare * w) / RATION[g];
     if (g === 'firewood') own = units * diet.fuel * 1.2;
