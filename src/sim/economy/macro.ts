@@ -376,12 +376,12 @@ function sellSurplus(E: Econ, s: Settlement, hh: Household, units: number, tier:
     }
   }
   // other produce beyond four days of the household's own use
-  const kinds: Array<[string, number]> = [['cheese', 0], ['eggs', 0], ['meat', 0], ['vegetables', 0], ['firewood', 0], ['fish', 0], ['tallow', 0]];
+  const kinds: Array<[string, number]> = [['cheese', 0], ['eggs', 0], ['meat', 0], ['vegetables', 0], ['firewood', 0], ['fish', 0]];
   for (const [g] of kinds) {
     const v = st[g] ?? 0;
     if (v < 1) continue;
     // what the player's own hands butchered is not sold behind his back: he sends someone to market, or goes himself
-    if (!full && (g === 'meat' || g === 'tallow')) continue;
+    if (!full && g === 'meat') continue;
     let own = 0;
     for (const [og, w] of diet.optional) if (og === g) own = (units * diet.optionalShare * w) / RATION[g];
     if (g === 'firewood') own = units * diet.fuel * 1.2;
@@ -459,8 +459,6 @@ function livestockYear(E: Econ, s: Settlement, hhs: Household[]): void {
       if (cull > 0) {
         bagAdd(st, 'meat', cull * meatLb);
         if (key !== 'chicken') bagAdd(st, 'hide', cull * (key === 'sheep' ? 0.4 : 1));
-        // the fat is rendered: tallow for the chandlers (a seventh of the meat's weight)
-        if (key !== 'chicken') bagAdd(st, 'tallow', Math.round(cull * meatLb * 0.14 * 100) / 100);
       }
       if (next <= 0) delete st[key]; else st[key] = next;
       touched = true;
