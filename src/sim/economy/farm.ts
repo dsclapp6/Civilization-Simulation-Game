@@ -287,7 +287,8 @@ export function liveSiteOf(E: Econ, hh: Household): SiteView | null {
   const construction = E.sim.services.construction;
   if (!construction) return null;
   let sites: readonly SiteView[];
-  try { sites = construction.sites(hh.settlement); } catch { return null; }
+  // all sites, not only those of the household's settlement: a lord's works may stand at an outpost in the wild
+  try { sites = construction.sites(); } catch { return null; }
   for (const s of sites) if (s.household === hh.id && s.status !== 'done' && s.status !== 'cancelled') return s;
   return null;
 }
