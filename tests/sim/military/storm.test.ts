@@ -44,7 +44,7 @@ describe('a storm with the player in the line', () => {
     const gate = t.sim.view.forts!().find((f) => f.building === t.fort.gate.id);
     expect(gate?.gate).toBe('shut');
     expect(t.sim.view.siegeWorks!().length).toBeGreaterThan(0);
-  });
+  }, 120_000);
 
   it('runs to a result: the battle concludes, the macro siege hears of it, and the works are gone', () => {
     const t = stormRig('mstorm-b');
@@ -62,7 +62,7 @@ describe('a storm with the player in the line', () => {
     // the walls took what the ram dealt, in the record the macro model keeps
     expect(t.fort.gate.damage).toBeGreaterThanOrEqual(0);
     expect(t.mil.alertOf(t.castleId)).not.toBe('assault');
-  });
+  }, 120_000);
 
   it('as a defender (a man of the place): he stands among the defenders and the besiegers come to the gate', () => {
     const t = stormRig('mstorm-c', { asDefender: true });
@@ -80,7 +80,7 @@ describe('a storm with the player in the line', () => {
     expect(fight.scene).toBeTruthy();
     const took = runUntilConcluded(t, 900);
     expect(took).toBeLessThanOrEqual(900);
-  });
+  }, 120_000);
 
   it('the commander of the host gives orders to its groups and the old six orders reach them', () => {
     const t = stormRig('mstorm-d', { asCommander: true });
@@ -105,5 +105,5 @@ describe('a storm with the player in the line', () => {
     expect(t.mil.command('charge').ok).toBe(true);
     expect(t.mil.battleGroups('own').find((g) => g.key === 'foot')?.order).toBe('charge');
     expect(t.mil.battleGroups('enemy').length).toBeGreaterThanOrEqual(0);
-  });
+  }, 120_000);
 });

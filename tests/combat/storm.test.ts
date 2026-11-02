@@ -49,6 +49,29 @@ describe('a walled place stormed: set-up', () => {
     for (const w of works) expect(Number.isFinite(w.x + w.y + w.z + w.yaw)).toBe(true);
   });
 
+  it('a garrison without archers still has bows in its armoury: its lowest men shoot from the wall, the better armed hold the gate', () => {
+    const t = storm('st-armoury', { archers: 0, foot: 24 }, { archers: 0, foot: 15 });
+    const arena = t.r.combat.arena;
+    const scene = arena.fights.get(t.id)!.scene!;
+    const defs = t.defenders.map((id) => arena.fighterOf(id)!);
+    const bows = defs.filter((f) => f.gear.ranged && f.preferRanged);
+    expect(bows).toHaveLength(6); // two in five of the garrison
+    for (const f of bows) {
+      expect(f.onWall).toBe(true);
+      expect(f.station).toBeTruthy();
+      expect(f.gear.ammo).toBeGreaterThan(0);
+      expect(f.shotsLeft).toBeGreaterThan(0);
+      expect(f.gear.shield).toBeNull();
+    }
+    expect(scene.status().stationed).toBe(6);
+    // nobody on the attackers' side is armed from the defenders' armoury
+    for (const id of t.attackers) expect(arena.fighterOf(id)!.gear.ranged).toBeNull();
+    // and the walls shoot: the bowmen loose at the host that comes to the gate
+    let loosed = false;
+    for (let i = 0; i < 20 * 60 && !loosed; i++) { t.r.sim.step(SIM_DT); loosed = arena.env.proj.flying.length > 0; }
+    expect(loosed).toBe(true);
+  });
+
   it('the ram has a crew, the ladders have squads; the rest of the line is the commander\'s', () => {
     const t = storm('st-roles', { archers: 4, foot: 24 }, { archers: 4, foot: 6 });
     const arena = t.r.combat.arena;
@@ -120,7 +143,12 @@ describe('the assault', () => {
       planted = Math.max(planted, scene.works.filter((w) => w.kind === 'ladder' && w.phase === 'up').length);
       for (const id of t.attackers) {
         const f = arena.fighterOf(id)!;
-        if (f.role === R.Climb) { sawClimb = true; expect(f.anim).toBe('climb'); expect(f.y).toBeGreaterThanOrEqual(10 - 0.01); }
+        if (f.role === R.Climb) {
+          sawClimb = true;
+          // a climber who is struck flinches or falls; otherwise he is drawn climbing
+          if (f.st !== S.Hit && f.st !== S.Stagger && f.st !== S.Down && f.st !== S.Dead) expect(f.anim).toBe('climb');
+          expect(f.y).toBeGreaterThanOrEqual(10 - 0.01);
+        }
       }
       climbed = Math.max(climbed, scene.works.reduce((s, w) => s + w.landed, 0));
       onWall = Math.max(onWall, t.attackers.filter((id) => arena.fighterOf(id)!.onWall).length);

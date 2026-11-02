@@ -110,7 +110,7 @@ const CSS = `
 .mu-bt-banner { position: absolute; left: 0; top: 0; transform: translate(-50%, -100%); pointer-events: none; display: flex; flex-direction: column; align-items: center; }
 .mu-bt-banner .flag { display: flex; align-items: center; gap: 4px; padding: 2px 8px 3px; border-radius: 3px 3px 10px 10px; font-size: 12px; font-weight: 700; white-space: nowrap;
   color: #2a1b0f; background: linear-gradient(180deg, #f6dd8c, #d8a935); border: 1px solid #7a5410; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); }
-.mu-bt-banner .pole { width: 2px; height: 14px; background: #3a2a1a; box-shadow: 0 0 2px #000; }
+.mu-bt-banner .pole { width: 2px; height: calc(14px + var(--lift, 0px)); background: #3a2a1a; box-shadow: 0 0 2px #000; }
 .mu-bt-banner .ord { font-size: 10.5px; font-weight: 400; font-style: italic; opacity: 0.85; }
 .mu-bt-banner.enemy .flag { color: #fbeee9; background: linear-gradient(180deg, #d4503a, #8e1c10); border-color: #4b0c06; }
 .mu-bt-banner.sel .flag { box-shadow: 0 0 0 2px #fff6cf, 0 1px 6px rgba(0, 0, 0, 0.7); }
@@ -164,6 +164,7 @@ export class BannerLayer {
     const r = this.ctx.host.renderer();
     const seen = new Set<string>();
     const scale = Math.max(0.5, this.ctx.scale());
+    const placed: Array<{ el: HTMLElement; x: number; y: number; lift: number }> = [];
     const put = (g: BattleGroupView, side: 'own' | 'enemy'): void => {
       if (g.count === 0 || (side === 'own' && g.key === 'all')) return;
       const id = `${side}:${g.key}`;
@@ -193,12 +194,22 @@ export class BannerLayer {
         el.style.display = 'none';
       } else {
         el.style.display = '';
-        el.style.left = `${Math.round(p.x / scale)}px`;
-        el.style.top = `${Math.round(p.y / scale)}px`;
+        placed.push({ el, x: Math.round(p.x / scale), y: Math.round(p.y / scale), lift: 0 });
       }
     };
     for (const g of own) put(g, 'own');
     for (const g of enemy) put(g, 'enemy');
+    // the groups of a side start with their men in one place: banners over the same spot rise one above another, on a longer pole
+    placed.sort((a, b) => b.y - a.y || a.x - b.x);
+    for (let i = 1; i < placed.length; i++) {
+      const a = placed[i];
+      for (let tries = 0; tries < 8 && placed.slice(0, i).some((b) => Math.abs(a.x - b.x) < 100 && Math.abs((a.y - a.lift) - (b.y - b.lift)) < 24); tries++) a.lift += 24;
+    }
+    for (const a of placed) {
+      a.el.style.left = `${a.x}px`;
+      a.el.style.top = `${a.y}px`;
+      a.el.style.setProperty('--lift', `${a.lift}px`);
+    }
     for (const [id, el] of this.items) if (!seen.has(id)) { el.remove(); this.items.delete(id); }
   }
 

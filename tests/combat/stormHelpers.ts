@@ -70,7 +70,7 @@ export interface Kits { archers: number; foot: number; horse?: number }
 
 const BOW = { weapon: 'dagger', ranged: 'longbow', armour: [] as string[] };
 const SWORD = { weapon: 'sword', shield: 'shield', armour: ['padded_armour'] };
-const SPEAR = { weapon: 'spear', armour: [] as string[] };
+const SPEAR = { weapon: 'spear', shield: null, armour: [] as string[] };
 
 export interface Storm {
   r: CombatRig;

@@ -22,6 +22,7 @@ import type { BuildingState } from '../sim/state';
 import { gap, type Arena, type Fight } from './arena';
 import { R, S, type Fighter } from './fighter';
 import { ballisticPitch } from './projectiles';
+import { RANGED } from './weapons';
 
 
 /** Heights of the walk above the ground (m) when the zone gives no stations: the fallback of the brief. */
@@ -267,6 +268,7 @@ export class SiegeScene {
     const archers = def.filter((f) => !f.isPlayer && f.gear.ranged !== null && f.preferRanged).sort((p, q) => p.key - q.key);
     const others = def.filter((f) => !f.isPlayer && !archers.includes(f)).sort((p, q) => rank(q) - rank(p) || p.key - q.key);
     const free = this.stations.slice().sort((p, q) => this.stationScore(p) - this.stationScore(q));
+    this.armoury(archers, others, free.length);
     let si = 0;
     for (const f of archers) {
       const st = free[si++];
@@ -282,6 +284,31 @@ export class SiegeScene {
       set(f, b.x + bw.x * (k - (per - 1) / 2) * sp, b.z + bw.z * (k - (per - 1) / 2) * sp, gyaw);
     });
     this.makeWorks(order);
+  }
+
+  /**
+   * A garrison seldom has archers enough for its walls, but every castle has bows in its armoury: the lowest of the men who carry
+   * no bow take one up (a shortbow and a quiver) until about two of every five defenders shoot, as many as there are stations.
+   * Knights, mounted men and anyone with a shield of rank hold the gate with the sword.
+   */
+  private armoury(archers: Fighter[], others: Fighter[], stations: number): void {
+    const total = archers.length + others.length;
+    const want = Math.min(stations, Math.ceil(total * 0.4));
+    if (archers.length >= want) return;
+    const pool = others.filter((f) => !f.mounted && !f.gear.shield && (f.person?.rankTier ?? 0) < 4).sort((p, q) => rank(p) - rank(q) || p.key - q.key);
+    for (const f of pool) {
+      if (archers.length >= want) break;
+      const bow = RANGED.shortbow;
+      if (!bow) break;
+      f.gear.ranged = bow;
+      f.gear.rangedQ = 1;
+      f.gear.ammo = 24;
+      f.gear.ammoKey = null;
+      f.shotsLeft = 24;
+      f.preferRanged = true;
+      archers.push(f);
+      others.splice(others.indexOf(f), 1);
+    }
   }
 
   /** Stations nearest the besiegers' camp (towers and the gate a little preferred) come first. */
@@ -456,7 +483,8 @@ export class SiegeScene {
       let best: Fighter | null = null, bd = 60;
       for (const f of att) {
         if (!f.active || f.isPlayer || f.role !== R.None || f.onWall || f.mounted || (f.gear.ranged && f.preferRanged)) continue;
-        if (!this.inside(f)) continue;
+        // inside the walls, and with a way to the stairs that no wall stands across (a man at the foot of the wall outside is not inside)
+        if (!this.inside(f) || !this.clearLine(f.x, f.z, st.inx, st.inz)) continue;
         const d = dist(f.x, f.z, st.inx, st.inz);
         if (d < bd) { bd = d; best = f; }
       }
@@ -734,6 +762,8 @@ export class SiegeScene {
     const e = a.nearestEnemy(f, fight);
     if (e && !e.onWall && gap(f, e) < 1.9) { f.target = e; return false; }
     const dx = st.inx - f.x, dz = st.inz - f.z, d = Math.hypot(dx, dz);
+    // a wall has come between him and the stairs (he was driven out, or never was inside): the job goes to a man who can get there
+    if (d > 1.3 && !this.clearLine(f.x, f.z, st.inx, st.inz)) { f.role = R.None; f.station = null; return false; }
     if (d > 1.3) {
       f.wantX = dx / d; f.wantZ = dz / d; f.wantSpeed = 3.1; f.wantYaw = Math.atan2(dx, dz); f.anim = 'run';
       return true;
