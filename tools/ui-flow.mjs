@@ -54,17 +54,8 @@ try {
   await page.waitForSelector('.mu-tier');
   await page.locator('.mu-tier').nth(2).click(); // Lord
   check('difficulty card selected', (await page.locator('.mu-tier.sel h4').textContent()) === 'Lord');
-  await page.getByRole('button', { name: 'Legacy shop' }).click();
-  await page.waitForSelector('.mu-shop-row');
-  const goldBefore = await text('.mu-gold-num');
-  await page.locator('.mu-shop-row .mu-btn.primary').nth(0).click();
-  await page.locator('.mu-shop-row .mu-btn.primary').nth(0).click();
-  check('stat shop spends gold (100 + 250)', (await text('.mu-gold-top + dl dd')) === '350', await text('.mu-gold-top + dl dd'));
-  check('gold balance stays', (await text('.mu-gold-num')) === goldBefore);
-  await page.keyboard.press('Escape');
-  check('Esc steps back to the difficulty screen', await page.locator('.mu-tier').count() === 4);
-  await page.getByRole('button', { name: 'Legacy shop' }).click();
-  await page.getByRole('button', { name: 'Begin your life' }).click();
+  check('there is no shop between the difficulty and the start', await page.locator('.mu-shop-row').count() === 0);
+  await page.getByRole('button', { name: 'Take up your lordship' }).click();
   await page.waitForSelector('.mu-loading:not(.mu-hide)', { timeout: 5000 });
   check('loading screen appears', true);
   await page.waitForSelector('.mu-birth', { timeout: 20000 });
@@ -74,11 +65,11 @@ try {
   await page.keyboard.press('Escape');
   s = await state();
   check('Esc does not dismiss the birth reveal', s.panels.includes('birth'));
-  await page.getByRole('button', { name: 'Begin your life' }).click();
+  await page.getByRole('button', { name: 'Take up your lordship' }).click();
   await wait(300);
   s = await state();
   check('beginning the life resumes the world', s.panels.length === 0 && s.paused === false && s.captures === false, JSON.stringify(s));
-  check('gold was spent on the shop ranks', await page.evaluate(() => window.__ui.host.profile().levels.medieval.legacyGold) === 1850 - 350);
+  check('the profile holds records only', await page.evaluate(() => !('legacyGold' in window.__ui.host.profile().levels.medieval)));
 
   // ---- hotkeys and Esc
   await page.keyboard.press('Tab');

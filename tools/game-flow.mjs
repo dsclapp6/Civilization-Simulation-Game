@@ -64,15 +64,13 @@ try {
   await page.getByRole('button', { name: 'New run' }).click();
   await page.waitForSelector('.mu-tier');
   await page.locator('.mu-tier').nth(1).click();
-  await page.getByRole('button', { name: 'Legacy shop' }).click();
-  await page.waitForSelector('.mu-shop-row');
   // the world is made on the main thread, so a poll could miss the loading screen: watch the DOM instead
   await page.evaluate(() => {
     window.__sawLoading = false;
     const el = document.querySelector('.mu-loading');
     new MutationObserver(() => { if (!el.classList.contains('mu-hide')) window.__sawLoading = true; }).observe(el, { attributes: true, attributeFilter: ['class'] });
   });
-  await page.getByRole('button', { name: 'Begin your life' }).click();
+  await page.getByRole('button', { name: 'Take up your lordship' }).click();
   const t0 = Date.now();
   await page.waitForSelector('.mu-birth', { timeout: 240000 });
   check('the loading screen appears while the world is made', await page.evaluate(() => window.__sawLoading));
@@ -81,7 +79,7 @@ try {
   let s = await ui();
   check('the birth reveal pauses the world and holds the input', s.panels.includes('birth') && s.captures && await sim(() => window.__game.session.sim.clock.paused), JSON.stringify(s));
   check('the host is on the game screen with a running session', await sim(() => window.__game.host.screen === 'game' && !!window.__game.session));
-  await page.getByRole('button', { name: 'Begin your life' }).click();
+  await page.getByRole('button', { name: 'Take up your lordship' }).click();
   await wait(300);
   // (clarity pass) the scene-setting intro card follows the birth reveal; "Straight in" starts the first day
   s = await ui();

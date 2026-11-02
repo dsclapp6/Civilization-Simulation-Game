@@ -1,5 +1,5 @@
-// "You are born …": the reveal shown at the start of a run. Who you are, where, to whom, with what
-// stats, what life holds for your class, and what your points are multiplied by.
+// "You are …": the reveal shown at the start of a run. The lord you are, what you hold, your kin, your
+// stats (the person you must make strong), and what your points are multiplied by.
 import { STAT_CAP } from '../../core/domain';
 import { h } from '../core/dom';
 import { dateText, trim } from '../core/format';
@@ -22,7 +22,7 @@ function kinRow(k: KinLine): HTMLElement {
 
 export function birthPanel(ctx: PanelCtx): UiPanel {
   const m: BirthModel | null = birthModel(ctx.sim);
-  const win = createWindow({ title: 'You are born…', subtitle: m ? dateText(ctx.sim.absDay) : '', icon: 'crown', size: 'xl' });
+  const win = createWindow({ title: m && m.age >= 16 ? 'You are…' : 'You are born…', subtitle: m ? dateText(ctx.sim.absDay) : '', icon: 'crown', size: 'xl' });
   if (!m) {
     win.body.append(h('p.mu-empty', null, 'No one is born yet.'));
     win.showFoot(h('div.mu-grow'), button('Close', { onClick: () => ctx.close() }));
@@ -30,12 +30,12 @@ export function birthPanel(ctx: PanelCtx): UiPanel {
   }
 
   const stats = h('div.mu-birth-stats', null, m.stats.map((s) =>
-    h('div.mu-birth-stat', { tip: `${STAT_INFO[s.id].affects}\nPotential ${s.potential}${s.ranks ? ` (including ${s.ranks} bought rank${s.ranks > 1 ? 's' : ''})` : ''}; the cap is ${STAT_CAP}.` },
+    h('div.mu-birth-stat', { tip: `${STAT_INFO[s.id].affects}\nPotential ${s.potential}; the cap is ${STAT_CAP}. Training raises the stat toward it.` },
       h('span.mu-birth-stat-ico', null, icon(STAT_ICON[s.id], 18)),
       h('span.mu-birth-stat-name', null, STAT_INFO[s.id].name),
       statBar(s.value, s.potential),
       h('span.mu-birth-stat-val.mu-num', null, h('b', null, trim(s.value, 1)), h('span.mu-dim', null, ` / ${s.potential}`)),
-      s.ranks > 0 ? chip(`+${s.ranks}`, 'gold', 'coin', 'Ranks bought with Legacy gold') : h('span')),
+      h('span')),
   ));
 
   const family = h('div.mu-col.mu-gap-6', null,
@@ -46,20 +46,24 @@ export function birthPanel(ctx: PanelCtx): UiPanel {
 
   const left = h('div.mu-birth-left', null,
     h('div.mu-reveal', { style: { '--i': 0 } }, h('div.mu-birth-name', null, m.name),
-      h('div.mu-birth-headline', null, `${m.age === 12 ? 'A twelve-year-old' : `A ${m.age}-year-old`} ${m.sex === 'm' ? 'boy' : 'girl'}, ${m.headline}`)),
+      h('div.mu-birth-headline', null, m.realm
+        ? `A ${m.age}-year-old ${m.sex === 'm' ? 'man' : 'woman'}, lord of ${m.realm}`
+        : `${m.age === 12 ? 'A twelve-year-old' : `A ${m.age}-year-old`} ${m.sex === 'm' ? 'boy' : 'girl'}, ${m.headline}`)),
     h('div.mu-row.mu-wrap.mu-gap-6.mu-reveal', { style: { '--i': 1 } },
       chip(m.rank.name, 'gold', 'shield'), chip(`Aged ${m.age}`, '', 'calendar'), m.rank.career !== 'Child' ? chip(m.rank.career, '', 'hammer') : null,
       chip(m.settlement.kind, '', 'pin'), m.settlement.lord ? chip(`Lord: ${m.settlement.lord}`, '', 'crown') : null),
-    h('p.mu-prose.mu-dropcap.mu-birth-life.mu-reveal', { style: { '--i': 2 } }, m.life),
+    h('p.mu-prose.mu-dropcap.mu-birth-life.mu-reveal', { style: { '--i': 2 } }, m.realm
+      ? `You hold ${m.realm}. Its fields, its purse and its men are yours to set to work: open the ruler’s seat (U) to plan the crops, put labour to your works, commission research, raise and train men and send your steward to market. You are also one man or woman among the rest — train at the butts and the yard, ride, fight and lead from the front. You may live as anyone else at any time; your House goes on after you.`
+      : m.life),
     h('div.mu-birth-mult.mu-reveal', { style: { '--i': 3 } },
       h('div.mu-birth-mult-big', null, icon('star_f', 18), `Points ×${trim(m.multiplier.total, 2)}`),
       h('div.mu-small.mu-ink2', null,
         `${m.className} birth ×${trim(m.multiplier.birth, 2)} · ${m.multiplier.difficultyName[0].toUpperCase()}${m.multiplier.difficultyName.slice(1)} ×${trim(m.multiplier.difficulty, 2)}. `,
-        'Harder births earn more; every point becomes Legacy gold, one for each ten.')),
+        'Harder starts and harder trials earn more.')),
   );
 
   const right = h('div.mu-birth-right', null,
-    h('div.mu-reveal', { style: { '--i': 1 } }, heading('Your nature', 'sparkle', m.ranksBought ? chip(`${m.ranksBought} ranks bought`, 'gold') : null), stats,
+    h('div.mu-reveal', { style: { '--i': 1 } }, heading('Your nature', 'sparkle'), stats,
       h('div.mu-tiny.mu-dim', null, `Bars show your strength now and, pale, the potential it can grow toward (cap ${STAT_CAP}).`)),
     h('div.mu-reveal', { style: { '--i': 2 } }, heading('Your family', 'users'), family),
     h('div.mu-reveal', { style: { '--i': 3 } }, heading('Your household', 'home'),
@@ -71,9 +75,9 @@ export function birthPanel(ctx: PanelCtx): UiPanel {
 
   win.body.append(h('div.mu-birth', null, left, right));
   win.showFoot(
-    h('span.mu-dim.mu-small.mu-ital', null, 'You begin at twelve, with your family, your hands and your name.'),
+    h('span.mu-dim.mu-small.mu-ital', null, m.realm ? 'You begin with your lands, your household, your sword and your name.' : 'You begin at twelve, with your family, your hands and your name.'),
     h('div.mu-grow'),
-    button('Begin your life', { variant: 'primary', size: 'big', icon: 'play', onClick: () => ctx.close() }),
+    button(m.realm ? 'Take up your lordship' : 'Begin your life', { variant: 'primary', size: 'big', icon: 'play', onClick: () => ctx.close() }),
   );
   return panelOf({ id: 'birth', group: 'screen', pauses: 'always', escape: 'ignore', mode: 'screen', hidesHud: true }, win.el, {
     key: (intent) => { if (intent.type === 'enter') { ctx.close(); return true; } return false; },

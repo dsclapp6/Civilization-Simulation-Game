@@ -219,14 +219,13 @@ describe('authority and obligations', () => {
 
 describe('birth reveal and life story from a real simulation', () => {
   it('describes who you were born as, with family, household and the points multiplier', () => {
-    const sim = newSim({ seed: 'ui-birth', preset: 'small', statUpgrades: { str: 2 } });
+    const sim = newSim({ seed: 'ui-birth', preset: 'small', start: 'lord' });
     const m = birthModel(sim)!;
     const me = sim.state.persons.get(sim.state.run.playerId)!;
     expect(m.name).toBe(fullName(me));
-    expect(m.age).toBe(12);
+    expect(m.age).toBeGreaterThanOrEqual(18);
     expect(m.stats).toHaveLength(6);
-    expect(m.stats.find((s) => s.id === 'str')?.ranks).toBe(2);
-    expect(m.ranksBought).toBe(2);
+    expect(m.realm.length).toBeGreaterThan(0);
     expect(m.headline).toContain(m.settlement.name);
     expect(m.life.length).toBeGreaterThan(80);
     expect(m.multiplier.total).toBeCloseTo(m.multiplier.birth * m.multiplier.difficulty, 5);

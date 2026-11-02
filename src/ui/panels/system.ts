@@ -5,7 +5,6 @@ import { createWindow } from '../components/window';
 import { button } from '../components/widgets';
 import type { PanelCtx, UiHooks, UiPanel } from '../app/panel';
 import type { ConfirmOptions } from '../core/requests';
-import { levelProfile } from '../../sim/legacy';
 import { thousands } from '../core/format';
 import { runCard } from '../../sim/api';
 import { settingsBody } from '../screens/settings';
@@ -37,12 +36,11 @@ export function confirmPanel(ctx: PanelCtx, o: ConfirmOptions): UiPanel {
 
 export function pausePanel(ctx: PanelCtx, hooks: UiHooks): UiPanel {
   const card = runCard(ctx.sim);
-  const gold = levelProfile(ctx.sim.profile).legacyGold;
   const win = createWindow({ title: 'Paused', subtitle: 'The world waits', icon: 'pause', size: 'sm', onClose: () => ctx.close() });
   const abandon = (): void => {
     ctx.confirm({
       title: 'Abandon this run?',
-      text: 'Your House’s story ends here. The run is over for good; there is no way back.\n\nYour score so far is recorded and the Legacy gold you have earned is kept.',
+      text: 'Your House’s story ends here. The run is over for good; there is no way back.\n\nYour score so far is recorded in the records.',
       confirmLabel: 'Yes, I may abandon it', cancelLabel: 'Keep playing', danger: true,
       onConfirm: () => ctx.confirm({
         title: 'Really abandon it?',
@@ -62,8 +60,7 @@ export function pausePanel(ctx: PanelCtx, hooks: UiHooks): UiPanel {
     ),
     h('div.mu-rule'),
     h('div.mu-row.mu-between.mu-small.mu-dim', null,
-      h('span', null, icon('star', 14), ` ${thousands(card.score)} points this run`),
-      h('span', null, icon('coin', 14), ` ${thousands(gold)} Legacy gold`)),
+      h('span', null, icon('star', 14), ` ${thousands(card.score)} points this run`)),
   );
   return panelOf({ id: 'pause', group: 'screen', pauses: 'always', backdropCloses: ctx }, win.el);
 }

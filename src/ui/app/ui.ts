@@ -3,7 +3,6 @@
 import type { Difficulty } from '../../core/domain';
 import type { UiRequest } from '../../sim/actions';
 import { familyOf } from '../../sim/kin';
-import { levelProfile, type StatUpgrades } from '../../sim/legacy';
 import type { SimEvents } from '../../sim/events';
 import { fullName, type ChronicleEntry, type PersonId } from '../../sim/state';
 import { settlementName } from '../../sim/api';
@@ -310,7 +309,7 @@ export class UiApp implements GameUIExt {
     this.lastChronicle = g.sim.state.chronicle[g.sim.state.chronicle.length - 1] ?? null;
   }
 
-  private async startRun(opts: { difficulty: Difficulty; statUpgrades: StatUpgrades }): Promise<void> {
+  private async startRun(opts: { difficulty: Difficulty }): Promise<void> {
     this.pendingBirth = true;
     try {
       await this.host.startNewRun(opts);
@@ -764,7 +763,6 @@ export class UiApp implements GameUIExt {
   // used by panels through the pause menu
   get game(): GameServices | null { return this.bound?.game ?? null; }
 
-  profileGold(): number { return levelProfile(this.host.profile()).legacyGold; }
 }
 
 export function createUiApp(parent: HTMLElement, host: UiHost): UiApp { return new UiApp(parent, host); }

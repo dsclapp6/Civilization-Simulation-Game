@@ -310,8 +310,6 @@ export interface RunCard {
   birthClass: string;
   multiplier: number;
   score: number;
-  legacyGold: number;
-  goldThisRun: number;
   bestScore: number;
   continentPct: number;
   bestContinentPct: number;
@@ -329,7 +327,7 @@ export function runCard(ctx: Ctx): RunCard {
   return {
     phase: st.run.phase, player: st.run.playerId, playerName: p ? fullName(p) : '',
     difficulty: st.difficulty, birthClass: st.run.birthClass, multiplier: st.run.multiplier,
-    score: st.score.points, legacyGold: lp.legacyGold, goldThisRun: st.score.goldBanked,
+    score: st.score.points,
     bestScore: Math.max(lp.bestScore, st.score.points), continentPct: st.score.continentPct,
     bestContinentPct: Math.max(lp.bestContinentPct, st.score.continentPct),
     maxTier: st.run.maxTier, lives: st.run.lives.length + 1, switches: st.run.switches,

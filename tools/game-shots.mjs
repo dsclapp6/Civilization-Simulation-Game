@@ -5,7 +5,7 @@
 //   node tools/game-shots.mjs village prompt map    # selected shots
 //   node tools/game-shots.mjs --quality=high --size=1600x900 --seed=abc --devzone
 //
-// Shots (in order): menu, run-start (difficulty, shop), loading, village, street, prompt, wheel, action, riding,
+// Shots (in order): menu, run-start (difficulty), loading, village, street, prompt, wheel, action, riding,
 // gallop, map, travel, encounter, death, successor. The game is driven through the
 // developer hooks on `window.__game` (src/app/game.ts), with the real-time loop frozen so every shot is
 // deterministic. `--devzone` adds stand-in villagers and a horse (use it only while the real agents module
@@ -157,7 +157,7 @@ try {
       // the UI's own menu views, when it offers them (the placeholder UI has none)
       const views = await page.evaluate(() => typeof window.__ui?.showMenu === 'function');
       if (views) {
-        for (const v of ['difficulty', 'shop']) {
+        for (const v of ['difficulty']) {
           await page.evaluate((view) => window.__ui.showMenu(view), v);
           await page.waitForTimeout(400);
           await shot(`run-start-${v}`, { settle: false });

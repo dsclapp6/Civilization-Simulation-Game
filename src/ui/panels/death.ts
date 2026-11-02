@@ -82,7 +82,7 @@ export function deathPanel(ctx: PanelCtx, hooks: UiHooks): UiPanel {
   const right = h('div.mu-death-right', null,
     heading('Who will you be?', 'users'),
     gameOverNext
-      ? h('div.mu-card.mu-succ-none', null, icon('crown', 22), h('p', null, 'No one is left to carry on your House.'), h('p.mu-dim.mu-small', null, 'Your story ends here. The score is counted and the Legacy gold you earned is kept.'))
+      ? h('div.mu-card.mu-succ-none', null, icon('crown', 22), h('p', null, 'No one is left to carry on your House.'), h('p.mu-dim.mu-small', null, 'Your story ends here. The score is counted in your records.'))
       : h('p.mu-small.mu-ink2', { style: { marginBottom: '8px' } }, 'Choose a living member of your family, or someone of your House of equal rank. The one you leave goes on with their life, run by the world.'),
     gameOverNext ? null : list,
   );
@@ -115,7 +115,6 @@ export function gameOverPanel(ctx: PanelCtx, hooks: UiHooks, summary: SimEvents[
   const best = summary?.bestScore ?? card.bestScore;
   const pctNow = card.continentPct;
   const bestPct = summary?.bestContinentPct ?? card.bestContinentPct;
-  const gold = summary?.legacyGold ?? card.legacyGold;
   const reason = summary?.reason ?? ctx.sim.state.run.endedReason ?? 'extinct';
   const record = score >= best && score > 0;
   const win = createWindow({ title: reason === 'extinct' ? 'Your House has fallen' : 'The run is over', subtitle: reason === 'extinct' ? 'No one is left to carry on' : 'You walked away', icon: 'crown', size: 'md' });
@@ -131,8 +130,6 @@ export function gameOverPanel(ctx: PanelCtx, hooks: UiHooks, summary: SimEvents[
     h('div.mu-rule'),
     h('div.mu-over-rows', null,
       row('Continent ruled', `${trim(pctNow, 1)}%`, `best ${trim(bestPct, 1)}%`),
-      row('Legacy gold earned this run', thousands(card.goldThisRun), '', true),
-      row('Legacy gold in all', thousands(gold), 'kept for your next birth', true),
       row('Lives lived', thousands(card.lives), card.switches ? plural(card.switches, 'switch', 'switches') : ''),
       row('Years played', thousands(card.yearsPlayed), `to Year ${card.year}`),
       row('Highest station', RANK_NAMES[Math.max(card.maxTier, 1) as RankTier], chronicleDate(ctx.sim.absDay)),

@@ -141,7 +141,7 @@ async function main(): Promise<void> {
     console.log(`save: ${store.commits} commits, last cycle ${(saveStats.bytes / 1024).toFixed(0)} KB, ${saveStats.cycles} cycles, longest slice ${saveStats.maxSlice.toFixed(2)} ms, store size ${(store.runSize() / 1024 / 1024).toFixed(1)} MB`);
   }
   const run = sim.state.run;
-  console.log(`run: ${run.phase}, score ${sim.state.score.points}, legacy gold ${sim.profile.levels.medieval.legacyGold}, character switches ${run.switches}`);
+  console.log(`run: ${run.phase}, score ${sim.state.score.points}, character switches ${run.switches}`);
 }
 
 void main();

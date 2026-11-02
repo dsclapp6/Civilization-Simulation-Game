@@ -153,7 +153,7 @@ SimView (core/view.ts) ──► GameRenderer (render) ──► asset layers (a
 - Quality presets low/medium/high (shadows, draw distance, post FX, pixel ratio).
 
 ## 11. Persistence (owner: sim)
-- IndexedDB database `millennia`: store `profile` (Legacy gold per level, records, settings)
+- IndexedDB database `millennia`: store `profile` (records per level, settings)
   and store `run` (the single current run). No other save slots.
 - Save = versioned JSON of dynamic state (world regenerated from seed). Migrations keyed by
   version. Incremental/dirty-chunk saving so a save never blocks a frame > 16 ms.

@@ -91,7 +91,7 @@ export class AppHost implements UiHost {
       await paint();
       const t2 = performance.now();
       const sim = Simulation.newGame({
-        seed, difficulty: opts.difficulty, statUpgrades: opts.statUpgrades, generateWorld: () => world,
+        seed, difficulty: opts.difficulty, generateWorld: () => world,
         store: this.env.store, profile: this.profileObj,
       });
       const t3 = performance.now();
@@ -212,7 +212,7 @@ export class AppHost implements UiHost {
     await this.flush();
     this.session = null;
     for (const fn of this.listeners) fn(null);
-    // carry the profile (Legacy gold earned in the run) forward
+    // carry the profile (the records of the run) forward
     this.profileObj = s.sim.profile;
     s.dispose();
     void saveProfile(this.env.store, this.profileObj).catch(() => {});

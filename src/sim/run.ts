@@ -1,5 +1,5 @@
-// A run (SPEC §1, §6, §8): birth into a random family, switching between family and House
-// members, death of the player, game over. A run starts with a new continent and ends only when
+// A run (SPEC §1, §6, §8): you start as a lord who holds a manor (ruler and a person of flesh at once), may take
+// over anyone, carry on after death, and the run ends when nobody is left or the player abandons it. A run starts with a new continent and ends only when
 // nobody eligible is left or the player abandons it.
 import { STATS, type Difficulty } from '../core/domain';
 import { DAYS_PER_YEAR } from '../core/time';
@@ -9,9 +9,7 @@ import { CAREERS } from './careers';
 import type { SimContext } from './context';
 import { youthCareer } from './family';
 import { familyOf } from './kin';
-import {
-  applyRanks, clampUpgrades, purchaseUpgrades, recordRunEnd, recordRunStart, type Profile, type StatUpgrades,
-} from './legacy';
+import { recordRunEnd, recordRunStart, type Profile } from './legacy';
 import { createPerson, trainedFor } from './people';
 import { generatePopulation } from './population';
 import { BIRTH_CLASS_MULTIPLIER, continentPct } from './score';
@@ -43,15 +41,18 @@ export function birthClassOf(p: Person): BirthClass {
   }
 }
 
+export type RunStart = 'lord' | 'birth';
+
 export interface NewRunOptions {
   seed: string;
   difficulty: Difficulty;
-  /** Ranks bought in the Legacy shop (applied to the rolled potential, capped at 18). */
-  statUpgrades?: StatUpgrades;
+  /** 'lord' (the game): the player starts as a lord who holds a manor. 'birth': a twelve-year-old born into a random
+   *  family of the period (kept for tools and the tests of village life). Default 'lord'. */
+  start?: RunStart;
   /** Injected so tests can pass a mock (the real one is src/world/generate.ts). */
   generateWorld: (seed: string, options?: WorldGenOptions) => WorldModel;
   worldOptions?: WorldGenOptions;
-  /** When given, the upgrades are paid for from its Legacy gold and the run counts as played. */
+  /** When given, the run counts as played in its records. */
   profile?: Profile;
 }
 
@@ -59,19 +60,14 @@ export interface NewRun { world: WorldModel; state: GameState }
 
 /** Creates a fresh world, population and the player's birth. */
 export function newRun(opts: NewRunOptions): NewRun {
-  const upgrades = clampUpgrades(opts.statUpgrades ?? {});
-  if (opts.profile) {
-    const bought = purchaseUpgrades(opts.profile, upgrades);
-    if (!bought) throw new Error('not enough Legacy gold for the chosen stat upgrades');
-    recordRunStart(opts.profile);
-  }
+  if (opts.profile) recordRunStart(opts.profile);
   const world = opts.generateWorld(opts.seed, opts.worldOptions);
   const state = GameState.fromWorld(world, opts.seed, opts.difficulty);
   state.worldOptions = opts.worldOptions ? { ...opts.worldOptions } : undefined;
   state.clock.absDay = START_DAY;
   state.clock.firedHour = Math.floor(START_DAY * 24);
   generatePopulation(state, world);
-  rollBirth(state, upgrades);
+  rollStart(state, opts.start ?? 'lord');
   state.markAllDirty();
   return { world, state };
 }
@@ -161,21 +157,59 @@ export function chooseBirth(state: GameState, rng: Rng): { household: Household;
   return drawBirth(birthPools(state), rng);
 }
 
-function rollBirth(state: GameState, upgrades: StatUpgrades): void {
+/** The lord you start as is a grown man or woman: young enough for a long reign, old enough to rule (docs/CIV.md §2). */
+export const LORD_AGE_MIN = 18;
+export const LORD_AGE_MAX = 45;
+
+/** Can this person rule their lands from the first day? Alive, of age, free, not a cleric. */
+function fitToRule(state: GameState, p: Person | undefined): p is Person {
+  if (!p || p.death || p.estate === 'clergy' || p.flags.captive || p.flags.outlaw) return false;
+  const a = ageYears(p, state.clock.absDay);
+  return a >= LORD_AGE_MIN && a <= LORD_AGE_MAX;
+}
+
+/** The lords a run may start as: holders of a manor (or, failing that, a town or barony) who can rule now.
+ *  Younger lords weigh more (a longer life to build in). Sorted by person id, so the draw is deterministic. */
+export function lordCandidates(state: GameState): { people: Person[]; weights: number[] } {
+  const day = state.clock.absDay;
+  for (const kinds of [['manor'], ['town', 'barony']] as const) {
+    const seen = new Set<PersonId>();
+    const people: Person[] = [];
+    for (const t of state.titles.values()) {
+      if (!(kinds as readonly string[]).includes(t.kind) || seen.has(t.holder)) continue;
+      const p = state.persons.get(t.holder);
+      if (!fitToRule(state, p)) continue;
+      seen.add(p.id);
+      people.push(p);
+    }
+    if (people.length) {
+      people.sort((a, b) => a.id - b.id);
+      return { people, weights: people.map((p) => 1 + Math.max(0, 40 - ageYears(p, day)) / 5) };
+    }
+  }
+  return { people: [], weights: [] };
+}
+
+/** Every run starts with the player as a lord: the holder of a manor, ruling its fields, purse and men from the first
+ *  morning (the macro game), and a person of flesh to make strong (the micro game). Falls back to the old birth of a
+ *  twelve-year-old only in a world that has no lord fit to rule. */
+function rollStart(state: GameState, start: RunStart): void {
   const rng = state.rng('birth');
   const day = state.clock.absDay;
-  const { household: hh, birthClass: cls } = chooseBirth(state, rng);
-
-  let player = twelveYearOldIn(state, hh);
-  if (!player) player = createTwelveYearOld(state, rng, hh);
-  else player.birthDay = Math.round(day - START_AGE * DAYS_PER_YEAR) + 0;
-
-  // stat upgrades are applied after the birth is rolled (SPEC §1)
-  for (const s of STATS) {
-    const r = upgrades[s] ?? 0;
-    if (r > 0) player.potential[s] = applyRanks(player.potential[s], r);
+  const lords = start === 'lord' ? lordCandidates(state) : { people: [], weights: [] };
+  let player: Person;
+  let cls: BirthClass;
+  if (lords.people.length) {
+    player = rng.weighted(lords.people, lords.weights);
+    cls = birthClassOf(player);
+  } else {
+    const birth = chooseBirth(state, rng);
+    cls = birth.birthClass;
+    const found = twelveYearOldIn(state, birth.household);
+    player = found ?? createTwelveYearOld(state, rng, birth.household);
+    if (found) player.birthDay = Math.round(day - START_AGE * DAYS_PER_YEAR);
+    player.trained = trainedFor(player.potential, START_AGE, player.career);
   }
-  player.trained = trainedFor(player.potential, START_AGE, player.career);
   player.flags.player = true;
   state.touch(player);
 
@@ -187,10 +221,11 @@ function rollBirth(state: GameState, upgrades: StatUpgrades): void {
   run.birthTier = player.rankTier;
   run.birthSettlement = player.settlement;
   run.multiplier = BIRTH_CLASS_MULTIPLIER[cls];
-  run.statUpgrades = upgrades;
   run.maxTier = player.rankTier;
   run.startedDay = 0;
-  state.log(day, 'birth', `You are ${fullName(player)}, a ${CAREERS[player.career].label.toLowerCase()} of ${describeBirth(cls)}.`, [player.id]);
+  const titles = [...state.titlesHeldBy(player.id)].sort((a, b) => b.kind.localeCompare(a.kind));
+  const held = titles.length ? `, lord of ${titles.map((t) => t.name).join(' and ')}` : '';
+  state.log(day, 'birth', `You are ${fullName(player)}${held}, of ${describeBirth(cls)}.`, [player.id]);
 }
 
 function describeBirth(cls: BirthClass): string {
@@ -354,7 +389,7 @@ function anyoneAlive(state: GameState): boolean {
   return false;
 }
 
-/** Ends the run: records the best score and continent share. Legacy gold was banked as it was earned. */
+/** Ends the run: records the best score and continent share. */
 export function gameOver(ctx: SimContext, reason: 'extinct' | 'abandoned'): void {
   const state = ctx.state;
   const run = state.run;
@@ -363,14 +398,13 @@ export function gameOver(ctx: SimContext, reason: 'extinct' | 'abandoned'): void
   run.endedReason = reason;
   run.pendingSuccession = null;
   state.score.continentPct = Math.max(state.score.continentPct, continentPct(state, ctx.world));
-  ctx.score.bankGold();
   const lp = recordRunEnd(ctx.profile, { score: state.score.points, continentPct: state.score.continentPct });
   ctx.clock.pause();
   state.dirty.profile = true;
   state.dirty.meta = true;
   state.log(ctx.absDay, 'gameover', reason === 'extinct' ? 'Your House has no one left to continue.' : 'You abandoned the run.', []);
   ctx.events.emit('gameOver', {
-    reason, score: state.score.points, bestScore: lp.bestScore, bestContinentPct: lp.bestContinentPct, legacyGold: lp.legacyGold,
+    reason, score: state.score.points, bestScore: lp.bestScore, bestContinentPct: lp.bestContinentPct,
   });
 }
 

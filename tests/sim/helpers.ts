@@ -16,8 +16,9 @@ export interface TestSimOptions {
   preset?: Preset;
   difficulty?: Difficulty;
   store?: MemorySaveStore;
-  statUpgrades?: Parameters<typeof Simulation.newGame>[0]['statUpgrades'];
   autosave?: Parameters<typeof Simulation.newGame>[0]['autosave'];
+  /** The game starts as a lord; the tests of village life start as a twelve-year-old (the default here). */
+  start?: 'lord' | 'birth';
 }
 
 export function newSim(opts: TestSimOptions = {}): Simulation {
@@ -27,8 +28,8 @@ export function newSim(opts: TestSimOptions = {}): Simulation {
     generateWorld: mockGenerator(opts.preset ?? 'tiny'),
     store: opts.store,
     profile: opts.store ? newProfile() : undefined,
-    statUpgrades: opts.statUpgrades,
     autosave: opts.autosave,
+    start: opts.start ?? 'birth',
   });
 }
 

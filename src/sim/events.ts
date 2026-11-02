@@ -18,7 +18,7 @@ export type SimEvents = {
   /** The player's character died; `eligible` lists who may be taken over (empty ⇒ game over follows). */
   playerDied: { person: PersonId; cause: DeathCause; eligible: PersonId[] };
   playerSwitched: { from: PersonId; to: PersonId; reason: 'death' | 'voluntary' };
-  gameOver: { reason: 'extinct' | 'abandoned'; score: number; bestScore: number; bestContinentPct: number; legacyGold: number };
+  gameOver: { reason: 'extinct' | 'abandoned'; score: number; bestScore: number; bestContinentPct: number };
   points: { kind: ScoreKind; amount: number; reason: string; total: number };
 
   hourStarted: HourInfo;

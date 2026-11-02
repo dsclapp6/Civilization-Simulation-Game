@@ -189,7 +189,7 @@ export async function start(root: AppRoot): Promise<void> {
     if (auto === 'continue') await host.continueRun();
     else {
       const d = params.get('difficulty') as Difficulty | null;
-      await host.startNewRun({ difficulty: d && DIFFICULTIES.includes(d) ? d : 'knight', statUpgrades: {} });
+      await host.startNewRun({ difficulty: d && DIFFICULTIES.includes(d) ? d : 'knight' });
     }
   }
 }

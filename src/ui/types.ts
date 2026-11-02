@@ -6,7 +6,7 @@ import type { Difficulty } from '../core/domain';
 import type { PlayerApi } from '../player/types';
 import type { UiRequest } from '../sim/actions';
 import type { EconomyApi, ItemKey } from '../sim/economy/types';
-import type { Profile, StatUpgrades } from '../sim/legacy';
+import type { Profile } from '../sim/legacy';
 import type { Simulation } from '../sim/sim';
 import type { SocialApi } from '../sim/social/types';
 import type { ObjectivesApi } from '../sim/objectives/types';
@@ -78,8 +78,8 @@ export interface UiRendererControls {
 export interface UiHost {
   profile(): Profile;
   hasSavedRun(): Promise<boolean>;
-  /** New continent + new character with the chosen difficulty and bought stat ranks (gold is spent). */
-  startNewRun(opts: { difficulty: Difficulty; statUpgrades: StatUpgrades }): Promise<void>;
+  /** New continent, and the player starts as one of its lords, at the chosen difficulty. */
+  startNewRun(opts: { difficulty: Difficulty }): Promise<void>;
   continueRun(): Promise<void>;
   /** The running game, or null at the menu / while loading. */
   game(): GameServices | null;
@@ -124,7 +124,7 @@ export interface GameUIExt extends GameUI {
   /** Ids of the open panels, bottom to top. */
   openPanels(): string[];
   /** Main-menu views, for the gallery and screenshots. */
-  showMenu(view: 'main' | 'difficulty' | 'shop' | 'records' | 'settings'): void;
+  showMenu(view: 'main' | 'difficulty' | 'records' | 'settings'): void;
   /** Shows the "You are born …" reveal for the current character. */
   showBirth(): void;
   /** Shows one hint of the first-minutes guide now (tools and tests). */

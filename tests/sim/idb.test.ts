@@ -86,9 +86,9 @@ describe('IdbSaveStore (fake IndexedDB)', () => {
     expect(await store.loadProfile()).toBeNull();
     expect([...fake.db.stores.keys()].sort()).toEqual(['profile', 'run']);
     const profile = newProfile();
-    profile.levels.medieval.legacyGold = 77;
+    profile.levels.medieval.bestScore = 77;
     await saveProfile(store, profile);
-    expect((await loadProfile(new IdbSaveStore())).levels.medieval.legacyGold).toBe(77);
+    expect((await loadProfile(new IdbSaveStore())).levels.medieval.bestScore).toBe(77);
   });
 
   it('commits batches atomically: puts, deletes and clear', async () => {

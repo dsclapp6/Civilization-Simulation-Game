@@ -15,9 +15,9 @@ import type { WorldGenOptions, WorldModel } from '../world/types';
 import { Clock, nextTimeOfDay, SKIP_DAYS_PER_SECOND, type ClockHooks, type TimeOfDay } from './clock';
 import type { SimContext } from './context';
 import type { SimEvents } from './events';
-import { levelProfile, newProfile, type Profile, type StatUpgrades } from './legacy';
+import { newProfile, type Profile } from './legacy';
 import { registerLifeSystems } from './life';
-import { abandonRun, attachRunHandlers, canSwitchTo, eligibleSwitchTargets, newRun, switchTo } from './run';
+import { abandonRun, attachRunHandlers, canSwitchTo, eligibleSwitchTargets, newRun, switchTo, type RunStart } from './run';
 import { RunSaver, loadProfile, loadRun, saveProfile, type SaveStore, type SaverOptions } from './save';
 import { hashState, warmUpSerializer } from './serialize';
 import { Scheduler, type Phase, type PhaseInfo, type System } from './scheduler';
@@ -72,9 +72,10 @@ export interface SimulationOptions {
 export interface NewGameOptions {
   seed: string;
   difficulty: Difficulty;
-  statUpgrades?: StatUpgrades;
   generateWorld: (seed: string, options?: WorldGenOptions) => WorldModel;
   worldOptions?: WorldGenOptions;
+  /** How the player starts (default: as a lord). */
+  start?: RunStart;
   store?: SaveStore;
   profile?: Profile;
   autosave?: SaverOptions;
@@ -117,9 +118,7 @@ export class Simulation implements SimContext {
     this.store = opts.store ?? null;
     this.profile = opts.profile ?? newProfile();
     this.clock = new Clock(this.state.clock);
-    this.score = new ScoreKeeper(this.state, this.events, {
-      add: (gold) => { levelProfile(this.profile).legacyGold += gold; this.state.dirty.profile = true; },
-    });
+    this.score = new ScoreKeeper(this.state, this.events);
     this.view = new SimViewImpl(this);
     this.actions = new ActionRegistry(this);
     this.actions.onEvent((e) => {
@@ -166,11 +165,11 @@ export class Simulation implements SimContext {
   /** Starts a new run: new continent, new character (SPEC §1). */
   static newGame(opts: NewGameOptions): Simulation {
     if (opts.store && !opts.profile) {
-      // a default profile would overwrite the player's saved Legacy gold
+      // a default profile would overwrite the player's saved records
       throw new Error('Simulation.newGame: pass the loaded profile (save.loadProfile) when a store is given');
     }
     const { world, state } = newRun({
-      seed: opts.seed, difficulty: opts.difficulty, statUpgrades: opts.statUpgrades,
+      seed: opts.seed, difficulty: opts.difficulty, start: opts.start,
       generateWorld: opts.generateWorld, worldOptions: opts.worldOptions, profile: opts.profile,
     });
     const sim = new Simulation({ world, state, store: opts.store, profile: opts.profile, autosave: opts.autosave, fresh: true });

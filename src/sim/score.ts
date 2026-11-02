@@ -1,12 +1,10 @@
 // Points ledger (SPEC §1, §20). Raw points are multiplied by the birth-class and difficulty
-// multipliers; each point earned is converted to Legacy gold immediately (1 gold per 10 points), so
-// gold follows the difficulty table without multiplying twice.
+// multipliers. Points are the run's score only: nothing is carried into the next run.
 import { DIFFICULTY_GOLD, type RankTier } from '../core/domain';
 import type { EventBus } from '../core/events';
 import { DAYS_PER_YEAR } from '../core/time';
 import type { WorldModel } from '../world/types';
 import type { SimEvents } from './events';
-import { POINTS_PER_GOLD } from './legacy';
 import type { BirthClass, GameState, ScoreKind, Title, TitleKind } from './state';
 
 /** SPEC §1: harder births earn more. */
@@ -24,11 +22,8 @@ export const TITLE_POINTS: Record<TitleKind, number> = {
 
 const LEDGER_CAP = 120;
 
-/** Where banked Legacy gold goes (the profile). */
-export interface GoldBank { add(gold: number): void }
-
 export class ScoreKeeper {
-  constructor(private readonly state: GameState, private readonly events: EventBus<SimEvents>, private readonly bank: GoldBank) {}
+  constructor(private readonly state: GameState, private readonly events: EventBus<SimEvents>) {}
 
   get points(): number { return this.state.score.points; }
 
@@ -43,22 +38,9 @@ export class ScoreKeeper {
     sc.byKind[kind] = (sc.byKind[kind] ?? 0) + pts;
     sc.ledger.push({ day: this.state.clock.absDay, kind, amount: pts, reason });
     if (sc.ledger.length > LEDGER_CAP) sc.ledger.splice(0, sc.ledger.length - LEDGER_CAP);
-    this.bankGold();
     this.state.dirty.meta = true;
     this.events.emit('points', { kind, amount: pts, reason, total: sc.points });
     return pts;
-  }
-
-  /** Converts any unbanked points into Legacy gold. */
-  bankGold(): number {
-    const sc = this.state.score;
-    const target = Math.floor(sc.points / POINTS_PER_GOLD);
-    const delta = target - sc.goldBanked;
-    if (delta > 0) {
-      sc.goldBanked = target;
-      this.bank.add(delta);
-    }
-    return Math.max(0, delta);
   }
 
   /** Call when a member of the player's line attains `tier` (promotion, inheritance, knighting …).

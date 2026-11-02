@@ -3,7 +3,7 @@ import { Rng } from '../../src/core/rng';
 import { STAT_CAP, STATS } from '../../src/core/domain';
 import { DAYS_PER_YEAR } from '../../src/core/time';
 import { newProfile } from '../../src/sim/legacy';
-import { BIRTH_CLASS_WEIGHTS, MIN_PLAYABLE_AGE, birthClassOf, birthPools, drawBirth, eligibleSwitchTargets, newRun } from '../../src/sim/run';
+import { BIRTH_CLASS_WEIGHTS, LORD_AGE_MAX, LORD_AGE_MIN, MIN_PLAYABLE_AGE, birthClassOf, birthPools, drawBirth, eligibleSwitchTargets, lordCandidates, newRun } from '../../src/sim/run';
 import { MemorySaveStore } from '../../src/sim/save-memory';
 import { Simulation } from '../../src/sim/sim';
 import { BIRTH_CLASS_MULTIPLIER } from '../../src/sim/score';
@@ -15,45 +15,43 @@ import { mkHouse, mkHousehold, mkPerson, makePlayer } from './builders';
 import { mockGenerator, newSim, settle } from './helpers';
 import type { Person } from '../../src/sim/state';
 
-describe('newRun: the player\'s birth (SPEC §6)', () => {
-  it('puts a 12-year-old into a household of the world and records their line as the player\'s House', () => {
-    const { world, state } = newRun({ seed: 'born1', difficulty: 'knight', generateWorld: mockGenerator('small') });
-    const p = state.persons.get(state.run.playerId)!;
-    expect(p).toBeDefined();
-    expect(ageYears(p, state.clock.absDay)).toBeCloseTo(12, 1);
-    expect(p.flags.player).toBe(true);
-    expect(state.households.get(p.household)!.members).toContain(p.id);
-    expect(p.settlement).toBe(state.households.get(p.household)!.settlement);
-    expect(state.run.houseId).toBe(p.house);
-    expect(state.houses.has(p.house)).toBe(true);
-    expect(state.run.phase).toBe('alive');
-    expect(state.run.birthClass).toBe(birthClassOf(state.persons.get(state.households.get(p.household)!.head)!));
-    expect(state.run.multiplier).toBe(BIRTH_CLASS_MULTIPLIER[state.run.birthClass]);
-    expect(state.run.birthTier).toBe(p.rankTier);
-    expect(state.chronicle.length).toBeGreaterThan(0);
-    // parents are older and consistent
-    for (const id of [p.father, p.mother]) {
-      if (!id) continue;
-      const parent = state.persons.get(id)!;
-      expect(parent.children).toContain(p.id);
-      expect(ageYears(parent, state.clock.absDay)).toBeGreaterThan(12 + 14);
+describe('newRun: the player starts as a lord (docs/CIV.md §2)', () => {
+  it('makes the player an adult who holds a manor and rules it, and records their House', () => {
+    for (const seed of ['born1', 'born2', 'born3']) {
+      const { world, state } = newRun({ seed, difficulty: 'knight', generateWorld: mockGenerator('small') });
+      const p = state.persons.get(state.run.playerId)!;
+      expect(p.flags.player).toBe(true);
+      const age = ageYears(p, state.clock.absDay);
+      expect(age).toBeGreaterThanOrEqual(LORD_AGE_MIN);
+      expect(age).toBeLessThanOrEqual(LORD_AGE_MAX);
+      const held = [...state.titlesHeldBy(p.id)];
+      expect(held.length).toBeGreaterThan(0);
+      expect(held.some((t) => t.kind === 'manor' || t.kind === 'town' || t.kind === 'barony')).toBe(true);
+      expect(p.estate).not.toBe('clergy');
+      expect(state.run.houseId).toBe(p.house);
+      expect(state.houses.has(p.house)).toBe(true);
+      expect(state.run.phase).toBe('alive');
+      expect(state.run.birthClass).toBe(birthClassOf(p));
+      expect(state.run.multiplier).toBe(BIRTH_CLASS_MULTIPLIER[state.run.birthClass]);
+      expect(state.run.birthTier).toBe(p.rankTier);
+      expect(state.chronicle.length).toBeGreaterThan(0);
+      expect(world.settlements.length).toBeGreaterThan(0);
     }
-    expect(world.settlements.length).toBeGreaterThan(0);
   });
 
-  it('always births the player as a family member, never as a servant or retainer of the household', () => {
-    for (let i = 0; i < 30; i++) {
-      const { state } = newRun({ seed: `family${i}`, difficulty: 'knight', generateWorld: mockGenerator('tiny') });
-      const p = state.persons.get(state.run.playerId)!;
-      const house = state.houses.get(p.house)!;
-      expect(house.sworn).not.toContain(p.id);
-      const hh = state.households.get(p.household)!;
-      const head = state.persons.get(hh.head)!;
-      expect(p.house).toBe(head.house);
-      // a child of the household's parents (or at least of its head's House)
-      const parents = [p.father, p.mother].filter(Boolean);
-      expect(parents.length === 0 || parents.some((id) => hh.members.includes(id) || state.persons.has(id))).toBe(true);
-      expect(p.rankTier).toBe(head.rankTier);
+  it('only offers lords who can rule now: alive, of age, free, not clergy', () => {
+    const world = createMockWorld({ seed: 'lords', preset: 'small' });
+    const state = GameState.fromWorld(world, 'lords', 'knight');
+    generatePopulation(state, world);
+    const { people, weights } = lordCandidates(state);
+    expect(people.length).toBeGreaterThan(0);
+    expect(weights).toHaveLength(people.length);
+    for (const p of people) {
+      expect(p.death).toBeFalsy();
+      expect(p.estate).not.toBe('clergy');
+      const a = ageYears(p, state.clock.absDay);
+      expect(a).toBeGreaterThanOrEqual(LORD_AGE_MIN);
+      expect(a).toBeLessThanOrEqual(LORD_AGE_MAX);
     }
   });
 
@@ -91,40 +89,11 @@ describe('newRun: the player\'s birth (SPEC §6)', () => {
     expect(((counts.serf ?? 0) + (counts.free ?? 0)) / n).toBeGreaterThan(0.75);
   });
 
-  it('applies bought stat ranks after the birth is rolled, capped at 18, with trained stats scaled', () => {
-    const base = newRun({ seed: 'ups', difficulty: 'knight', generateWorld: mockGenerator('tiny') });
-    const up = newRun({ seed: 'ups', difficulty: 'knight', generateWorld: mockGenerator('tiny'), statUpgrades: { str: 3, int: 8, cha: 1 } });
-    const p0 = base.state.persons.get(base.state.run.playerId)!;
-    const p1 = up.state.persons.get(up.state.run.playerId)!;
-    expect(p1.id).toBe(p0.id); // the same birth
-    expect(p1.potential.str).toBe(Math.min(STAT_CAP, p0.potential.str + 3));
-    expect(p1.potential.int).toBe(Math.min(STAT_CAP, p0.potential.int + 8));
-    expect(p1.potential.cha).toBe(Math.min(STAT_CAP, p0.potential.cha + 1));
-    expect(p1.potential.end).toBe(p0.potential.end);
-    expect(p1.trained.str).toBeCloseTo(p1.potential.str * 0.65, 1);
-    expect(up.state.run.statUpgrades).toEqual({ str: 3, int: 8, cha: 1 });
-  });
-
-  it('never lets any stat exceed the cap of 18, however many ranks are requested', () => {
-    for (const seed of ['cap1', 'cap2', 'cap3', 'cap4']) {
-      const all = Object.fromEntries(STATS.map((s) => [s, 99]));
-      const r = newRun({ seed, difficulty: 'king', generateWorld: mockGenerator('tiny'), statUpgrades: all });
-      const p = r.state.persons.get(r.state.run.playerId)!;
-      for (const s of STATS) {
-        expect(p.potential[s]).toBeLessThanOrEqual(STAT_CAP);
-        expect(p.trained[s]).toBeLessThanOrEqual(STAT_CAP);
-      }
-      for (const q of r.state.persons.values()) for (const s of STATS) expect(q.potential[s]).toBeLessThanOrEqual(STAT_CAP);
-    }
-  });
-
-  it('charges the Legacy gold for the upgrades and counts the run', () => {
+  it('counts the run in the records and carries nothing else between runs', () => {
     const profile = newProfile();
-    profile.levels.medieval.legacyGold = 1000;
-    newRun({ seed: 'pay', difficulty: 'knight', generateWorld: mockGenerator('tiny'), statUpgrades: { str: 2, end: 1 }, profile });
-    expect(profile.levels.medieval.legacyGold).toBe(1000 - (100 + 250) - 100);
+    newRun({ seed: 'pay', difficulty: 'knight', generateWorld: mockGenerator('tiny'), profile });
     expect(profile.levels.medieval.runsPlayed).toBe(1);
-    expect(() => newRun({ seed: 'pay2', difficulty: 'knight', generateWorld: mockGenerator('tiny'), statUpgrades: { str: 8 }, profile })).toThrow();
+    expect(Object.keys(profile.levels.medieval).sort()).toEqual(['bestContinentPct', 'bestScore', 'runsPlayed']);
   });
 });
 
@@ -260,7 +229,7 @@ describe('death of the player and game over', () => {
     expect(sim.absDay).toBeGreaterThan(day);
   });
 
-  it('goes on when the family is gone (anyone may be taken over); ending the run records the best score, keeps the gold, deletes the save', async () => {
+  it('goes on when the family is gone (anyone may be taken over); ending the run records the best score and deletes the save', async () => {
     const store = new MemorySaveStore();
     const profile = newProfile();
     const sim = Simulation.newGame({ seed: 'over', difficulty: 'king', generateWorld: mockGenerator('tiny'), store, profile, autosave: { intervalMs: 0 } });
@@ -271,8 +240,6 @@ describe('death of the player and game over', () => {
     sim.score.award('deed', 500, 'a great deed');
     const points = st.score.points;
     expect(points).toBeGreaterThan(0);
-    const gold = profile.levels.medieval.legacyGold;
-    expect(gold).toBeGreaterThan(0);
     // wipe out the family
     const gameOvers: unknown[] = [];
     sim.events.on('gameOver', (e) => gameOvers.push(e));
@@ -295,7 +262,6 @@ describe('death of the player and game over', () => {
     expect(st.run.endedReason).toBe('abandoned');
     expect(gameOvers).toHaveLength(1);
     expect(profile.levels.medieval.bestScore).toBe(Math.round(points));
-    expect(profile.levels.medieval.legacyGold).toBe(gold);
     expect(profile.levels.medieval.runsPlayed).toBe(1);
     await settle();
     expect(store.hasRun).toBe(false);

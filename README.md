@@ -25,7 +25,7 @@ npm run preview        # serve the build
 ```
 
 The game is the default mode. The main menu offers **Continue** (one run is kept, saved to IndexedDB every few
-seconds), **New run** (difficulty, a shop of stat ranks bought with *Legacy gold* from earlier runs, then your birth) and
+seconds), **New run** (difficulty, then the lord you start as) and
 the settings. A new continent takes about four seconds to raise in a browser. Chrome, Edge and Firefox with WebGL2
 are fine; the *quality* setting (low / medium / high) trades shadows and view distance for speed.
 

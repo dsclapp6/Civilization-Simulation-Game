@@ -77,7 +77,7 @@ export async function start(root: AppRoot): Promise<void> {
     ui, host, frames, setBg: (bg) => { currentBg = bg; setBg(bg); },
     async enter(o = {}) {
       let mock = host.mock();
-      if (!mock || o.fresh || mock.sim.state.run.phase !== 'alive') mock = await host.create(o.difficulty ?? 'knight', {}, true);
+      if (!mock || o.fresh || mock.sim.state.run.phase !== 'alive') mock = await host.create(o.difficulty ?? 'knight', true);
       ui.setScreen('game');
       closeAll();
       const time = o.time ?? Number(q.get('time') ?? 0.58);
@@ -161,13 +161,6 @@ export async function start(root: AppRoot): Promise<void> {
     // screens
     { id: 'menu', label: 'Main menu', group: 'Screens', run: async (c) => { await c.host.quitToMenu(); c.ui.showMenu('main'); await c.frames(); } },
     { id: 'difficulty', label: 'Difficulty', group: 'Screens', run: async (c) => { await c.host.quitToMenu(); c.ui.showMenu('difficulty'); await c.frames(); } },
-    {
-      id: 'shop', label: 'Legacy shop', group: 'Screens', run: async (c) => {
-        await c.host.quitToMenu(); c.ui.showMenu('shop'); await c.frames();
-        const buy = (row: number, n: number): void => { for (let i = 0; i < n; i++) c.click('.mu-shop-row .mu-btn.primary', 1, row); };
-        buy(0, 3); await c.frames(); buy(1, 2); await c.frames(); buy(4, 2); await c.frames(); buy(5, 1); await c.frames();
-      },
-    },
     { id: 'records', label: 'Records', group: 'Screens', run: async (c) => { await c.host.quitToMenu(); c.ui.showMenu('records'); await c.frames(); } },
     { id: 'menu-settings', label: 'Settings (menu)', group: 'Screens', run: async (c) => { await c.host.quitToMenu(); c.ui.showMenu('settings'); await c.frames(); } },
     { id: 'loading', label: 'Loading', group: 'Screens', run: async (c) => { await c.host.quitToMenu(); c.ui.setScreen('loading', { progress: 0.62, label: 'Settling villages and towns…' }); await c.frames(); } },

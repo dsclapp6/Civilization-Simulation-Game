@@ -19,7 +19,7 @@ your home door at 06:00 on the first day of Spring.
 
 Exactly one run is kept, saved to IndexedDB every ~10 s, on every important event, when the tab is hidden
 and when you leave to the menu. The world pauses while the game is closed. Death is permanent; if nobody
-eligible is left the run ends and your Legacy gold stays.
+eligible is left the run ends.
 
 ## Controls
 
@@ -203,7 +203,7 @@ battles near you; the *Armies & wars* tab lists them, the *Forces* tab the stren
 When your character dies the body falls and the death screen shows the life story and who may carry on
 (your family, and House members of equal rank). Choose one: the camera rises to the map, slides to the
 new character and settles behind them. The same works on purpose from the family panel (*Play as*).
-With nobody left the run ends (game over, records, Legacy gold).
+With nobody left the run ends (game over, records).
 
 ## Developer parameters
 

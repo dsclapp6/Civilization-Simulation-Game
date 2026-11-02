@@ -7,10 +7,10 @@ import type { BirthClass } from '../../src/sim/state';
 import { mockGenerator } from './helpers';
 
 function sim(difficulty: Difficulty = 'knight', seed = 'score'): Simulation {
-  return Simulation.newGame({ seed, difficulty, generateWorld: mockGenerator('small'), profile: newProfile() });
+  return Simulation.newGame({ seed, difficulty, generateWorld: mockGenerator('small'), profile: newProfile(), start: 'birth' });
 }
 
-describe('points and Legacy gold', () => {
+describe('points', () => {
   it('multiplies by birth class: serf x1.5, free x1.3, craftsman x1.1, merchant x1.0, gentry x0.9, knightly x0.8, baronial x0.6', () => {
     expect(BIRTH_CLASS_MULTIPLIER).toEqual({ serf: 1.5, free: 1.3, craftsman: 1.1, merchant: 1.0, gentry: 0.9, knightly: 0.8, baronial: 0.6 });
     const s = sim();
@@ -24,31 +24,13 @@ describe('points and Legacy gold', () => {
     }
   });
 
-  it('multiplies points by difficulty (SPEC §20), so gold is not multiplied twice', () => {
+  it('multiplies points by difficulty (SPEC §20) and puts nothing into the profile', () => {
     for (const d of ['squire', 'knight', 'lord', 'king'] as const) {
       const s = sim(d, `pts-${d}`);
       s.state.run.multiplier = 1;
-      const p = s.profile;
-      const g0 = levelProfile(p).legacyGold;
+      const before = JSON.stringify(levelProfile(s.profile));
       expect(s.score.award('deed', 100, 'test')).toBeCloseTo(100 * DIFFICULTY_GOLD[d], 6);
-      expect(levelProfile(p).legacyGold - g0).toBe(Math.floor(10 * DIFFICULTY_GOLD[d]));
-    }
-  });
-
-  it('banks gold immediately: 1 gold per 10 points x the difficulty multiplier, with no rounding loss', () => {
-    for (const d of ['squire', 'knight', 'lord', 'king'] as const) {
-      const s = sim(d, `gold-${d}`);
-      s.state.run.multiplier = 1;
-      const p = levelProfile(s.profile);
-      const g0 = p.legacyGold;
-      s.score.award('deed', 1000, 'big');
-      expect(p.legacyGold - g0).toBe(Math.floor((1000 / 10) * DIFFICULTY_GOLD[d]));
-      // many tiny awards add up exactly like one large one
-      const t = sim(d, `gold2-${d}`);
-      t.state.run.multiplier = 1;
-      for (let i = 0; i < 100; i++) t.score.award('holdings', 7, 'drip');
-      expect(levelProfile(t.profile).legacyGold).toBe(Math.floor((700 / 10) * DIFFICULTY_GOLD[d]));
-      expect(t.state.score.goldBanked).toBe(levelProfile(t.profile).legacyGold);
+      expect(JSON.stringify(levelProfile(s.profile))).toBe(before);
     }
   });
 

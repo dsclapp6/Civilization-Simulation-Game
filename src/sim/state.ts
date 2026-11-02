@@ -278,8 +278,6 @@ export interface RunState {
   birthSettlement: number;
   /** Birth-class points multiplier (SPEC §1). */
   multiplier: number;
-  /** Ranks bought in the Legacy shop for this run. */
-  statUpgrades: Partial<Record<StatId, number>>;
   maxTier: RankTier;
   /** Previous characters of this run, oldest first. */
   lives: LifeRecord[];
@@ -298,8 +296,6 @@ export interface ScoreState {
   raw: number;
   /** Points after the multiplier: the run's score. */
   points: number;
-  /** Legacy gold already banked from this run's points. */
-  goldBanked: number;
   /** Tiers whose first-reached milestone has been paid. */
   milestones: number[];
   continentPct: number;
@@ -406,13 +402,13 @@ export function emptyYearStats(year: number): YearStats {
 export function emptyRun(): RunState {
   return {
     phase: 'alive', playerId: NONE, houseId: NONE, birthClass: 'free', birthTier: 2, birthSettlement: -1,
-    multiplier: 1, statUpgrades: {}, maxTier: 2, lives: [], switches: 0, startedDay: 0,
+    multiplier: 1, maxTier: 2, lives: [], switches: 0, startedDay: 0,
     endedReason: null, pendingSuccession: null,
   };
 }
 
 export function emptyScore(): ScoreState {
-  return { raw: 0, points: 0, goldBanked: 0, milestones: [], continentPct: 0, ledger: [], byKind: {} };
+  return { raw: 0, points: 0, milestones: [], continentPct: 0, ledger: [], byKind: {} };
 }
 
 export class GameState {

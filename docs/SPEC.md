@@ -47,17 +47,14 @@ and research currencies, hands-on production, war you can direct, rival towns th
 - Quitting and returning continues exactly where you were. A death cannot be undone.
 - The world **pauses while the game is closed** (no offline progress).
 
-### Points, Legacy gold, stat upgrades
+### Points and records (no meta currency)
 - **Points** are earned for advancement (§20). Per level, the game records your **best run
   score** and your **highest % of the continent ruled**. Point milestones unlock other
   levels (when they exist).
-- **Legacy gold** is a per-level meta currency: points convert to gold as they are earned
-  (*tune*: 1 gold per 10 points) and gold is kept forever, even when a run ends.
-- **The only thing gold buys: base-stat upgrades for the starting character of the next
-  run.** Bought fresh each run (consumed), not permanent.
-  - Each stat can be raised in ranks; each rank costs more (*tune*: 100, 250, 450, 700, 1000…).
-  - **Cap: 18** (top of the natural human range; the best NPCs are also ~18).
-  - Upgrades raise the character's *potential* (genes) — children inherit normally.
+- **Nothing carries from one run into the next**: there is no currency between runs and no shop
+  (owner's decision; the earlier *Legacy gold* stat shop was removed). Stats cap at 18.
+- **Every run starts as a lord** (owner's decision): the holder of a manor, adult, ruling its
+  fields, purse and men from the first morning (macro) while being one person to make strong (micro).
 - Points multiplier by birth class (harder births earn more): serf ×1.5, free peasant ×1.3,
   craftsman ×1.1, merchant ×1.0, gentry ×0.9, knightly ×0.8, baronial and above ×0.6 *(tune)*.
 
@@ -248,7 +245,7 @@ company, faith, status, grief). Unmet needs slow work, block training, and kill.
 ### Birth (run start)
 - You are **born into a random family**, weighted like the period (mostly peasants; rare
   gentry/noble births). No choice of family. You **start at age 12**.
-- Run start screen: difficulty → spend Legacy gold on stat upgrades → see your birth.
+- Run start screen: difficulty → see the lord you start as.
 
 ### Youth (12–14)
 Help the household (labour builds strength/endurance), errands, minding animals, church,
@@ -313,7 +310,7 @@ Management panels in the UI unlock exactly as authority is gained.
   pass — `docs/CIV.md` §2). Family and House are suggested first; *Rule this town* takes over the
   town's ruler in one click.
 - **Game over** only when the player abandons the run (or nobody is left alive). Final score
-  recorded; Legacy gold kept.
+  recorded.
 - An NPC you leave reverts to AI and continues their life.
 
 ---

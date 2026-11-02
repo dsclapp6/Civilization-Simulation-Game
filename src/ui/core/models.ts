@@ -34,10 +34,11 @@ export interface BirthModel {
   siblings: KinLine[];
   household: { size: number; headName: string; headRelation: string; home: string };
   rank: { tier: number; name: string; estate: string; career: string };
-  stats: Array<{ id: StatId; value: number; potential: number; ranks: number }>;
+  stats: Array<{ id: StatId; value: number; potential: number }>;
   life: string;
   multiplier: { birth: number; difficulty: number; total: number; difficultyName: string };
-  ranksBought: number;
+  /** The lands you hold and rule from the first day (empty for someone who holds none). */
+  realm: string;
 }
 
 function kinLine(ctx: ReadCtx, from: Person, to: Person): KinLine {
@@ -71,7 +72,6 @@ export function birthModel(ctx: ReadCtx): BirthModel | null {
   const head = hh ? ctx.state.persons.get(hh.head) : undefined;
   const home = hh ? ctx.state.buildings.get(hh.home) : undefined;
   const diffMult = DIFFICULTY_GOLD[ctx.state.difficulty];
-  const bought = ctx.state.run.statUpgrades;
   const place_ = place?.name ?? 'the countryside';
   const kingdom = place?.kingdom ?? '';
   return {
@@ -88,10 +88,10 @@ export function birthModel(ctx: ReadCtx): BirthModel | null {
       home: home ? `a ${home.kind.replace('_', ' ')}` : 'a home',
     },
     rank: { tier: me.rankTier, name: card.rankName, estate: info.estate, career: CAREERS[me.career].label },
-    stats: STATS.map((id) => ({ id, value: me.trained[id], potential: me.potential[id], ranks: bought[id] ?? 0 })),
+    stats: STATS.map((id) => ({ id, value: me.trained[id], potential: me.potential[id] })),
     life: info.life,
     multiplier: { birth: run.multiplier, difficulty: diffMult, total: Math.round(run.multiplier * diffMult * 100) / 100, difficultyName: run.difficulty },
-    ranksBought: STATS.reduce((n, s) => n + (bought[s] ?? 0), 0),
+    realm: [...ctx.state.titlesHeldBy(me.id)].map((t) => t.name).join(', '),
   };
 }
 

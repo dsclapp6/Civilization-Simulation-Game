@@ -4,7 +4,7 @@
 import type { ZoneApi } from '../../agents/types';
 import type { Difficulty } from '../../core/domain';
 import { createStubWorld } from '../../render/dev/stubWorld';
-import { levelProfile, newProfile, type Profile, type StatUpgrades } from '../../sim/legacy';
+import { levelProfile, newProfile, type Profile } from '../../sim/legacy';
 import { Simulation } from '../../sim/sim';
 import type { WorldModel } from '../../world/types';
 import { DEFAULT_SETTINGS, type GameServices, type GameUIExt, type Settings, type UiHost, type UiRendererControls } from '../types';
@@ -80,7 +80,7 @@ export class MockHost implements UiHost {
   private prof: Profile = (() => {
     const p = newProfile();
     const lp = levelProfile(p);
-    lp.legacyGold = 1850; lp.bestScore = 12480; lp.bestContinentPct = 3.4; lp.runsPlayed = 7;
+    lp.bestScore = 12480; lp.bestContinentPct = 3.4; lp.runsPlayed = 7;
     return p;
   })();
   private current: MockGame | null = null;
@@ -102,14 +102,14 @@ export class MockHost implements UiHost {
   setSettings(change: Partial<Settings>): void { this.settingsState = { ...this.settingsState, ...change }; }
 
   /** Creates a run on the stub continent. `quick` skips the fake loading delays (screenshots). */
-  async create(difficulty: Difficulty, statUpgrades: StatUpgrades, quick = false): Promise<MockGame> {
-    const steps = ['Raising the hills…', 'Laying out the rivers and roads…', 'Settling villages and towns…', 'Choosing your family…'];
+  async create(difficulty: Difficulty, quick = false): Promise<MockGame> {
+    const steps = ['Raising the hills…', 'Laying out the rivers and roads…', 'Settling villages and towns…', 'Choosing your lord…'];
     for (let i = 0; i < steps.length; i++) {
       this.ui?.setScreen('loading', { progress: (i + 0.5) / steps.length, label: steps[i] });
       await sleep(quick ? 10 : 280);
     }
     const world = galleryWorld();
-    const sim = Simulation.newGame({ seed: GALLERY_SEED, difficulty, statUpgrades, generateWorld: () => world, profile: this.prof });
+    const sim = Simulation.newGame({ seed: GALLERY_SEED, difficulty, generateWorld: () => world, profile: this.prof });
     // let a little time pass so the date reads as a living world
     sim.state.clock.absDay = 1.58;
     sim.state.clock.firedHour = Math.floor(1.58 * 24);
@@ -119,13 +119,13 @@ export class MockHost implements UiHost {
     return this.current;
   }
 
-  async startNewRun(opts: { difficulty: Difficulty; statUpgrades: StatUpgrades }): Promise<void> {
-    await this.create(opts.difficulty, opts.statUpgrades);
+  async startNewRun(opts: { difficulty: Difficulty }): Promise<void> {
+    await this.create(opts.difficulty);
     this.ui?.setScreen('game');
   }
 
   async continueRun(): Promise<void> {
-    await this.create('knight', {});
+    await this.create('knight');
     this.ui?.setScreen('game');
   }
 
