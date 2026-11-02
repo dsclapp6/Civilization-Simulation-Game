@@ -32,6 +32,8 @@ interface Ctx {
   frames(n?: number): Promise<void>;
   click(selector: string, times?: number, index?: number): void;
   setBg(bg: Bg): void;
+  /** Holds the UI's own clock (the gallery drives it by hand with `ui.update`) until the next entry runs: a veil caught half closed. */
+  hold(on: boolean): void;
 }
 
 interface Entry { id: string; label: string; group: string; run(c: Ctx): void | Promise<void> }
@@ -74,8 +76,9 @@ export async function start(root: AppRoot): Promise<void> {
     sim.state.clock.firedHour = Math.floor(abs * 24);
   };
 
+  let holdUi = false;
   const ctx: Ctx = {
-    ui, host, frames, setBg: (bg) => { currentBg = bg; setBg(bg); },
+    ui, host, frames, setBg: (bg) => { currentBg = bg; setBg(bg); }, hold: (on) => { holdUi = on; },
     async enter(o = {}) {
       let mock = host.mock();
       if (!mock || o.fresh || mock.sim.state.run.phase !== 'alive') mock = await host.create(o.difficulty ?? 'knight', {}, true);
@@ -438,6 +441,19 @@ export async function start(root: AppRoot): Promise<void> {
       },
     },
     {
+      id: 'lives-fade', label: 'Living as someone far away: the screen fades', group: 'Lives', run: async (c) => {
+        const mock = await c.enter({ time: 0.36, fresh: true });
+        c.ui.openPanel({ panel: 'ext', name: 'liveAs', id: someoneElse(mock), data: { reason: 'choose' } });
+        await c.frames(3);
+        // the gallery has no camera to glide: the change goes by the fade. The UI's own clock is driven by hand: the veil closing
+        [...document.querySelectorAll<HTMLButtonElement>('.mu-btn')].find((b) => /^Live as /.test(b.textContent ?? ''))?.click();
+        c.hold(true);
+        c.ui.update(0.05);
+        c.ui.update(0.2);
+        await c.frames(2);
+      },
+    },
+    {
       id: 'lives-death', label: 'Death: anyone alive (search)', group: 'Lives', run: async (c) => {
         const mock = await c.enter({ fresh: true, bg: 'night', time: 0.3 });
         const sim = mock.sim;
@@ -462,6 +478,23 @@ export async function start(root: AppRoot): Promise<void> {
         if (input) { input.value = query; input.dispatchEvent(new Event('input', { bubbles: true })); }
         c.click('.mu-succ-list .mu-succ.compact', 1, 1);
         await c.frames(3);
+        // the screen reveals itself row by row: let it finish before the picture is taken
+        await new Promise((r) => window.setTimeout(r, 1200));
+      },
+    },
+    {
+      id: 'lives-death-family', label: 'Death: your family first, the search above', group: 'Lives', run: async (c) => {
+        const mock = await c.enter({ fresh: true, bg: 'night', time: 0.3 });
+        const sim = mock.sim;
+        const p = sim.state.persons.get(sim.state.run.playerId);
+        const hh = p ? sim.state.households.get(p.household) : undefined;
+        if (hh && hh.head !== sim.state.run.playerId) sim.dispatch({ type: 'switchCharacter', personId: hh.head });
+        logLife(mock);
+        sim.state.run.maxTier = 3;
+        const who = sim.state.persons.get(sim.state.run.playerId);
+        if (who) killPerson(sim, who, 'plague', sim.absDay);
+        await c.frames(4);
+        await new Promise((r) => window.setTimeout(r, 1200));
       },
     },
     {
@@ -499,6 +532,7 @@ export async function start(root: AppRoot): Promise<void> {
   const run = (id: string): Promise<void> => {
     running = running.then(async () => {
       document.getElementById('icon-sheet')?.remove();
+      holdUi = false;
       const e = byId.get(id);
       if (!e) throw new Error(`unknown gallery entry ${id}`);
       document.documentElement.dataset.shot = '';
@@ -553,7 +587,7 @@ export async function start(root: AppRoot): Promise<void> {
     last = now;
     const mock = host.mock();
     if (mock && !STILL) { mock.sim.step(dt); mock.player.update?.(dt); }
-    ui.update(dt);
+    if (!holdUi) ui.update(dt);
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);

@@ -619,6 +619,10 @@ try {
     && glide.some((x) => x.ph === 'glide' && x.me === vt.id && x.mode === 'free') && glide[glide.length - 1].mode === 'follow' && glide[glide.length - 1].me === vt.id && before !== vt.id, JSON.stringify({ gp, first: glide[0], last: glide[glide.length - 1] }));
   check('the zone keeps its people through the change (no trip to the map)', glide.every((x) => x.vm === 'street') && glide.every((x) => x.ag > 0), JSON.stringify(glide.filter((x) => x.vm !== 'street' || x.ag === 0).slice(0, 2)));
   check('the card appears with the change', glide.some((x) => x.ph === 'glide' && x.arrival !== null));
+  await tick(1.5);
+  check('the tasks of the new life are on the card, not toasted one by one over it', (await page.locator('.mu-toast', { hasText: 'A new task' }).count()) === 0, await page.locator('.mu-toast').allTextContents().then((x) => x.join(' | ')));
+  const col = await page.evaluate(() => { const c = document.querySelector('.mu-hud-left'); const g = document.querySelector('.mu-hud-left > .mu-guide'); return { bottom: c ? Math.round(c.getBoundingClientRect().bottom) : -1, h: window.innerHeight, guide: g ? getComputedStyle(g).display : 'none' }; });
+  check('the card leaves room: the hints step aside and the left column ends above the foot of the screen', col.guide === 'none' && col.bottom > 0 && col.bottom < col.h - 40, JSON.stringify(col));
   check('the "who you are now" card is up with who they are', (await txt('.mu-arrival:not(.mu-hide) .mu-arrival-name')).length > 3 && (await txt('.mu-arrival-doing')).includes('was'), await txt('.mu-arrival'));
   check('and the HUD plate is theirs', !(await txt('.mu-hud-name')).startsWith('Sir ') || true);
   await page.waitForTimeout(120);

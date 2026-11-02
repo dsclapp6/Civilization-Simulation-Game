@@ -454,18 +454,37 @@ try {
     }
   }
   if (want('lives')) {
-    const person = (not = []) => page.evaluate((skip) => {
-      // the nearest villager in view that is not one of `skip`, 9 m ahead of the player, who faces them
+    const person = (not = [], k = 0) => page.evaluate(([skip, k]) => {
+      // the k-th nearest villager in view that is not one of `skip`, 6 m ahead of the player, who faces them
       const g = window.__game; const se = g.session; const z = se.services.zone; const p = se.services.player; const b = p.body(); const me = se.sim.state.run.playerId;
-      const a = [...z.agents()].filter((x) => x.visible && x.personId !== me && !skip.includes(x.personId)).sort((u, v) => Math.hypot(u.x - b.x, u.z - b.z) - Math.hypot(v.x - b.x, v.z - b.z))[0];
+      const a = [...z.agents()].filter((x) => x.visible && x.personId !== me && !skip.includes(x.personId)).sort((u, v) => Math.hypot(u.x - b.x, u.z - b.z) - Math.hypot(v.x - b.x, v.z - b.z))[k];
       if (!a) return null;
       const dx = b.x - a.x, dz = b.z - a.z; const d = Math.hypot(dx, dz) || 1;
       const yaw = Math.atan2(-dx, -dz);
       p.placeAt(a.x + (dx / d) * 6, a.z + (dz / d) * 6, yaw);
       const r = se.renderer; r.orbit(Math.atan2(Math.sin(yaw - r.getCameraYaw()), Math.cos(yaw - r.getCameraYaw())), 0);
       return { id: a.personId, name: se.sim.state.persons.get(a.personId).first };
-    }, not);
+    }, [not, k]);
     const frame = async () => { await advance(0.4); await page.evaluate(() => window.__game.settle()); await page.evaluate(() => window.__game.draw()); };
+    // a villager the real mouse is over (the first of the nearest few with a clear view of them, clear of the plates), the world held still
+    const hovered = async (not = []) => {
+      for (let k = 0; k < 8; k++) {
+        const a = await person(not, k);
+        if (!a) return null;
+        await frame();
+        const at = await page.evaluate(([id, w, h]) => {
+          const s = window.__game.session; const x = s.services.zone.agent(id);
+          const pt = x ? s.controls.project(x.x, x.y + 0.65, x.z) : null;
+          return pt && pt.x > 420 && pt.x < w - 420 && pt.y > 130 && pt.y < h - 160 ? pt : null;
+        }, [a.id, W, H]);
+        if (!at) continue;
+        await hoverAt(at.x, at.y);
+        await page.evaluate(() => window.__game.tick(0.02));
+        const hv = await page.evaluate(() => { const h = window.__game.session.services.player.hover?.(); return h && h.target.kind === 'person' ? h.target.id : null; });
+        if (hv === a.id) return { ...a, at };
+      }
+      return null;
+    };
     const tickUi = (sec) => page.evaluate((n) => window.__game.tick(n), sec);
     const close = async () => { for (const id of [...(await ui(() => window.__ui.openPanels()))].reverse()) await ui((x) => window.__ui.closePanel(x), id); await page.waitForTimeout(250); };
 
@@ -473,22 +492,20 @@ try {
     await shot('lives-hud');
 
     // ---- quest marks: a gold "!" and a silver "?", the compass, the minimap's dots, the hover card's words
-    const a = await person();
-    const bpe = a && (await page.evaluate(([id]) => {
-      const se = window.__game.session; const z = se.services.zone; const o = se.services.objectives; const me = se.sim.state.run.playerId; const b = se.services.player.body();
-      const near = [...z.agents()].filter((x) => x.personId !== me && x.personId !== id && Math.hypot(x.x - b.x, x.z - b.z) > 8).sort((u, v) => Math.hypot(u.x - b.x, u.z - b.z) - Math.hypot(v.x - b.x, v.z - b.z))[0];
-      const nm = (pid) => se.sim.state.persons.get(pid).first;
-      const list = [{ person: id, kind: 'quest', text: `${nm(id)} wants 7 bundles of firewood`, objective: 1 }];
-      if (near) list.push({ person: near.personId, kind: 'turnin', text: `Hand the firewood to ${nm(near.personId)}`, objective: 1 });
-      o.marks = () => list;
-      z.setQuestMarks(list.map((m) => ({ person: m.person, kind: m.kind })));
-      return { ids: list.map((m) => m.person) };
-    }, [a.id]));
-    if (a && bpe) {
-      await frame();
-      const at = await page.evaluate((id) => { const s = window.__game.session; const x = s.services.zone.agent(id); return x ? s.controls.project(x.x, x.y + 0.65, x.z) : null; }, a.id);
-      if (at) await hoverAt(at.x, at.y);
-      await frames(4);
+    const a = await hovered();
+    if (a) {
+      await page.evaluate(([id]) => {
+        const se = window.__game.session; const z = se.services.zone; const o = se.services.objectives; const me = se.sim.state.run.playerId; const b = se.services.player.body();
+        const other = [...z.agents()].filter((x) => x.personId !== me && x.personId !== id && Math.hypot(x.x - b.x, x.z - b.z) > 8).sort((u, v) => Math.hypot(u.x - b.x, u.z - b.z) - Math.hypot(v.x - b.x, v.z - b.z))[0];
+        const nm = (pid) => se.sim.state.persons.get(pid).first;
+        const list = [{ person: id, kind: 'quest', text: `${nm(id)} wants 7 bundles of firewood`, objective: 1 }];
+        if (other) list.push({ person: other.personId, kind: 'turnin', text: `Hand the firewood to ${nm(other.personId)}`, objective: 1 });
+        o.marks = () => list;
+        z.setQuestMarks(list.map((m) => ({ person: m.person, kind: m.kind })));
+      }, [a.id]);
+      await tickUi(0.05); // the zone takes the marks at its next step
+      await page.waitForTimeout(900); // and the HUD reads the words twice a second
+      await frames(6);
       await shot('lives-marks', { settle: false });
       await page.mouse.move(150, 300);
       await ui(() => window.__ui.openPanel({ panel: 'journal', tab: 'objectives' }));
@@ -497,7 +514,7 @@ try {
       await shot('lives-marks-journal', { settle: false });
       await close();
       await page.evaluate(() => { const se = window.__game.session; se.services.zone.setQuestMarks([]); se.services.objectives.marks = () => []; });
-    } else console.log('lives: nobody in view for the marks');
+    } else console.log('lives: nobody under the mouse for the marks');
 
     // ---- hands-on work: the bar says which step the bout is at
     await page.evaluate(() => {
@@ -537,16 +554,45 @@ try {
       console.log('lives: wheel on a', wheel.kind, JSON.stringify(labels));
       await shot('lives-wheel', { settle: false });
       await close();
-    } else console.log('lives: no animal of the household near for the wheel');
+    } else {
+      // no animal of the household in the zone: the wheel on a person (with *Live as …* and an icon on every option), one in the open
+      // (a door near them would be the thing in front of you)
+      let w = null;
+      for (let k = 0; k < 8 && !w; k++) {
+        const got = await page.evaluate((k) => {
+          const se = window.__game.session; const z = se.services.zone; const p = se.services.player; const b = p.body(); const sm = se.sim; const me = sm.state.run.playerId;
+          const bl = sm.state.buildingsAt.get(sm.world.nearestSettlement(b.x, b.z).id) ?? [];
+          const doorDist = (x, zz) => Math.min(...bl.map((q) => Math.hypot(q.x - x, q.z - zz)), 1e9);
+          const x = [...z.agents()].filter((q) => q.visible && q.personId !== me).sort((u, v) => doorDist(v.x, v.z) - doorDist(u.x, u.z))[k];
+          if (!x) return null;
+          const dx = b.x - x.x, dz = b.z - x.z; const d = Math.hypot(dx, dz) || 1;
+          p.placeAt(x.x + (dx / d) * 1.0, x.z + (dz / d) * 1.0, Math.atan2(-dx, -dz));
+          const r = se.renderer; const yaw = Math.atan2(-dx, -dz); r.orbit(Math.atan2(Math.sin(yaw - r.getCameraYaw()), Math.cos(yaw - r.getCameraYaw())), 0);
+          return { id: x.personId, name: sm.state.persons.get(x.personId).first };
+        }, k);
+        if (!got) break;
+        await advance(0.15);
+        const tgt = await page.evaluate(() => { const t = window.__game.session.services.player.target(); return t && t.target.kind === 'person' ? t.target.id : null; });
+        if (tgt === got.id) w = got;
+      }
+      if (w) {
+        await ui(() => window.__ui.open({ panel: 'actions' }));
+        await page.waitForTimeout(500);
+        await frames(3);
+        console.log('lives: wheel on', w.name, JSON.stringify(await page.locator('.mu-wheel-label').allTextContents()));
+        await shot('lives-wheel', { settle: false });
+        await close();
+      } else console.log('lives: nobody near for the wheel');
+    }
 
     // ---- wounds: the mark on the plate, the page of the character sheet
     await page.evaluate(() => {
       const se = window.__game.session; const sm = se.sim; const combat = sm.services.combat; const me = sm.state.persons.get(sm.state.run.playerId);
       const mk = (location, kind, severity, extra = {}) => ({ location, kind, severity, bleeding: false, rate: 0, fracture: false, mortal: false, stun: 0, damage: severity * 70, ...extra });
-      combat.book.inflict(me, mk('arm_l', 'cut', 0.34, { bleeding: true, rate: 0.0035 }), 'axe');
-      combat.book.inflict(me, mk('leg_r', 'blunt', 0.5, { fracture: true }), 'cudgel');
-      combat.book.inflict(me, mk('torso', 'arrow', 0.3, { bleeding: true, rate: 0.002 }), 'longbow');
-      combat.book.advance(me, 30);
+      // a boy's health is about 60: hurt, not dead
+      combat.book.inflict(me, mk('arm_l', 'cut', 0.22, { bleeding: true, rate: 0.0035 }), 'axe');
+      combat.book.inflict(me, mk('leg_r', 'blunt', 0.25, { fracture: true }), 'cudgel');
+      combat.book.inflict(me, mk('torso', 'arrow', 0.1), 'longbow');
     });
     await tickUi(0.6);
     await frames(3);
@@ -572,11 +618,8 @@ try {
     await shot('lives-sir', { settle: false });
 
     // ---- living as someone: the card, the glide (mid-way), the "who you are now" card
-    const vt = await person();
+    const vt = await hovered();
     if (vt) {
-      await frame();
-      const pt = await page.evaluate((id) => { const s = window.__game.session; const x = s.services.zone.agent(id); return x ? s.controls.project(x.x, x.y + 0.65, x.z) : null; }, vt.id);
-      if (pt) await hoverAt(pt.x, pt.y);
       await page.keyboard.press('KeyV');
       await page.waitForTimeout(500);
       await tickUi(0.2);
@@ -608,12 +651,9 @@ try {
       await page.waitForTimeout(500);
       await frames(3);
       await shot('lives-liveas-far', { settle: false });
+      // (the veil runs on the UI's own clock: the half-closed screen is the gallery's lives-fade; here the change is only made)
       await page.getByRole('button', { name: /^Live as / }).last().click();
-      await tickUi(0.32 + 0.14 + 0.3); // closed, cut, and opening again: the veil is about halfway
-      await page.evaluate(() => window.__game.settle());
-      await page.evaluate(() => window.__game.draw());
-      console.log('lives: veil', JSON.stringify(await ui(() => window.__ui.debugState().veil)));
-      await shot('lives-fade', { settle: false });
+      await page.waitForFunction(() => window.__ui.debugState().switching === 'idle', null, { timeout: 60000 });
       await tickUi(1.5);
     }
 

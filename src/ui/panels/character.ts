@@ -15,6 +15,7 @@ import { CONDITIONS, SKILL_GROUPS, SKILL_NAMES, STAT_INFO, TRAITS } from '../cor
 import { bar, button, chip, empty, heading, statBar, tabs } from '../components/widgets';
 import type { CharacterTab } from '../core/requests';
 import { tabKeys } from '../core/tabkeys';
+import { roleAndRank } from '../core/titles';
 import { createWindow } from '../components/window';
 import type { PanelCtx, UiPanel } from '../app/panel';
 import { every, panelOf } from './base';
@@ -106,7 +107,14 @@ export function characterPanel(ctx: PanelCtx, startTab: CharacterTab = 'sheet'):
     }
     return { view: wounds, el: woundsEl };
   };
+  /** The window says who this is whichever page is showing (the sheet's own render does it too). */
+  const nameTheWindow = (): void => {
+    const card = personCard(ctx.sim, ctx.playerId());
+    const person = ctx.sim.state.persons.get(ctx.playerId());
+    if (card && person) win.setTitle(card.name, `Age ${card.age} · ${roleAndRank(card.rankName, roleLabel(person.career, person.careerStage, person.sex))}`);
+  };
   const showWounds = (): void => {
+    nameTheWindow();
     const w = woundsPage();
     w.view.render();
     page.replaceChildren(w.el);
@@ -130,7 +138,7 @@ export function characterPanel(ctx: PanelCtx, startTab: CharacterTab = 'sheet'):
     const sig = JSON.stringify([card.stats, card.skills.map((s) => [s.level, Math.floor(s.xp / 5), s.openPerks]), person.perks, card.hp, card.needs, person.rep, card.money, card.conditions.length]);
     if (sig === signature) return;
     signature = sig;
-    win.setTitle(card.name, `Age ${card.age} · ${card.rankName} · ${roleLabel(person.career, person.careerStage, person.sex)}`);
+    win.setTitle(card.name, `Age ${card.age} · ${roleAndRank(card.rankName, roleLabel(person.career, person.careerStage, person.sex))}`);
 
     // --- left: nature
     const traits = card.traits.length

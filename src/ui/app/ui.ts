@@ -462,6 +462,8 @@ export class UiApp implements GameUIExt {
     for (const p of [...this.stack.all()]) if (p.group === 'main' || p.group === 'dialogue' || p.group === 'trade') this.stack.close(p.id);
     this.hud.setVisible(true);
     this.hud.reset();
+    // the toasts were about the old life (and the new one's tasks, said by the objectives module as the change was made, are on the card)
+    this.toasts.clear();
     const g = this.bound?.game;
     if (!g) return;
     const to = g.sim.state.persons.get(e.to);
@@ -613,7 +615,8 @@ export class UiApp implements GameUIExt {
   /** A task was added, moved on or finished: say so, and draw the eye to the tracker. */
   private onObjective(e: SimEvents['objective']): void {
     this.hud.tracker.flash(e.phase === 'added' ? 'added' : e.phase === 'progress' ? 'progress' : 'done');
-    if (e.phase === 'added') this.toasts.push({ tone: 'lapis', icon: 'flag', title: 'A new task', text: e.title, ttl: 6, key: `obj-${e.id}` }, this.clock);
+    // the tasks of a life just taken up are on the "who you are now" card: not one toast each on top of it
+    if (e.phase === 'added') { if (!this.hud.arrival.settling(this.clock)) this.toasts.push({ tone: 'lapis', icon: 'flag', title: 'A new task', text: e.title, ttl: 6, key: `obj-${e.id}` }, this.clock); }
     else if (e.phase === 'done') this.toasts.push({ tone: 'gold', icon: 'check', title: 'Task done', text: e.title, ttl: 6, key: `obj-${e.id}` }, this.clock);
     else if (e.phase === 'failed' || e.phase === 'expired') this.toasts.push({ tone: 'vermilion', icon: 'warning', title: e.phase === 'failed' ? 'Task failed' : 'Task lapsed', text: e.title, ttl: 6, key: `obj-${e.id}` }, this.clock);
   }

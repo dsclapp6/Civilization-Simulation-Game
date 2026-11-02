@@ -25,7 +25,7 @@ import type { Toasts } from './toasts';
 import type { Guide } from './guide';
 import { ArrivalCard } from './arrival';
 import { stepAt, stepEnds } from '../core/stepModel';
-import { styledName } from '../core/titles';
+import { roleAndRank, styledName } from '../core/titles';
 import { Banner } from './banner';
 import { Compass } from './compass';
 import { Destination } from './destination';
@@ -464,6 +464,8 @@ export class Hud {
     this.clockNow = now;
     this.updateGuidance(game, hud, now);
     this.arrival.update(now);
+    // the card takes the column's room from the hints below it (they are for the first minutes of a life, and it lists the tasks)
+    this.leftCol.classList.toggle('arrival-on', this.arrival.isOn());
     for (const part of this.extParts) {
       try { part.update(now); } catch (err) { console.error('HUD part failed', err); }
     }
@@ -774,7 +776,7 @@ export class Hud {
     const id = sim.state.run.playerId;
     const p = sim.state.persons.get(id);
     if (p) {
-      const meta = `Age ${Math.floor((sim.absDay - p.birthDay) / 16)} · ${roleLabel(p.career, p.careerStage, p.sex)} · ${RANK_NAMES[p.rankTier]}`;
+      const meta = `Age ${Math.floor((sim.absDay - p.birthDay) / 16)} · ${roleAndRank(roleLabel(p.career, p.careerStage, p.sex), RANK_NAMES[p.rankTier])}`;
       this.setMeta(meta);
     }
     // location and market day
@@ -865,7 +867,7 @@ function dockIcon(d: DockEntry): IconName {
     case 'rest': return 'bed';
     case 'requests': return 'quill';
     case 'builder': return 'hammer';
-    case 'ruler': return 'crown';
+    case 'ruler': return 'castle'; // the crown is the realm and politics page's
     case 'techs': return 'book';
     case 'politics': return 'crown';
     case 'army': return 'swords';

@@ -19,3 +19,8 @@ export function styledFirst(p: Namely): string {
   const h = honorific(p);
   return h ? `${h} ${p.first}` : p.first;
 }
+
+/** "Farmhand · Commoner"; one word when the trade and the rank are the same word (a knight is "Knight · Knight" otherwise). */
+export function roleAndRank(role: string, rank: string): string {
+  return role.toLowerCase() === rank.toLowerCase() ? role : `${role} · ${rank}`;
+}

@@ -147,7 +147,8 @@ world). Ways in, all leading to the same card — a parchment card with their na
 what they are doing and how they are related to you (**Live as Godwin** / **Stay as you are**; the card is switched off with *Ask before
 living as someone* in the settings or its own switch):
 
-- **V** on the person under the cursor, or in front of you (nobody there: the card says how to choose someone);
+- **V** on the person under the cursor, or in front of you (nobody there: a list to choose from — your family and House, people near
+  you, and a search over everyone alive);
 - the action wheel (hold **E** on a person): *Live as Godwin*;
 - the journal's **People you know** (a *Live as* button on each), the **Family & House** page and a person's page;
 - the death screen (below); the map's *People here* and *Rule this town* (banner, map, ruler panel) open the same card with
@@ -156,8 +157,8 @@ living as someone* in the settings or its own switch):
 
 **The way across.** When the new body is within 300 m the camera glides from where it was to behind them (about 1.2 s) while the world
 goes on; farther, the screen fades to black and opens on them. Then a card in the top left says **who you are now** (name, age, trade,
-place, household, what they were doing, the tasks the objectives set them) and goes by itself after a while, with its button or with
-Esc. A knight is *Sir …* on the HUD.
+place, household, what they were doing, the tasks the objectives set them) and goes by itself after a while, with its cross or with
+Esc (the first Esc takes the card; the pause menu comes with the next). A knight is *Sir …* on the HUD.
 
 **On death** the screen offers your family and House first, then **people near where you fell**, and a **search over everyone alive**
 (a name, a place or a trade: "smith Dromore"). Choose one and *Carry on as …*. The run ends only when you give it up (*End the run* on

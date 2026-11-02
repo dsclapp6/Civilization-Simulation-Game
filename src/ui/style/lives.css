@@ -33,15 +33,20 @@
 .mu-arrival-doing { margin-top: 6px; font-size: 13.5px; font-style: italic; color: var(--ink-2); line-height: 1.35; }
 .mu-arrival-tasks { margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--rule-soft); }
 .mu-arrival-tasks-head { display: flex; align-items: center; gap: 5px; font-size: 11.5px; font-variant: small-caps; letter-spacing: 0.1em; font-weight: 700; color: var(--gold); margin-bottom: 3px; }
-.mu-arrival-task { font-size: 13px; line-height: 1.32; padding: 1px 0; }
+.mu-arrival-task { font-size: 13px; line-height: 1.32; padding: 1px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mu-arrival-task b { color: var(--ink-2); }
 .mu-arrival-task.tracked b { color: var(--ink); }
+.mu-arrival-step { display: block; overflow: hidden; text-overflow: ellipsis; color: var(--ink-3); font-size: 12.5px; font-style: italic; padding-bottom: 2px; }
+.mu-arrival-more { margin-top: 1px; font-size: 12px; font-style: italic; color: var(--ink-3); }
+.mu-hud-left.arrival-on > .mu-guide { display: none; }
 .mu-arrival-none { margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--rule-soft); font-size: 13px; color: var(--ink-3); line-height: 1.35; }
 @keyframes mu-arrival-in { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: none; } }
 
 /* ---- the death screen: family and House, people near, anyone alive ---- */
 .mu-succ-head { display: flex; align-items: center; gap: 6px; margin: 12px 0 6px; font-size: 12px; font-variant: small-caps; letter-spacing: 0.1em; font-weight: 700; color: var(--gold); }
 .mu-succ-head:first-child { margin-top: 0; }
-.mu-succ-search { margin: 0 0 8px; }
+/* the search stays in view at the top of the scrolling list */
+.mu-succ-search { position: sticky; top: 0; z-index: 3; margin: 0; padding: 0 0 10px; background: linear-gradient(to bottom, var(--parch-hi) 78%, rgba(248, 238, 211, 0)); }
 .mu-succ-search .mu-input { width: 100%; }
 .mu-succ.compact { padding: 7px 12px 8px; gap: 3px; }
 .mu-succ.compact h4 { font-size: 16px; }
