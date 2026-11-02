@@ -219,11 +219,23 @@ lists, the map's deposit card and the news toast can open them somewhere (`{ pan
 
 * **Renderer (B2):** nothing here draws the ghost, the tint or the overview camera: they are `setGhost`, `setBuildArea` and
   `setOverview`. Until they exist builder mode shows the land from its own camera, without the ghost and the tint (the cursor's label
-  and the red reason are the interface's and work). The renderer should make `UiRendererControls.setOverview` truly absent when it has
-  none (`session.ts` `makeControls` forwards it unconditionally today); the builder would then not need to look.
+  and the red reason are the interface's and work). The builder recognises the renderer's overview camera *by what it shows*, not by a
+  camera mode (there is none for it in `CameraMode`): within about a second of `setOverview(view)` the middle half of the screen
+  (`screenToGround` at 25 % and 75 % of the width, at 55 % of the height) must span at least `max(24, min(60, 0.3 × view.distance))`
+  metres and one and a half times what it spanned before, three frames running. With the contract's ~55° look and the `distance` the
+  builder asks for (120 m for a household head, 170 m for a lord or baron) that is some 80 to 140 m, so honouring `distance` as the
+  starting distance is enough; a renderer that does not show that much ground is given the builder's own bird's-eye camera
+  (`setCameraPose`) after 1.3 s, which would fight its overview camera. The renderer (or `makeControls`, `session.ts`, which forwards
+  `setOverview` unconditionally today) should leave `UiRendererControls.setOverview` absent when there is none: the builder then lays
+  its own camera at once and does not look.
 * **Integrator:** (1) `makeControls` as above; (2) both builder mode and the seat are ordinary ext panels of their own *groups*
   (`'builder'`, `'ruler'`) so a panel opened from them (politics, the army panel, the person page) stacks above and `Esc` comes back;
   (3) the dock buttons for Builder (`B`) and Ruler (`U`) are B6's; (4) the map draws the `construction.outposts()` as DOM flags; if the
   integrator also feeds `MapMarker 'outpost'` to the renderer they will be drawn twice.
+* **For B6 (the HUD):** the dock buttons for Builder (`B`) and Ruler (`U`) and the live-as panel are yours; `Banner.show(info, now)` may
+  be given `info.settlement` (the id) so the banner need not find the place again by its name and kind.
 * **Not done:** the builder does not let you drag out a run of wall or palisade segments (one click, one segment); the Overview map
-  does not show roads; *Dub a knight* is offered for the men raised through `recruit` only (those `troops()` lists).
+  does not show roads; *Dub a knight* is offered for the men raised through `recruit` only (those `troops()` lists); middle-button
+  turning of the camera is in the code but the flow only drives the right button; the ghost, the tint and the renderer's overview
+  camera could not be seen in this worktree (their calls are recorded and checked by the flow, their pictures are B2's); on a screen
+  lower than 800 px the window of builder mode lies over the top row of the dock (the list needs the room).
