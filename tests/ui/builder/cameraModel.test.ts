@@ -241,6 +241,17 @@ describe('the camera driver', () => {
     expect(r.calls).toHaveLength(n);
   });
 
+  it('lays its own camera at once when the controls have no overview call at all', () => {
+    const r = fakeRenderer(false);
+    delete r.setOverview;
+    const c = driver(r);
+    c.enter();
+    c.tick();
+    expect(c.kind).toBe('pose');
+    expect(r.poses).toHaveLength(1);
+    expect(r.calls).toEqual(['pose']);
+  });
+
   it('glides to a spot in either camera', () => {
     const own = fakeRenderer(false);
     const c = driver(own);

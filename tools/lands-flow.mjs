@@ -1,7 +1,8 @@
 // End-to-end flow of the lands UI in the real game (civilization pass, wave B1): builder mode, ruler mode, "Rule this town" and
 // the map's deposits, borders and people lists, in headless Chromium.
 //
-//   node tools/lands-flow.mjs [--seed=flow] [--from=king]   (port 5182; starts its own Vite if nothing is listening)
+//   node tools/lands-flow.mjs [--seed=flow] [--from=king | --until=king]   (port 5182; starts its own Vite if nothing is listening;
+//   `--until=king` runs the child's cards, the map and the banner and stops, `--from=king` runs the rest)
 //
 // The loop is driven through `window.__game` (src/app/game.ts): `tick(seconds)` runs whole frames — the real UI and the simulation —
 // without drawing, `draw()` renders (the builder's picking and the ghost need a drawn frame). The live-as panel is another
@@ -19,6 +20,8 @@ const args = process.argv.slice(2);
 const opt = (name, def) => { const a = args.find((x) => x.startsWith(`--${name}=`)); return a ? a.slice(name.length + 3) : def; };
 const seed = opt('seed', 'flow');
 const fromKing = opt('from', '') === 'king';
+const untilKing = opt('until', '') === 'king';
+class Stop extends Error {}
 
 async function serverUp() { try { return (await fetch(`http://localhost:${PORT}/`)).ok; } catch { return false; } }
 async function serverIsOurs() {
@@ -233,6 +236,8 @@ try {
     check('the button asks the live-as panel for the ruler, with the reason "rule"', bannerAsked.length === 1 && typeof bannerAsked[0].id === 'number' && bannerAsked[0].data && bannerAsked[0].data.reason === 'rule', JSON.stringify({ bannerAsked, spot }));
     await esc();
   }
+
+  if (untilKing) throw new Stop();
 
   // ======================================================================== live as the ruler (the king of Basseance)
   await sim(() => { const s = window.__game.session.sim; const me = s.state.persons.get(s.state.run.playerId); s.switchTo(s.services.realm.rulerOf(me.settlement)); });
@@ -639,8 +644,8 @@ try {
   await page.keyboard.press('KeyM');
   await frames(2);
 } catch (err) {
-  failures++;
-  console.log(`FAIL the flow stopped: ${err && err.message ? String(err.message).split('\n').slice(0, 14).join(' | ') : err}${err && err.stack ? ` @ ${String(err.stack).split('\n').filter((l) => /lands-flow/.test(l)).slice(0, 2).join(' ')}` : ''}`);
+  if (!(err instanceof Stop)) failures++;
+  if (!(err instanceof Stop)) console.log(`FAIL the flow stopped: ${err && err.message ? String(err.message).split('\n').slice(0, 14).join(' | ') : err}${err && err.stack ? ` @ ${String(err.stack).split('\n').filter((l) => /lands-flow/.test(l)).slice(0, 2).join(' ')}` : ''}`);
 }
 
 check('no browser errors', errors.length === 0, errors.slice(0, 4).join(' | '));

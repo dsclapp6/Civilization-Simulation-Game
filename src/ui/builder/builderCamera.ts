@@ -117,7 +117,8 @@ export class BuilderCamera {
   }
 
   private probe(r: UiRendererControls): void {
-    const verdict = cameraVerdict(this.watch, this.sight(r), this.before, this.plan.distance, this.ports.clock() - this.t0);
+    // controls that have no overview call at all (a host that leaves it out) need no looking
+    const verdict = r.setOverview ? cameraVerdict(this.watch, this.sight(r), this.before, this.plan.distance, this.ports.clock() - this.t0) : 'none';
     if (verdict === 'overview') { this.kind = 'overview'; return; }
     if (verdict === 'none') {
       // no overview camera: place our own, starting where the player's camera looks
