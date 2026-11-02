@@ -9,7 +9,7 @@ import type { CharacterDrawItem, AnimalDrawItem, BuildingView, SimView, StripVie
 import type { AssetLibrary } from '../assets/types';
 import type { WorldModel } from '../world/types';
 import { QUALITY, type QualitySettings } from './quality';
-import type { CameraMode, GameRenderer, GroundPoint, HoverTarget, PickResult, QualityLevel, RenderStats, RendererOptions } from './types';
+import type { BuildGhost, CameraMode, GameRenderer, GroundPoint, HoverTarget, OrderMark, OverviewView, PickResult, QualityLevel, RenderStats, RendererOptions } from './types';
 import { computeAtmosphere, createAtmosphereState } from './sky/atmosphere';
 import { atmoUniforms, installAtmospherePatch } from './sky/atmospherePatch';
 import { Sky } from './sky/sky';
@@ -31,6 +31,10 @@ import { BeaconLayer } from './feedback/beacons';
 import { FloaterLayer } from './feedback/floaters';
 import { Nameplates } from './feedback/nameplates';
 import { HoverLayer } from './feedback/hover';
+import { QuestMarks } from './feedback/marks';
+import { GhostLayer } from './feedback/ghost';
+import { BuildAreaOverlay } from './feedback/buildArea';
+import { OrderMarkLayer } from './feedback/orderMarks';
 
 export type { CameraMode, GameRenderer, GroundPoint, HoverTarget, PickResult, QualityLevel, RenderStats, RendererOptions } from './types';
 
@@ -91,6 +95,9 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
   const buildings = new BuildingSystem(world, assets, { detailDistance: quality.buildingDetail, drawBudget: quality.buildingDrawBudget });
   const roads = new RoadSystem(world, palette, quality.roadRadius);
   roads.weather = { uSnowCover: terrain.uniforms.uSnowCover, uWetness: terrain.uniforms.uWetness };
+  // builder mode's land tint lives in the ground shaders (terrain, strips, roads share the uniforms)
+  const buildArea = new BuildAreaOverlay(terrain.uniforms);
+  roads.build = terrain.uniforms;
   const fields = new FieldSystem(world, assets, terrain.uniforms, { stripDistance: quality.stripDistance, cropRadius: quality.cropRadius, cropMax: quality.cropMax, cropTris: quality.cropTris });
   const dynamic = new DynamicLayers(assets, heightAt);
   // clarity & feedback: results of work, where to go, gains, who is who, what the cursor is on
@@ -98,6 +105,10 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
   const beacons = new BeaconLayer(heightAt, showLabels);
   const floaters = new FloaterLayer();
   const plates = new Nameplates(showLabels);
+  // civilization pass: quest marks over people, the builder's ghost, orders on the ground
+  const marks = new QuestMarks();
+  const ghost = new GhostLayer(world, assets, heightAt);
+  const orders = new OrderMarkLayer(heightAt);
   let lastBuildings: readonly BuildingView[] = [];
   let lastStrips: readonly StripView[] = [];
   const hover = new HoverLayer({
@@ -111,6 +122,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
   let hoverStripsVer = -1;
   // nameplates are DOM overlays (never depth-tested): hide those of people behind houses
   plates.occluded = (from, to) => buildings.occludes(from, to);
+  marks.occluded = (from, to) => buildings.occludes(from, to);
   const precip = new Precipitation(quality.rainDrops, quality.snowFlakes);
   const overlayTex = buildMapOverlay(world);
   const mapBaseTex = buildMapBase(world, palette);
@@ -132,7 +144,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
   lighting.configure(quality.shadows, quality.shadowMapSize, quality.shadowRadius);
 
   scene.add(sky.stars, sky.dome, terrain.root, water.root, roads.root, vegetation.root, buildings.root, fields.root, dynamic.root,
-    worldProps.root, hover.root, beacons.root, precip.rain, precip.snow);
+    worldProps.root, hover.root, beacons.root, precip.rain, precip.snow, marks.root, ghost.root, orders.root);
 
   let post: PostFx | null = null;
   const atmo = createAtmosphereState();
@@ -226,7 +238,8 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     const vm = view.mode();
     if (vm !== lastViewMode) {
       // the sim's view mode drives the camera, except an explicitly posed free camera (dev, cut-scenes)
-      if ((lastViewMode !== null || vm !== 'street') && rig.mode !== 'free') rig.setMode(VIEW_TO_CAMERA[vm], lastViewMode === null ? 0 : 1.4);
+      if (rig.overviewOn) rig.setOverviewReturn(VIEW_TO_CAMERA[vm]);
+      else if ((lastViewMode !== null || vm !== 'street') && rig.mode !== 'free') rig.setMode(VIEW_TO_CAMERA[vm], lastViewMode === null ? 0 : 1.4);
       lastViewMode = vm;
     }
     // aiming a bow or crossbow: over-the-shoulder camera (the reticle must not sit on the head)
@@ -352,6 +365,11 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     floaters.update(dt, camera, height);
     floaterMs = performance.now() - tfl;
     plates.update(streetView ? chars : [], camera, width, height, showLabels && mapBlend < 0.3);
+    marks.root.visible = streetView;
+    marks.update(streetView ? chars : [], camera, height, dt, streetView && mapBlend < 0.6);
+    ghost.update(dt);
+    orders.update(dt, camera, height);
+    buildArea.update(dt);
     if (hoverKey && sv !== hoverStripsVer) { hoverStripsVer = sv; hover.refresh(); }
     hover.update(dt, camera);
     feedbackMs = performance.now() - tf;
@@ -422,7 +440,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
       frame(view, dt, 1);
     },
     setCameraMode(mode: CameraMode): void { rig.setMode(mode); },
-    getCameraMode(): CameraMode { return rig.mode; },
+    getCameraMode(): CameraMode { return rig.reportedMode; },
     orbit(dYaw: number, dPitch: number): void { rig.orbit(dYaw, dPitch); },
     zoom(steps: number): void { rig.zoom(steps); },
     pan(dx: number, dy: number): void { rig.pan(dx, dy, height); },
@@ -442,7 +460,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
       const groups: [string, THREE.Object3D][] = [
         ['terrain', terrain.root], ['water', water.root], ['roads', roads.root], ['vegetation', vegetation.root],
         ['buildings', buildings.root], ['fields', fields.root], ['dynamic', dynamic.root], ['sky', sky.dome],
-        ['props', worldProps.root], ['beacons', beacons.root], ['hover', hover.root],
+        ['props', worldProps.root], ['beacons', beacons.root], ['hover', hover.root], ['marks', marks.root], ['ghost', ghost.root], ['orders', orders.root],
       ];
       for (const [name, obj] of groups) {
         const was = obj.visible;
@@ -492,6 +510,10 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
       plates.focusId = target?.kind === 'person' ? id : -1;
       hover.set(target && target.kind !== 'person' && target.kind !== 'animal' ? target : null);
     },
+    setGhost(g: BuildGhost | null): void { ghost.set(g); },
+    setBuildArea(area: ReadonlyArray<ReadonlyArray<{ x: number; z: number }>> | null): void { buildArea.set(area); },
+    setOverview(v: OverviewView | null): void { rig.setOverview(v); },
+    setOrderMarks(m: readonly OrderMark[] | null): void { orders.set(m); },
     setQuality,
     getQuality(): QualityLevel { return quality.level; },
     resize,
@@ -532,6 +554,10 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
       floaters.dispose();
       plates.dispose();
       hover.dispose();
+      marks.dispose();
+      ghost.dispose();
+      orders.dispose();
+      buildArea.dispose();
       precip.dispose();
       mapLabels.dispose();
       overlayTex.dispose();
@@ -561,12 +587,13 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
         buildings: buildings.count,
         buildingsDetailed: buildings.detailedCount,
         cropInstances: fields.cropInstances,
-        cameraMode: rig.mode,
+        cameraMode: rig.reportedMode,
         quality: quality.level,
         worldProps: worldProps.count,
         beacons: beacons.drawn,
         floaters: floaters.active,
         nameplates: plates.shown,
+        questMarks: marks.drawn,
         workingStrips: fields.workingStrips,
         feedbackMs,
         labelMs,

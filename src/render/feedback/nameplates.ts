@@ -1,6 +1,6 @@
 // Nameplates over people (CharacterDrawItem.label/sublabel/labelTone/labelRange/mark, docs/CLARITY.md §3):
 // the full name in small capitals in the colour of the relationship, the relation and role in italics
-// below; a gold "!" badge for someone with a task for the player, a blue badge for the tracked person.
+// below; a blue badge for the tracked person (the gold "!" and silver "?" of quests are drawn in the world: marks.ts).
 // Kin and quest people show from their labelRange (≈ 40 m), strangers from ≈ 15 m, the hovered or
 // targeted person always; marks alone reach further. Crowds stay tidy: plates are ranked (hovered, marked,
 // close kin first), drop their second line with distance, and a plate that would overlap a more
@@ -108,12 +108,13 @@ export function layoutPlates(
     const speech = isSpeech(it.label);
     const range = Math.max(it.labelRange ?? DEFAULT_LABEL_RANGE, speech ? SPEECH_RANGE : 0);
     const text = focus ? d < FOCUS_RANGE : d < range;
-    const markOk = !!it.mark && d < MARK_RANGE;
+    // quest marks ('!' and '?') are drawn in the world (feedback/marks.ts); the plate's badge is the tracked person's
+    const markOk = it.mark === 'track' && d < MARK_RANGE;
     if (!text && !markOk) continue;
     const tone = it.labelTone ?? 'stranger';
     // the hovered one, then people with a task for the player or tracked, then a spoken line (it steps up over
     // others), then kin and the like, nearest first
-    const pri = (focus ? 1e6 : 0) + (it.mark === 'quest' ? 3e4 : it.mark === 'track' ? 2.5e4 : 0) + (speech ? 2e4 : 0) + TONE_WEIGHT[tone] * 900 - d * 10;
+    const pri = (focus ? 1e6 : 0) + (it.mark === 'quest' || it.mark === 'turnin' ? 3e4 : it.mark === 'track' ? 2.5e4 : 0) + (speech ? 2e4 : 0) + TONE_WEIGHT[tone] * 900 - d * 10;
     cands.push({ it, d, pri, text, sub: !!it.sublabel && !speech && (focus || d < SUB_RANGE), focus, speech, sx: 0, sy: 0 });
   }
   cands.sort((a, b) => b.pri - a.pri);
@@ -142,7 +143,7 @@ export function layoutPlates(
       const k = plateScale(c.d, c.focus);
       const nameW = Math.min(it.label!.length, c.speech ? 44 : 40) * (c.speech ? 6.6 : 8.2) * k + 8;
       const subW = c.sub ? (it.sublabel!.length * 6.1 * k + 8) : 0;
-      const markH = it.mark ? 19 * k : 0;
+      const markH = it.mark === 'track' ? 19 * k : 0;
       const lines = c.speech ? Math.ceil(it.label!.length / 44) : 1;
       const tries: ('full' | 'name' | 'mark')[] = pass === 1 ? ['mark'] : c.text ? (c.sub ? ['full', 'name'] : ['name']) : [];
       let placed = false;
@@ -165,7 +166,7 @@ export function layoutPlates(
         placed = true;
         break;
       }
-      if (pass === 0 && !placed && it.mark && !c.speech) later.push(c);
+      if (pass === 0 && !placed && it.mark === 'track' && !c.speech) later.push(c);
     }
   }
   return out;
@@ -247,12 +248,12 @@ export class Nameplates {
       const h = it.look.height + (it.mount ? 1.25 : 0) + 0.3;
       p.obj.position.set(it.x, it.y + h, it.z);
       p.obj.visible = true;
-      const mark = l.speech ? '' : it.mark ?? '';
+      const mark = l.speech || it.mark !== 'track' ? '' : 'track';
       const cls = `mil-plate${l.focus ? ' focus' : ''}${l.speech ? ' speech' : ''}${mark ? ` ${mark}` : ''}${l.mode === 'mark' ? ' markonly' : l.mode === 'name' ? ' nosub' : ''}`;
       if (p.cls !== cls) {
         p.obj.element.className = cls;
         p.cls = cls;
-        p.mark.textContent = mark === 'quest' ? '!' : mark === 'track' ? '•' : '';
+        p.mark.textContent = mark === 'track' ? '•' : '';
       }
       const name = l.speech ? `“${it.label}”` : it.label ?? '';
       if (p.nameText !== name) { p.name.textContent = name; p.nameText = name; }

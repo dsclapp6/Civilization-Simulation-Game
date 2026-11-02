@@ -5,7 +5,7 @@ import type { CultureId } from '../../core/domain';
 import type { P2 } from '../../core/math';
 import { F, Layer, MAT_COUNT, Mat, MeshBuilder, prng, type V3 } from '../core/builder';
 import { newOut, type AnimPart, type Ctx, type EmitterSpec, type FlagSpec } from './parts';
-import { applyConstruction, applyDamage } from './states';
+import { applyConstruction, applyDamage, CONSTRUCTION_BREAKS, constructionOfStep, constructionStep } from './states';
 import { STYLES } from './style';
 import { RECIPES } from './recipes';
 
@@ -47,7 +47,9 @@ export interface BuiltBuilding {
   triangles: number;
 }
 
-export const CONSTRUCTION_STEPS = 10;
+/** Construction models cached per kind (stage-aligned bins, states.ts CONSTRUCTION_BREAKS). */
+export const CONSTRUCTION_STEPS = CONSTRUCTION_BREAKS.length;
+export { constructionStep, constructionOfStep };
 export const DAMAGE_STEPS = 4;
 export const SEED_BUCKETS = 4;
 
@@ -55,7 +57,7 @@ export function normalizeRequest(req: { kind: BuildingKind; level: number; cultu
   const def = BUILDINGS[req.kind];
   const level = Math.max(1, Math.min(def.maxLevel, Math.round(req.level || 1)));
   const c = req.construction ?? 1;
-  const construction = c >= 1 ? 1 : Math.min(CONSTRUCTION_STEPS - 1, Math.max(0, Math.floor(c * CONSTRUCTION_STEPS))) / CONSTRUCTION_STEPS + 0.5 / CONSTRUCTION_STEPS;
+  const construction = constructionOfStep(constructionStep(c));
   const d = req.damage ?? 0;
   const damage = Math.round(Math.max(0, Math.min(1, d)) * DAMAGE_STEPS) / DAMAGE_STEPS;
   return {
@@ -66,7 +68,7 @@ export function normalizeRequest(req: { kind: BuildingKind; level: number; cultu
 }
 
 export function requestKey(n: NormalizedRequest): string {
-  return `${n.kind}|${n.level}|${n.culture}|${n.seedBucket}|${n.construction.toFixed(2)}|${n.damage.toFixed(2)}|${n.owner.toString(16)}|${n.lod}`;
+  return `${n.kind}|${n.level}|${n.culture}|${n.seedBucket}|${constructionStep(n.construction)}|${n.damage.toFixed(2)}|${n.owner.toString(16)}|${n.lod}`;
 }
 
 /** Run a recipe and produce the raw builder (before states), for tests and tools. */

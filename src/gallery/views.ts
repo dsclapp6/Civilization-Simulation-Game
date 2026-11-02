@@ -222,11 +222,63 @@ export function sheetStates(lib: MillenniaAssetLibrary, root: THREE.Group, kind:
   const def = BUILDINGS[kind];
   const st = newState(`${def.name} — construction and damage`);
   const gx = def.w + 3, gz = def.d + 7;
-  const cons = [0.02, 0.2, 0.35, 0.5, 0.65, 0.8, 0.95];
-  cons.forEach((c, i) => placeBuilding(lib, st, root, kind, { ...o, culture, level, construction: c, damage: 0 }, (i - (cons.length - 1) / 2) * gx, -gz / 2, '', `built ${Math.round(c * 100)}%`));
+  // the construction stages in a row (with their material piles), the damage states in front
+  const cons = STAGE_COLUMNS.filter(([, c]) => c < 1);
+  cons.forEach(([name, c], i) => {
+    const x = (i - (cons.length - 1) / 2) * gx;
+    placeBuilding(lib, st, root, kind, { ...o, culture, level, construction: c, damage: 0 }, x, -gz / 2, '', `${name} ${Math.round(c * 100)}%`);
+    if (c >= 0.06 && c < 0.92) sitePiles(kind).slice(0, 2).forEach((pk, j) => {
+      const p = lib.prop(pk, j + 1, Math.max(1, Math.round(8 * (1 - c))));
+      p.position.set(x - def.w / 2 + 0.9 + j * 1.6, 0, -gz / 2 + def.d / 2 + 1.6);
+      p.rotation.y = 0.3 + j * 0.8;
+      p.scale.setScalar(0.8);
+      root.add(p);
+    });
+  });
   const dmg = [0, 0.25, 0.5, 0.75, 1];
   dmg.forEach((d, i) => placeBuilding(lib, st, root, kind, { ...o, culture, level, construction: 1, damage: d }, (i - (dmg.length - 1) / 2) * gx, gz / 2, '', `damage ${Math.round(d * 100)}%`));
   st.cam = { az: -20, el: 34, k: 0.8 };
+  return st;
+}
+
+/** The named construction stages (sim `stageOf`) and the progress each is shown at on the stages sheet. */
+export const STAGE_COLUMNS: readonly [string, number][] = [
+  ['pegs', 0.02], ['trenches', 0.06], ['footings', 0.17], ['frame', 0.35], ['walls', 0.56], ['rafters', 0.685], ['roof', 0.8], ['finishing', 0.96], ['done', 1],
+];
+
+/** Material piles a site of this kind keeps (gallery dressing; in play they are world props from the sim's site view). */
+function sitePiles(kind: BuildingKind): PropKind[] {
+  const def = BUILDINGS[kind];
+  const stone = def.cat === 'church' || def.cat === 'defence' || kind === 'well' || kind === 'market_cross' || kind === 'gaol' || kind === 'kiln';
+  if (def.w * def.d < 10) return stone ? ['stone_pile'] : ['plank_pile'];
+  return stone ? ['stone_pile', 'logs', 'plank_pile'] : ['logs', 'plank_pile', 'stone_pile'];
+}
+
+/** Every kind of a building category at each construction stage, with material piles beside the sites. */
+export function sheetStages(lib: MillenniaAssetLibrary, root: THREE.Group, cats: BuildingCategory[], culture: CultureId, o: Omit<BuildingOpts, 'culture' | 'level' | 'construction' | 'damage'>): ViewState {
+  const kinds = BUILDING_KINDS.filter((k) => cats.includes(BUILDINGS[k].cat));
+  const st = newState(`Construction stages — ${cats.join(', ')}`);
+  let z = 0;
+  kinds.forEach((kind) => {
+    const def = BUILDINGS[kind];
+    const gx = def.w + 5;
+    const rz = z + def.d / 2;
+    STAGE_COLUMNS.forEach(([name, c], i) => {
+      const x = (i - (STAGE_COLUMNS.length - 1) / 2) * gx;
+      placeBuilding(lib, st, root, kind, { ...o, culture, level: 1, construction: c, damage: 0 }, x, -rz, i === 0 ? def.name : name, i === 0 ? name : undefined);
+      if (c >= 0.06 && c < 0.92) {
+        // piles at the front corner (a full pile early on, smaller as the work uses them up)
+        sitePiles(kind).forEach((pk, j) => {
+          const p = lib.prop(pk, j + 1, Math.max(1, Math.round(8 * (1 - c))));
+          p.position.set(x + def.w / 2 + 1.2, 0, -rz + def.d / 2 - 0.8 - j * 1.7);
+          p.rotation.y = 0.4 + j;
+          root.add(p);
+        });
+      }
+    });
+    z += def.d + 9;
+  });
+  st.cam = { az: -16, el: 38, k: 0.6 };
   return st;
 }
 

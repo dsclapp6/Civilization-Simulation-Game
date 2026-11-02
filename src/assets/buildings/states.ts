@@ -120,24 +120,55 @@ function clipFlat(dst: MeshBuilder, src: MeshBuilder, t: number, h: number): voi
 export interface StateInfo { w: number; d: number; }
 
 /**
- * Construction state (c < 1). Returns a new builder with clipped layers plus scaffolding
- * and a materials pile.
+ * Construction progress bins. Each cached construction model stands for one bin (drawn at its middle); the breaks
+ * follow the sim's stages (construction/sites.ts `stageOf`: pegs < 0.08 ≤ footings < 0.3 ≤ frame < 0.75 ≤ roof < 1)
+ * so what is drawn always matches the stage the site card names.
+ */
+export const CONSTRUCTION_BREAKS: readonly number[] = [0, 0.04, 0.08, 0.14, 0.2, 0.3, 0.4, 0.5, 0.62, 0.75, 0.84, 0.92];
+
+/** Bin of a construction value (0 … BREAKS.length - 1; BREAKS.length = complete). */
+export function constructionStep(c: number): number {
+  if (!(c < 1)) return CONSTRUCTION_BREAKS.length;
+  let i = 0;
+  while (i + 1 < CONSTRUCTION_BREAKS.length && c >= CONSTRUCTION_BREAKS[i + 1]) i++;
+  return i;
+}
+
+/** The construction value a bin is drawn at (its middle; 1 = complete). */
+export function constructionOfStep(step: number): number {
+  const n = CONSTRUCTION_BREAKS.length;
+  if (step >= n) return 1;
+  const a = CONSTRUCTION_BREAKS[Math.max(0, step)], b = step + 1 < n ? CONSTRUCTION_BREAKS[step + 1] : 1;
+  return (a + b) / 2;
+}
+
+/** Wall tops at least this high get a full scaffold (masonry, towers, tall houses); lower ones a ladder and trestles. */
+const SCAFFOLD_H = 4.2;
+
+/**
+ * Construction state (c < 1), read from the model's layers: the site is staked out with pegs, lines and lime marks
+ * (pegs), the trenches are dug and the footings rise (footings), the frame rises ahead of the walls, the walls with a
+ * ragged course top, the rafters go up (frame), the roof is laid from the eaves up and the doors and windows go in
+ * (roof). Scaffolding stands round tall walls while they rise; low ones get a ladder and trestles. The materials on
+ * the site are world props (the sim's site view), not part of the model.
  */
 export function applyConstruction(src: MeshBuilder, c: number, info: StateInfo, seed: number): MeshBuilder {
   const lb = layerBounds(src);
   const dst = new MeshBuilder(seed + 3);
-  const groundOn = c >= 0.03;
-  const lerp = (l: number, a: number, b: number) => {
+  /** Height to which a layer shows: nothing before `a`, its whole height by `b`. */
+  const reveal = (l: number, a: number, b: number, from?: number): number => {
     const L = lb[l];
-    if (L.min === Infinity) return -Infinity;
-    const lo = Math.max(L.min, 0);
-    return lo + (L.max - lo) * ss(a, b, c);
+    if (L.min === Infinity || c < a) return -Infinity;
+    const lo = from ?? Math.max(L.min, 0);
+    return lo + (L.max + 0.01 - lo) * ss(a, b, c);
   };
-  const hFrame = lerp(Layer.Frame, 0.06, 0.4);
-  const hWall = lerp(Layer.Wall, 0.14, 0.64);
-  const hRF = c > 0.5 ? lerp(Layer.RoofFrame, 0.5, 0.7) : -Infinity;
-  const hRoof = c > 0.66 ? lerp(Layer.Roof, 0.66, 0.97) : -Infinity;
-  const showDetail = c >= 0.84;
+  const G = lb[Layer.Ground];
+  const hGround = G.min === Infinity || c < 0.08 ? -Infinity : -0.12 + (G.max + 0.13) * ss(0.08, 0.2, c);
+  const hFrame = reveal(Layer.Frame, 0.17, 0.5);
+  const hWall = reveal(Layer.Wall, 0.2, 0.7);
+  const hRF = reveal(Layer.RoofFrame, 0.5, 0.72, lb[Layer.RoofFrame].min);
+  const hRoof = reveal(Layer.Roof, 0.72, 0.97, lb[Layer.Roof].min);
+  const showDetail = c >= 0.86;
   const ragged = (base: number) => (x: number, z: number) => base + (posHash(Math.floor(x), 0, Math.floor(z), seed) - 0.5) * 0.45;
   for (let t = 0; t < src.triCount; t++) {
     const layer = src.tLayer[t];
@@ -147,8 +178,8 @@ export function applyConstruction(src: MeshBuilder, c: number, info: StateInfo, 
       continue;
     }
     switch (layer) {
-      case Layer.Ground: if (groundOn) dst.copyTri(src, t); break;
-      case Layer.Frame: clipFlat(dst, src, t, hFrame); break;
+      case Layer.Ground: if (hGround > -Infinity) clipFlat(dst, src, t, hGround); break;
+      case Layer.Frame: if (hFrame > -Infinity) clipFlat(dst, src, t, hFrame); break;
       case Layer.Wall: if (hWall > -Infinity) raggedClip(dst, src, t, ragged(hWall), 1.1, hWall - 0.3, hWall + 0.3); break;
       case Layer.RoofFrame: if (hRF > -Infinity) clipFlat(dst, src, t, hRF); break;
       case Layer.Roof:
@@ -158,15 +189,141 @@ export function applyConstruction(src: MeshBuilder, c: number, info: StateInfo, 
       case Layer.Decor: break;
     }
   }
-  // Scaffolding around the wall footprint while walls and roof go up.
-  if (c > 0.04 && c < 0.97) {
-    const wallTop = Math.max(lb[Layer.Wall].max, 0);
-    const curH = Math.min(wallTop, Math.max(hWall, hFrame, 0.5) + 1.2);
-    scaffolding(dst, src, info, curH, seed);
+  const outline = siteOutline(src, info);
+  siteGround(dst, info, c);
+  if (c < 0.14) markingOut(dst, outline, c);
+  if (c >= 0.04 && c < 0.2) trenches(dst, outline, c, seed);
+  const wb = src.bounds((t) => src.tLayer[t] === Layer.Wall && src.tMat[t] === Mat.Opaque);
+  const wallTop = wb.isEmpty() ? 0 : wb.max.y;
+  // how tall the walls stand: up to the eaves where there is a roof (gables and chimneys rise above them)
+  const eaves = lb[Layer.Roof].min === Infinity ? wallTop : Math.min(wallTop, Math.max(0, lb[Layer.Roof].min));
+  // (a church's porch roof is low but its tower is not: anything with walls 10 m up is scaffolded too)
+  const tall = eaves >= SCAFFOLD_H || wallTop >= 10;
+  const rising = Math.max(hWall, hFrame);
+  if (c >= 0.2 && c < 0.92 && rising > 1.2) {
+    if (tall) scaffolding(dst, src, info, Math.min(wallTop, rising + 1.2), seed);
+    else lightScaffold(dst, outline, Math.min(eaves, rising), c, seed);
   }
-  if (c < 0.9) materialsPile(dst, info, seed, c);
-  if (c < 0.06) markingOut(dst, info);
+  if (c >= 0.14 && c < 0.92) siteTools(dst, outline, info, tall, seed);
   return dst;
+}
+
+interface Outline { x0: number; x1: number; z0: number; z1: number }
+
+/** The rectangle the walls stand on (base of the wall layer), else the footprint less a margin. */
+function siteOutline(src: MeshBuilder, info: StateInfo): Outline {
+  const low = (t: number) => Math.min(src.pos[t * 9 + 1], src.pos[t * 9 + 4], src.pos[t * 9 + 7]) < 1.2;
+  const wb = src.bounds((t) => src.tLayer[t] === Layer.Wall && src.tMat[t] === Mat.Opaque && low(t));
+  const hw = info.w / 2 - 0.3, hd = info.d / 2 - 0.3;
+  if (wb.isEmpty()) return { x0: -hw, x1: hw, z0: -hd, z1: hd };
+  return { x0: Math.max(-hw, wb.min.x), x1: Math.min(hw, wb.max.x), z0: Math.max(-hd, wb.min.z), z1: Math.min(hd, wb.max.z) };
+}
+
+/** The cleared, trodden ground of the site (a levelled platform: its sides show on a slope). */
+function siteGround(dst: MeshBuilder, info: StateInfo, c: number): void {
+  if (info.w * info.d < 4) return;
+  dst.layer = Layer.Ground;
+  dst.flags = F.Snow | F.NoAO;
+  const hw = info.w / 2 - 0.08, hd = info.d / 2 - 0.08;
+  const top = c < 0.08 ? 0x7d6646 : 0x6f5a3e;
+  dst.box(-hw, -0.5, -hd, hw, 0.025, hd, { top, side: COL.earth }, 'b');
+}
+
+/** Pegs at the corners and along the sides, string lines between them, lime marks on the ground. */
+function markingOut(dst: MeshBuilder, o: Outline, c: number): void {
+  dst.layer = Layer.Ground;
+  dst.flags = F.Snow;
+  const corners: [number, number][] = [[o.x0, o.z0], [o.x1, o.z0], [o.x1, o.z1], [o.x0, o.z1]];
+  const peg = (x: number, z: number, h: number) => dst.cyl(x, z, -0.2, h, 0.035, 0.022, 4, 0xa7865a, { rot: 0.4 });
+  const mx = (o.x0 + o.x1) / 2, mz = (o.z0 + o.z1) / 2;
+  for (let i = 0; i < 4; i++) {
+    const [ax, az] = corners[i], [bx, bz] = corners[(i + 1) % 4];
+    const L = Math.hypot(bx - ax, bz - az);
+    // corner profile: a pair of pegs set out beyond the corner
+    const ox = Math.sign(ax - mx) * 0.5, oz = Math.sign(az - mz) * 0.5;
+    peg(ax + ox, az, 0.62);
+    peg(ax, az + oz, 0.62);
+    const n = Math.max(1, Math.round(L / 3));
+    for (let k = 1; k < n; k++) peg(ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n, 0.42);
+    if (c < 0.08) {
+      // the string at knee height and the lime line under it
+      dst.beam([ax, 0.36, az], [bx, 0.36, bz], 0.016, 0.016, COL.rope);
+      dst.state({ flags: F.NoAO }, () => dst.beam([ax, 0.035, az], [bx, 0.035, bz], 0.12, 0.02, COL.lime));
+    }
+  }
+}
+
+/** Foundation trenches dug along the wall lines, with the spoil thrown up beside them. */
+function trenches(dst: MeshBuilder, o: Outline, c: number, seed: number): void {
+  dst.layer = Layer.Ground;
+  dst.flags = F.Snow | F.NoAO;
+  const w = 0.55;
+  const k = ss(0.04, 0.1, c);
+  const sides: [number, number, number, number, number, number][] = [
+    [o.x0 - w / 2, o.z1 - w / 2, o.x1 + w / 2, o.z1 + w / 2, 0, 1], [o.x0 - w / 2, o.z0 - w / 2, o.x1 + w / 2, o.z0 + w / 2, 0, -1],
+    [o.x0 - w / 2, o.z0 + w / 2, o.x0 + w / 2, o.z1 - w / 2, -1, 0], [o.x1 - w / 2, o.z0 + w / 2, o.x1 + w / 2, o.z1 - w / 2, 1, 0],
+  ];
+  sides.forEach(([x0, z0, x1, z1, nx, nz], i) => {
+    // dug (dark) along the part of the line the diggers have reached
+    const xe = nz !== 0 ? x0 + (x1 - x0) * k : x1, ze = nx !== 0 ? z0 + (z1 - z0) * k : z1;
+    if (Math.abs(xe - x0) < 0.05 || Math.abs(ze - z0) < 0.05) return;
+    dst.box(x0, 0.0, z0, xe, 0.04, ze, { top: 0x3f3122, side: 0x4a3a28 }, 'b');
+    // spoil ridge just outside
+    const sx = nx * (w * 0.5 + 0.3), sz = nz * (w * 0.5 + 0.3);
+    const cx = (x0 + xe) / 2 + sx, cz = (z0 + ze) / 2 + sz;
+    const lx = nz !== 0 ? Math.abs(xe - x0) / 2 : 0.3, lz = nx !== 0 ? Math.abs(ze - z0) / 2 : 0.3;
+    dst.blob(cx, 0.0, cz, Math.max(0.3, lx), 0.2, Math.max(0.3, lz), COL.earth, 0.22, 0, seed + i);
+  });
+}
+
+/** Low walls: a ladder against the front and a pair of trestles with a plank (cottages, sheds, low workshops). */
+function lightScaffold(dst: MeshBuilder, o: Outline, h: number, c: number, seed: number): void {
+  dst.layer = Layer.Detail;
+  dst.flags = F.Burn | F.Snow;
+  const pole = 0x8f7350;
+  const lx = o.x0 + (o.x1 - o.x0) * 0.72, lz = o.z1 + 0.08;
+  const lt = Math.max(1.6, h + 0.6);
+  for (const dx of [-0.22, 0.22]) dst.beam([lx + dx, 0, lz + 0.55], [lx + dx, lt, lz + 0.02], 0.055, 0.055, pole);
+  for (let y = 0.32; y < lt - 0.1; y += 0.32) {
+    const zz = lz + 0.55 * (1 - y / lt) + 0.02;
+    dst.beam([lx - 0.22, y, zz], [lx + 0.22, y, zz], 0.035, 0.035, pole);
+  }
+  if (c < 0.62) {
+    // trestles and a plank along the back, where the daubers or masons work from
+    const tz = o.z0 - 0.75, x0 = o.x0 + 0.6, x1 = Math.min(o.x1 - 0.6, x0 + 3.2);
+    const th = Math.min(1.25, Math.max(0.8, h * 0.5));
+    for (const x of [x0, x1]) {
+      dst.beam([x - 0.25, 0, tz], [x, th, tz], 0.05, 0.05, pole);
+      dst.beam([x + 0.25, 0, tz], [x, th, tz], 0.05, 0.05, pole);
+    }
+    dst.beam([x0 - 0.2, th + 0.03, tz], [x1 + 0.2, th + 0.03, tz], 0.32, 0.05, 0xa88b62);
+  }
+  void seed;
+}
+
+/** Working gear on the site: a mortar box and a hod (masonry) or a sawhorse with a beam and offcuts (timber). */
+function siteTools(dst: MeshBuilder, o: Outline, info: StateInfo, masonry: boolean, seed: number): void {
+  if (info.w * info.d < 8) return;
+  dst.layer = Layer.Detail;
+  dst.flags = F.Snow | F.Burn;
+  const x = Math.max(-info.w / 2 + 0.6, o.x0 - 0.2) + 0.4, z = Math.min(info.d / 2 - 0.5, o.z1 + 0.9);
+  if (masonry) {
+    dst.box(x - 0.45, 0.02, z - 0.3, x + 0.45, 0.24, z + 0.3, { side: COL.timberRaw, top: 0xd8d2c2 });
+    dst.beam([x + 0.7, 0.02, z], [x + 0.95, 1.05, z - 0.1], 0.05, 0.05, COL.timberRaw);
+    dst.box(x + 0.82, 0.85, z - 0.22, x + 1.08, 1.05, z + 0.0, 0x9a7a52);
+  } else {
+    const p = 0x8a6a46;
+    for (const dx of [-0.45, 0.45]) {
+      dst.beam([x + dx, 0, z - 0.25], [x + dx, 0.7, z], 0.05, 0.05, p);
+      dst.beam([x + dx, 0, z + 0.25], [x + dx, 0.7, z], 0.05, 0.05, p);
+    }
+    dst.beam([x - 1.0, 0.78, z], [x + 1.1, 0.78, z + 0.02], 0.18, 0.16, 0xa8875e);
+    for (let i = 0; i < 6; i++) {
+      const a = posHash(i, 3, seed) * Math.PI;
+      const cx = x + (posHash(i, 1, seed) - 0.5) * 2.0, cz = z + 0.4 + (posHash(i, 2, seed) - 0.5) * 0.6;
+      dst.beam([cx, 0.03, cz], [cx + Math.cos(a) * 0.12, 0.03, cz + Math.sin(a) * 0.12], 0.05, 0.015, 0xd8c08a);
+    }
+  }
 }
 
 function scaffolding(dst: MeshBuilder, src: MeshBuilder, info: StateInfo, h: number, seed: number): void {
@@ -196,17 +353,20 @@ function scaffolding(dst: MeshBuilder, src: MeshBuilder, info: StateInfo, h: num
     for (let y = levelH; y <= top + 0.01; y += levelH) {
       dst.beam([ax, y, az], [bx, y, bz], 0.07, 0.07, pole);
     }
-    // Working platform at the highest level.
+    // working platform at the highest level
     const ly = Math.floor(top / levelH) * levelH;
     if (ly >= levelH) {
       const nx = -(bz - az) / len, nz = (bx - ax) / len;
       const w = 0.45;
-      dst.push();
       dst.beam([ax - nx * w, ly + 0.06, az - nz * w], [bx - nx * w, ly + 0.06, bz - nz * w], 0.5, 0.05, 0xa88b62);
-      dst.pop();
+    }
+    // a diagonal brace on the long faces
+    if (len > 6 && top > levelH * 1.5) {
+      const f = Math.min(1, (levelH * 1.6) / len);
+      dst.beam([ax, 0.1, az], [ax + (bx - ax) * f, Math.min(top, levelH * 2), az + (bz - az) * f], 0.05, 0.05, pole);
     }
   }
-  // Ladder at the front.
+  // ladder at the front
   const lx = x0 + 0.7, lz = z1 + 0.05;
   const lt = Math.min(top + 1, maxH);
   dst.beam([lx - 0.22, 0, lz + 0.35], [lx - 0.22, lt, lz], 0.06, 0.06, pole);
@@ -215,37 +375,15 @@ function scaffolding(dst: MeshBuilder, src: MeshBuilder, info: StateInfo, h: num
     const zz = lz + 0.35 * (1 - y / lt);
     dst.beam([lx - 0.22, y, zz], [lx + 0.22, y, zz], 0.04, 0.04, pole);
   }
+  // a hoist pole with a rope and a block of stone on its way up
+  if (top > 5) {
+    const hx = x1 - 0.4, hz = z1 - 0.2, hy = top + 1.6;
+    dst.beam([hx, -0.3, hz], [hx, hy, hz], 0.09, 0.09, pole);
+    dst.beam([hx, hy - 0.1, hz], [hx, hy - 0.1, hz + 1.1], 0.07, 0.07, pole);
+    dst.beam([hx, hy - 0.15, hz + 1.05], [hx, top * 0.55, hz + 1.05], 0.02, 0.02, COL.rope);
+    dst.box(hx - 0.25, top * 0.55 - 0.35, hz + 0.85, hx + 0.25, top * 0.55, hz + 1.25, { side: COL.stoneGrey, top: COL.stoneTrim });
+  }
   void seed;
-}
-
-function materialsPile(dst: MeshBuilder, info: StateInfo, seed: number, c: number): void {
-  if (info.w * info.d < 6) return;
-  dst.layer = Layer.Detail;
-  dst.flags = F.Snow | F.Burn;
-  const x = -info.w / 2 + 0.6, z = info.d / 2 - 0.45;
-  // Timber stack
-  const n = c < 0.5 ? 4 : 2;
-  for (let i = 0; i < n; i++) {
-    const y = 0.11 + Math.floor(i / 2) * 0.2;
-    const zz = z - (i % 2) * 0.24;
-    dst.beam([x - 0.3, y, zz], [x + Math.min(2.4, info.w * 0.35), y, zz], 0.2, 0.2, i % 2 ? 0x9a7a52 : 0x8a6a46);
-  }
-  // Stone / daub heap
-  dst.blob(info.w / 2 - 0.8, 0.12, info.d / 2 - 0.55, 0.5, 0.3, 0.4, COL.stoneGrey, 0.25, 0, seed);
-  dst.box(info.w / 2 - 1.5, 0, info.d / 2 - 0.7, info.w / 2 - 1.05, 0.3, info.d / 2 - 0.3, COL.stoneTrim);
-}
-
-function markingOut(dst: MeshBuilder, info: StateInfo): void {
-  dst.layer = Layer.Ground;
-  dst.flags = F.Snow;
-  const hw = info.w / 2 - 0.3, hd = info.d / 2 - 0.3;
-  for (const [x, z] of [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]] as [number, number][]) {
-    dst.cyl(x, z, 0, 0.6, 0.04, 0.02, 4, 0x9a7a52);
-  }
-  dst.beam([-hw, 0.45, hd], [hw, 0.45, hd], 0.015, 0.015, COL.rope);
-  dst.beam([hw, 0.45, hd], [hw, 0.45, -hd], 0.015, 0.015, COL.rope);
-  dst.beam([hw, 0.45, -hd], [-hw, 0.45, -hd], 0.015, 0.015, COL.rope);
-  dst.beam([-hw, 0.45, -hd], [-hw, 0.45, hd], 0.015, 0.015, COL.rope);
 }
 
 /** Damage state (d > 0): soot and char, roof holes, ragged collapse, rubble. */

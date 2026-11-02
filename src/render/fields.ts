@@ -9,6 +9,7 @@
 // cut corn, mown windrows, clean stubble), with a fresh working front at the boundary. The boundary glides
 // to each new value (no jumps between bouts) and standing crops are cut down behind it. Per-strip changes
 // rewrite only that strip's vertices (partial uploads), so a busy harvest costs next to nothing.
+import { BUILD_TINT_PARS } from './feedback/buildArea';
 import * as THREE from 'three';
 import type { CropKind } from '../core/domain';
 import { clamp, hash01 } from '../core/math';
@@ -240,7 +241,7 @@ export class FieldSystem {
       uRowCol: { value: new THREE.Color(WINDROW) },
     };
     this.material.onBeforeCompile = (shader) => {
-      Object.assign(shader.uniforms, { uSnowCover: terrainU.uSnowCover, uWetness: terrainU.uWetness }, uniforms);
+      Object.assign(shader.uniforms, { uSnowCover: terrainU.uSnowCover, uWetness: terrainU.uWetness, uBuildMask: terrainU.uBuildMask, uBuildRect: terrainU.uBuildRect, uBuildOn: terrainU.uBuildOn }, uniforms);
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', `#include <common>
 attribute vec4 aField;
@@ -254,8 +255,10 @@ vWork = aWork;
 vFWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', `#include <common>
-${FIELD_GLSL}`)
+${FIELD_GLSL}
+${BUILD_TINT_PARS}`)
         .replace('#include <color_fragment>', `#include <color_fragment>
+float mlBuildM = mlBuildIn(vFWorld.xz);
 float mlFur = 0.0;
 float mlAA = 0.0;
 {
@@ -282,8 +285,10 @@ float mlAA = 0.0;
   float snow = smoothstep(1.0 - uSnowCover, 1.0 - uSnowCover + 0.25, n * 0.5 + 0.5 - furrow * 0.12);
   col = mix(col, vec3(0.86, 0.9, 0.95), clamp(snow * smoothstep(0.0, 0.2, uSnowCover), 0.0, 1.0));
   col *= 1.0 - uWetness * 0.25 * (1.0 - snow);
-  diffuseColor.rgb = col;
+  diffuseColor.rgb = mlBuildTint(col, mlBuildM);
 }`)
+        .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+totalEmissiveRadiance += mlBuildGlow(mlBuildM);`)
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
 {
   // furrow ridges catch the light: bump the normal across the strip (surface gradient from screen derivatives)
@@ -297,7 +302,7 @@ float mlAA = 0.0;
   normal = normalize(abs(det) * normal - grad);
 }`);
     };
-    this.material.customProgramCacheKey = () => 'millennia-strips-2';
+    this.material.customProgramCacheKey = () => 'millennia-strips-3';
   }
 
   configure(s: FieldSettings): void { this.settings = s; this.cropsDirty = true; }

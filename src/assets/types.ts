@@ -141,7 +141,8 @@ export interface AssetLibrary {
   vegetation(kind: ScatterKind, lod: 0 | 1 | 2): InstancedKit;
   /** stage 0 sprout … 3 ripe. One instance = one plant clump (~0.5 m). */
   crop(kind: CropKind, stage: 0 | 1 | 2 | 3): InstancedKit;
-  prop(kind: PropKind, seed?: number): THREE.Object3D;
+  /** `size` (1..8) grows piles (PILE_KINDS); 0/omitted = the ordinary look. */
+  prop(kind: PropKind, seed?: number, size?: number): THREE.Object3D;
   /**
    * Instancing kits for a prop, one per material channel it uses (opaque, cloth, glow…), shared and cached.
    * `size` (1..8) grows piles — woodpile, sack_pile, stone_pile, logs, plank_pile; 0/omitted = the ordinary

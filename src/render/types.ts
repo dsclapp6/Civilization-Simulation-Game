@@ -64,6 +64,9 @@ export interface RenderStats {
   floaterMs?: number;
   /** CPU ms of the DOM label overlay (nameplates, beacon label, map labels). */
   labelMs?: number;
+  // ---- civilization pass (optional) ----
+  /** Quest marks ("!" / "?") drawn over people this frame. */
+  questMarks?: number;
 }
 
 export interface GroundPoint { x: number; y: number; z: number }

@@ -14,6 +14,7 @@ import type { AssetLibrary, BuildingAsset, Palette } from '../assets/types';
 import type { WorldModel } from '../world/types';
 import { adoptObject } from './sky/atmospherePatch';
 import { BUILDING_FADE } from '../assets/core/materials';
+import { constructionStep } from '../assets/buildings/states';
 
 /** Seconds a building takes to cross-fade from one detail level (lod) to the next. */
 const LOD_FADE_S = 0.6;
@@ -249,7 +250,7 @@ export class BuildingSystem {
   get count(): number { return this.entries.size; }
 
   private requestKey(b: BuildingView): string {
-    const c = Math.round(Math.min(1, b.construction) * 10);
+    const c = constructionStep(b.construction);
     const d = Math.round(b.damage * 4);
     return `${b.kind}|${b.level}|${b.culture}|${b.seed}|${c}|${d}|${b.ownerColor ?? -1}`;
   }
@@ -262,7 +263,7 @@ export class BuildingSystem {
   private cacheKey(b: BuildingView, lod: number): string {
     const def = BUILDINGS[b.kind];
     const level = Math.max(1, Math.min(def.maxLevel, Math.round(b.level || 1)));
-    const c = b.construction >= 1 ? 10 : Math.floor(Math.max(0, b.construction) * 10);
+    const c = constructionStep(b.construction);
     const d = Math.round(Math.max(0, Math.min(1, b.damage)) * 4);
     return `${b.kind}|${level}|${b.culture}|${(((b.seed | 0) % 4) + 4) % 4}|${c}|${d}|${b.ownerColor ?? -1}|${lod}`;
   }
