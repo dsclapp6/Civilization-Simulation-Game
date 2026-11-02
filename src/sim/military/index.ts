@@ -4,7 +4,7 @@
 // player, combat or politics needed — the others are looked up lazily on `sim.services`).
 import { dist } from '../../core/math';
 import { setRank } from '../succession';
-import { ageYears, type HouseId, type PersonId } from '../state';
+import { NONE, ageYears, type HouseId, type Person, type PersonId } from '../state';
 import type { ArmyView } from '../wave3';
 import type { Wave3Deps } from '../wave3deps';
 import type { Simulation } from '../sim';
@@ -21,6 +21,8 @@ import { battleGroupsOf, orderGroupOf } from './command';
 import { captiveOf, captiveView, freeCaptive, holdCaptive, payRansom, ransomValue, tickCaptives, adoptCaptive } from './harm';
 import { installMarkers } from './markers';
 import { RaidSystem } from './raid';
+import { launchRaid, raidersDay } from './raiders';
+import { freshMen } from './recruits';
 import { Realm } from './realm';
 import { SiegeSystem } from './siege';
 import { Mil } from './store';
@@ -77,6 +79,7 @@ export function installMilitary(sim: Simulation, deps: Wave3Deps): MilitaryRunti
         else if (h === 14) M.time('day.captives', () => tickCaptives(M));
         else if (h === 17) M.time('day.sieges', () => M.sieges.tick());
         else if (h === 20) M.time('day.repair', () => repairDamage(M));
+        else if (h % 6 === 1) M.time('day.raiders', () => raidersDay(M));
         return;
       }
       if (M.data.armies.length === 0 && M.data.battles.length === 0) return;
@@ -149,22 +152,8 @@ export function installMilitary(sim: Simulation, deps: Wave3Deps): MilitaryRunti
     raiseArmy: (house, reason, opts) => raise(M, house, reason, opts)?.id ?? 0,
     order: (id, order) => { const a = M.army(id); return a ? giveOrder(M, a, order) : { ok: false, reason: 'No such army' }; },
     disband: (id) => { const a = M.army(id); if (!a) return { ok: false, reason: 'No such army' }; if (a.engaged) return { ok: false, reason: 'The army is in battle' }; disband(M, a); return { ok: true }; },
-    raid(house, settlement, opts) {
-      const pt = settlementPoint(M, settlement);
-      const lord = M.realm.lordHouse(settlement);
-      if (!pt || !house || lord === house) return 0;
-      M.declareFeud(house, lord, 24, 'raid');
-      const a = raise(M, house, 'raid', { vassals: false, intent: 'raid', target: { x: pt.x, z: pt.z, settlement } });
-      if (!a) return 0;
-      const size = opts?.size ?? 60;
-      if (a.men.length > size) {
-        // keep the professionals, drop levy from the tail
-        const drop = new Set<PersonId>();
-        for (let i = a.men.length - 1; i >= 0 && a.men.length - drop.size > size; i--) if (a.units[i] === 'l' && a.men[i] !== a.commander) drop.add(a.men[i]);
-        removeMen(M, a, drop);
-      }
-      return a.id;
-    },
+    raid: (house, settlement, opts) => launchRaid(M, house, settlement, opts?.size ?? 60),
+    raidsDue: () => M.data.raidNext ?? -1,
     declareFeud: (a, b, days, cause) => M.declareFeud(a, b, days, cause),
     hostile: (a, b) => M.realm.hostile(a, b),
 

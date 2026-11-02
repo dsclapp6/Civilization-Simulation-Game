@@ -422,6 +422,9 @@ function conclude(
   }
   M.career.afterBattle(a, d, fa, fd, res, attWon, detail?.wonBy);
   if (rec.siege >= 0) M.sieges.afterAssault(rec, a, d, attWon);
+  // a raid goes on if the raiders held the field, else they go home; the village's militia goes back to its work
+  if (a.raid && M.armyById.has(a.id)) M.raids.afterBattle(a, attWon);
+  if (d.reason === 'sally' && M.armyById.has(d.id) && rec.siege < 0) disband(M, d, 'back to their work');
 }
 
 // ---------------------------------------------------------------------------------------------

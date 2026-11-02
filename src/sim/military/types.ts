@@ -191,6 +191,8 @@ export interface MilState {
   /** Armies waiting to be raised (one a day keeps the frame cost flat): House, war, reason. */
   queue: Array<{ h: HouseId; w: number; r: string }>;
   stats: { battles: number; dead: number; raids: number; sieges: number; ransoms: number; ransomPaid: number };
+  /** Day the next raid on the player's lands is due (raiders come at least once a month). */
+  raidNext?: number;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -304,6 +306,8 @@ export interface MilitaryRuntime extends MilitaryApi {
   disband(army: number): Result;
   /** A raiding party goes against `settlement` (the harsh AI's favourite tool). Returns the army id. */
   raid(house: HouseId, settlement: number, opts?: { size?: number }): number;
+  /** Day the next raid on the player's lands is due (-1 before the first reckoning). */
+  raidsDue?(): number;
   /** Two Houses are enemies in the field without a war (a feud or a raid). */
   declareFeud(a: HouseId, b: HouseId, days?: number, cause?: string): void;
   hostile(a: HouseId, b: HouseId): boolean;
