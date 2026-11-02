@@ -7,6 +7,7 @@ import type { ZoneApi } from '../agents/types';
 import { createAssetLibrary, type MillenniaAssetLibrary } from '../assets/library';
 import { wrapAngle } from '../core/math';
 import { installPlayer } from '../player';
+import { InteriorMode } from './interior';
 import type { HoverMark, PickPort, PickRay } from '../player/types';
 import { createRenderer } from '../render/renderer';
 import type { GameRenderer } from '../render/types';
@@ -36,6 +37,8 @@ export interface Session {
   readonly renderer: GameRenderer;
   readonly assets: MillenniaAssetLibrary;
   readonly controls: UiRendererControls;
+  /** Inside a building (the room is drawn instead of the world). */
+  readonly interior: InteriorMode;
   dispose(): void;
 }
 
@@ -104,8 +107,20 @@ export async function buildSession(sim: Simulation, o: SessionOptions): Promise<
   const t5 = performance.now();
   await o.progress(0.95, 'Almost there…');
 
+  // interiors: "Go inside" a house, the hall, the church…; inside, the HUD prompt is the room's own
+  const interior = new InteriorMode(sim, renderer, player, zone);
+  offs.push(sim.actions.register(interior.provider()));
+  offs.push(sim.events.on('playerSwitched', () => interior.exit()), sim.events.on('playerDied', () => interior.exit()));
+  const worldHud = player.hud.bind(player);
+  player.hud = () => {
+    const hud = worldHud();
+    if (!hud || !interior.active) return hud;
+    return { ...hud, prompt: interior.prompt() };
+  };
+
   const services: GameServices = { sim, economy, social, zone, player, objectives, territory, construction, realm };
   return {
+    interior,
     loadMs: { assets: t1 - t0, renderer: t2 - t1, modules: t3 - t2, settle: t5 - t4 },
     sim, services, renderer, assets, controls: makeControls(renderer),
     dispose() {

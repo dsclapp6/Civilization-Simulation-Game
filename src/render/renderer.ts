@@ -9,7 +9,7 @@ import type { CharacterDrawItem, AnimalDrawItem, BuildingView, SimView, StripVie
 import type { AssetLibrary } from '../assets/types';
 import type { WorldModel } from '../world/types';
 import { QUALITY, type QualitySettings } from './quality';
-import type { BuildGhost, CameraMode, GameRenderer, GroundPoint, HoverTarget, PickResult, QualityLevel, RenderStats, RendererOptions } from './types';
+import type { BuildGhost, CameraMode, InteriorFrame, GameRenderer, GroundPoint, HoverTarget, PickResult, QualityLevel, RenderStats, RendererOptions } from './types';
 import { computeAtmosphere, createAtmosphereState } from './sky/atmosphere';
 import { atmoUniforms, installAtmospherePatch } from './sky/atmospherePatch';
 import { Sky } from './sky/sky';
@@ -32,6 +32,7 @@ import { FloaterLayer } from './feedback/floaters';
 import { Nameplates } from './feedback/nameplates';
 import { HoverLayer } from './feedback/hover';
 import { GhostLayer } from './feedback/ghost';
+import { InteriorScene } from './interior';
 
 export type { CameraMode, GameRenderer, GroundPoint, HoverTarget, PickResult, QualityLevel, RenderStats, RendererOptions } from './types';
 
@@ -99,6 +100,8 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
   const beacons = new BeaconLayer(heightAt, showLabels);
   const floaters = new FloaterLayer();
   const ghost = new GhostLayer(heightAt);
+  const interior = new InteriorScene(assets);
+  let interiorView: (() => InteriorFrame) | null = null;
   const plates = new Nameplates(showLabels);
   let lastBuildings: readonly BuildingView[] = [];
   let lastStrips: readonly StripView[] = [];
@@ -214,6 +217,16 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
   }
 
   function frame(view: SimView, dt: number, budgetScale: number, draw = true): void {
+    // inside a building: only the room is drawn
+    // the world's name plates and speech stay outside
+    labelRenderer.domElement.style.visibility = interior.active ? 'hidden' : '';
+    if (interior.active && interiorView) {
+      if (!draw) return;
+      const v = interiorView();
+      renderer.info.reset();
+      interior.render(renderer, v.chars, v.eye, v.at, dt);
+      return;
+    }
     const t0 = performance.now();
     dt = clamp(dt, 0, 0.25);
     time += dt;
@@ -496,6 +509,14 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
       hover.set(target && target.kind !== 'person' && target.kind !== 'animal' ? target : null);
     },
     setGhost(g: BuildGhost | null): void { ghost.set(g); },
+    setInterior(spec, view): void { interior.open(spec); interiorView = spec ? view ?? null : null; },
+    pickInterior(x: number, y: number): number {
+      if (!interior.active) return -1;
+      const rect = renderer.domElement.getBoundingClientRect();
+      ndc.set(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
+      raycaster.setFromCamera(ndc, interior.camera);
+      return interior.pick(raycaster);
+    },
     setBuildArea(area): void { ghost.setArea(area); },
     setQuality,
     getQuality(): QualityLevel { return quality.level; },

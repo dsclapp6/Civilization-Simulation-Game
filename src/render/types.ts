@@ -1,3 +1,5 @@
+import type { InteriorSpec } from './interior';
+import type { CharacterDrawItem as InteriorChar } from '../core/view';
 // Public types of the render module (re-exported from renderer.ts).
 import type * as THREE from 'three';
 import type { SimView } from '../core/view';
@@ -69,6 +71,13 @@ export interface RenderStats {
 export interface GroundPoint { x: number; y: number; z: number }
 
 /** The builder's ghost building (civilization pass). */
+export type { InteriorSpec };
+export interface InteriorFrame {
+  chars: readonly InteriorChar[];
+  eye: { x: number; y: number; z: number };
+  at: { x: number; y: number; z: number };
+}
+
 export interface BuildGhost {
   kind: BuildingKind;
   level: number;
@@ -135,6 +144,13 @@ export interface GameRenderer {
   setGhost?(ghost: BuildGhost | null): void;
   /** Builder mode's land tint: the land the builder may build on (polygons, world m) shown lightly; null clears. */
   setBuildArea?(area: ReadonlyArray<ReadonlyArray<{ x: number; z: number }>> | null): void;
+  /**
+   * Interiors: while set, the renderer draws this room instead of the world, with the people `view()` gives, seen from
+   * its eye towards its target (room-local metres, the floor at y 0). null goes back outside.
+   */
+  setInterior?(spec: InteriorSpec | null, view?: () => InteriorFrame): void;
+  /** The person under a screen point inside the room (−1 none). */
+  pickInterior?(x: number, y: number): number;
 
   // ---- lifecycle ----
   setQuality(q: QualityLevel): void;

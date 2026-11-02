@@ -101,9 +101,9 @@ export async function start(root: AppRoot): Promise<void> {
     },
     drawn: () => !!host.session?.services.player.drawn?.(),
     toggleWeapon: () => { const p = host.session?.services.player; p?.setDrawn?.(!p.drawn?.()); },
-    pointerMove: (x, y) => host.session?.services.player.pointerMove?.(x, y),
+    pointerMove: (x, y) => { if (!host.session?.interior.active) host.session?.services.player.pointerMove?.(x, y); },
     pointerLeave: () => host.session?.services.player.pointerLeave?.(),
-    pointerClick: (x, y) => { host.session?.services.player.pointerClick?.(x, y); },
+    pointerClick: (x, y) => { if (!host.session?.interior.active) host.session?.services.player.pointerClick?.(x, y); },
     cursor: () => {
       const hov = host.session?.services.player.hover?.();
       return hov ? cursorCss(hov.cursor) : '';
@@ -142,7 +142,9 @@ export async function start(root: AppRoot): Promise<void> {
       const t1 = performance.now();
       let t2 = t1, t3 = t1;
       if (step) {
-        g.player.setInput(host.screen === 'game' ? intent : EMPTY_INPUT);
+        // inside a building the room takes the keys; the body outside stands still at the door
+        if (s.interior.active) { s.interior.step(host.screen === 'game' ? intent : EMPTY_INPUT, dt); g.player.setInput(EMPTY_INPUT); }
+        else g.player.setInput(host.screen === 'game' ? intent : EMPTY_INPUT);
         s.sim.step(dt);
         t2 = performance.now();
         g.player.frame?.(dt);

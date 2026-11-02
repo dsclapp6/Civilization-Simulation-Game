@@ -40,6 +40,14 @@ behalf (U again brings you back to your lord), and any man of arms can be **chal
 action wheel: honourable, no crime, and renown for the victor. You may live as anyone else at any time, and the House
 goes on after you.
 
+**Go inside** any home, the lord's hall, the church, a workshop, an inn or a barn (the action on its door): the room is
+drawn with its hearth and furniture and the people of the house at the table; W A S D walks about it, E talks to the one
+you face, and out through the door you are back in the street. **People (V)** lists everyone of your town, ruler and
+knights included, with *Live as* on each. **Build mode (B)** changes anything in your lands: grow your seat into a castle
+stage by stage, place new buildings (a green ghost fits, a red one says why), click any building to enlarge, repair or
+pull it down. Tasks train the skill of their work (farming, a craft, fighting, learning); anyone may win a knight's spurs
+on merit; and the character you play, struck down, lives gravely hurt and recovers (Recuperate takes them to bed).
+
 Tasks are given **in person**: a gold **!** over someone's head means they have something for you; walk up and speak
 to them to take it up. Gilded **wings** over someone mean a task can be finished with them. The screen starts clear:
 the task card, hints, the clock card, the minimap, notices and messages all start folded to a line or a count (urgent
@@ -65,8 +73,9 @@ top left corner (the *tracker*), shown by a gold marker in the world, the compas
 | **1 2 3**, **P** | Speed 1×, 3×, 8×; pause |
 | **Y**, **O**, **N** | What now? card, the journal (tasks, today, people, places), minimap on or off |
 | **Tab I H J M L Z** | Character, inventory, family and House, ledger, map and travel, chronicle, sleep or wait |
+| **V**, **B** | People of your town (live as anyone); build mode |
 | **U** | The ruler's seat: fields and labour, research, men and arms (fight as one of your knights), trade orders, rivals and news |
-| **R B T K C** | Requests and news, wounds, House techniques, realm and politics, command and army |
+| **R F2 T K C** | Requests and news, wounds, House techniques, realm and politics, command and army |
 | **F1**, **Esc** | Help and controls; Esc leaves mouse-look, else closes a page, else the pause menu |
 
 The same list, and how to play, is in the game (**F1** or the pause menu) and in [docs/PLAYING.md](docs/PLAYING.md). In
