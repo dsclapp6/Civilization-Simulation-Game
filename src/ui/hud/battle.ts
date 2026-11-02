@@ -88,7 +88,7 @@ export function giveOrder(ctx: HudPartCtx, order: GroupOrder, label: string): bo
 const CSS = `
 .mu-bt { position: absolute; inset: 0; pointer-events: none; }
 .mu-bt.mu-hide { display: none; }
-.mu-bt-bar { position: absolute; left: 50%; bottom: 74px; transform: translateX(-50%); display: flex; gap: 6px; pointer-events: auto; align-items: stretch; }
+.mu-bt-bar { position: absolute; left: 50%; bottom: 128px; transform: translateX(-50%); display: flex; gap: 6px; pointer-events: auto; align-items: stretch; }
 .mu-bt-g { position: relative; min-width: 108px; padding: 6px 9px 7px; border-radius: 6px; cursor: pointer; text-align: left;
   background: linear-gradient(180deg, rgba(246, 234, 208, 0.94), rgba(221, 198, 144, 0.94)); border: 1px solid var(--edge); color: var(--ink);
   box-shadow: 0 2px 8px rgba(10, 6, 2, 0.5); display: flex; flex-direction: column; gap: 2px; font: inherit; }
@@ -104,7 +104,7 @@ const CSS = `
 .mu-bt-g .mor.gold i { background: #c9961c; }
 .mu-bt-g .mor.vermilion i { background: var(--vermilion); }
 .mu-bt-g .cap { position: absolute; left: -5px; top: -7px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 4px; background: #2a1b0f; color: #f6ead0; font-size: 11px; line-height: 18px; text-align: center; border: 1px solid #8c6b36; }
-.mu-bt-hint { position: absolute; left: 50%; bottom: 52px; transform: translateX(-50%); font-size: 11.5px; color: #f6ead0; text-shadow: 0 1px 2px #000, 0 0 6px #000; white-space: nowrap; }
+.mu-bt-hint { position: absolute; left: 50%; bottom: 194px; transform: translateX(-50%); font-size: 11.5px; color: #f6ead0; text-shadow: 0 1px 2px #000, 0 0 6px #000; white-space: nowrap; }
 .mu-bt-hint b { color: var(--gold-hi); font-weight: 700; }
 .mu-bt-banners { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .mu-bt-banner { position: absolute; left: 0; top: 0; transform: translate(-50%, -100%); pointer-events: none; display: flex; flex-direction: column; align-items: center; }

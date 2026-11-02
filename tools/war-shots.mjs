@@ -331,6 +331,14 @@ try {
       }
       return out;
     })));
+    console.log('war: agents', JSON.stringify(await page.evaluate(() => {
+      const { s, sim } = window.__m;
+      const z = s.services.zone; const list = z.agents();
+      const b = s.services.player.body();
+      const summoned = list.filter((a) => a.summoned);
+      const drawn = sim.view.characters?.() ?? [];
+      return { body: [Math.round(b.x), +b.y.toFixed(1), Math.round(b.z)], agents: list.length, summoned: summoned.length, visible: summoned.filter((a) => a.visible).length, drawn: drawn.length, sample: summoned.slice(0, 4).map((a) => [Math.round(a.x), +a.y.toFixed(1), Math.round(a.z), a.visible, a.dead, a.draw?.anim, a.draw?.mainHand]) };
+    })));
     const survey = () => page.evaluate(() => {
       const { sim, s } = window.__m;
       const works = sim.view.siegeWorks?.() ?? [];
@@ -430,24 +438,26 @@ try {
     await results();
 
     if (want('mounted', 'fights')) {
-      const cav = await people(8, 0), foot = await people(18, 8);
-      await page.evaluate(([cav, foot, at]) => {
+      const cav = await people(8, 0), own = await people(6, 8), foot = await people(10, 14);
+      await page.evaluate(([cav, own, foot, at]) => {
         const { sim } = window.__m; const c = sim.services.combat; const arena = c.arena;
         for (const id of cav) arena.setKitOverride(id, { weapon: 'lance', shield: null, armour: ['mail_hauberk'] });
+        for (const id of own) arena.setKitOverride(id, { weapon: 'sword', shield: 'shield', armour: ['padded_armour'] });
         foot.forEach((id, i) => arena.setKitOverride(id, { weapon: 'spear', shield: i % 3 ? 'shield' : null, armour: ['padded_armour'] }));
-        const fid = c.engage([{ faction: 'house:1', people: cav, mounted: cav }, { faction: 'house:2', people: foot }], { at, reason: 'battle', yieldAllowed: true });
+        const fid = c.engage([{ faction: 'house:1', people: [...cav, ...own], mounted: cav }, { faction: 'house:2', people: foot }], { at, reason: 'battle', yieldAllowed: true });
         console.log('war: mounted fight ' + fid);
-      }, [cav, foot, { x: body.x, z: body.z }]);
-      for (let k = 0; k < 9; k++) {
-        await advance(k === 0 ? 3 : 2.5);
+      }, [cav, own, foot, { x: body.x, z: body.z }]);
+      for (let k = 0; k < 16; k++) {
+        await advance(k === 0 ? 3 : 3.5);
         const c = await positions(cav), f = await positions(foot);
         const mc = mean(c), mf = mean(f);
         console.log(`war: mounted t${k}`, JSON.stringify({ cav: c.length, mounted: c.filter((r) => r[3]).length, foot: f.length, mc, mf, gap: mc && mf ? Math.round(Math.hypot(mc[0] - mf[0], mc[2] - mf[2])) : null }));
         if (!mc || !mf) break;
+        if (Math.hypot(mc[0] - mf[0], mc[2] - mf[2]) > 48 && k < 12) continue; // the lines are still far apart: no picture yet
         const mx = (mc[0] + mf[0]) / 2, mz = (mc[2] + mf[2]) / 2, my = (mc[1] + mf[1]) / 2;
         // from the side of the charge, low and close
         const ax = mf[0] - mc[0], az = mf[2] - mc[2], al = Math.hypot(ax, az) || 1;
-        await look([mx - az / al * 26, my + 4.5, mz + ax / al * 26], [mx, my + 1.4, mz]);
+        await look([mx - az / al * 19, my + 3.6, mz + ax / al * 19], [mx, my + 1.3, mz]);
         await shot(`mounted-t${k}`, { settle: false });
       }
     }
@@ -468,14 +478,14 @@ try {
         console.log(`war: subdue t${k}`, JSON.stringify({ watch: w.length, culprits: c.length, culpritStates: c.map((r) => r[4]) }));
         const all = [...w, ...c]; const m = mean(all);
         if (!m) break;
-        await look([m[0] - 9, m[1] + 3.2, m[2] - 11], [m[0], m[1] + 1.0, m[2]]);
+        await look([m[0] - 5.5, m[1] + 2.4, m[2] - 6.5], [m[0], m[1] + 1.0, m[2]]);
         await shot(`subdue-t${k}`, { settle: false });
       }
     }
 
     if (want('foot', 'fights')) {
       // swords and spears meet in a line with archers behind each: the sword and the bow on foot, then the player's own
-      const a = await people(7, 40), b = await people(7, 47);
+      const a = await people(6, 40), b = await people(6, 47);
       await page.evaluate(([a, b, at]) => {
         const { sim } = window.__m; const c = sim.services.combat; const arena = c.arena;
         a.forEach((id, i) => arena.setKitOverride(id, i < 4 ? { weapon: i % 2 ? 'sword' : 'spear', shield: i % 2 ? 'shield' : null, armour: ['padded_armour'] } : { weapon: 'dagger', ranged: 'longbow', armour: [] }));
@@ -489,7 +499,7 @@ try {
         const m = mean([...pa, ...pb]);
         console.log(`war: foot t${k}`, JSON.stringify({ a: pa.length, b: pb.length }));
         if (!m) break;
-        await look([m[0] - 7, m[1] + 3.0, m[2] - 15], [m[0], m[1] + 1.2, m[2]]);
+        await look([m[0] - 6, m[1] + 2.6, m[2] - 11], [m[0], m[1] + 1.2, m[2]]);
         await shot(`foot-t${k}`, { settle: false });
       }
     }

@@ -105,6 +105,38 @@ describe('a battle has groups and an AI commander', () => {
     expect(run()).toBe(run());
   });
 
+  it('the horse waits on the flank, rides in once its foot are locked, and does not draw rein when they fall', () => {
+    const r = combatRig({ seed: 'cmd-horse', preset: 'small' });
+    const men = adultMen(r.sim, 24, 18, 40);
+    men.forEach((p) => { setStats(p, { str: 11, agi: 11, end: 12 }); p.needs.hunger = 1; p.needs.rest = 1; });
+    const cav = men.slice(0, 8), own = men.slice(8, 14), foe = men.slice(14, 24);
+    const arena = r.combat.arena;
+    for (const p of cav) arena.setKitOverride(p.id, { weapon: 'lance', shield: null, armour: ['mail_hauberk'] });
+    for (const p of own) arena.setKitOverride(p.id, { weapon: 'sword', shield: 'shield', armour: ['padded_armour'] });
+    foe.forEach((p, i) => arena.setKitOverride(p.id, { weapon: 'spear', shield: i % 3 ? 'shield' : null, armour: ['padded_armour'] }));
+    const id = r.combat.engage([
+      { faction: 'house:1', people: [...cav, ...own].map((p) => p.id), mounted: cav.map((p) => p.id) },
+      { faction: 'house:2', people: foe.map((p) => p.id) },
+    ], { at: { x: 800, z: 800 }, reason: 'battle', yieldAllowed: true });
+    const cmd = arena.fights.get(id)!.cmd!;
+    let waited = false, charged = false, chargedWithoutFoot = false, footWasLocked = false;
+    for (let i = 0; i < 20 * 70; i++) {
+      r.sim.step(SIM_DT);
+      const horse = cmd.find(0, 0, 2), foot = cmd.find(0, 0, 0);
+      if (!horse || horse.count === 0) break;
+      if (horse.order === 'hold') waited = true;
+      if (foot?.engaged) footWasLocked = true;
+      if (horse.order === 'charge') { charged = true; if (!foot || foot.count === 0) chargedWithoutFoot = true; }
+    }
+    expect(waited).toBe(true);
+    expect(footWasLocked).toBe(true);
+    expect(charged).toBe(true);
+    // the foot were cut down first, and the horse went on riding the enemy down: the enemy foot are the worse for it
+    expect(chargedWithoutFoot).toBe(true);
+    const left = foe.filter((p) => !p.death && arena.fighterOf(p.id)?.active).length;
+    expect(left).toBeLessThan(10);
+  });
+
   it('a line advances as a line: the foot arrive together, not one by one', () => {
     const b = battle('cmd-line', { foot: 12, bows: 0, horse: 0 });
     const fight = b.r.combat.arena.fights.get(b.id)!;
