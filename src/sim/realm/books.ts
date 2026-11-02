@@ -72,6 +72,9 @@ export function closeBooks(R: Rlm): void {
     const income = round(b.inn + Math.max(0, ext));
     const spending = round(b.out + Math.max(0, -ext));
     while (b.b.length < LEDGER_DAYS) b.b.push([0, 0]);
+    // days nobody closed (the clock skipped, or the book is new) count for nothing
+    const gap = day - b.day;
+    for (let i = 1; i < Math.min(gap, LEDGER_DAYS + 1); i++) b.b[(((b.day + i) % LEDGER_DAYS) + LEDGER_DAYS) % LEDGER_DAYS] = [0, 0];
     const cats = Object.keys(b.cats).length > 0 ? b.cats : undefined;
     b.b[slot] = cats ? [income, spending, cats] : [income, spending];
     b.last = hh.purse;

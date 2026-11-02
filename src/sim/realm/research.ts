@@ -10,7 +10,7 @@ import { ageYears, type Household, type HouseId, type Person, type PersonId } fr
 import { bagAdd, round2 } from './bags';
 import { bookIn, bookOut } from './books';
 import { RESEARCH } from './config';
-import { addNews, bump } from './news';
+import { addNews } from './news';
 import { Pool, realmHouseholds } from './pool';
 import { mayCommand, poolOf, scopeOf, titleAtSettlement, type RealmScope } from './rule';
 import type { ProjectRec, Rlm } from './store';
@@ -18,6 +18,12 @@ import type { ResearchOption, ResearchProject, Result } from './types';
 
 const fail = (reason: string): Result => ({ ok: false, reason });
 const names = (ids: readonly string[], R: Rlm): string => ids.map((i) => R.tech?.tech(i)?.name ?? i).join(' and ');
+
+/** "smithy, sawpit or carpenter" for the first few kinds of building a work is done in. */
+function placeWords(kinds: readonly string[]): string {
+  const k = kinds.slice(0, 3).map((x) => x.replace(/_/g, ' '));
+  return k.length <= 1 ? (k[0] ?? 'workshop') : `${k.slice(0, -1).join(', ')} or ${k[k.length - 1]}`;
+}
 
 // ---------------------------------------------------------------------------------------------
 // Who can do the work, and where
@@ -164,7 +170,7 @@ export function researchOptions(R: Rlm, personId: PersonId): ResearchOption[] {
     else if (running.some((pr) => pr.tech === def.id)) reason = 'Already under way';
     else if (running.length >= RESEARCH.maxProjects) reason = `Your scholars are busy with ${running.length} works already`;
     else if (fit.length + slow.length === 0) reason = 'Nobody in your lands could work it out';
-    else if (places.length === 0) reason = `You have no ${def.research.place.slice(0, 3).join(', ').replace(/_/g, ' ')} to work in`;
+    else if (places.length === 0) reason = `You have no ${placeWords(def.research.place)} to work in`;
     else if (purse + 1e-9 < res.pence) reason = `Needs ${formatMoney(res.pence)}; the treasury holds ${formatMoney(purse)}`;
     else if (hasShort) reason = describeShort(R, pool, res.goods, short);
     let days: number | undefined;
@@ -215,10 +221,10 @@ export function startResearch(R: Rlm, personId: PersonId, tech: string, research
   let building = buildingId >= 0 ? R.state.buildings.get(buildingId) : undefined;
   if (buildingId >= 0) {
     if (!building || building.construction < 1 || building.damage >= 0.9) return fail('That building cannot be worked in');
-    if (!places.includes(building.id)) return fail(`That is no place for it: it is worked in a ${res.place.slice(0, 3).join(', ').replace(/_/g, ' ')}`);
+    if (!places.includes(building.id)) return fail(`That is no place for it: it is worked in a ${placeWords(res.place)}`);
   } else {
     building = places.length ? R.state.buildings.get(places[0]) : undefined;
-    if (!building) return fail(`You have no ${res.place.slice(0, 3).join(', ').replace(/_/g, ' ')} to work in`);
+    if (!building) return fail(`You have no ${placeWords(res.place)} to work in`);
   }
 
   // the researcher
@@ -470,7 +476,6 @@ function finish(R: Rlm, A: Adv, rec: ProjectRec, def: TechDef, researcher: Perso
   const holder = R.alive(R.state.households.get(rec.household)?.head ?? 0);
   for (const who of [ruler, holder]) if (who && who.id !== researcher.id && ageYears(who, R.day) >= 12) A.grant(who, def.id, 'research');
   A.grant(researcher, def.id, 'research');
-  bump(R, rec.house, 1);
   prune(R);
   R.touch();
   R.sim.events.emit('research', { phase: 'done', project: rec.id, tech: rec.tech, house: rec.house, researcher: rec.researcher });
