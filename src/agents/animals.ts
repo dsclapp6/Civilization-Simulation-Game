@@ -10,7 +10,7 @@ import type { AnimalKind } from '../core/domain';
 import { clamp, hash01, smoothstep } from '../core/math';
 import { daylight, toDate } from '../core/time';
 import type { AnimalAnim, AnimalDrawItem } from '../core/view';
-import type { Household, Person } from '../sim/state';
+import type { Household, Person, PersonId } from '../sim/state';
 import { Biome, CHUNK_SIZE } from '../world/types';
 import { ENTER_RADIUS, LEAVE_RADIUS } from './config';
 import { frontPoint } from './geometry';
@@ -51,6 +51,42 @@ const KINDS: Record<AnimalKind, KindInfo> = {
   fox: { walk: 0.9, trot: 2.3, run: 8, radius: 0.18, shy: 20, nightHidden: false, coats: [0xc0602a, 0xb05a2a] },
   hare: { walk: 0.5, trot: 1.8, run: 11, radius: 0.15, shy: 14, nightHidden: false, coats: [0x9a7a54, 0x8a6a48, 0xa88a60] },
 };
+
+/**
+ * Ids of a household's beasts are stable by kind: a household's ids are `1 000 000 + household × ID_SPAN + KIND_BASE[kind] + index`, so
+ * when one kind changes (a pig slaughtered) the others keep theirs. At most KIND_ROOM of a kind are drawn, and 24 beasts per household.
+ */
+const ID_SPAN = 64;
+const KIND_ROOM: Partial<Record<AnimalKind, number>> = {
+  sheep: 20, ox: 4, cow: 4, horse: 4, goat: 6, pig: 6, goose: 4, chicken: 14, dog: 1, cat: 1,
+};
+const KIND_BASE: Partial<Record<AnimalKind, number>> = (() => {
+  const out: Partial<Record<AnimalKind, number>> = {};
+  let at = 0;
+  for (const k of ['sheep', 'ox', 'cow', 'horse', 'goat', 'pig', 'goose', 'chicken', 'dog', 'cat'] as AnimalKind[]) { out[k] = at; at += KIND_ROOM[k] ?? 4; }
+  return out;
+})();
+
+/** The goods the economy keeps livestock as in a household's stores (sim/economy/holdings.ts). */
+const LIVESTOCK_GOODS: ReadonlySet<string> = new Set(['ox', 'cow', 'sheep', 'pig', 'goat', 'chicken', 'horse']);
+
+/** A number that changes whenever the household's stock of animals does (counts of each, from the stores; no allocation to speak of). */
+export function animalSignature(hh: Household): number {
+  let sig = 0;
+  for (const k in hh.stores) {
+    const i = k.indexOf('~');
+    const good = i < 0 ? k : k.slice(0, i);
+    if (!LIVESTOCK_GOODS.has(good)) continue;
+    const n = hh.stores[k];
+    if (n > 0) sig = (sig * 31 + good.charCodeAt(0) * 7 + good.length * 3 + Math.round(n * 4)) | 0;
+  }
+  return sig;
+}
+
+/** Kinds a person can lead on a halter (the others cannot be, or follow anyway). */
+export const LEADABLE: ReadonlySet<AnimalKind> = new Set<AnimalKind>(['horse', 'ox', 'cow', 'sheep', 'goat', 'pig']);
+/** How many animals one person leads at a time. */
+export const MAX_LED = 4;
 
 const A = { Idle: 0, Graze: 1, Walk: 2, Trot: 3, Run: 4, Lie: 5, Sleep: 6, Eat: 7, Home: 8 } as const;
 
@@ -99,6 +135,12 @@ export class Animal implements ZoneAnimal {
   summoned = false;
   /** The player rides it: not drawn, not simulated. */
   claimed = false;
+  /** The person leading it on a halter (0 = nobody): it follows them at their pace, `leadSlot` places behind. */
+  leader: PersonId = 0;
+  leadSlot = 0;
+  /** Seconds its leader has been out of sight / the animal has been too far behind. */
+  leadWait = 0;
+  leadFar = 0;
 
   constructor(id: number, kind: AnimalKind, draw: AnimalDrawItem) {
     this.id = id; this.kind = kind; this.draw = draw; this.info = KINDS[kind];
@@ -133,7 +175,11 @@ export class AnimalSystem {
   private readonly items: Animal[] = [];
   private readonly byId = new Map<number, Animal>();
   private readonly viewList: AnimalDrawItem[] = [];
-  private readonly specCache = new Map<number, { day: number; specs: Spec[] }>();
+  private readonly specCache = new Map<number, { day: number; sig: number; specs: Spec[] }>();
+  /** Ids of household beasts that left the herd today (sold, slaughtered): not put back from the day's list. */
+  private readonly gone = new Set<number>();
+  private goneDay = -1;
+  private reconcileT = -100;
   private readonly wildCache = new Map<number, Spec[] | null>();
   private gatherT = -100;
   private readonly mr: MoveResult = { x: 0, z: 0, blocked: false, wading: false };
@@ -180,7 +226,7 @@ export class AnimalSystem {
   claim(id: number): boolean {
     const a = this.byId.get(id);
     if (!a || a.dead || a.kind !== 'horse' || a.hostile || a.claimed) return false;
-    a.claimed = true; a.flee = 0;
+    a.claimed = true; a.flee = 0; a.leader = 0;
     return true;
   }
 
@@ -234,6 +280,7 @@ export class AnimalSystem {
 
   step(dt: number): void {
     const z = this.zone;
+    if (z.zoneT - this.reconcileT > 1.5) this.reconcile();
     if (z.zoneT - this.gatherT > 2.5) this.gather(false);
     const items = this.items;
     const fx = z.focusX, fz = z.focusZ;
@@ -268,7 +315,8 @@ export class AnimalSystem {
     a.timer -= dt;
     a.counter++;
 
-    if (a.hostile && (a.kind === 'wolf' || a.summoned)) this.wolf(a, dt);
+    if (a.leader) this.led(a, dt);
+    else if (a.hostile && (a.kind === 'wolf' || a.summoned)) this.wolf(a, dt);
     else {
       // people near? shy animals move off; others carry on
       if (a.counter % 3 === 0) this.threat(a);
@@ -284,6 +332,157 @@ export class AnimalSystem {
     d.moveSpeed = v * z.clockSpeed;
     d.anim = ANIM_OF[a.st];
     void info;
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // the herd follows the households' stock
+  // ---------------------------------------------------------------------------------------------
+
+  /**
+   * Beasts that are no longer in the household's stores (sold, slaughtered, dead) leave the herd, those the player leads first: a few
+   * times a second it compares the number of each kind of a household that is drawn with what the household keeps. Each household's list
+   * is rebuilt as soon as its stock changes (`livestockOf`), and the ones that went are not put back from the day's list.
+   */
+  private reconcile(): void {
+    const z = this.zone;
+    this.reconcileT = z.zoneT;
+    const day = Math.floor(z.now);
+    if (day !== this.goneDay) { this.gone.clear(); this.goneDay = day; }
+    const by = new Map<number, Animal[]>();
+    for (const a of this.items) {
+      if (a.dead || a.wild || a.summoned || !a.owner || !a.spec) continue;
+      const list = by.get(a.owner);
+      if (list) list.push(a); else by.set(a.owner, [a]);
+    }
+    for (const [owner, beasts] of by) {
+      const hh = z.state.households.get(owner);
+      if (!hh) { for (const a of beasts) this.remove(a); continue; }
+      const specs = this.livestockOf(hh, beasts[0].spec!.settlement);
+      const want = new Map<AnimalKind, number>();
+      for (const sp of specs) want.set(sp.kind, (want.get(sp.kind) ?? 0) + 1);
+      const have = new Map<AnimalKind, Animal[]>();
+      for (const a of beasts) { const l = have.get(a.kind); if (l) l.push(a); else have.set(a.kind, [a]); }
+      for (const [kind, list] of have) {
+        let extra = list.length - (want.get(kind) ?? 0);
+        if (extra <= 0) continue;
+        // the one in hand goes first, then those the player cannot see best
+        list.sort((p, q) => Number(q.leader !== 0) - Number(p.leader !== 0) || (q.claimed ? 1 : 0) - (p.claimed ? 1 : 0) || this.distFocus(q) - this.distFocus(p));
+        for (const a of list) {
+          if (extra <= 0) break;
+          if (a.claimed) continue;
+          this.remove(a);
+          extra--;
+        }
+      }
+    }
+  }
+
+  private distFocus(a: Animal): number { return Math.hypot(a.x - this.zone.focusX, a.z - this.zone.focusZ); }
+
+  /** Takes a beast out of the herd for the day (it was sold, slaughtered, or is no longer the household's). */
+  private remove(a: Animal): void {
+    a.dead = true;
+    a.leader = 0;
+    this.gone.add(a.id);
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // led on a halter
+  // ---------------------------------------------------------------------------------------------
+
+  animal(id: number): Animal | null { const a = this.byId.get(id); return a && !a.dead ? a : null; }
+
+  /** The animals this person leads, in the order they follow. */
+  ledBy(person: PersonId): Animal[] {
+    const out: Animal[] = [];
+    for (const a of this.items) if (a.leader === person && !a.dead) out.push(a);
+    return out.sort((x, y) => x.leadSlot - y.leadSlot);
+  }
+
+  /** Why this person cannot lead this animal now, or null when they can. */
+  whyNotLead(a: Animal, person: PersonId, household: number): string | null {
+    if (a.dead || a.claimed) return 'That animal is not available.';
+    if (a.wild || a.hostile || a.summoned) return 'That is not a tame animal.';
+    if (!LEADABLE.has(a.kind)) return `You cannot lead ${a.kind === 'chicken' || a.kind === 'goose' ? 'a bird' : 'that'} on a halter.`;
+    if (a.leader === person) return 'You are leading it already.';
+    if (a.leader) return 'Someone else is leading it.';
+    if (!household || a.owner !== household) return 'That animal is not your household\'s.';
+    if (this.ledBy(person).length >= MAX_LED) return `You already lead ${MAX_LED} animals.`;
+    return null;
+  }
+
+  /** The person takes the animal on a halter: it follows them at their pace until they let go. */
+  lead(id: number, person: PersonId, household: number): { ok: boolean; reason?: string } {
+    const a = this.animal(id);
+    if (!a) return { ok: false, reason: 'That animal is not here.' };
+    const why = this.whyNotLead(a, person, household);
+    if (why) return { ok: false, reason: why };
+    const taken = new Set(this.ledBy(person).map((q) => q.leadSlot));
+    let slot = 0;
+    while (taken.has(slot)) slot++;
+    a.leader = person; a.leadSlot = slot; a.leadWait = 0; a.leadFar = 0;
+    a.flee = 0; a.timer = 0; a.st = A.Walk;
+    return { ok: true };
+  }
+
+  /** Lets an animal go: it stays about where it is and goes back to its routine (and home at dusk). */
+  unlead(id: number): boolean {
+    const a = this.byId.get(id);
+    if (!a || !a.leader) return false;
+    this.letGo(a);
+    return true;
+  }
+
+  unleadAll(person: PersonId): number {
+    let n = 0;
+    for (const a of this.items) if (a.leader === person) { this.letGo(a); n++; }
+    return n;
+  }
+
+  private letGo(a: Animal): void {
+    a.leader = 0; a.leadWait = 0; a.leadFar = 0;
+    a.st = A.Idle; a.timer = 2 + 2 * hash01(a.id, a.counter);
+    a.anchorX = a.x; a.anchorZ = a.z; a.area = Math.min(a.area, 6);
+  }
+
+  /** One step of a led animal: to the place behind its leader, at the leader's pace; waits when the leader is out of sight. */
+  private led(a: Animal, dt: number): void {
+    const z = this.zone;
+    const lead = z.motionOf(a.leader);
+    if (!lead) {
+      // its leader is not in the open (gone in at a door): it waits there, and in the end is let go
+      a.st = A.Idle;
+      a.leadWait += dt;
+      if (a.leadWait > 90) this.letGo(a);
+      return;
+    }
+    a.leadWait = 0;
+    const info = a.info;
+    // behind the leader in a line (a few make a small drove: alternately to one side and the other)
+    const gap = 1.9 + 1.3 * a.leadSlot;
+    const side = a.leadSlot % 2 === 0 ? -0.55 : 0.55;
+    const fx = Math.sin(lead.yaw), fz = Math.cos(lead.yaw);
+    const tx = lead.x - fx * gap + fz * side, tz = lead.z - fz * gap - fx * side;
+    const dx = tx - a.x, dz = tz - a.z;
+    const d = Math.sqrt(dx * dx + dz * dz);
+    const toLeader = Math.hypot(lead.x - a.x, lead.z - a.z);
+    // too far behind for too long: the halter slips
+    if (toLeader > 30) { a.leadFar += dt; if (a.leadFar > 10) { this.letGo(a); z.sim.events.emit('notify', { kind: 'warn', text: `${this.labelOf(a)} slipped its halter.` }); return; } } else a.leadFar = 0;
+    if (d < 0.45) {
+      // there: stands (or turns to its leader), and after a while crops the grass
+      a.st = a.timer > 0 || a.kind === 'pig' ? A.Idle : A.Graze;
+      a.timer -= dt;
+      if (a.timer < -6) a.timer = 4;
+      a.yaw = turn(a.yaw, Math.atan2(lead.x - a.x, lead.z - a.z), 3 * dt);
+      return;
+    }
+    const pace = Math.max(0.5, lead.speed);
+    const v = Math.min(info.trot * 1.15, pace * 1.04 + Math.max(0, d - 0.9) * 0.9);
+    const ang = Math.atan2(dx, dz);
+    a.yaw = turn(a.yaw, ang, 7 * dt);
+    this.moveBy(a, Math.sin(ang) * v * dt, Math.cos(ang) * v * dt);
+    a.st = v > info.walk * 1.3 ? A.Trot : A.Walk;
+    a.timer = 1.5;
   }
 
   // ---- threats ----
@@ -515,7 +714,7 @@ export class AnimalSystem {
 
   /** Considers a spec: if it should be visible now, in range and not already present, queue it. */
   private offer(spec: Spec, night: boolean, found: Array<{ s: Spec; d: number; x: number; z: number }>): void {
-    if (this.byId.has(spec.id)) return;
+    if (this.byId.has(spec.id) || this.gone.has(spec.id)) return;
     const z = this.zone;
     const info = KINDS[spec.kind];
     if (!spec.wild && night && info.nightHidden) return;
@@ -569,14 +768,19 @@ export class AnimalSystem {
 
   // ---- household livestock ----
 
+  /**
+   * The household's beasts for today. The list is kept for the day unless the household's stock of animals changes (a pig slaughtered,
+   * sheep sold or bought): `animalSignature` is a cheap look at the stores, so a sale shows up within a few seconds.
+   */
   private livestockOf(hh: Household, settlement: number): Spec[] {
     const z = this.zone;
     const day = Math.floor(z.now);
+    const sig = animalSignature(hh);
     const hit = this.specCache.get(hh.id);
-    if (hit && hit.day === day) return hit.specs;
+    if (hit && hit.day === day && hit.sig === sig) return hit.specs;
     const specs = this.buildLivestock(hh, settlement);
     if (this.specCache.size > 3000) this.specCache.clear();
-    this.specCache.set(hh.id, { day, specs });
+    this.specCache.set(hh.id, { day, sig, specs });
     return specs;
   }
 
@@ -611,12 +815,12 @@ export class AnimalSystem {
     let slot = 0;
     const order: AnimalKind[] = ['sheep', 'ox', 'cow', 'horse', 'goat', 'pig', 'goose', 'chicken', 'dog', 'cat'];
     for (const kind of order) {
-      const n = Math.min(counts[kind] ?? 0, 24);
+      const n = Math.min(counts[kind] ?? 0, KIND_ROOM[kind] ?? 4);
       const grazer = kind === 'sheep' || kind === 'cow' || kind === 'ox' || kind === 'goat' || (kind === 'horse' && !(head.rankTier >= 5));
       const lordHorse = kind === 'horse' && head.rankTier >= 5;
       for (let i = 0; i < n && slot < 24; i++, slot++) {
         out.push({
-          id: 1_000_000 + hh.id * 24 + slot, kind, household: hh.id, owner: hh.id, settlement, head: head.id,
+          id: 1_000_000 + hh.id * ID_SPAN + (KIND_BASE[kind] ?? 0) + i, kind, household: hh.id, owner: hh.id, settlement, head: head.id,
           shepherd: kind === 'sheep' ? shepherd : 0,
           homeX: lordHorse && sp.lordSeat ? sp.lordSeat.x + 6 : homeX, homeZ: lordHorse && sp.lordSeat ? sp.lordSeat.z + 6 : homeZ,
           yardR: kind === 'chicken' || kind === 'goose' ? 4.2 : kind === 'dog' || kind === 'cat' ? 3 : 5,
@@ -649,7 +853,7 @@ export class AnimalSystem {
         });
       }
     }
-    this.specCache.set(key, { day, specs: out });
+    this.specCache.set(key, { day, sig: 0, specs: out });
     return out;
   }
 

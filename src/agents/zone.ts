@@ -543,6 +543,17 @@ export class Zone {
     return null;
   }
 
+  /** Where a person is, which way they face and how fast they go (the player's body or an agent), or null; reused between calls. */
+  motionOf(person: PersonId): { x: number; z: number; yaw: number; speed: number } | null {
+    const m = this.motion;
+    const a = this.byPerson.get(person);
+    if (a) { m.x = a.x; m.z = a.z; m.yaw = a.yaw; m.speed = a.st === St.Walk ? a.speed : 0; return m; }
+    const p = this.player;
+    if (p && p.person === person) { m.x = p.x; m.z = p.z; m.yaw = p.yaw; m.speed = Math.hypot(p.vx, p.vz); return m; }
+    return null;
+  }
+  private readonly motion = { x: 0, z: 0, yaw: 0, speed: 0 };
+
   canGreet(): boolean { return this.zoneT - this.lastGreetT > 1.4; }
 
   isKin(a: Agent, other: Person | null): boolean {
@@ -666,6 +677,11 @@ export class Zone {
   summonAnimal(kind: AnimalKind, x: number, z: number, hostile: boolean): number { return this.fauna.summon(kind, x, z, hostile); }
   dismissAnimal(id: number): void { this.fauna.dismiss(id); }
   claimAnimal(id: number): boolean { return this.fauna.claim(id); }
+  leadAnimal(id: number, person: PersonId): { ok: boolean; reason?: string } {
+    return this.fauna.lead(id, person, this.state.persons.get(person)?.household ?? 0);
+  }
+  releaseLed(id: number): boolean { return this.fauna.unlead(id); }
+  ledBy(person: PersonId): readonly ZoneAnimal[] { return this.fauna.ledBy(person); }
   releaseAnimal(id: number, x: number, z: number, yaw: number): void { this.fauna.release(id, x, z, yaw); }
 
   say(person: PersonId, text: string, seconds = 3): void {
