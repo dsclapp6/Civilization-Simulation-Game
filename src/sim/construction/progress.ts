@@ -208,7 +208,7 @@ function planSite(C: Construction, ctx: PlanCtx, rec: SiteRec): void {
   const reps: Person[] = [];
   const waitingNote = (): string => sup.text || 'Waiting';
 
-  if (!holy && cap > 0.05) {
+  if (!holy && cap > 0.001) {
     // 1. the household's own, on the 'build' task
     for (const m of buildMembers(C, payer)) {
       if (units >= Math.min(cap, crewCap) - 1e-6) break;
@@ -282,7 +282,7 @@ function planSite(C: Construction, ctx: PlanCtx, rec: SiteRec): void {
     rec.status = 'working';
     rec.note = sup.text && cap < rec.labour - rec.done - 0.01 ? sup.text : '';
     rec.idle = 0;
-  } else if (cap <= 0.05) {
+  } else if (cap <= 0.001) {
     rec.idle += sup.stuck && !sup.coming ? 1 : 0;
     rec.status = rec.idle >= 2 ? 'stalled' : 'waiting';
     rec.note = waitingNote();
@@ -382,6 +382,8 @@ export function putIn(C: Construction, rec: SiteRec, days: number): number {
     rec.paid = r2(rec.paid + (paid >= fee - 1e-6 ? fee : paid));
   }
   rec.done = r6(Math.min(rec.labour, rec.done + add));
+  // a sliver of a worker-day left over is not worth another day's hire
+  if (rec.labour - rec.done < 0.02 && capacity(rec) >= rec.labour - rec.done - 1e-6) rec.done = rec.labour;
   rec.idle = 0;
   if (!rec.started) {
     rec.started = true;
@@ -396,8 +398,28 @@ export function putIn(C: Construction, rec: SiteRec, days: number): number {
   return add;
 }
 
+/**
+ * Goods ordered for a site that has no crew today come in during the working day: the site is looked at again at once, so the
+ * hands that were not hired this morning (nothing to build with) are hired now.
+ */
+function refreshArrivals(C: Construction): void {
+  let ctx: PlanCtx | null = null;
+  for (const s of C.save.sites) {
+    if (s.closed !== 0 || s.planned !== C.day || s.perDay > 0 || s.crew.length > 0) continue;
+    let due = false;
+    for (const tr of Object.values(s.transit)) if (tr[1] <= C.absDay + 1e-9) { due = true; break; }
+    if (!due) continue;
+    if (!ctx) {
+      ctx = newPlanCtx();
+      for (const o of C.save.sites) if (o.closed === 0 && o.planned === C.day) for (const p of o.crew) ctx.busy.add(p);
+    }
+    planSite(C, ctx, s);
+  }
+}
+
 /** One working hour of every site with a crew. */
 export function accrueAll(C: Construction): void {
+  refreshArrivals(C);
   for (const s of C.save.sites) {
     if (s.closed !== 0 || s.planned !== C.day || s.perDay <= 0) continue;
     putIn(C, s, s.perDay / WORK_HOURS);
