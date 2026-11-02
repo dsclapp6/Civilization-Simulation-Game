@@ -58,7 +58,7 @@ ownership of the ground.
 (`BUILDINGS` w × d, door on local +z, `rot` as in the renderer) through, in order: the **ground** (the territory service's
 `landAt` at the centre and the four corners — kind and holder: field, road and water are never buildable; a lord needs his own
 settlement's ground or title at every corner; a head needs the garden or town ground of his own household; the wild needs a baron;
-without a territory service the nearest settlement stands in), **permission** (rank, technique, count), **the ground's own
+without a territory service — or while it is the placeholder that calls everything wild, even a village's own streets — the nearest settlement stands in), **permission** (rank, technique, count), **the ground's own
 nature** (water at nine points, cliffs, slope — rise over the footprint's diagonal, 4–10 m, default 0.16 — a river within 25 m of
 the bank for watermill, fulling mill and tannery, a rise 1.5 m over the ring 35 m round for a windmill, the right deposit
 under the centre for mine, quarry, clay pit and salt pan via `territory.depositAt`, water beside a dock, woodland for a lumber

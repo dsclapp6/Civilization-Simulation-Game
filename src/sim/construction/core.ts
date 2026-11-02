@@ -6,6 +6,7 @@ import { DAYS_PER_YEAR } from '../../core/time';
 import type { Settlement, WorldModel } from '../../world/types';
 import type { Simulation } from '../sim';
 import { fullName, type GameState, type Household, type HouseId, type HouseholdId, type Person, type PersonId } from '../state';
+import type { EconomyApi } from '../economy/types';
 import type { Wave3Deps } from '../wave3deps';
 import { Spatial } from './geometry';
 import type { PlanRun } from './progress';
@@ -58,7 +59,7 @@ export class Construction {
   get territory() { return this.sim.services.territory; }
   get realm() { return this.sim.services.realm; }
   get advancement() { return this.sim.services.advancement; }
-  get economy() { return this.deps.economy; }
+  get economy(): EconomyApi | undefined { return this.deps.economy as EconomyApi | undefined; }
 
   // ---- saving ----
   /** Marks the saved section changed (and creates it in the state on first use). */
@@ -110,8 +111,8 @@ export class Construction {
   kindName(kind: keyof typeof BUILDINGS): string { return BUILDINGS[kind].name.toLowerCase(); }
 
   // ---- goods ----
-  goodUnit(good: string): string { return this.economy.good?.(good)?.unit ?? good; }
-  goodName(good: string): string { return this.economy.good?.(good)?.name?.toLowerCase() ?? good; }
+  goodUnit(good: string): string { return this.economy?.good?.(good)?.unit ?? good; }
+  goodName(good: string): string { return this.economy?.good?.(good)?.name?.toLowerCase() ?? good; }
 
   /** Households whose stores a job paid by `payer` draws on: the payer's own and, for institutions, those the House keeps in the place. */
   storeHouseholds(payer: Household, settlement: number): Household[] {

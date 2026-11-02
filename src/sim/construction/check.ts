@@ -40,7 +40,16 @@ const WILD: LandInfo = { kind: 'wild', settlement: -1, house: 0, title: 0, house
 
 export function landAt(C: Construction, x: number, z: number): LandInfo {
   const t = C.territory;
-  if (t) return t.landAt(x, z);
+  if (t) {
+    const land = t.landAt(x, z);
+    // ground inside a settlement's built-up area is never wild: a territory service that says so is not up yet (the placeholder)
+    if (land.kind !== 'wild' || land.settlement >= 0 || !C.world.settlementAt(x, z)) return land;
+  }
+  return fallbackLand(C, x, z);
+}
+
+/** Without a territory service: the built-up area of a settlement is its town, the ground within the reach of its kind its demesne. */
+function fallbackLand(C: Construction, x: number, z: number): LandInfo {
   const s = C.world.settlementAt(x, z);
   if (s) {
     const lord = lordTitleAt(C, s.id);

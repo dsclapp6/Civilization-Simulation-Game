@@ -4,6 +4,8 @@ import { BUILDINGS } from '../../../src/content/types';
 import { dist2 } from '../../../src/core/math';
 import type { Deposit, River } from '../../../src/world/types';
 import { footprintCorners } from '../../../src/sim/construction/geometry';
+import { installTerritory } from '../../../src/sim/territory';
+import type { SocialApi } from '../../../src/sim/social/types';
 import { mkHouse, mkPerson } from '../builders';
 import { manorLord, openGround, peasantWithGarden, probeVillage, probeWild, rig, village, type Rig, type Shape } from './helpers';
 
@@ -244,6 +246,31 @@ describe('placement: whose land, whose right', () => {
     const c = r.cons.check(lord.id, 'cottage', OPEN.x, OPEN.z, 0);
     expect(c.ok, c.reason).toBe(true);
     expect(c.settlement).toBe(v.id);
+  });
+
+  it('works while the territory service is only the placeholder (all wild): the built-up area still counts as the village', () => {
+    const { r, lord, v } = lordRig();
+    installTerritory(r.sim, { economy: r.eco.api, social: {} as SocialApi });
+    expect(r.sim.services.territory!.landAt(V.x, V.z).kind).toBe('wild');
+    const spot = r.cons.suggestSpot(lord.id, 'hovel', v.id);
+    expect(spot, 'a place inside the village').not.toBeNull();
+    expect(spot!.settlement).toBe(v.id);
+    // beyond the built-up area it is open country to the placeholder, and to the module
+    const out = r.cons.check(lord.id, 'cottage', OPEN.x, OPEN.z, 0);
+    expect(out.ok).toBe(false);
+    expect(out.reason).toMatch(/Open country/);
+  });
+
+  it('works without an economy at all (stores only)', () => {
+    const { r, lord, v } = lordRig();
+    (r.cons.core.deps as { economy?: unknown }).economy = undefined;
+    const hh = r.sim.state.households.get(lord.household)!;
+    hh.purse = 5000; hh.stores['planks'] = 40; hh.stores['straw'] = 40;
+    const spot = r.cons.suggestSpot(lord.id, 'cottage', v.id)!;
+    const res = r.cons.place(lord.id, 'cottage', spot.x, spot.z, spot.rot);
+    expect(res.ok, res.reason).toBe(true);
+    r.sim.advanceDays(12);
+    expect(r.sim.state.buildings.get(r.cons.site(res.site as number)?.building ?? -1)?.construction ?? 1).toBe(1);
   });
 
   it('answers a stranger and a nobody with a reason', () => {

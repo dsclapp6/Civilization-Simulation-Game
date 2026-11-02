@@ -111,7 +111,7 @@ function weekCapacity(C: Construction, ctx: PlanCtx, settlement: number): number
 function buildMembers(C: Construction, ctx: PlanCtx, payer: Household): Person[] {
   const hit = ctx.members.get(payer.id);
   if (hit) return hit;
-  const lines = C.economy.householdPlan?.(payer.id) ?? [];
+  const lines = C.economy?.householdPlan?.(payer.id) ?? [];
   const player = C.state.run.playerId;
   const out: Person[] = [];
   for (const l of lines) {
@@ -151,7 +151,7 @@ function supply(C: Construction, rec: SiteRec, payer: Household, ctx?: PlanCtx):
   const hhs = storesFor(C, ctx, payer, rec.settlement);
   const f = horizonFraction(rec);
   let text = '', coming = false, stuck = false;
-  const proc = C.economy.procure;
+  const proc = C.economy?.procure;
   for (const [g, total] of Object.entries(rec.need)) {
     const target = f >= 1 ? total : r2(total * f);
     let want = r2(target - (rec.have[g] ?? 0));
