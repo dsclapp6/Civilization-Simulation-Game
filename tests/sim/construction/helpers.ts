@@ -224,6 +224,13 @@ export function toDawn(sim: Simulation, days = 1): void {
   setTime(sim, 5 / 24, Math.floor(sim.absDay) + days);
 }
 
+/** Moves to 05:00 of the next working day: not the holy day (the fourth of the four). */
+export function toWorkDawn(sim: Simulation): void {
+  let d = Math.floor(sim.absDay) + 1;
+  while (d % 4 === 3) d++;
+  setTime(sim, 5 / 24, d);
+}
+
 export function village(sim: Simulation): { id: number; x: number; z: number; radius: number } {
   const s = sim.world.settlements.find((x) => x.kind === 'village' && sim.state.titleFor('manor', x.id))!;
   return { id: s.id, x: s.x, z: s.z, radius: s.radius };
