@@ -13,6 +13,7 @@ import { newProfile } from '../src/sim/legacy';
 import { installMilitary, militaryContext } from '../src/sim/military';
 import { installPolitics } from '../src/sim/politics';
 import { installRealm } from '../src/sim/realm';
+import { installLaw } from '../src/sim/law';
 import { SLOW_MS } from '../src/sim/scheduler';
 import { Simulation } from '../src/sim/sim';
 import { installSocial } from '../src/sim/social';
@@ -46,6 +47,7 @@ installAdvancement(sim, deps);
 installTerritory(sim, deps);
 installConstruction(sim, deps);
 installRealm(sim, deps);
+installLaw(sim, deps);
 console.log(`ready in ${((performance.now() - t0) / 1000).toFixed(1)} s: ${sim.world.settlements.length} settlements, services: ${Object.keys(sim.services).join(', ')}`);
 
 const tally: Record<string, number> = {};

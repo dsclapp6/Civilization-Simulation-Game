@@ -23,7 +23,9 @@ describe('hotkeys and the dock', () => {
     expect(keyIntent(KEYMAP.ui.politics, free)).toEqual({ type: 'toggle', panel: 'politics' });
     expect(keyIntent(KEYMAP.ui.techs, free)).toEqual({ type: 'toggle', panel: 'techs' });
     expect(keyIntent(KEYMAP.ui.requests, free)).toEqual({ type: 'toggle', panel: 'requests' });
-    expect(keyIntent(KEYMAP.ui.wounds, free)).toEqual({ type: 'toggle', panel: 'wounds' });
+    expect(keyIntent(KEYMAP.ui.builder, free)).toEqual({ type: 'toggle', panel: 'builder' });
+    expect(keyIntent(KEYMAP.ui.ruler, free)).toEqual({ type: 'toggle', panel: 'ruler' });
+    expect(keyIntent(KEYMAP.ui.liveAs, free)).toEqual({ type: 'toggle', panel: 'liveAs' });
     expect(keyIntent(KEYMAP.ui.help, free)).toEqual({ type: 'toggle', panel: 'help' });
     expect(keyIntent(KEYMAP.ui.politics, { ...free, typing: true })).toBeNull();
   });

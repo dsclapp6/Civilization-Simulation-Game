@@ -85,6 +85,10 @@ export function panelForKey(key: string, has: (needs: DockNeeds) => boolean): { 
     }
     case 'help': return { request: { panel: 'help' }, panelId: 'help' };
     case 'journal': return { request: { panel: 'journal' }, panelId: 'journal' };
+    // civilization pass (wave B registers these ext panels: src/ui/builder, src/ui/ruler, the live-as flow)
+    case 'builder': return { request: { panel: 'ext', name: 'builder' }, panelId: 'builder' };
+    case 'ruler': return { request: { panel: 'ext', name: 'ruler' }, panelId: 'ruler' };
+    case 'liveAs': return { request: { panel: 'ext', name: 'liveAs' }, panelId: 'liveAs' };
     default: return null;
   }
 }

@@ -86,7 +86,7 @@ export const HINTS: readonly HintDef[] = [
     when: (f) => f.engaged && f.ranged, done: () => false, maxSeconds: 14,
   },
   {
-    id: 'wounds', icon: 'heart', title: 'You are wounded', keys: [k(KEYMAP.ui.wounds)],
+    id: 'wounds', icon: 'heart', title: 'You are wounded', keys: [k(KEYMAP.ui.character)],
     text: 'Bleeding wounds must be bound or the blood runs out. Open the Wounds page and bind them; rest and food do the rest, and a healer helps.',
     link: { label: 'Open Wounds', request: { panel: 'ext', name: 'wounds' } },
     when: (f) => f.wounded && !f.engaged, done: (f) => f.opened.has('wounds'), maxSeconds: 30,

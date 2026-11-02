@@ -1,10 +1,12 @@
 // Keyboard → UI intent, pure. The input layer owns movement keys; the UI owns the panel keys of
-// KEYMAP.ui (Tab, I, J, M, C, H, L, Z, Esc) plus menu navigation (digits, arrows, Enter).
+// KEYMAP.ui (Tab, I, J, M, C, H, L, Z, K, T, R, O, N, Y, B, U, V, F1, Esc) plus menu navigation (digits, arrows, Enter).
 import { KEYMAP } from '../../player/types';
 
 export type PanelKey =
   | 'character' | 'inventory' | 'ledger' | 'map' | 'command' | 'family' | 'chronicle' | 'rest'
-  | 'politics' | 'techs' | 'requests' | 'wounds' | 'help' | 'journal' | 'minimap' | 'whatNow';
+  | 'politics' | 'techs' | 'requests' | 'wounds' | 'help' | 'journal' | 'minimap' | 'whatNow'
+  /** Civilization pass: builder mode (B), ruler mode (U), live as the person under the cursor / in front (V). */
+  | 'builder' | 'ruler' | 'liveAs';
 
 export type KeyIntent =
   | { type: 'toggle'; panel: PanelKey }
@@ -34,11 +36,13 @@ const TOGGLES: ReadonlyArray<readonly [string, PanelKey]> = [
   [KEYMAP.ui.politics, 'politics'],
   [KEYMAP.ui.techs, 'techs'],
   [KEYMAP.ui.requests, 'requests'],
-  [KEYMAP.ui.wounds, 'wounds'],
   [KEYMAP.ui.help, 'help'],
   [KEYMAP.ui.journal, 'journal'],
   [KEYMAP.ui.minimap, 'minimap'],
   [KEYMAP.ui.whatNow, 'whatNow'],
+  [KEYMAP.ui.builder, 'builder'],
+  [KEYMAP.ui.ruler, 'ruler'],
+  [KEYMAP.ui.liveAs, 'liveAs'],
 ];
 
 export function keyIntent(code: string, state: KeyState): KeyIntent | null {

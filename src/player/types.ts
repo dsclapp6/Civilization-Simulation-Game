@@ -27,9 +27,18 @@ export const KEYMAP = {
     menu: 'Escape', character: 'Tab', inventory: 'KeyI', ledger: 'KeyJ', map: 'KeyM', command: 'KeyC',
     family: 'KeyH', chronicle: 'KeyL', rest: 'KeyZ',
     /** Wave 4 (UI): realm and politics, House techniques, the requests journal, wounds, help and controls. */
-    politics: 'KeyK', techs: 'KeyT', requests: 'KeyR', wounds: 'KeyB', help: 'F1',
+    politics: 'KeyK', techs: 'KeyT', requests: 'KeyR', help: 'F1',
     /** Clarity pass: the journal (objectives, today, people you know), the minimap toggle and the "What now?" card. */
     journal: 'KeyO', minimap: 'KeyN', whatNow: 'KeyY',
+    /** Civilization pass (docs/CIV.md §2, §5, §6): builder mode, ruler mode (seat of government), live as the person under the
+     *  cursor or in front of you. B used to open the wounds page: wounds are now a tab of the character sheet (Tab) and the
+     *  HUD's wound mark. */
+    builder: 'KeyB', ruler: 'KeyU', liveAs: 'KeyV',
+  },
+  /** Civilization pass (CIV §9): in battle, select troop groups (all / foot / archers / horse) and toggle the tactical view
+   *  (C, which opens the command panel outside battle). Handled by the battle HUD through the UI's hotkey hook. */
+  battle: {
+    all: 'Digit4', foot: 'Digit5', archers: 'Digit6', horse: 'Digit7', tactical: 'KeyC',
   },
 } as const;
 
@@ -196,9 +205,22 @@ export interface PlayerApi {
   pointerLeave?(): void;
   /** What is under the cursor now (a stable object, mutated in place), or null. */
   hover?(): HoverInfo | null;
+  // ---- civilization pass (optional; docs/CIV.md §4, §9) ----
+  /** Bind the player (captivity, an escort): while set, movement input is ignored and the body is moved by the restraint
+   *  (led behind a person at their pace, held at a spot, escorted towards a point). null frees them. */
+  restrain?(r: Restraint | null): void;
+  restraint?(): Restraint | null;
+  /** Call your horse (hold F): it comes to you at a trot from where it is stabled or was left. */
+  callHorse?(): Result;
   /** Test and dev hooks (the dev overlay, screenshots, unit tests). */
   debug?: PlayerDebug;
 }
+
+/** Civilization pass (CIV §4): what holds the player. `reason` is shown in the HUD ("Bound and led to the gaol of Dromore"). */
+export type Restraint =
+  | { kind: 'led'; by: PersonId; reason: string }
+  | { kind: 'held'; x: number; z: number; building: number; reason: string }
+  | { kind: 'escorted'; by: PersonId; toX: number; toZ: number; reason: string };
 
 // ---------------------------------------------------------------------------------------------
 // Clarity pass: the mouse (CLARITY §5). A free cursor shows what is under it and what a click does; a click walks

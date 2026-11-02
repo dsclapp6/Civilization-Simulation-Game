@@ -17,7 +17,10 @@ export type AnimState =
   | 'attack_slash' | 'attack_overhead' | 'attack_thrust' | 'block' | 'dodge'
   | 'draw_bow' | 'aim_bow' | 'shoot_bow' | 'aim_crossbow' | 'shoot_crossbow' | 'reload_crossbow'
   | 'hit' | 'stagger' | 'fall' | 'dead'
-  | 'ride_idle' | 'ride_walk' | 'ride_trot' | 'ride_gallop' | 'ride_charge' | 'mount' | 'dismount';
+  | 'ride_idle' | 'ride_walk' | 'ride_trot' | 'ride_gallop' | 'ride_charge' | 'mount' | 'dismount'
+  /** Civilization pass (docs/CIV.md §4, §9): a captive's bound hands (standing / led on foot), climbing a siege ladder,
+   *  pushing (a ram, a cart). Renderers without a clip fall back to idle / walk / walk / work_lift. */
+  | 'bound' | 'bound_walk' | 'climb' | 'push';
 
 export type HorseAnim = 'idle' | 'walk' | 'trot' | 'gallop' | 'rear' | 'fall' | 'dead' | 'graze';
 
@@ -32,7 +35,9 @@ export type HeldItem =
   | 'tongs' | 'saw' | 'chisel' | 'distaff' | 'basket' | 'bucket' | 'sack' | 'staff' | 'crook' | 'book'
   | 'cup' | 'torch' | 'ladle'
   | 'dagger' | 'sword' | 'longsword' | 'war_axe' | 'mace' | 'spear' | 'bill' | 'lance'
-  | 'longbow' | 'shortbow' | 'crossbow' | 'shield_round' | 'shield_heater' | 'shield_kite' | 'banner';
+  | 'longbow' | 'shortbow' | 'crossbow' | 'shield_round' | 'shield_heater' | 'shield_kite' | 'banner'
+  /** Civilization pass (CIV §8): the butcher's cleaver (the forge's glowing bar is the 'tongs' item). */
+  | 'cleaver';
 
 export type CarryLook = 'none' | 'sack' | 'bundle_wood' | 'sheaf' | 'basket' | 'barrel' | 'stone' | 'bucket' | 'child';
 export type BackLook = 'none' | 'quiver' | 'shield' | 'bundle' | 'pack';
@@ -245,13 +250,42 @@ export interface FloatText {
 
 export interface MapMarker {
   id: number;
-  kind: 'player' | 'party' | 'army' | 'caravan' | 'bandits' | 'battle' | 'siege' | 'home' | 'work';
+  kind: 'player' | 'party' | 'army' | 'caravan' | 'bandits' | 'battle' | 'siege' | 'home' | 'work'
+    /** Civilization pass: a named outpost (CIV §5) — mining camp, quarry, lumber camp, fishing hamlet. */
+    | 'outpost';
   x: number;
   z: number;
   color: number;
   /** Rough headcount for sizing. */
   size: number;
   label?: string;
+}
+
+/** Civilization pass (docs/CIV.md §9): a siege work in the detail zone — a ladder against a wall, a ram at the gate, a
+ *  mantlet, an engine. Fed by the military/combat modules (`ViewSources.siegeWorks`), drawn by the renderer. */
+export interface SiegeWorkDrawItem {
+  id: number;
+  kind: 'ladder' | 'ram' | 'mantlet' | 'trebuchet' | 'mangonel';
+  x: number;
+  y: number;
+  z: number;
+  /** Facing (radians, 0 faces +z): a ladder faces the wall it leans on, a ram the gate it batters. */
+  yaw: number;
+  /** Ladder: length (m); its foot is at x/y/z and it leans on the wall top. */
+  length?: number;
+  /** Ram: swing phase 0..1 while battering (0 = drawn back); engines: throwing-arm phase. */
+  swing?: number;
+  state?: 'ok' | 'burning' | 'broken';
+}
+
+/** Civilization pass (CIV §9): how a fortification stands right now — gate leaves and breaches — for the renderer (and the
+ *  zone's navigation, which asks `military.fortState`). Only fortifications whose state differs from "open, whole" need be listed. */
+export interface FortView {
+  building: number;
+  /** Gatehouses: open, shut (barred), broken (battered in: passable). */
+  gate?: 'open' | 'shut' | 'broken';
+  /** Walls and palisades: 0 = whole … 1 = fallen the full width; ≥ 0.5 is a passable breach of rubble. */
+  breach: number;
 }
 
 export interface ClockView {
@@ -322,4 +356,10 @@ export interface SimView {
   worldMarkers?(): readonly WorldMarker[];
   /** Floating texts since the last call (drained). */
   drainFloaters?(): readonly FloatText[];
+  // ---- civilization pass (optional) ----
+  /** Siege works in the detail zone (ladders, rams, mantlets, engines). */
+  siegeWorks?(): readonly SiegeWorkDrawItem[];
+  /** Gates and breaches that are not "open, whole"; `fortsVersion` moves when any changes. */
+  forts?(): readonly FortView[];
+  fortsVersion?(): number;
 }

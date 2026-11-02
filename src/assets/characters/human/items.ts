@@ -71,6 +71,7 @@ export const ITEMS: Record<Exclude<HeldItem, 'none'>, ItemDef> = {
   shield_heater: { grip: 'shield', hand: 'forearmL', len: 0.8 },
   shield_kite: { grip: 'shield', hand: 'forearmL', len: 1.05 },
   banner: { grip: 'upright', grip2: { z: -0.45, min: -0.6, max: -0.3 }, hand: 'R', len: 2.6 },
+  cleaver: { grip: 'light', hand: 'R', len: 0.34 },
 };
 
 export function isShield(h: HeldItem): boolean { return h === 'shield_round' || h === 'shield_heater' || h === 'shield_kite'; }
@@ -329,6 +330,11 @@ function buildItem(kind: Exclude<HeldItem, 'none'>, look: CharacterLook | null):
     case 'ladle':
       shaft(b, -0.08, 0.38, 0.012, 0.01, 5, WOOD_LIGHT);
       b.color(WOOD_LIGHT).flag(MAT.wood).sphere(0, -0.03, 0.42, 0.05, 0.04, 0.05, 6, 3);
+      break;
+    case 'cleaver':
+      // civilization pass stand-in (wave B art may refine): a wooden grip and a broad, square-ended blade below it
+      shaft(b, -0.07, 0.09, 0.014, 0.016, 5);
+      b.color(IRON).flag(MAT.steel).box(0, -0.035, 0.18, 0.01, 0.1, 0.17);
       break;
     case 'dagger':
       b.color(LEATHER).flag(MAT.leather).tube(0, 0, -0.05, 0, 0, 0.05, 0.015, 0.014, 5);

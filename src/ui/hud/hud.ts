@@ -2,6 +2,7 @@
 // message feed, gain chips, travel card, sleep/wait fade, danger vignette and the hotkey dock.
 // It repaints only what changed (binders cache the last value), so it costs next to nothing per frame.
 import { RANK_NAMES } from '../../core/domain';
+import { hudPartFactories, type HudPart } from '../core/extHud';
 import { SEASON_NAMES } from '../../core/time';
 import { dayPart } from '../../sim/calendar';
 import { roleLabel } from '../../sim/careers';
@@ -195,6 +196,8 @@ export class Hud {
   private skipLabel = '';
   private needScratch: NeedView[] = [];
 
+  private readonly extParts: HudPart[] = [];
+
   constructor(private readonly deps: HudDeps) {
     this.tracker = new Tracker({
       game: () => deps.game(), nav: this.nav, nameOf: (id) => deps.nameOf(id),
@@ -205,6 +208,16 @@ export class Hud {
       openJournal: () => deps.open({ panel: 'journal' }),
     });
     this.minimap = new Minimap({ game: () => deps.game(), nav: this.nav, openMap: () => deps.open({ panel: 'map' }) });
+    // civilization pass: HUD parts registered by module UI files (src/ui/core/extHud.ts)
+    for (const [name, make] of hudPartFactories()) {
+      try {
+        const part = make({ game: () => deps.game(), host: deps.host, open: (req) => deps.open(req), isOpen: (id) => deps.isOpen(id), say: (k, t) => deps.say(k, t), scale: () => deps.scale() });
+        this.extParts.push(part);
+        this.el.append(part.el);
+      } catch (err) {
+        console.error(`HUD part "${name}" failed to build`, err);
+      }
+    }
     this.buildPlate();
     this.buildClock();
     this.buildCenter();
@@ -431,6 +444,9 @@ export class Hud {
     this.updateFeed(now);
     this.clockNow = now;
     this.updateGuidance(game, hud, now);
+    for (const part of this.extParts) {
+      try { part.update(now); } catch (err) { console.error('HUD part failed', err); }
+    }
     this.deps.guide.update(now);
     if (this.savedUntil && now > this.savedUntil) { this.savedUntil = 0; this.savedEl.classList.remove('on'); }
 

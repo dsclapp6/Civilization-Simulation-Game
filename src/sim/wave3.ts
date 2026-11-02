@@ -8,11 +8,12 @@
 //   installAdvancement(sim, deps) → sim.services.advancement, sim.services.happenings
 //                                   (src/sim/advancement, src/sim/happenings)
 import type { P2 } from '../core/math';
-import type { AnimState, HeldItem } from '../core/view';
+import type { AnimState, FortView, HeldItem } from '../core/view';
 import type { HouseId, PersonId, TitleId } from './state';
 import type { ConstructionApi } from './construction/types';
 import type { RealmApi } from './realm/types';
 import type { TerritoryApi } from './territory/types';
+import type { LawApi } from './law/types';
 
 // ---------------------------------------------------------------------------------------------
 // Combat (src/combat)
@@ -55,9 +56,13 @@ export interface FightResult {
   fled: PersonId[];
 }
 
+/** Civilization pass (CIV §4): 'subdue' — the side that engages strikes to wound and takes the downed and the yielding
+ *  alive (a patrol taking a trespasser); 'kill' (default) is a fight as before. */
+export type FightIntent = 'kill' | 'subdue';
+
 export interface CombatApi {
   /** A fight in the detail zone near the player (people are summoned if not already agents). */
-  engage(sides: FightSide[], opts?: { at?: P2; yieldAllowed?: boolean; reason?: string }): number;
+  engage(sides: FightSide[], opts?: { at?: P2; yieldAllowed?: boolean; reason?: string; intent?: FightIntent }): number;
   isFighting(person: PersonId): boolean;
   /** Off-screen harm for macro battles, raids, accidents: rolls a wound by intensity 0..1. */
   harm(person: PersonId, intensity: number, cause: string): HarmResult;
@@ -213,6 +218,60 @@ export interface MilitaryApi {
   declareFeud?(a: HouseId, b: HouseId, days?: number, cause?: string): void;
   /** Men a House would raise by levy for a reason ('war' | 'defence' | 'raid'). */
   levySize?(house: HouseId, reason: string): number;
+
+  // ---- civilization pass, wave B (docs/CIV.md §4, §9); optional ----
+  /** How a settlement stands: 'watch' (its House at war, or a hostile army within ~6 km): gates shut at night, the watch
+   *  doubled; 'alarm' (a hostile army within ~2 km, a siege camp): gates shut, the militia on the walls; 'assault' (a storm or
+   *  battle at the walls): bells, the people indoors, every station manned. */
+  alertOf?(settlement: number): AlertLevel;
+  /** A fortification as it stands (navigation: a shut gate is solid; a broken gate or a breach ≥ 0.5 is passable). null =
+   *  not a fortification, or open and whole. */
+  fortState?(building: number): FortView | null;
+  /** Troop groups in the current detail fight: the player's own side (by command level) or the enemy's (as far as seen). */
+  battleGroups?(side?: 'own' | 'enemy'): readonly BattleGroupView[];
+  /** An order to one of the player's groups (needs the command level for it; AI commanders use the same orders). */
+  orderGroup?(group: GroupKey, order: GroupOrder): { ok: boolean; reason?: string };
+  /** Someone taken by a captor outside a battle (a patrol, the watch, the sheriff): held by the captor's House for ransom,
+   *  fine or sentence (the law module keeps the gaol; the ransom right is the military's as for prisoners of war). */
+  takeCaptive?(captive: PersonId, captor: PersonId, opts?: { settlement?: number; reason?: string }): { ok: boolean; reason?: string };
+  /** A captive goes free: escaped, pardoned, sentence served, ransom paid. */
+  release?(captive: PersonId, reason: 'escaped' | 'pardoned' | 'served' | 'ransomed'): void;
+}
+
+/** Civilization pass (CIV §9). */
+export type AlertLevel = 'peace' | 'watch' | 'alarm' | 'assault';
+/** Troop groups the player selects in battle (keys 4–7). */
+export type GroupKey = 'all' | 'foot' | 'archers' | 'horse';
+export type Formation = 'loose' | 'line' | 'shield_wall' | 'wedge';
+/** Battle orders (SPEC §13) plus moving to a point and changing formation. */
+export type GroupOrderKind = 'follow' | 'hold' | 'advance' | 'charge' | 'loose' | 'retreat' | 'move' | 'formation';
+export interface GroupOrder {
+  kind: GroupOrderKind;
+  /** move / advance / hold: the ground point; loose / charge: optional. */
+  at?: P2;
+  /** loose / charge: the enemy fighter (person id) aimed at; 0/undefined = the nearest. */
+  target?: PersonId;
+  /** formation: the new formation. */
+  formation?: Formation;
+}
+export interface BattleGroupView {
+  key: GroupKey;
+  /** "Foot", "Archers", "Horse", "All". */
+  label: string;
+  count: number;
+  /** Centre of the group's men (world m). */
+  x: number;
+  z: number;
+  /** Facing of the formation (radians, 0 faces +z). */
+  yaw: number;
+  order: GroupOrderKind;
+  formation: Formation;
+  /** Where the order points, or null. */
+  at: P2 | null;
+  target: PersonId;
+  engaged: boolean;
+  /** 0..1 */
+  morale: number;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -251,4 +310,6 @@ export interface Wave3Services {
   territory?: TerritoryApi;
   construction?: ConstructionApi;
   realm?: RealmApi;
+  /** Wave B: trespass, patrols and captivity (src/sim/law). */
+  law?: LawApi;
 }

@@ -6,8 +6,8 @@ import type { P2 } from '../core/math';
 import { yawTo } from '../core/math';
 import { DAY_SECONDS, isNight, toDate } from '../core/time';
 import type {
-  AnimalDrawItem, BuildingView, CharacterDrawItem, ClockView, FloatText, FxEvent, MapMarker, PlayerView, ProjectileDrawItem,
-  SimView, StripTask, StripView, ViewMode, WeatherView, WorldMarker, WorldPropView,
+  AnimalDrawItem, BuildingView, CharacterDrawItem, ClockView, FloatText, FortView, FxEvent, MapMarker, PlayerView, ProjectileDrawItem,
+  SiegeWorkDrawItem, SimView, StripTask, StripView, ViewMode, WeatherView, WorldMarker, WorldPropView,
 } from '../core/view';
 import type { WorldModel } from '../world/types';
 import { AppearanceCache } from './appearance';
@@ -33,6 +33,10 @@ export interface ViewSources {
   /** Strips with a task under way and how far it has got (economy/stripfeed.ts); `stripWorkVersion` moves when that changes visibly. */
   stripWork?: () => ReadonlyArray<{ id: number; task: StripTask; work: number }>;
   stripWorkVersion?: () => number;
+  /** Civilization pass (military/combat): siege works in the zone, gates and breaches. */
+  siegeWorks?: () => readonly SiegeWorkDrawItem[];
+  forts?: () => readonly FortView[];
+  fortsVersion?: () => number;
 }
 
 export interface ViewHost {
@@ -47,6 +51,8 @@ const EMPTY_FX: readonly FxEvent[] = [];
 const EMPTY_PROPS: readonly WorldPropView[] = [];
 const EMPTY_MARKERS: readonly WorldMarker[] = [];
 const EMPTY_FLOATERS: readonly FloatText[] = [];
+const EMPTY_WORKS: readonly SiegeWorkDrawItem[] = [];
+const EMPTY_FORTS: readonly FortView[] = [];
 
 /** World position in front of a building's door (door is on local +z, yaw `rot`). */
 export function doorPoint(b: BuildingState, extra = 1.5): { x: number; z: number; yaw: number } {
@@ -328,6 +334,9 @@ export class SimViewImpl implements SimView {
   worldProps(): readonly WorldPropView[] { return this.sources.worldProps ? this.sources.worldProps() : EMPTY_PROPS; }
   worldMarkers(): readonly WorldMarker[] { return this.sources.worldMarkers ? this.sources.worldMarkers() : EMPTY_MARKERS; }
   drainFloaters(): readonly FloatText[] { return this.sources.drainFloaters ? this.sources.drainFloaters() : EMPTY_FLOATERS; }
+  siegeWorks(): readonly SiegeWorkDrawItem[] { return this.sources.siegeWorks ? this.sources.siegeWorks() : EMPTY_WORKS; }
+  forts(): readonly FortView[] { return this.sources.forts ? this.sources.forts() : EMPTY_FORTS; }
+  fortsVersion(): number { return this.sources.fortsVersion ? this.sources.fortsVersion() : 0; }
 
   // ---- felled scatter ----
   felledVersion(): number { return this.felledVer; }

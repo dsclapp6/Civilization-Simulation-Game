@@ -80,6 +80,31 @@ export interface BuildGhost {
   footprint: ReadonlyArray<{ x: number; z: number }>;
 }
 
+/** An overhead camera over a piece of land (civilization pass: builder mode, CIV §5; the battle's tactical view, §9). The
+ *  camera looks down at ~55° (height/pitch the renderer's choice), pans, zooms and turns but keeps its look-at point
+ *  inside the circle; entering and leaving glide (~0.8 s). */
+export interface OverviewView {
+  x: number;
+  z: number;
+  /** The look-at point stays within this radius (m) of x/z. */
+  radius: number;
+  /** Starting distance from the look-at point (m); the renderer clamps zoom to [20, 2.2 × radius]. */
+  distance?: number;
+  /** Starting yaw (radians); default keeps the current one. */
+  yaw?: number;
+}
+
+/** An order shown on the ground in battle (CIV §9): an arrow from a troop group to where it moves, a ring round what it
+ *  attacks or looses at, a flag where it holds. */
+export interface OrderMark {
+  id: number;
+  kind: 'move' | 'attack' | 'hold' | 'retreat';
+  from: { x: number; z: number };
+  to: { x: number; z: number };
+  /** Friendly orders gold, the selected group bright, the enemy's (when seen) red. */
+  tone: 'own' | 'selected' | 'enemy';
+}
+
 /**
  * Something the UI marks under the cursor or about to be acted on (clarity pass, docs/CLARITY.md §5). The kinds
  * mirror the sim's TargetRef (sim/actions.ts), so a TargetRef can be passed as it is: 'building' and 'strip'
@@ -135,6 +160,11 @@ export interface GameRenderer {
   setGhost?(ghost: BuildGhost | null): void;
   /** Builder mode's land tint: the land the builder may build on (polygons, world m) shown lightly; null clears. */
   setBuildArea?(area: ReadonlyArray<ReadonlyArray<{ x: number; z: number }>> | null): void;
+  /** Civilization pass, wave B: the overhead camera of builder mode and the tactical view; null returns to the camera mode
+   *  that was active before (with a glide). While it is on, `orbit`/`zoom`/`pan` drive it. */
+  setOverview?(view: OverviewView | null): void;
+  /** Orders drawn on the ground in battle (tactical view and command HUD); null or [] clears. */
+  setOrderMarks?(marks: readonly OrderMark[] | null): void;
 
   // ---- lifecycle ----
   setQuality(q: QualityLevel): void;

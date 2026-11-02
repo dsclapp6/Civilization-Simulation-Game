@@ -12,6 +12,7 @@ import type { SocialApi } from '../sim/social/types';
 import type { ObjectivesApi } from '../sim/objectives/types';
 import type { ConstructionApi } from '../sim/construction/types';
 import type { RealmApi } from '../sim/realm/types';
+import type { LawApi } from '../sim/law/types';
 import type { TerritoryApi } from '../sim/territory/types';
 import type { PersonId } from '../sim/state';
 import type { PanelRequest } from './core/requests';
@@ -28,6 +29,7 @@ export interface GameServices {
   readonly territory?: TerritoryApi;
   readonly construction?: ConstructionApi;
   readonly realm?: RealmApi;
+  readonly law?: LawApi;
 }
 
 export type QualitySetting = 'low' | 'medium' | 'high';

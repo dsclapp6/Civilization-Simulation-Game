@@ -26,6 +26,7 @@ import {
 } from '../core/notices';
 import { hasModule } from '../core/modules';
 import { Hud } from '../hud/hud';
+import { runHotkeys, type HudPartCtx } from '../core/extHud';
 import { Toasts } from '../hud/toasts';
 import { Guide } from '../hud/guide';
 import { createPanel } from '../panels/registry';
@@ -56,6 +57,8 @@ export class UiApp implements GameUIExt {
   private readonly toasts: Toasts;
   private readonly guide: Guide;
   private readonly hud: Hud;
+  /** What module hotkeys get (src/ui/core/extHud.ts). */
+  private readonly extCtx: HudPartCtx;
   private readonly menu: MenuLayer;
   private readonly loading = new LoadingLayer();
   private readonly tooltips: Tooltips;
@@ -112,6 +115,10 @@ export class UiApp implements GameUIExt {
       scale: () => this.scale,
       nameOf: (id) => this.nameOf(id),
     });
+    this.extCtx = {
+      game: () => this.bound?.game ?? null, host, open: (req) => this.toggleOrOpen(req), isOpen: (id) => this.stack.has(id),
+      say: (kind, text) => this.say(kind, text), scale: () => this.scale,
+    };
     this.menu = new MenuLayer({
       host,
       startRun: (opts) => this.startRun(opts),
@@ -686,6 +693,12 @@ export class UiApp implements GameUIExt {
     }
     const intent = keyIntent(e.code, { typing: isTypingTarget(e.target), ctrl: e.ctrlKey, alt: e.altKey, meta: e.metaKey });
     if (this.screen === 'game' && e.code === 'Tab' && !e.ctrlKey && !e.altKey && !e.metaKey && !isTypingTarget(e.target)) e.preventDefault();
+    // civilization pass: module hotkeys (the battle HUD's troop groups and tactical view) come before the UI's own keys
+    if (this.screen === 'game' && this.bound && !e.ctrlKey && !e.altKey && !e.metaKey && !isTypingTarget(e.target)) {
+      const top = this.stack.top();
+      const held = !!top && (top.group === 'screen' || top.group === 'dialogue' || top.group === 'trade' || top.escape === 'ignore');
+      if (!held && runHotkeys(e.code, e, this.extCtx)) { e.preventDefault(); e.stopPropagation(); return; }
+    }
     if (!intent) return;
     if (this.screen === 'menu') {
       if (intent.type === 'escape' && this.menu.back()) { e.preventDefault(); e.stopPropagation(); }
