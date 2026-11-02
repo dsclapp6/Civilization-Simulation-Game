@@ -67,7 +67,8 @@ Measured on seed `abc` (7 kingdoms, 139 deposits for 140 settlements) and the de
 | silver | 6 (0 4 0 2 0 0 0) | 3 (0 0 0 0 1 2 0) | 5 / 2 |
 | gold | 2 (0 1 0 1 0 0 0) | 2 (1 0 0 0 1 0 0) | 2 / 1 |
 
-Close-ups: `deposit-iron-abc.png` (an iron deposit in the uplands: the dotted circle is its extent, the small square its levelled floor),
+Close-ups: `deposit-stone-abc.png` (a stone deposit high in the mountains: the dotted circle is its extent, the small square at its middle the
+levelled working floor cut into the slope), `deposit-iron-abc.png` (an iron deposit in the uplands, on ground already level enough to need no floor),
 `deposit-clay-abc.png` (clay on the bank of a river through marsh), `deposit-gold-abc.png` (alluvial gold on a mountain stream),
 `deposit-salt-abc.png` (salt pans behind a beach). `npx tsx tests/world/depositMap.tool.ts --seed abc --out docs/world --zoom iron,stone,clay,salt,silver,gold`.
 
