@@ -68,14 +68,14 @@ Measured on seed `abc` (7 kingdoms, 139 deposits for 140 settlements) and the de
 | gold | 2 (0 1 0 1 0 0 0) | 2 (1 0 0 0 1 0 0) | 2 / 1 |
 
 Close-ups: `deposit-stone-abc.png` (a stone deposit high in the mountains: the dotted circle is its extent, the small square at its middle the
-levelled working floor cut into the slope), `deposit-iron-abc.png` (an iron deposit in the uplands, on ground already level enough to need no floor),
+levelled working floor cut into the slope), `deposit-iron-abc.png` (an iron deposit in the uplands; its 18 m floor hardly shows in the hillshade),
 `deposit-clay-abc.png` (clay on the bank of a river through marsh), `deposit-gold-abc.png` (alluvial gold on a mountain stream),
 `deposit-salt-abc.png` (salt pans behind a beach). `npx tsx tests/world/depositMap.tool.ts --seed abc --out docs/world --zoom iron,stone,clay,salt,silver,gold`.
 
 ### Working floors
 
 Iron, stone, silver and gold deposits are in hills where the detail noise bumps the ground by a metre in a few metres, so a
-mine (6 m square) or a quarry (16 m) would not fit. Where the ground under a deposit's centre is not already level, **a level working
+mine (6 m square) or a quarry (16 m) would not fit. Where the ground under a deposit's centre is not already level (on seed `abc`: under all 92 of them), **a level working
 floor is cut into the hillside** (an extra "platform" of the world's own height model: 18 m square for iron and silver, 22 m for
 stone, 12 m for gold, blended 6 m into the slope; no yard, no road, vegetation cleared). `world.heightAt` is flat there, so
 construction's slope check passes at the deposit's centre. Clay and salt lie on flat ground and need none.
