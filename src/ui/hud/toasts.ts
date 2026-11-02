@@ -1,5 +1,7 @@
 // Top-centre toasts: points earned, skill levels, rank changes, perks waiting. Short-lived gilded
-// ribbons; a toast with an action (a perk to choose) can be clicked or confirmed with Enter.
+// ribbons; a toast with an action (a perk to choose) can be clicked or confirmed with Enter. Each one can be
+// dismissed (×), and the whole stack folds away into a small "N notices" bar (remembered between sessions).
+import { foldButton, isCollapsed } from '../core/collapse';
 import { h } from '../core/dom';
 import type { ToastInput } from '../core/feed';
 import { icon } from '../core/icons';
@@ -11,10 +13,29 @@ const MAX_TOASTS = 4;
 
 export class Toasts {
   readonly el = h('div.mu-toasts');
+  private readonly list = h('div.mu-toasts-list');
+  private readonly count = h('span.mu-toasts-count');
+  private readonly bar = h('div.mu-toasts-bar.mu-hide');
   private live: Live[] = [];
   private seq = 0;
 
-  constructor(private readonly open: (req: PanelRequest) => void) {}
+  constructor(private readonly open: (req: PanelRequest) => void) {
+    const fold = foldButton('toasts', 'notices', () => this.paint());
+    this.bar.append(icon('bell', 13), this.count, fold);
+    this.bar.addEventListener('click', () => fold.click());
+    this.el.append(this.bar, this.list);
+    this.paint();
+  }
+
+  /** Folded: only the bar with the count shows. Open: the bar shows (to fold them) whenever there are notices. */
+  private paint(): void {
+    const folded = isCollapsed('toasts');
+    const n = this.live.length;
+    this.el.classList.toggle('folded', folded);
+    this.list.classList.toggle('mu-hide', folded);
+    this.bar.classList.toggle('mu-hide', n === 0);
+    this.count.textContent = folded ? `${n} ${n === 1 ? 'notice' : 'notices'}` : 'Fold notices';
+  }
 
   push(t: ToastInput, now: number): void {
     const key = t.key ?? `t${++this.seq}`;
@@ -26,6 +47,7 @@ export class Toasts {
         h('div.mu-toast-title', null, t.title),
         t.text ? h('div.mu-toast-sub', null, t.text) : null,
       ),
+      h('button.mu-toast-x', { type: 'button', 'aria-label': 'Dismiss', tip: 'Dismiss', onclick: () => this.dismissKey(key) }, icon('cross', 11)),
     );
     if (t.action) {
       const a = t.action;
@@ -34,9 +56,10 @@ export class Toasts {
         h('button.mu-btn.small.primary', { type: 'button', onclick: () => { this.dismissKey(key); this.open(a.request); } }, a.label),
         h('span.mu-tiny.mu-dim', null, 'or press ', h('span.mu-key', null, 'Enter'))));
     }
-    this.el.appendChild(el);
+    this.list.appendChild(el);
     this.live.push({ key, el, input: t, born: now });
     while (this.live.length > MAX_TOASTS) this.remove(this.live[0]);
+    this.paint();
   }
 
   /** The most recent toast that carries an action, if still showing. */
@@ -76,5 +99,6 @@ export class Toasts {
   private remove(l: Live): void {
     l.el.remove();
     this.live = this.live.filter((x) => x !== l);
+    this.paint();
   }
 }
