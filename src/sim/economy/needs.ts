@@ -164,7 +164,7 @@ export function eatAtHome(E: Econ, p: Person): { ok: boolean; message: string } 
   if (!hh) return { ok: false, message: 'You have no household.' };
   const foods = bagEntries(hh.stores).filter(([k]) => GOODS[parseItemKey(k).good]?.food && GOODS[parseItemKey(k).good].category !== 'livestock');
   // bread or flat cakes first, then cheese, vegetables and a little ale
-  const order = ['bread', 'cheese', 'eggs', 'vegetables', 'meat', 'fish', 'ale', 'honey'];
+  const order = ['bread', 'cheese', 'eggs', 'vegetables', 'meat', 'fish', 'salt_meat', 'ale', 'honey'];
   foods.sort((a, b) => order.indexOf(parseItemKey(a[0]).good) - order.indexOf(parseItemKey(b[0]).good));
   let ate = 0;
   for (const [k, have] of foods) {
@@ -208,7 +208,7 @@ function autoEat(E: Econ, p: Person): void {
     return;
   }
   // bread and cheese before ale and vegetables
-  const order = ['bread', 'cheese', 'meat', 'fish', 'eggs', 'vegetables', 'honey', 'ale'];
+  const order = ['bread', 'cheese', 'meat', 'fish', 'salt_meat', 'eggs', 'vegetables', 'honey', 'ale'];
   foods.sort((a, b) => order.indexOf(parseItemKey(a).good) - order.indexOf(parseItemKey(b).good));
   let ate = 0;
   for (const k of foods) {

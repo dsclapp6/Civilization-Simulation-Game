@@ -53,6 +53,20 @@ export interface HelperSave {
 
 export interface FineSave { amount: number; reason: string; day: number; due: number; to: number }
 
+/** Goods a household bought at a market that are still on the cart (civilization pass, trade-house.ts). */
+export interface CartSave {
+  /** Household the goods are for. */
+  h: number;
+  /** Item key. */
+  k: string;
+  /** Quantity. */
+  q: number;
+  /** Absolute day on which they arrive. */
+  at: number;
+  /** Market settlement they come from. */
+  f: number;
+}
+
 export interface EconSave {
   v: 1;
   /** 1 once households, livestock and kits were set up. */
@@ -91,12 +105,14 @@ export interface EconSave {
   paid: Record<string, number>;
   /** Day numbers of the last daily/weekly bookkeeping (idempotency across loads). */
   last: { day: number; week: number; year: number; /** 1 while the player's household table is laid (set by the macro household tick), 0 when it went short. */ board?: number };
+  /** Goods on the carts of households that bought at a market (arrive in the stores at their day). */
+  carts: CartSave[];
 }
 
 export function newEconSave(): EconSave {
   return {
     v: 1, init: 0, eq: {}, emp: {}, filled: {}, helpers: [], plan: {}, ledger: {}, tenure: {}, lease: {}, fines: {}, ww: {},
-    fug: {}, deeds: [], mood: {}, tally: {}, harvest: { year: -1, f: [] }, parcels: {}, paid: {}, last: { day: -1, week: -1, year: -1 },
+    fug: {}, deeds: [], mood: {}, tally: {}, harvest: { year: -1, f: [] }, parcels: {}, paid: {}, last: { day: -1, week: -1, year: -1 }, carts: [],
   };
 }
 
@@ -152,8 +168,13 @@ export class Econ {
   readonly stripCentre = new Map<number, { x: number; z: number }>();
   /** Indexes of macro goods in the stock arrays of the saved markets. */
   marketIndex: Record<string, number> = {};
-  /** Market id → target stock per macro good (static: derived from the settlements' carrying capacities). */
+  /**
+   * Market id → target stock per macro good: the foods' from the settlements' carrying capacities (static), the materials'
+   * from what the hinterland uses and its works make (supply.ts); rebuilt when the supply stamp of the works moves.
+   */
   readonly targets = new Map<number, Float64Array>();
+  /** Market id → the supply stamp its targets were built at. */
+  readonly targetStamp = new Map<number, number>();
   /** Optional probe for calibration tools: (what, rank tier, pence). */
   probe: ((what: string, tier: number, value: number) => void) | null = null;
   /** Prices fixed for the length of one settlement's tick (see market.beginTick). */
