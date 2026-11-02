@@ -49,7 +49,10 @@ function rulerAt(w: AiWorld, place: number): number {
 
 describe('the AI rulers: who runs, and when', () => {
   it('are installed with the realm unless left out', () => {
-    expect(aiWorld({ seed: SEED }).realm.ai).toBeTruthy();
+    const on = aiWorld({ seed: SEED });
+    expect(on.realm.ai).toBeTruthy();
+    // the game's console finds them on the service
+    expect((on.sim.services.realm as unknown as { ai?: unknown }).ai).toBe(on.ai);
     const none = aiWorld({ seed: SEED, noAi: true });
     expect(none.realm.ai).toBeUndefined();
     none.sim.advanceDays(6);
@@ -197,6 +200,43 @@ describe('the AI rulers: works', () => {
     const site = w.cons.sites().find((x) => x.builder === r.id)!;
     expect(site.kind).toBe('palisade');
     expect(w.ai.table()[0].defence).toBe(1);
+  });
+
+  it('go on from the palisade to the wall, the towers and the keep as the techniques come, and stop when the walls count for what they fear', () => {
+    const w = aiWorld({ seed: SEED });
+    const k = aRuler(w, 'kingdom', 0);
+    const adv = w.sim.services.advancement as unknown as { grant(p: number, t: string): boolean };
+    const S0 = sense(w, k.id, { purse: 9_000_000, fear: 0.9, eager: true });
+    // the town of the realm that has no wall of its own
+    const town = S0.places.find((p) => (p.kind === 'town' || p.kind === 'village') && loadPlace(w.ai, p).fort < 1.2)!;
+    expect(town, 'a place without walls').toBeTruthy();
+    const kinds = (): string[] => { const S = sense(w, k.id, { purse: 9_000_000, fear: 0.9, eager: true }); return wantsFor(w.ai, S, loadPlace(w.ai, S.places.find((p) => p.id === town.id)!)).map((x) => x.kind); };
+    // without the techniques: a palisade and nothing greater
+    const first = kinds();
+    expect(first).toContain('palisade');
+    expect(first).not.toContain('wall');
+    expect(first).not.toContain('tower');
+    // curtain walls: stone walls, and the palisade is for the villages only
+    expect(adv.grant(k.id, 'curtain_walls')).toBe(true);
+    const walled = kinds();
+    expect(walled).toContain('wall');
+    if (town.kind === 'town') expect(walled).not.toContain('palisade');
+    // three pieces of wall already fill the sum the siege counts: no more wall, but the gate and the towers go with the wall that stands
+    expect(adv.grant(k.id, 'stone_keep')).toBe(true);
+    for (let i = 0; i < 3; i++) addBuilding(w.sim, town.id, 'wall');
+    const three = kinds();
+    expect(three).toContain('gatehouse');
+    expect(three).toContain('tower');
+    expect(three).not.toContain('wall');
+    expect(three).not.toContain('palisade');
+    // once the gate and the towers stand, he wants no more of any
+    addBuilding(w.sim, town.id, 'gatehouse');
+    for (let i = 0; i < 3; i++) addBuilding(w.sim, town.id, 'tower');
+    const S = sense(w, k.id, { fear: 0.9, eager: true });
+    const done = loadPlace(w.ai, S.places.find((p) => p.id === town.id)!);
+    expect(done.fort).toBeGreaterThanOrEqual(fortWanted(0.9) - 0.2);
+    const more = wantsFor(w.ai, S, done).map((x) => x.kind);
+    for (const d of ['palisade', 'wall', 'tower', 'gatehouse', 'keep_stone', 'motte']) expect(more).not.toContain(d);
   });
 
   it('want no palisade when they have little to fear', () => {

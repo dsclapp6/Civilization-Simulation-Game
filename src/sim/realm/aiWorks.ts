@@ -114,8 +114,9 @@ const RULES: readonly Rule[] = [
   { kind: 'great_hall', group: 'military', f: (c) => (c.n('great_hall') < 1 && c.S.tier >= 5 && c.p.id === c.S.seat ? [0.14, 'a great hall'] : 0) },
   { kind: 'palisade', group: 'defence', f: (c) => (c.S.fear >= 0.3 && fortGap(c) && (!c.has('curtain_walls') || c.p.kind === 'village' || c.p.kind === 'hamlet') ? [0.3 + 0.5 * c.S.fear, 'a palisade against the danger'] : 0) },
   { kind: 'wall', group: 'defence', f: (c) => (fortGap(c) && c.has('curtain_walls') ? [0.45 + 0.5 * c.S.fear, 'curtain wall against the danger'] : 0) },
-  { kind: 'tower', group: 'defence', f: (c) => (fortGap(c) && c.has('stone_keep') && c.p.pieces >= 5 && c.n('tower') < c.p.pieces / 6 ? [0.3 + 0.3 * c.S.fear, 'a tower on the wall'] : 0) },
-  { kind: 'gatehouse', group: 'defence', f: (c) => (fortGap(c) && c.has('curtain_walls') && c.n('wall') >= 6 && c.n('gatehouse') < 1 ? [0.3 + 0.2 * c.S.fear, 'a gatehouse'] : 0) },
+  // (three pieces of wall fill the sum the siege counts, so towers and the gate go with the wall that stands, not with the gap)
+  { kind: 'tower', group: 'defence', f: (c) => (c.S.fear >= 0.3 && c.has('stone_keep') && c.p.pieces >= 3 && c.n('tower') < c.p.pieces / 4 ? [0.3 + 0.3 * c.S.fear, 'a tower on the wall'] : 0) },
+  { kind: 'gatehouse', group: 'defence', f: (c) => (c.S.fear >= 0.3 && c.has('curtain_walls') && c.n('wall') >= 3 && c.n('gatehouse') < 1 ? [0.3 + 0.2 * c.S.fear, 'a gatehouse'] : 0) },
   { kind: 'keep_stone', group: 'defence', f: (c) => (fortGap(c) && c.has('stone_keep') && c.S.fear > 0.4 && c.n('keep_stone') < 1 && c.n('motte') < 1 && (c.p.kind === 'castle' || c.p.id === c.S.seat) ? [0.4 + 0.4 * c.S.fear, 'a stone keep'] : 0) },
   { kind: 'motte', group: 'defence', f: (c) => (fortGap(c) && !c.has('stone_keep') && c.S.fear > 0.45 && c.S.tier >= 5 && c.p.pop >= 60 && c.n('motte') < 1 && c.n('keep_stone') < 1 ? [0.35 + 0.3 * c.S.fear, 'a motte and keep'] : 0) },
 ];

@@ -125,6 +125,7 @@ function computePicks(A: Ai, S: Sense): ResearchPick[] {
   };
   const running = new Set<string>();
   for (const pr of R.data.projects) if (pr.house === S.house && (pr.state === 'active' || pr.state === 'stalled')) running.add(pr.tech);
+  const great = RESEARCH_AT_ONCE[S.class] >= 2;
   const out: ResearchPick[] = [];
   for (const def of rt.techs()) {
     const res = def.research;
@@ -144,8 +145,9 @@ function computePicks(A: Ai, S: Sense): ResearchPick[] {
         const shelf = gd?.category === 'livestock' ? 4 : gd?.quality ? 10 : 25;
         if (missing > shelf) short = true;
       } else if (SCARCE.has(g)) {
-        // the dear materials must be in the markets: a technique that wants 400 stone waits for a quarry
-        if (A.stockAt(seat, g) * 0.9 < missing * AI.supplyMargin) short = true;
+        // the dear materials must be in the markets: a technique that wants 400 stone waits for a quarry. A great House (two hands or more
+        // for research) may begin with a quarter of it there: the realm's research orders the rest again every few days and waits for the carts
+        if (A.stockAt(seat, g) * 0.9 < missing * AI.supplyMargin * (great ? 0.25 : 1)) short = true;
       } else if (A.stockAt(seat, g) * 0.9 < missing) short = true;
     }
     if (short) continue;
