@@ -273,3 +273,19 @@ work is charred and throws fire and smoke, a broken one lies tipped over.
 `push` (shoulder to a ram's beam; walkable); the cleaver; a halter rope from the leader's nearer hand to a led
 animal's head (`AnimalDrawItem.ledBy`; it sags when slack, never thinner than ~1 px) and turns of rope round a
 captive's wrists (`civ-led`, `civ-works`); props for the new work (`src/assets/props/civProps.ts`).
+
+**Measured** (tests/render/civ.perf.test.ts, `npm run test:perf`; the world-viewer presets at medium quality, this branch
+against its base 372c7ca run side by side, two rounds each, on a shared 4-core machine at a load of 30–50 — SwiftShader
+makes every frame seconds long there, so only the comparison means anything):
+
+| Preset | Frame, base → this branch (ms, GPU-synced, 320×180) | Render CPU (ms) | Draw calls | Triangles |
+|---|---|---|---|---|
+| village | 2 972 / 3 199 → 3 310 / 3 005 | 13.0 / 16.3 → 14.1 / 15.4 | 263 → 263 | 1.51 M → 1.51 M |
+| town | 3 144 / 3 769 → 3 275 / 3 175 | 15.7 / 18.2 → 18.0 / 20.6 | 364 → 364 | 1.50 M → 1.50 M |
+| castle | 4 239 / 3 575 → 3 999 / 3 511 | 19.1 / 17.4 → 19.7 / 17.2 | 394 → 399 | 1.494 M → 1.503 M (a deposit in view) |
+
+Unchanged within the noise (which runs ±10 % between two rounds of the same build). The new layers cost ~0.06 ms a frame
+together when idle or showing a village's marks, orders, deposits and ten siege works (marks ≈ 0.01, orders ≈ 0.01,
+tint < 0.001, deposits ≈ 0.03, siege ≈ 0.02 ms) and ~0.3 ms while a ghost is dragged (it re-drapes its outline).
+Draw calls only while something is shown: the marks 2 in all, a deposit in view ≤ 3, a siege work 1–2, the ghost 2 per
+mesh of its model plus 2, the orders 3.
