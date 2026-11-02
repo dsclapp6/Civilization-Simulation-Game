@@ -30,10 +30,8 @@ import { classifyAccolade, isKnighting, type AccoladeData } from '../core/accola
 import { Hud } from '../hud/hud';
 import { runHotkeys, type HudPartCtx } from '../core/extHud';
 import { liveAsProvider } from '../core/liveAsAction';
-import { personSummary, switchKind, whoNowCard, type LiveAsReason, type SwitchKind } from '../core/liveAsModel';
-import { SwitchFx, followPoseBehind, skipPlayerSwitchEffect } from '../core/switchfx';
-import { GLIDE_SECONDS } from '../core/liveAsModel';
-import type { CameraPose } from '../types';
+import { whoNowCard, type LiveAsReason } from '../core/liveAsModel';
+import { LifeSwitcher } from '../core/lifeSwitch';
 import { Toasts } from '../hud/toasts';
 import { Guide } from '../hud/guide';
 import { createPanel } from '../panels/registry';
@@ -45,9 +43,6 @@ import { Tooltips } from './tooltips';
 import { SoundDirector } from '../audio/director';
 
 interface Bound { game: GameServices; offs: Array<() => void>; pause: PauseController }
-
-/** A change of life the UI started (`liveAs`): why, how it crosses, what the person was doing, where the camera was. */
-interface PendingSwitch { id: PersonId; reason: LiveAsReason; kind: SwitchKind; doing: string; pose: CameraPose | null }
 
 const ESCAPE_DEBOUNCE_MS = 80;
 
@@ -100,18 +95,15 @@ export class UiApp implements GameUIExt {
   private chronicleTimer = 0;
   private lastEncounterKey = '';
   private lastMenuPause: boolean | null = null;
-  /** Taking up another life (CIV §2): the clock of the glide or fade, the screen veil, what is under way. */
-  private readonly fx = new SwitchFx();
+  /** Taking up another life (CIV §2): the glide or fade, its clock and the veil over the screen. */
+  private readonly lives: LifeSwitcher;
   private readonly veil = h('div.mu-veil');
-  private pending: PendingSwitch | null = null;
-  /** After the switch: open the ruler's seat of government when the glide or fade is over ("Rule this town"). */
-  private ruleAfter: PersonId | null = null;
-  /** Where the body was last seen (the place of death, the start of a glide). */
-  private lastBody: { x: number; z: number } | null = null;
+  private veilOpacity = 0;
   /** Knighthoods the simulation announced (`careerChanged`): the chronicle line that says how comes a moment later, so they wait a frame. */
   private knights: Array<{ person: PersonId; from: string; at: number }> = [];
 
   constructor(private readonly parent: HTMLElement, private readonly host: UiHost) {
+    this.lives = new LifeSwitcher({ game: () => this.bound?.game ?? null, host, say: (kind, text) => this.say(kind, text) });
     this.toasts = new Toasts((req) => this.openPanel(req));
     this.guide = new Guide({
       game: () => this.bound?.game ?? null,
@@ -188,7 +180,7 @@ export class UiApp implements GameUIExt {
       else if (!g) return;
     }
     const sim = this.bound!.game.sim;
-    this.stepSwitch(dt);
+    this.stepLives(dt);
     this.flushKnights();
     if (sim.state.run.phase === 'alive') this.guardedHud();
     try { this.sound.update(this.clock); } catch (err) { console.error('sound failed', err); }
@@ -306,7 +298,7 @@ export class UiApp implements GameUIExt {
   debugState(): NonNullable<ReturnType<NonNullable<GameUIExt['debugState']>>> {
     return {
       pin: this.pins.get(), whatNowOpen: this.hud.whatNow.isOpen(), tracker: this.hud.tracker.el.textContent ?? '',
-      arrival: this.hud.arrival.current()?.name ?? null, switching: this.fx.phase, veil: this.veilOpacity,
+      arrival: this.hud.arrival.current()?.name ?? null, switching: this.lives.fx.phase, veil: this.veilOpacity,
       cues: [...this.sound.cuesPlayed],
     };
   }
@@ -435,11 +427,8 @@ export class UiApp implements GameUIExt {
     const b = this.bound;
     this.sound.bind(null);
     this.summaryDay = null;
-    this.pending = null;
-    this.ruleAfter = null;
-    this.lastBody = null;
+    this.lives.reset();
     this.knights = [];
-    this.fx.cancel();
     this.veilOpacity = 0;
     this.veil.style.opacity = '0';
     this.hud.arrival.hide();
@@ -464,8 +453,8 @@ export class UiApp implements GameUIExt {
 
   /**
    * The character changed (taken up from the death screen, a list, the wheel, V, or by a tool). Closes what belonged to the old
-   * life and sees the change across: the camera glides to the new body when it is near, else the screen fades; then the card says
-   * who you are now. Runs inside the event, before the renderer has moved the camera, so the old view can still be read.
+   * life and sees the change across (`LifeSwitcher`: the camera glides to the new body when it is near, else the screen fades); then
+   * the card says who you are now.
    */
   private onPlayerSwitched(e: SimEvents['playerSwitched']): void {
     this.stack.close('death');
@@ -477,111 +466,31 @@ export class UiApp implements GameUIExt {
     if (!g) return;
     const to = g.sim.state.persons.get(e.to);
     if (!to) return;
-    const pend = this.pending && this.pending.id === e.to ? this.pending : null;
-    this.pending = null;
-    const doing = pend?.doing ?? personSummary(g, e.to)?.doing ?? '';
-    const controls = this.host.renderer();
-    const pose = pend?.pose ?? this.host.cameraPose?.(this.headOf(g, this.lastBody)) ?? null;
-    const body = g.player.body();
-    // the player module's own rise to the map is replaced by ours
-    skipPlayerSwitchEffect(g.player);
-
-    const canGlide = !!pose && !!body && !!controls?.setCameraPose && (controls.cameraMode?.() ?? 'follow') === 'follow';
-    const from = this.lastBody;
-    const dist = from && body ? Math.hypot(body.x - from.x, body.z - from.z) : null;
-    const kind: SwitchKind = pend ? pend.kind : switchKind(dist, canGlide);
-    let glided = false;
-    if (kind === 'glide' && canGlide && pose && body && controls?.setCameraPose) {
-      const target = followPoseBehind(pose, body, controls.cameraYaw?.() ?? body.yaw);
-      if (target) {
-        controls.setCameraPose(target.position, target.lookAt, GLIDE_SECONDS);
-        this.fx.start('glide');
-        glided = true;
-      }
-    }
-    if (!glided && this.fx.phase !== 'hold') this.fx.blackOut(); // far (or no street camera to glide): the cut is under a veil that opens again
-    const card = whoNowCard(g, e.to, doing);
+    const arrival = this.lives.arrived(e);
+    const card = whoNowCard(g, e.to, arrival?.doing);
     if (card) this.hud.arrival.show(card, this.clock);
-    this.toasts.push({ tone: 'gold', icon: 'user', title: e.reason === 'death' ? 'You carry on' : 'A new life', text: `You are now ${styledName(to)}.`, ttl: 5, key: 'switched' }, this.clock);
-    if (pend?.reason === 'rule') this.ruleAfter = e.to;
+    this.say('quest', e.reason === 'death' ? `You carry on as ${styledName(to)}.` : `You are now ${styledName(to)}.`);
   }
 
   /** Called by the panels (`ctx.liveAs`): crosses to another life, with the glide or the fade. */
   liveAs(id: PersonId, opts: { reason?: LiveAsReason } = {}): { ok: boolean; reason?: string } {
-    const b = this.bound;
-    if (!b || this.screen !== 'game') return { ok: false, reason: 'There is no game to change in.' };
-    if (this.fx.active || this.pending) return { ok: false, reason: 'A change of life is already under way.' };
-    const g = b.game;
-    const sim = g.sim;
-    if (!sim.canSwitchTo(id)) return { ok: false, reason: id === sim.state.run.playerId ? 'You are them already.' : 'They cannot be taken up now.' };
-    const controls = this.host.renderer();
-    const pose = this.host.cameraPose?.(this.headOf(g, this.lastBody)) ?? null;
-    const canGlide = !!pose && !!controls?.setCameraPose && (controls.cameraMode?.() ?? 'follow') === 'follow';
-    const at = this.positionOf(g, id);
-    const from = this.lastBody;
-    const dist = from && at ? Math.hypot(at.x - from.x, at.z - from.z) : null;
-    const kind = switchKind(dist, canGlide);
-    this.pending = { id, reason: opts.reason ?? 'choose', kind, doing: personSummary(g, id)?.doing ?? '', pose };
-    if (kind === 'fade') {
-      this.fx.start('fade'); // the veil closes; stepSwitch makes the change at the black
-      return { ok: true };
-    }
-    return this.cut();
+    if (!this.bound || this.screen !== 'game') return { ok: false, reason: 'There is no game to change in.' };
+    return this.lives.liveAs(id, opts.reason ?? 'choose');
   }
 
-  /** Makes the change now (at the black of a fade, or at once for a glide). */
-  private cut(): { ok: boolean; reason?: string } {
-    const p = this.pending;
-    const b = this.bound;
-    if (!p || !b) { this.fx.cancel(); return { ok: false, reason: 'There is no game to change in.' }; }
-    const r = b.game.sim.dispatch({ type: 'switchCharacter', personId: p.id });
-    if (!r.ok) {
-      this.pending = null;
-      this.fx.cancel();
-      this.say('warn', r.reason ? `You cannot do that: ${r.reason}.` : 'You cannot take up that life.');
-      return { ok: false, reason: r.reason };
-    }
-    return { ok: true };
-  }
-
-  /** The head of a body standing at `at`: what the follow camera looks at. */
-  private headOf(g: GameServices, at: { x: number; z: number } | null): { x: number; y: number; z: number } | undefined {
-    return at ? { x: at.x, y: g.sim.world.heightAt(at.x, at.z) + 1.55, z: at.z } : undefined;
-  }
-
-  /** Where a person is (the zone's agent, else their schedule), or null. */
-  private positionOf(g: GameServices, id: PersonId): { x: number; z: number } | null {
-    try {
-      const a = g.zone.agent(id);
-      if (a) return { x: a.x, z: a.z };
-      const w = g.zone.whereabouts(id);
-      return Number.isFinite(w.x) && Number.isFinite(w.z) ? { x: w.x, z: w.z } : null;
-    } catch { return null; }
-  }
-
-  /** Every frame: the clock of the glide or fade, the veil, the body's last place, and the camera handed back at the end of a glide. */
-  private stepSwitch(dt: number): void {
+  /** Every frame: the clock of the glide or fade, the veil over the screen, and "Rule this town" opening the seat of government. */
+  private stepLives(dt: number): void {
+    const ruler = this.lives.step(dt);
+    const v = this.lives.veil;
+    if (Math.abs(v - this.veilOpacity) > 0.004 || (v === 0 && this.veilOpacity !== 0)) { this.veilOpacity = v; this.veil.style.opacity = v.toFixed(3); }
     const g = this.bound?.game;
-    if (!g) return;
-    const body = g.player.body();
-    if (body) this.lastBody = { x: body.x, z: body.z };
-    if (!this.fx.active) {
-      if (this.veilOpacity !== 0) { this.veilOpacity = 0; this.veil.style.opacity = '0'; }
-      if (this.ruleAfter !== null) this.finishRule();
-      return;
+    if (ruler !== null && g) {
+      const realm = g.sim.services.realm ?? g.realm;
+      let can = true;
+      try { can = realm ? realm.canRule(ruler) : true; } catch { can = true; }
+      if (can) this.openPanel({ panel: 'ext', name: 'ruler' });
     }
-    for (const ev of this.fx.step(Math.min(dt, 0.25))) {
-      if (ev === 'cut') this.cut();
-      else if (ev === 'done') {
-        // the glide is over: the follow camera takes the view back (it blends from where the glide ended)
-        this.host.renderer()?.setCameraMode('follow');
-        if (this.ruleAfter !== null) this.finishRule();
-      }
-    }
-    const v = this.fx.veil;
-    if (Math.abs(v - this.veilOpacity) > 0.004) { this.veilOpacity = v; this.veil.style.opacity = v.toFixed(3); }
   }
-  private veilOpacity = 0;
 
   /**
    * A knighthood (docs/CIV.md §9): the player's own (their liege, a lord, valour on the field) or one of their men dubbed by their hand
@@ -607,18 +516,6 @@ export class UiApp implements GameUIExt {
         this.toasts.push({ tone: 'gold', icon: 'crown', title: k.person === me ? 'You are made a knight' : `${knight?.first ?? 'A man'} is made a knight`, text: 'Read what happened.', ttl: 16, key: `accolade:${k.person}`, action: { label: 'Read it', request: req } }, this.clock);
       } else this.openPanel(req);
     }
-  }
-
-  /** "Rule this town": once you are the ruler, the seat of government opens. */
-  private finishRule(): void {
-    const id = this.ruleAfter;
-    this.ruleAfter = null;
-    const g = this.bound?.game;
-    if (id === null || !g || g.sim.state.run.playerId !== id) return;
-    const realm = g.sim.services.realm ?? g.realm;
-    let can = true;
-    try { can = realm ? realm.canRule(id) : true; } catch { can = true; }
-    if (can) this.openPanel({ panel: 'ext', name: 'ruler' });
   }
 
   private onGameOver(e: SimEvents['gameOver']): void {

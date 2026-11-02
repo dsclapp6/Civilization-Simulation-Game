@@ -27,6 +27,10 @@ export interface InputHost {
   togglePause(): void;
   /** The weapon is drawn (G, or a fight began). */
   drawn(): boolean;
+  /** Civilization pass: the player is riding (a hold of F is then a slow dismount, not a call). */
+  mounted?(): boolean;
+  /** Hold F: send for the player's horse (`PlayerApi.callHorse`). */
+  callHorse?(): void;
   /** G: draw or put away the weapon. */
   toggleWeapon(): void;
   /** The free cursor is over the world at this client position, or has left it. */
@@ -132,12 +136,14 @@ export class InputLayer {
         attack: combat && this.locked && this.modes.attack,
         block: combat && this.locked && this.modes.block,
         aim: r && mode === 'follow' ? this.cameraRay(r) : null,
+        riding: !!this.host.mounted?.(),
       },
       dt,
     );
     if (intent.speed !== null) this.host.setSpeed(intent.speed);
     if (intent.togglePause) this.host.togglePause();
     if (intent.openWheel) this.host.openWheel();
+    if (intent.callHorse) this.host.callHorse?.();
 
     // the free cursor: what is under it, and what the pointer looks like
     const free = !mapView && !combat && !this.locked && !this.modes.lookHeld;

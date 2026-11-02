@@ -4,14 +4,15 @@
 // town's ruler). The card names who they are, where they live, what they were doing; confirming hands over to `ctx.liveAs`, which
 // runs the glide or the fade and shows the "who you are now" card. A setting turns the card off ("Ask before living as someone").
 import { h } from '../core/dom';
-import { distanceText } from '../core/format';
+import { distanceText, plural } from '../core/format';
 import { icon } from '../core/icons';
-import { liveAsCard, liveAsReason, liveAsTarget, type LiveAsCard } from '../core/liveAsModel';
+import { liveAsCard, liveAsReason, liveAsTarget, nearbyPeople, personHits, type LiveAsCard, type LiveAsReason } from '../core/liveAsModel';
 import { shield } from '../core/ornament';
 import { button, chip, kv, toggle } from '../components/widgets';
 import { createWindow } from '../components/window';
 import type { PanelCtx, UiHooks, UiPanel } from '../app/panel';
 import { panelOf } from './base';
+import { hitEl, personChooser } from './chooser';
 import { registerPanel } from './extRegistry';
 
 const PANEL_ID = 'liveAs';
@@ -21,8 +22,8 @@ export function liveAsPanel(ctx: PanelCtx, req: { id?: number; data?: unknown })
   const found = liveAsTarget(ctx.game, req.id);
   const card = found ? liveAsCard(ctx.game, found.id, reason) : null;
 
-  // nobody to speak of: say how to choose
-  if (!card) return noOnePanel(ctx, found === null);
+  // nobody to speak of: a list to choose from
+  if (!card) return chooserPanel(ctx, reason);
 
   const rule = reason === 'rule';
   const title = rule ? `Rule through ${card.first}` : `Live as ${card.first}?`;
@@ -84,24 +85,38 @@ export function liveAsPanel(ctx: PanelCtx, req: { id?: number; data?: unknown })
   });
 }
 
-/** V with nobody in front of you: how to choose someone. */
-function noOnePanel(ctx: PanelCtx, nobody: boolean): UiPanel {
-  const win = createWindow({ title: 'Live as someone', subtitle: 'Take up another life', icon: 'user', size: 'sm', onClose: () => ctx.close() });
+/**
+ * V with nobody in front of you, or the captivity card's "live as someone else": a list to choose from — your family and House, people
+ * near, anyone alive by search. Choosing leads to the confirmation card (or straight in when the setting says not to ask).
+ */
+function chooserPanel(ctx: PanelCtx, reason: LiveAsReason): UiPanel {
+  const sim = ctx.sim;
+  const me = sim.state.persons.get(ctx.playerId());
+  const win = createWindow({ title: 'Live as someone', subtitle: 'Anyone alive may be taken up', icon: 'user', size: 'lg', onClose: () => ctx.close() });
+  let chosen: { id: number; first: string } | null = null;
+  const go = button('Choose someone', { variant: 'primary', size: 'big', icon: 'user', disabled: true, onClick: () => { if (chosen) ctx.open({ panel: 'ext', name: 'liveAs', id: chosen.id, data: { reason } }); } });
+  const kin = sim.eligibleSwitchTargets().slice(0, 12);
+  const hits = personHits(ctx.game, kin);
+  const body = ctx.player.body();
+  const near = nearbyPeople(ctx.game, body ? { x: body.x, z: body.z } : null, me?.settlement ?? 0, 6, new Set([ctx.playerId(), ...kin]));
+  const chooser = personChooser(ctx, {
+    suggested: hits.map((hit) => ({ id: hit.id, first: hit.first, el: (selected, pick) => hitEl(hit, selected, pick, ctx.social.relationLabel(ctx.playerId(), hit.id) || undefined) })),
+    nearby: near, nearTitle: 'Near you', exclude: new Set([ctx.playerId()]), near: me?.settlement,
+    selected: () => chosen?.id ?? null,
+    pick: (id, first) => {
+      chosen = { id, first };
+      go.disabled = false;
+      go.replaceChildren(icon('user', 20), h('span', null, `Live as ${first}`));
+      chooser.render();
+    },
+  });
   win.body.append(
-    h('div.mu-prose', null,
-      h('p', null, nobody
-        ? 'Nobody is close enough to choose. Look at a person and press V (or hold E and choose Live as…).'
-        : 'That person cannot be found.'),
-      h('p.mu-small.mu-dim', null, 'You may live as anyone alive, at any time: the people you know in the journal, your family, or a settlement’s people on the map.')),
-  );
-  win.showFoot(
-    button('People you know', { icon: 'users', onClick: () => { ctx.close(); ctx.open({ panel: 'journal', tab: 'people' }); } }),
-    button('Family & House', { icon: 'tree', onClick: () => { ctx.close(); ctx.open({ panel: 'family' }); } }),
-    button('Map', { icon: 'map', onClick: () => { ctx.close(); ctx.open({ panel: 'map' }); } }),
-    h('div.mu-grow'),
-    button('Close', { onClick: () => ctx.close() }),
-  );
-  return panelOf({ id: PANEL_ID, pauses: 'menu', backdropCloses: ctx }, win.el);
+    h('p.mu-small.mu-ink2', { style: { marginBottom: '8px' } }, 'You may take up the life of anyone alive, at any time. Your family and House are listed first, then the people near you; search for anyone at all. (Looking at someone and pressing V is quicker.)'),
+    chooser.el);
+  win.showFoot(h('span.mu-dim.mu-small.mu-ital', null, `${plural(chooser.alive(), 'person', 'people')} alive`), h('div.mu-grow'), button('Close', { onClick: () => ctx.close() }), go);
+  return panelOf({ id: PANEL_ID, pauses: 'menu', backdropCloses: ctx }, win.el, {
+    key: (intent) => { if (intent.type === 'enter' && chosen) { go.click(); return true; } return false; },
+  });
 }
 
 registerPanel(PANEL_ID, (ctx, req, _hooks: UiHooks) => liveAsPanel(ctx, req));

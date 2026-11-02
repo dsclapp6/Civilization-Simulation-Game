@@ -98,13 +98,18 @@ export function characterPanel(ctx: PanelCtx, startTab: CharacterTab = 'sheet'):
   if (hasWounds) win.body.append(tabsEl.el, h('div.mu-tabbar-rule'));
   win.body.append(page);
 
-  const showWounds = (): void => {
-    if (!wounds) {
+  /** The wounds page, built on first use (the tab's badge counts the wounds from the start). */
+  const woundsPage = (): { view: WoundsView; el: HTMLElement } => {
+    if (!wounds || !woundsEl) {
       wounds = woundsView(ctx, ctx.playerId());
       woundsEl = h('div.mu-char-wounds', null, wounds.el, h('div.mu-row.mu-gap-8', { style: { marginTop: '14px' } }, wounds.bindBtn));
     }
-    wounds.render();
-    page.replaceChildren(woundsEl as HTMLElement);
+    return { view: wounds, el: woundsEl };
+  };
+  const showWounds = (): void => {
+    const w = woundsPage();
+    w.view.render();
+    page.replaceChildren(w.el);
     ctx.noteOpened('wounds');
   };
   const select = (id: CharacterTab): void => {
@@ -209,22 +214,19 @@ export function characterPanel(ctx: PanelCtx, startTab: CharacterTab = 'sheet'):
   };
 
   const refresh = (): void => {
-    if (tab === 'wounds' && wounds) wounds.render();
+    if (tab === 'wounds') woundsPage().view.render();
     else render();
-    if (hasWounds) {
-      const c = (wounds ?? (wounds = woundsView(ctx, ctx.playerId()))).count();
-      tabsEl.badge('wounds', c.wounds);
-    }
+    if (hasWounds) tabsEl.badge('wounds', woundsPage().view.count().wounds);
   };
   if (tab === 'wounds' && hasWounds) showWounds();
   else { page.replaceChildren(body); render(); }
-  if (hasWounds) { const c = (wounds ?? (wounds = woundsView(ctx, ctx.playerId()))).count(); tabsEl.badge('wounds', c.wounds); }
+  if (hasWounds) tabsEl.badge('wounds', woundsPage().view.count().wounds);
   const tick = every(0.5, refresh);
   const nav = tabKeys(tabItems.map((x) => x.id), () => tab, (id) => select(id as CharacterTab), { scroller: page, digits: () => false });
   return panelOf({ id: 'character', group: 'main', pauses: 'menu', backdropCloses: ctx }, win.el, {
     tick,
     key: (intent, e) => {
-      if (tab === 'wounds' && intent.type === 'enter' && wounds) { wounds.bindBtn.click(); return true; }
+      if (tab === 'wounds' && intent.type === 'enter') { woundsPage().view.bindBtn.click(); return true; }
       return hasWounds ? nav(intent, e) : false;
     },
   });

@@ -44,7 +44,10 @@ eligible is left the run ends and your Legacy gold stays.
 | **1 / 2 / 3** | Game speed 1× / 3× / 8× (refused with a message while an enemy is within 150 m) |
 | **P** | Pause |
 | **Tab** character · **I** inventory · **H** family and House · **J** ledger · **M** map and travel · **L** chronicle · **Z** sleep or wait | The UI's books and pages |
-| **R** requests and news · **B** wounds · **T** House techniques · **K** realm and politics · **C** command and army (the household page of the ledger when you have no troops) | The wave 3 pages. Each also has a button in the dock (bottom right); modules that are not in the run have none |
+| **R** requests and news · **T** House techniques · **K** realm and politics · **C** command and army (the household page of the ledger when you have no troops) | The wave 3 pages. Each also has a button in the dock (bottom right); modules that are not in the run have none |
+| **V** | **Live as** the person under the cursor or in front of you: anyone alive, at any time (see *Living as anyone*) |
+| **B** · **U** | **Builder mode** and **ruler mode** (the seat of government) — civilization pass; each has a dock button too |
+| **Tab**, then *Wounds* | The wounds page is a tab of the character sheet (and the red or gold mark under your name on the HUD opens it): *Bind your wounds* there |
 | **F1** | Help and controls (also in the pause menu): all the keys, first steps, fighting, lords and wars |
 | **Esc** | Leave mouse-look first (it never opens the menu for that press); else close the top page (or the "What now?" card); with nothing open, the pause menu |
 | **← →**, **1–9**, **↑ ↓**, **PgUp PgDn**, **Enter** | Inside pages: switch tabs, scroll, confirm. **Enter** with a notice showing at the top of the screen opens the page it points to (a levy call or a war first) |
@@ -71,13 +74,16 @@ camera, left strikes, right guards, a click on the view takes the mouse) is the 
 - **On the screen edge**: an arrow for the tracked objective (or a pinned place) when it is out of sight, with its
   distance. **Under the cursor**: the tooltip (name, who or what, what a click does, how far) and, while you walk to a
   click, a ring on the destination.
-- **Bottom centre**: the prompt (`E  Reap · strip of barley`), the progress bar of work in progress and floating gains.
+- **Bottom centre**: the prompt (`E  Reap · strip of barley`), the progress bar of work in progress and floating gains. A bout of
+  hands-on work (the forge, the butcher's block, the kiln, the digs, a building going up) shows **the step it is at** under the bar
+  ("Heat the bar", "Draw it out", "Quench"), with a tick on the bar and a dot under it for each step; each step has its own sound.
   In a fight a small chip names your stance: *On guard*, *Striking*, *Drawing*, *Aiming*, *Staggered*…
 - **Bottom left**: the message feed. **Top centre**: toasts and **notices** (below).
 - **Bottom right**: the dock. Two rows of buttons for every page: character, inventory, family, ledger, map,
-  chronicle, rest; then requests, wounds, House techniques, realm and politics, command and army, and the menu. A gold dot
-  with a number says something waits (requests, letters and petitions); a red one that the levy is called or a wound
-  bleeds.
+  chronicle, rest; then requests, builder mode (**B**), ruler mode (**U**), House techniques, realm and politics, command and army, and
+  the menu. A gold dot with a number says something waits (requests, letters and petitions); a red one that the levy is called.
+- **Under your name**: besides the bars and the four signs, a **wound mark** (gold while wounds mend, red and throbbing while one bleeds;
+  it opens the Wounds page of the character sheet) and, after you take up another life, the **who you are now** card.
 
 ### Notices
 
@@ -114,7 +120,9 @@ notice (*Read it*) rather than a page that stops the world.
 
 Effects are made in the browser, no files: the swish of a scythe or sickle, the chop of an axe, a hammer's clank, a
 pick, a saw, a hoe's thud (keyed to the animation of the work you do), coins on a trade or a wage, a chime for a
-level-up, a ding for a task, the church bell at Mass (louder the nearer the church) and a soft click on buttons. The
+level-up, a ding for a task, the church bell at Mass (louder the nearer the church) and a soft click on buttons. Work with steps
+sounds each step's own cue as it begins — bellows, hammer, quench, saw, chop, cut, dig, stir, fire, grind, scrape, knead — and the
+strokes of the rhythmic ones while the step lasts. The
 **Sound volume** setting scales them; browsers start sound only after the first click or key press.
 
 ## The loop
@@ -131,6 +139,42 @@ level-up, a ding for a task, the church bell at Mass (louder the nearer the chur
   at 1× gallop.
 - **Following.** The wheel offers *Follow* on a person: you walk after them until you move yourself.
 - **Sleep.** At your home door the wheel offers *Sleep until dawn*; **Z** opens the sleep/wait menu anywhere.
+
+### Living as anyone
+
+You may take up the life of **anyone alive, at any time** (civilization pass; the one you leave goes on with their life, run by the
+world). Ways in, all leading to the same card — a parchment card with their name, age, trade, where they live, their household and House,
+what they are doing and how they are related to you (**Live as Godwin** / **Stay as you are**; the card is switched off with *Ask before
+living as someone* in the settings or its own switch):
+
+- **V** on the person under the cursor, or in front of you (nobody there: the card says how to choose someone);
+- the action wheel (hold **E** on a person): *Live as Godwin*;
+- the journal's **People you know** (a *Live as* button on each), the **Family & House** page and a person's page;
+- the death screen (below); the map's *People here* and *Rule this town* (banner, map, ruler panel) open the same card with
+  `{ panel: 'ext', name: 'liveAs', id, data: { reason: 'choose' | 'rule' } }`. *Rule this town* lives as the holder of the town's title (or
+  its regent or steward) and opens the seat of government (**U**) when you arrive.
+
+**The way across.** When the new body is within 300 m the camera glides from where it was to behind them (about 1.2 s) while the world
+goes on; farther, the screen fades to black and opens on them. Then a card in the top left says **who you are now** (name, age, trade,
+place, household, what they were doing, the tasks the objectives set them) and goes by itself after a while, with its button or with
+Esc. A knight is *Sir …* on the HUD.
+
+**On death** the screen offers your family and House first, then **people near where you fell**, and a **search over everyone alive**
+(a name, a place or a trade: "smith Dromore"). Choose one and *Carry on as …*. The run ends only when you give it up (*End the run* on
+that screen, or the pause menu).
+
+### Who wants something of you
+
+A person with something for you has a gold **!** over their head, and one you can hand a finished task to a silver **?**. The compass
+ribbon shows the nearest few within 150 m (with the distance), the minimap dots them (**!** and **?** badges, fainter when they are
+indoors), the hover card says what they want ("Maire wants 7 bundles of firewood"), and the journal's Tasks page lists **Who wants
+something of you** with *Find* on each.
+
+### The accolade
+
+When you are made a knight — by your liege, dubbed by a lord, or for valour on the field — a scene card tells the vigil in the church
+and the sword laid on your shoulders ("Arise, Sir …"); from then on you are *Sir …* on the HUD. The same card, told your way, when you
+dub one of your own men in ruler mode. In the middle of a fight it waits as a notice with a *Read it* button.
 
 ### Map travel
 
@@ -168,8 +212,8 @@ door, and from your own quarrels. When steel is out the weapon appears in your h
 - **Lances.** On a horse with a lance, gallop and hold the left button to couch it.
 - **Being hurt.** There is no health pool that refills by itself: blows leave **wounds** (head, torso, arms, legs; cut,
   stab, bruise, arrow) that bleed, break bones, fester and mend over days. The screen flashes red on every blow,
-  the **blood** bar appears and the dock's wound button gets a red dot while you bleed. Open **Wounds** (**B**) to see
-  where you are hurt and to **bind** the wounds (Medicine skill decides how well); rest, food, a healer and the
+  the **blood** bar appears and the wound mark under your name turns red and throbs while you bleed. Open the character sheet (**Tab**, or the
+  mark under your name) and its **Wounds** page to see where you are hurt and to **bind** the wounds (Medicine skill decides how well); rest, food, a healer and the
   infirmary do the rest. Lame legs and scars may remain.
 - **Down.** A heavy blow or loss of blood can knock you down: the screen darkens and says *You are down*. You cannot act
   until you are on your feet again (a few seconds, unless you are dying). A nobleman who yields is held for ransom
@@ -200,10 +244,10 @@ battles near you; the *Armies & wars* tab lists them, the *Forces* tab the stren
 
 ### Death and succession
 
-When your character dies the body falls and the death screen shows the life story and who may carry on
-(your family, and House members of equal rank). Choose one: the camera rises to the map, slides to the
-new character and settles behind them. The same works on purpose from the family panel (*Play as*).
-With nobody left the run ends (game over, records, Legacy gold).
+When your character dies the body falls and the death screen shows the life story and who may carry on: your family and
+House first, then people near where you fell, and a search over everyone alive. Choose one: the camera glides to them
+(or the screen fades) and a card says who you are now. The same works on purpose any time (*Living as anyone*, above).
+The run ends only when you give it up, or when nobody at all is left (game over, records, Legacy gold).
 
 ## Developer parameters
 

@@ -168,7 +168,7 @@ describe('the first-minutes guide', () => {
 
   it('keeps to the controls: the old teaching hints are the objectives\u2019 business now', () => {
     const ids = HINTS.map((h) => h.id);
-    expect(ids).toEqual(['move', 'interact', 'tasks', 'time', 'fight', 'bow', 'wounds', 'help']);
+    expect(ids).toEqual(['move', 'interact', 'tasks', 'time', 'liveAs', 'fight', 'bow', 'wounds', 'help']);
     for (const gone of ['work', 'character', 'hunger', 'rest', 'warmth', 'map', 'holy', 'career']) expect(ids).not.toContain(gone);
     // hunger and the like no longer interrupt
     const seen = new Set<string>(['move', 'interact', 'tasks']);

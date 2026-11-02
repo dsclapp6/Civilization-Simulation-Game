@@ -267,6 +267,20 @@ export class PeopleIndex {
   }
 }
 
+/** The people with these ids as rows for a list (the dead and the unknown are left out). */
+export function personHits(game: Pick<GameServices, 'sim'>, ids: readonly PersonId[]): PersonHit[] {
+  const sim = game.sim;
+  const names = new Map<number, string>();
+  for (const s of sim.world.settlements) names.set(s.id, s.name);
+  const out: PersonHit[] = [];
+  for (const id of ids) {
+    const p = sim.state.persons.get(id);
+    if (!p || p.death) continue;
+    out.push(hitOf(game, p, names.get(p.settlement) ?? '', personCard(sim, id)?.rankName ?? ''));
+  }
+  return out;
+}
+
 /** People close to where the player fell: those the zone shows nearest the focus first, then the residents of the place. */
 export function nearbyPeople(game: GameServices, around: { x: number; z: number } | null, settlement: number, limit = 6, exclude: ReadonlySet<PersonId> = new Set()): PersonHit[] {
   const sim = game.sim;

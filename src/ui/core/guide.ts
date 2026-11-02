@@ -75,6 +75,12 @@ export const HINTS: readonly HintDef[] = [
     when: (f) => f.seconds > 150 && f.worked >= 1 && !f.speedChanged, done: (f) => f.speedChanged, maxSeconds: 20,
   },
   {
+    id: 'liveAs', icon: 'user', title: 'Live as anyone', keys: [k(KEYMAP.ui.liveAs)],
+    text: 'You may take up the life of anyone alive, at any time. Look at a person and press V (or hold E and choose Live as…): the camera glides to them and you carry on as them; the one you leave goes on with their own life.',
+    link: { label: 'How to choose someone', request: { panel: 'ext', name: 'liveAs' } },
+    when: (f) => f.seconds > 240 && f.interacted >= 3 && !f.engaged, done: (f) => f.opened.has('liveAs'), maxSeconds: 24,
+  },
+  {
     id: 'fight', icon: 'swords', title: 'Steel is out', keys: ['LMB', 'RMB', k(KEYMAP.input.dodge), k(KEYMAP.input.weapon)],
     text: 'The mouse looks around while the weapon is drawn: tap the left button to strike, hold it for a heavy blow, hold the right to guard, Space rolls out of the way. G puts the weapon away; Esc frees the mouse.',
     link: { label: 'Fighting help', request: { panel: 'help', tab: 'combat' } },

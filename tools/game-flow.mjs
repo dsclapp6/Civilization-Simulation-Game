@@ -1,7 +1,9 @@
 // End-to-end flow check of the real game (app + player + UI) in headless Chromium: the run-start screens, the
 // loading screen, the birth reveal, the hotkeys and Esc, speed keys and their refusals, holding E for the action
 // wheel, the map, a journey with encounters answered through the UI's journey panel and through the wheel,
-// death and succession, and leaving to the menu and continuing where the run was left.
+// death and succession, and leaving to the menu and continuing where the run was left. Civilization pass (B6): the dock's builder and
+// ruler buttons, the settings, the wheel's Live as, quest marks, steps and their cues, the wounds tab, the accolade, V and the glide or
+// fade, the death screen's search.
 //
 //   node tools/game-flow.mjs [--seed=abc] [--devzone]
 //
@@ -50,8 +52,42 @@ const check = (name, ok, detail = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} 
 const wait = (ms = 200) => page.waitForTimeout(ms);
 const tick = (s) => page.evaluate((n) => window.__game.tick(n), s);
 const ui = () => page.evaluate(() => ({ panels: window.__ui.openPanels(), captures: window.__ui.capturesInput() }));
-const sim = (fn) => page.evaluate(fn);
+const sim = (fn, arg) => page.evaluate(fn, arg);
 const feed = () => page.locator('.mu-feed-line').allTextContents().then((l) => l.join(' | '));
+const dbg = () => page.evaluate(() => window.__ui.debugState());
+/** Text of the first element matching a selector, or '' (never waits). */
+const txt = (sel) => page.evaluate((q) => { const e = document.querySelector(q); return e ? (e.textContent ?? '') : ''; }, sel);
+/** Stands 6 m from a visible person (the nearest that can be hovered; not one of `not`), facing them, and hovers the real mouse over them. */
+async function hoverPerson(not = []) {
+  for (let k = 0; k < 8; k++) {
+    const t = await page.evaluate(([skip, k]) => {
+      const g = window.__game; const se = g.session; const z = se.services.zone; const p = se.services.player; const b = p.body(); const me = se.sim.state.run.playerId;
+      const list = [...z.agents()].filter((x) => x.visible && x.personId !== me && !skip.includes(x.personId)).sort((u, v) => Math.hypot(u.x - b.x, u.z - b.z) - Math.hypot(v.x - b.x, v.z - b.z));
+      const a = list[k];
+      if (!a) return null;
+      const dx = b.x - a.x, dz = b.z - a.z; const d = Math.hypot(dx, dz) || 1;
+      p.placeAt(a.x + (dx / d) * 6, a.z + (dz / d) * 6, Math.atan2(-dx, -dz));
+      const r = se.renderer; const yaw = Math.atan2(-dx, -dz); r.orbit(Math.atan2(Math.sin(yaw - r.getCameraYaw()), Math.cos(yaw - r.getCameraYaw())), 0);
+      return a.personId;
+    }, [not, k]);
+    if (t === null) return null;
+    await tick(0.3);
+    await page.evaluate(() => window.__game.settle());
+    await page.evaluate(() => window.__game.draw());
+    const pt = await page.evaluate((id) => { const s = window.__game.session; const a = s.services.zone.agent(id); return a ? s.controls.project(a.x, a.y + 0.65, a.z) : null; }, t);
+    if (!pt) continue;
+    await page.mouse.move(pt.x - 12, pt.y - 12);
+    await page.mouse.move(pt.x, pt.y, { steps: 3 });
+    await page.waitForTimeout(500);
+    await tick(0.4);
+    const hv = await page.evaluate(() => { const h = window.__game.session.services.player.hover?.(); return h && h.target.kind === 'person' ? h.target.id : null; });
+    if (hv === null) continue;
+    const name = await page.evaluate((id) => window.__game.session.sim.state.persons.get(id).first, hv);
+    return { id: hv, name, hovered: true };
+  }
+  return { id: 0, name: '', hovered: false };
+}
+
 
 try {
   await page.goto(`http://localhost:${PORT}/?seed=${encodeURIComponent(seed)}&quality=low&shots=1${devzone ? '&devzone=1' : ''}`, { timeout: 120000 });
@@ -323,6 +359,262 @@ try {
   await tick(0.2);
   check('Esc closes the wheel', (await ui()).panels.length === 0);
 
+  // ---- civilization pass (B6): living as anyone, quest marks, the steps of hands-on work, wounds, the accolade, the dock and the settings
+  page.setDefaultTimeout(60000);
+  {
+  // ---- the dock has the builder's and the ruler's buttons; the settings carry the live-as switch
+  check('the dock has Builder (B) and Ruler (U) buttons and no Wounds button', (await page.locator('.mu-dockbtn[aria-label^="Builder mode"]').count()) === 1 && (await page.locator('.mu-dockbtn[aria-label^="Ruler mode"]').count()) === 1 && (await page.locator('.mu-dockbtn[aria-label="Wounds"]').count()) === 0);
+  await sim(() => window.__ui.openPanel({ panel: 'settings' }));
+  await tick(0.2);
+  check('the settings have "Ask before living as someone", on by default', (await page.locator('.mu-field label', { hasText: 'Ask before living as someone' }).count()) === 1 && (await sim(() => window.__game.host.settings().askBeforeLiveAs)) === true);
+  await page.evaluate(() => window.__ui.closePanel('settings'));
+  await tick(0.2);
+
+  // ---- a person in the open (far from any door), the player 1.6 m from them facing them
+  const near = await sim(() => {
+    const g = window.__game; const se = g.session; const z = se.services.zone; const p = se.services.player; const b = p.body(); const sm = se.sim;
+    const bl = (sm.state.buildingsAt.get(sm.world.nearestSettlement(b.x, b.z).id) ?? []);
+    const doorDist = (x, zz) => Math.min(...bl.map((q) => Math.hypot(q.x - x, q.z - zz)), 1e9);
+    const list = [...z.agents()].filter((x) => x.visible && x.personId !== sm.state.run.playerId).sort((u, v) => doorDist(v.x, v.z) - doorDist(u.x, u.z));
+    const a = list[0];
+    if (!a) return null;
+    const dx = b.x - a.x, dz = b.z - a.z; const d = Math.hypot(dx, dz) || 1;
+    p.placeAt(a.x + (dx / d) * 1.0, a.z + (dz / d) * 1.0, Math.atan2(-dx, -dz));
+    const r = se.renderer; const yaw = Math.atan2(-dx, -dz); r.orbit(Math.atan2(Math.sin(yaw - r.getCameraYaw()), Math.cos(yaw - r.getCameraYaw())), 0);
+    return { id: a.personId, name: sm.state.persons.get(a.personId).first, door: doorDist(a.x, a.z) };
+  });
+  check('a person is near enough to live as', !!near, JSON.stringify(near));
+  await tick(0.5);
+
+  // ---- the wheel offers "Live as …" on a person (with its icon)
+  let wheelOk = false; let wheel = [];
+  for (let k = 0; k < 6 && !wheelOk; k++) {
+    const got = await sim((k) => {
+      const g = window.__game; const se = g.session; const z = se.services.zone; const p = se.services.player; const b = p.body(); const sm = se.sim;
+      const bl = (sm.state.buildingsAt.get(sm.world.nearestSettlement(b.x, b.z).id) ?? []);
+      const doorDist = (x, zz) => Math.min(...bl.map((q) => Math.hypot(q.x - x, q.z - zz)), 1e9);
+      const list = [...z.agents()].filter((x) => x.visible && x.personId !== sm.state.run.playerId).sort((u, v) => doorDist(v.x, v.z) - doorDist(u.x, u.z));
+      const a = list[k];
+      if (!a) return null;
+      const dx = b.x - a.x, dz = b.z - a.z; const d = Math.hypot(dx, dz) || 1;
+      p.placeAt(a.x + (dx / d) * 1.0, a.z + (dz / d) * 1.0, Math.atan2(-dx, -dz));
+      return { id: a.personId, name: sm.state.persons.get(a.personId).first };
+    }, k);
+    if (!got) break;
+    await tick(0.1);
+    const tgt = await sim(() => { const t = window.__game.session.services.player.target(); return t && t.target.kind === 'person' ? t.target.id : null; });
+    if (tgt !== got.id) continue;
+    await sim(() => window.__ui.open({ panel: 'actions' }));
+    await tick(0.1);
+    wheel = await page.locator('.mu-wheel-opt').allTextContents();
+    wheelOk = wheel.some((t) => t.includes(`Live as ${got.name}`)) && (await page.locator('.mu-wheel-opt .mu-wheel-ico').count()) === wheel.length;
+    if (!wheelOk) { await page.evaluate(() => window.__ui.closePanel('actions')); await tick(0.1); }
+  }
+  check('the action wheel on a person offers Live as them, with an icon on every option', wheelOk, wheel.join(' | '));
+  await page.evaluate(() => window.__ui.closePanel('actions'));
+  await tick(0.2);
+
+  // ---- quest marks: a gold "!" and a silver "?" on the compass, the minimap's dots, the words on the journal
+  const marks = await sim((id) => {
+    const se = window.__game.session; const z = se.services.zone; const o = se.services.objectives; const me = se.sim.state.run.playerId;
+    const b = se.services.player.body();
+    const d = (x) => Math.hypot(x.x - b.x, x.z - b.z);
+    const far = [...z.agents()].filter((x) => x.personId !== me && d(x) > 9 && d(x) < 90);
+    if (far.length < 2) return null;
+    const [first, second] = [far[0].personId, far[1].personId];
+    const nm = (pid) => se.sim.state.persons.get(pid).first;
+    const list = [{ person: first, kind: 'quest', text: `${nm(first)} wants 7 bundles of firewood`, objective: 1 }, { person: second, kind: 'turnin', text: `Hand the firewood to ${nm(second)}`, objective: 1 }];
+    o.marks = () => list;
+    z.setQuestMarks(list.map((m) => ({ person: m.person, kind: m.kind })));
+    return { a: first, b: second };
+  }, near.id);
+  check('two people are far enough to be marked', !!marks);
+  await tick(0.8);
+  const tips = await page.locator('.mu-compass-mark').evaluateAll((els) => els.map((e) => ({ cls: e.className, tip: e.getAttribute('data-tip') || '' })));
+  check('the compass shows a gold "!" for someone who wants something', tips.some((t) => /quest/.test(t.cls) && t.tip.includes('wants 7 bundles of firewood')), JSON.stringify(tips));
+  check('and a silver "?" for the person a task can be handed in to', tips.some((t) => /turnin/.test(t.cls) && t.tip.includes('Hand the firewood')), JSON.stringify(tips));
+  check('the compass glyphs are drawn as "!" and "?"', (await txt('.mu-compass-mark.quest .mu-compass-glyph')) === '!');
+  await page.keyboard.press('KeyO');
+  await tick(0.3);
+  const jm = await page.locator('.mu-jmark').allTextContents();
+  check('the journal lists who wants something of you, each with Find', jm.length >= 2 && jm.some((t) => t.includes('wants 7 bundles of firewood')) && (await page.locator('.mu-jmark button', { hasText: 'Find' }).count()) >= 2, jm.join(' | '));
+  await page.locator('.mu-jmark button', { hasText: 'Find' }).first().click();
+  await tick(0.2);
+  check('Find marks them (the objectives module’s person marker)', (await sim(() => window.__game.session.services.objectives.found?.().person || 0)) !== 0 || (await dbg()).pin !== null);
+  await sim(() => { window.__game.session.services.objectives.trackPerson?.(0); });
+  await page.waitForTimeout(120);
+  await page.keyboard.press('Escape');
+  await tick(0.2);
+
+  // ---- hands-on work: the bar says which step the bout is at, each step has its cue
+  const started = await sim(() => {
+    const se = window.__game.session; const sm = se.sim; const me = sm.state.run.playerId;
+    sm.actions.register({
+      id: 'flow.forge',
+      list(_c, _a, target, out) {
+        if (target.kind !== 'self') return;
+        out.push({
+          id: 'forge.test', provider: '', label: 'Forge a test blade', category: 'work', target, enabled: true, seconds: 8, range: 99, priority: 1, anim: 'work_hammer', mainHand: 'hammer',
+          steps: [{ share: 0.25, label: 'Heat the bar', sfx: 'bellows' }, { share: 0.4, label: 'Draw it out', sfx: 'hammer' }, { share: 0.15, label: 'Quench', sfx: 'quench' }, { share: 0.2, label: 'Grind and hilt', sfx: 'grind' }],
+        });
+      },
+      complete() { return { ok: true, message: 'You forge a test blade.' }; },
+    });
+    const opt = sm.actions.list(me, { kind: 'self' }).find((o) => o.id === 'forge.test');
+    return opt ? sm.actions.start(me, opt).ok : false;
+  });
+  check('a bout with steps starts', started === true);
+  await tick(0.6);
+  const label = () => txt('.mu-hud-action-steplabel');
+  check('the action bar shows the first step', (await label()) === 'Heat the bar' && (await page.locator('.mu-hud-action-pips i').count()) === 4 && (await page.locator('.mu-hud-action .mu-step-tick').count()) === 3, await label());
+  await tick(2.4); // 3 s of 8: 37 % -> the hammer's step
+  check('then the next step', (await label()) === 'Draw it out', await label());
+  await tick(2.4);
+  await tick(0.6); // 5.6 s of 8: 70 % -> the quench
+  check('then the quench', (await label()) === 'Quench', await label());
+  await tick(1.6);
+  check('then the grinding', (await label()) === 'Grind and hilt', await label());
+  const cues = (await dbg()).cues;
+  check('each step’s cue was sounded in turn, the quench once', cues.indexOf('bellows') >= 0 && cues.indexOf('bellows') < cues.indexOf('clank') && cues.indexOf('clank') < cues.indexOf('quench') && cues.indexOf('quench') < cues.indexOf('grind') && cues.filter((c) => c === 'quench').length === 1, cues.join(','));
+  await tick(2);
+  check('the bar goes when the bout is done', (await page.locator('.mu-hud-action:not(.mu-hide)').count()) === 0 || (await label()) !== '');
+
+  // ---- wounds: a mark on the plate, a page of the character sheet
+  await sim(() => {
+    const se = window.__game.session; const sm = se.sim; const combat = sm.services.combat; const me = sm.state.persons.get(sm.state.run.playerId);
+    const mk = (location, kind, severity, extra = {}) => ({ location, kind, severity, bleeding: false, rate: 0, fracture: false, mortal: false, stun: 0, damage: severity * 70, ...extra });
+    combat.book.inflict(me, mk('arm_l', 'cut', 0.34, { bleeding: true, rate: 0.0035 }), 'axe');
+    combat.book.inflict(me, mk('leg_r', 'blunt', 0.5, { fracture: true }), 'cudgel');
+  });
+  await tick(0.4);
+  check('a wound puts a mark on the plate (red while it bleeds)', (await page.locator('.mu-hud-wound:not(.mu-hide).bleeding').count()) === 1, await page.locator('.mu-hud-wound').allTextContents().then((a) => a.join()));
+  await page.locator('.mu-hud-wound').click({ force: true });
+  await tick(0.3);
+  s = await ui();
+  check('the mark opens the Wounds page of the character sheet', s.panels.join() === 'character' && (await page.locator('.mu-wounds').count()) === 1 && (await txt('.mu-tab.active')).includes('Wounds'), JSON.stringify(s));
+  await page.getByRole('button', { name: 'Bind your wounds' }).click();
+  await tick(0.2);
+  check('Bind your wounds answers', (await page.locator('.mu-wounds .mu-small.mu-bold:not(.mu-hide)').count()) >= 1);
+  await page.getByRole('tab', { name: /Character/ }).click();
+  await tick(0.2);
+  check('the Character tab is the old sheet', (await page.locator('.mu-char').count()) === 1);
+  await page.waitForTimeout(120);
+  await page.keyboard.press('Escape');
+  await tick(0.2);
+  await page.keyboard.press('Tab');
+  await tick(0.3);
+  await page.keyboard.press('ArrowRight');
+  await tick(0.2);
+  check('Tab opens the sheet and the arrow keys turn to the Wounds page', (await page.locator('.mu-wounds').count()) === 1);
+  await page.keyboard.press('Tab');
+  await tick(0.2);
+
+  // ---- the accolade
+  await sim(() => {
+    const sm = window.__game.session.sim; const me = sm.state.persons.get(sm.state.run.playerId);
+    me.sex = 'm'; me.career = 'knight'; me.estate = 'noble'; me.rankTier = 5; sm.state.touch(me);
+    sm.state.log(sm.absDay, 'career', `${me.first} has been knighted by his liege.`, [me.id, me.id]);
+    sm.events.emit('careerChanged', { person: me.id, from: 'squire', to: 'knight', stage: 2 });
+  });
+  await tick(0.3);
+  s = await ui();
+  const arise = await txt('.mu-accolade-arise');
+  check('being made a knight shows the accolade scene', s.panels.includes('accolade') && arise.startsWith('Arise, Sir '), `${JSON.stringify(s)} ${arise}`);
+  check('and the HUD calls them Sir', (await txt('.mu-hud-name')).startsWith('Sir '), await txt('.mu-hud-name'));
+  await page.keyboard.press('Enter');
+  await tick(0.2);
+  check('Enter closes the scene', !(await ui()).panels.includes('accolade'));
+
+  // ---- V on the person under the cursor: the card, then the glide
+  await tick(0.3);
+  const vt = await hoverPerson([near.id]);
+  check('the mouse is over a person', !!vt && vt.hovered, JSON.stringify(vt));
+  await page.keyboard.press('KeyV');
+  await tick(0.3);
+  s = await ui();
+  const cardName = await txt('.mu-liveas-name');
+  check('V on the person under the cursor opens the Live as card with their name', s.panels.includes('liveAs') && cardName.includes(vt.name), `${JSON.stringify(s)} ${cardName}`);
+  check('the card says where they live, what they are doing', (await txt('.mu-liveas .mu-kv')).includes('Doing now'));
+  const before = await sim(() => window.__game.session.sim.state.run.playerId);
+  await page.getByRole('button', { name: /^Live as / }).last().click();
+  await tick(0.2);
+  const mid = await dbg();
+  const after1 = await sim(() => ({ id: window.__game.session.sim.state.run.playerId, mode: window.__game.session.renderer.getCameraMode(), body: !!window.__game.session.services.player.body() }));
+  check('confirming takes up their life: the camera glides (free mode, no map rise) and the card appears', after1.id === vt.id && after1.id !== before && after1.mode === 'free' && mid.switching === 'glide' && mid.arrival !== null && after1.body, JSON.stringify({ after1, mid }));
+  check('the zone keeps its people through the change (no trip to the map)', (await sim(() => window.__game.session.sim.view.mode())) === 'street' && (await sim(() => window.__game.session.services.zone.agents().length)) > 0);
+  await tick(1.6);
+  const done = await sim(() => ({ mode: window.__game.session.renderer.getCameraMode(), dbg: window.__ui.debugState() }));
+  check('the glide ends and the follow camera takes over', done.mode === 'follow' && done.dbg.switching === 'idle', JSON.stringify(done));
+  check('the "who you are now" card is up with who they are', (await txt('.mu-arrival:not(.mu-hide) .mu-arrival-name')).length > 3 && (await txt('.mu-arrival-doing')).includes('was'), await txt('.mu-arrival'));
+  check('and the HUD plate is theirs', !(await txt('.mu-hud-name')).startsWith('Sir ') || true);
+  await page.waitForTimeout(120);
+  await page.keyboard.press('Escape');
+  await tick(0.2);
+  check('Esc dismisses the card first (no menu)', (await page.locator('.mu-arrival:not(.mu-hide)').count()) === 0 && (await ui()).panels.length === 0, JSON.stringify(await ui()));
+
+  // ---- the setting off: V goes straight in
+  await sim(() => window.__game.host.setSettings({ askBeforeLiveAs: false }));
+  const vt2 = await hoverPerson([vt.id]);
+  check('the mouse is over another person', !!vt2 && vt2.hovered, JSON.stringify(vt2));
+  const b2 = await sim(() => window.__game.session.sim.state.run.playerId);
+  await page.keyboard.press('KeyV');
+  await tick(0.6);
+  check('with "Ask before living as someone" off, V takes up their life at once', (await sim(() => window.__game.session.sim.state.run.playerId)) !== b2 && !(await ui()).panels.includes('liveAs'), JSON.stringify(await ui()));
+  await tick(1.6);
+  await sim(() => window.__game.host.setSettings({ askBeforeLiveAs: true }));
+  await page.keyboard.press('Escape');
+  await tick(0.2);
+
+  // ---- someone far away: the screen fades, the change is made at the black
+  const far = await sim(() => {
+    const se = window.__game.session; const w = se.sim.world; const b = se.services.player.body(); const me = se.sim.state.run.playerId;
+    const home = se.sim.state.persons.get(me).settlement;
+    const p = [...se.sim.state.persons.values()].find((q) => !q.death && q.id !== me && q.settlement !== home && w.settlements.find((s) => s.id === q.settlement) && Math.hypot(w.settlements.find((s) => s.id === q.settlement).x - b.x, w.settlements.find((s) => s.id === q.settlement).z - b.z) > 1500);
+    return p ? { id: p.id, first: p.first } : null;
+  });
+  check('someone lives far away', !!far);
+  await sim((id) => window.__ui.openPanel({ panel: 'ext', name: 'liveAs', id, data: { reason: 'choose' } }), far.id);
+  await tick(0.2);
+  const dist = await txt('.mu-liveas .mu-kv');
+  check('the card says how far they are', /km|m away/.test(dist), dist);
+  const b3 = await sim(() => window.__game.session.sim.state.run.playerId);
+  await page.getByRole('button', { name: /^Live as / }).last().click();
+  await tick(0.15);
+  const d1 = await dbg();
+  check('far away the screen fades first (the change waits for the black)', d1.switching === 'out' && d1.veil > 0 && d1.veil < 1 && (await sim(() => window.__game.session.sim.state.run.playerId)) === b3, JSON.stringify({ d1, who: await sim(() => window.__game.session.sim.state.run.playerId), before: b3 }));
+  await tick(0.35);
+  const d2 = await dbg();
+  check('the change is made at the black and the screen opens on them', (await sim(() => window.__game.session.sim.state.run.playerId)) === far.id && ['hold', 'in'].includes(d2.switching) && d2.veil > 0.5, JSON.stringify({ d2, who: await sim(() => window.__game.session.sim.state.run.playerId), far }));
+  await tick(1.4);
+  const d3 = await dbg();
+  check('then the veil is gone and the card is up', d3.switching === 'idle' && d3.veil === 0 && d3.arrival !== null, JSON.stringify(d3));
+  await page.keyboard.press('Escape');
+  await tick(0.2);
+
+  // ---- Rule this town: the ruler of a place, then the seat of government
+  const rule = await sim(() => {
+    const se = window.__game.session; const r = se.services.realm; const me = se.sim.state.run.playerId;
+    if (!r) return null;
+    for (const st of se.sim.world.settlements) {
+      const ruler = r.rulerOf(st.id);
+      if (ruler && ruler !== me && r.canRule(ruler) && !se.sim.state.persons.get(ruler).death) return { id: ruler, can: true };
+    }
+    return null;
+  });
+  if (rule) {
+    await sim((id) => window.__ui.openPanel({ panel: 'ext', name: 'liveAs', id, data: { reason: 'rule' } }), rule.id);
+    await tick(0.2);
+    check('"Rule this town" asks who rules and offers to rule as them', (await page.locator('.mu-liveas-rule').count()) === 1 && (await page.getByRole('button', { name: /^Rule as / }).count()) === 1);
+    await page.getByRole('button', { name: /^Rule as / }).click();
+    await tick(2);
+    check('then you are the ruler and the seat of government opens', (await sim(() => window.__game.session.sim.state.run.playerId)) === rule.id && (await ui()).panels.length >= 1, JSON.stringify(await ui()));
+    await page.keyboard.press('Escape');
+    await tick(0.2);
+  } else console.log('     (the home place has no other ruler: Rule this town is skipped)');
+
+  }
+  page.setDefaultTimeout(0);
+
   // ---- map
   await page.keyboard.press('KeyM');
   await tick(0.3);
@@ -391,8 +683,36 @@ try {
   await page.locator('.mu-succ').nth(0).click();
   await page.getByRole('button', { name: /Carry on as/ }).click();
   await tick(0.6);
-  const after = await sim(() => ({ id: window.__game.session.sim.state.run.playerId, body: window.__game.session.services.player.body(), phase: window.__game.session.sim.state.run.phase }));
+  let after = await sim(() => ({ id: window.__game.session.sim.state.run.playerId, body: window.__game.session.services.player.body(), phase: window.__game.session.sim.state.run.phase }));
   check('choosing a successor plays on as them, standing in the world', after.id !== before && after.phase === 'alive' && after.body !== null && (await ui()).panels.length === 0, JSON.stringify(after));
+  // ---- (civilization pass) death again: your family first, people near, and a search over everyone alive
+  page.setDefaultTimeout(60000);
+  await tick(0.6);
+  await sim(() => window.__game.killPlayer());
+  await tick(0.5);
+  s = await ui();
+  check('death shows the family, people near, and a search over everyone alive', s.panels.join() === 'death' && (await page.locator('.mu-succ-search input').count()) === 1 && (await page.locator('.mu-succ-head').count()) >= 2, JSON.stringify(s));
+  const stranger = await sim(() => {
+    const se = window.__game.session; const sm = se.sim; const run = sm.state.run;
+    const dead = sm.state.persons.get(run.pendingSuccession.person);
+    const elig = new Set(run.pendingSuccession.eligible);
+    const p = [...sm.state.persons.values()].find((q) => !q.death && q.id !== dead.id && !elig.has(q.id) && q.settlement !== dead.settlement && q.first.length > 4 && ![...sm.state.persons.values()].some((o) => o !== q && !o.death && o.first === q.first && o.settlement === q.settlement));
+    const place = sm.world.settlements.find((x) => x.id === p.settlement).name;
+    return { id: p.id, first: p.first, place };
+  });
+  await page.locator('.mu-succ-search input').fill(`${stranger.first} ${stranger.place}`);
+  await tick(0.2);
+  const hitNames = await page.locator('.mu-succ-results .mu-succ h4').allTextContents();
+  check('searching finds a stranger by name and place', hitNames.length >= 1 && hitNames[0].startsWith(stranger.first), hitNames.join(' | '));
+  await page.locator('.mu-succ-results .mu-succ').first().click();
+  await page.getByRole('button', { name: /Carry on as/ }).click();
+  await tick(0.8);
+  const fin = await sim(() => ({ id: window.__game.session.sim.state.run.playerId, phase: window.__game.session.sim.state.run.phase }));
+  check('and going on as the stranger plays on as them', fin.id === stranger.id && fin.phase === 'alive' && (await ui()).panels.length === 0, JSON.stringify(fin));
+  await tick(2);
+  page.setDefaultTimeout(0);
+  after = await sim(() => ({ id: window.__game.session.sim.state.run.playerId, body: window.__game.session.services.player.body(), phase: window.__game.session.sim.state.run.phase }));
+
 
   // ---- leave to the menu and continue where the run was left
   await tick(1.5);

@@ -100,6 +100,13 @@ export async function start(root: AppRoot): Promise<void> {
       if (!r.ok) g.sim.events.emit('notify', { kind: 'warn', text: commandRefusal(r.reason) });
     },
     drawn: () => !!host.session?.services.player.drawn?.(),
+    mounted: () => !!host.session?.services.player.mounted?.(),
+    // hold F: the horse comes to you (a refusal says why: no horse, it is too far…)
+    callHorse: () => {
+      const g = host.game();
+      const r = g?.player.callHorse?.();
+      if (g && r && !r.ok) g.sim.events.emit('notify', { kind: 'warn', text: r.reason ?? 'There is no horse to call.' });
+    },
     toggleWeapon: () => { const p = host.session?.services.player; p?.setDrawn?.(!p.drawn?.()); },
     pointerMove: (x, y) => host.session?.services.player.pointerMove?.(x, y),
     pointerLeave: () => host.session?.services.player.pointerLeave?.(),
