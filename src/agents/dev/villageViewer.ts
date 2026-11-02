@@ -178,30 +178,32 @@ function raiseDevSite(c: SceneCtx, progress: number): void {
   devSite = { building, site, crew };
 }
 
-/** A household's animals on a halter behind its head, who walks to the green. */
+/** A household's animals on a halter behind its head, who walks to the green (the household is given a few pigs and sheep to bring). */
 function leadDevDrove(c: SceneCtx): void {
   const { zone, s } = c;
   const sp = zone.places.of(s.id)!;
   const st = zone.state;
-  for (const hh of st.householdsIn(s.id)) {
-    const head = st.persons.get(hh.head);
-    const home = st.buildings.get(hh.home);
-    if (!head || head.death || !home) continue;
+  const near = [...st.householdsIn(s.id)].filter((h) => { const b = st.buildings.get(h.home); const hd = st.persons.get(h.head); return !!b && !!hd && !hd.death && Math.hypot(b.x - sp.green.x, b.z - sp.green.z) < 70; });
+  for (const hh of near) {
+    const head = st.persons.get(hh.head)!;
+    const home = st.buildings.get(hh.home)!;
+    hh.stores.pig = Math.max(hh.stores.pig ?? 0, 2);
+    hh.stores.sheep = Math.max(hh.stores.sheep ?? 0, 2);
+    st.touchHousehold(hh);
+    zone.fauna.resync();
     const own = zone.fauna.list().filter((a) => a.owner === hh.id && (a.kind === 'sheep' || a.kind === 'pig' || a.kind === 'cow' || a.kind === 'goat'));
     if (own.length < 2) continue;
     // the head comes out of the door and the animals are brought to him
     const door = zone.nav.doorOf(home.id)!;
-    zone.summon?.(head.id, door.x + Math.sin(door.yaw) * 3, door.z + Math.cos(door.yaw) * 3, door.yaw);
+    const hx = door.x + Math.sin(door.yaw) * 3, hz = door.z + Math.cos(door.yaw) * 3;
+    zone.summon?.(head.id, hx, hz, door.yaw);
     let n = 0;
     for (const a of own) {
       if (n >= 3) break;
-      const res = zone.fauna.lead(a.id, head.id, hh.id);
-      if (res.ok) n++;
+      if (zone.fauna.lead(a.id, head.id, hh.id).ok) n++;
     }
     if (n === 0) continue;
     devLed = { leader: head.id };
-    zone.dismiss?.(head.id);
-    zone.summon?.(head.id, door.x + Math.sin(door.yaw) * 3, door.z + Math.cos(door.yaw) * 3, door.yaw);
     zone.command(head.id, { kind: 'goto', x: sp.green.x, z: sp.green.z });
     return;
   }
