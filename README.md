@@ -65,6 +65,30 @@ goes 1.6× faster in it), **stables** (come with horses) and **cowsheds, sheepfo
 beasts). In build mode the **wall line** tool lays a wall from one click to the next, and on each site's *Works* page
 you **set servants to it**: you see them at it in daylight, hammering, sawing and carrying.
 
+**Every bout of work is played.** While a task runs a small game sits over the action bar: the hammer, saw, axe,
+hoe and spade strike on the gold (**J**); sowing asks seed (**J**) or cover (**K**); binding a wound, stirring a pot or
+spinning wants a steady hand (hold **J** to keep the needle in the band); the bow is drawn and loosed on the mark.
+Good strokes finish the bout sooner, teach more and make better pieces and better-bound wounds; left alone, a bout
+goes as it always did.
+
+**Fighting has lines.** With steel out, **W+J** comes over the top at the head, **S+J** cuts at the legs, **A/D+J**
+thrusts (good against armour), **J** cuts at the body. The guard is held on a line too (**W+K** high, **K** middle,
+**S+K** low): it covers its own line, the next partly, the far one hardly at all, and a shield covers the body. A
+bar over the action shows your guard and the line of the blow coming at you. A guard raised just as the blow lands
+parries it and opens a **riposte** (J at once: quicker, surer, harder). **K** in your own swing **feints**, drawing a
+guarding foe wide. A tired arm swings slower and hits softer. Skilled enemies read your lines, cut low under a high
+guard and feint as well.
+
+**Days have duties, not quests.** Villagers ask a favour only now and then. Someone with no master has the duty of
+their station each working day: a knight rides the bounds, trains the men at the yard, sees to his arms at the
+forge or stands the watch; a priest keeps the church and visits the sick; a healer tends the ailing; a master works
+at his bench. The people of the world keep the same rounds. **A lord has no tasks**: the tracker lists the
+**matters of the realm** (raiders on your lands, the host in the field, idle works, no research, a thin treasury,
+people in want), each opening the page where it is decided. Taking up another life shows who that person is,
+what they are doing right now, and what their days are made of. **Enemies raid your lands at least once a month**
+(a month is a third of a season), with a warning saying which way they come; and during an attack, battle command
+can **sound the retreat**.
+
 Tasks are given **in person**: a gold **!** over someone's head means they have something for you; walk up and speak
 to them to take it up. Gilded **wings** over someone mean a task can be finished with them. The screen starts clear:
 the task card, hints, the clock card, the minimap, notices and messages all start folded to a line or a count (urgent

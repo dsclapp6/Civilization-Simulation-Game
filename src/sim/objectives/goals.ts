@@ -34,6 +34,8 @@ function allowed(O: Obj, key: string): boolean {
 function pathGoal(O: Obj, me: Person): NewObjective | null {
   if (O.age(me) < 12 || O.deps.economy.employment(me.id)) return null;
   const age = O.age(me);
+  // a grown man or woman with a trade of their own has chosen
+  if (age >= 18 && me.career !== 'none' && me.career !== 'child' && me.career !== 'labourer') return null;
   const steps: Step[] = [];
   if (age < 14) {
     const years = Math.max(0.1, 14 - age);

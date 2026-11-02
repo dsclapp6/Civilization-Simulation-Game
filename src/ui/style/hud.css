@@ -334,7 +334,7 @@
 
 /* ---- work mini-games (above the action bar) ---- */
 .mu-mini {
-  position: absolute; left: 50%; bottom: 142px; transform: translateX(-50%); width: 340px; padding: 8px 14px 10px;
+  position: absolute; left: 50%; bottom: 160px; transform: translateX(-50%); width: 340px; padding: 8px 14px 10px;
   background: var(--paper); border-radius: 3px; border: 1px solid #1f1309; pointer-events: auto; user-select: none; cursor: pointer;
   box-shadow: 0 0 0 2px rgba(172, 130, 58, 0.9), 0 0 0 3px #1f1309, 0 6px 18px rgba(0, 0, 0, 0.45);
 }
@@ -365,7 +365,7 @@
 .mu-agenda-item.warn { border-color: #a5762a; }
 
 /* ---- the duel's reading (steel out) ---- */
-.mu-duel { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); width: 300px; padding: 6px 10px 8px; pointer-events: none;
+.mu-duel { position: absolute; left: 50%; bottom: 240px; transform: translateX(-50%); width: 300px; padding: 6px 10px 8px; pointer-events: none;
   background: rgba(20, 13, 6, 0.72); color: #f6e7be; border-radius: 3px; font-size: 12.5px; text-align: center; }
 .mu-duel-lines { display: flex; gap: 6px; justify-content: center; margin-bottom: 4px; }
 .mu-duel-line { flex: 1; padding: 2px 0; border: 1px solid rgba(246, 231, 190, 0.35); border-radius: 2px; opacity: 0.75; }

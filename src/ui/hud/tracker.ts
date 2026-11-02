@@ -123,26 +123,27 @@ export class Tracker {
 
   /** The ruler's matters, shown when no task is tracked (a lord has none of his own). */
   private paintAgenda(game: GameServices): void {
-    const items = this.cur ? [] : realmAgenda(game);
-    const rules = !this.cur && !!game.realm?.canRule(game.sim.state.run.playerId);
-    const sig = rules ? `r|${items.map((i) => `${i.key}:${i.text}`).join('|')}` : '';
+    // a ruler's matters stand under whatever is tracked (the first day's steps, the host's march)
+    const rules = !!game.realm?.canRule(game.sim.state.run.playerId);
+    const items = rules ? realmAgenda(game) : [];
+    const show = rules && (items.length > 0 || !this.cur);
+    const sig = show ? `r|${this.cur ? 'c' : ''}|${items.map((i) => `${i.key}:${i.text}`).join('|')}` : '';
     if (sig === this.agendaSig) return;
     this.agendaSig = sig;
-    this.agenda.classList.toggle('mu-hide', !rules);
-    this.empty.classList.toggle('mu-hide', !!this.cur || rules);
-    if (!rules) return;
+    this.agenda.classList.toggle('mu-hide', !show);
+    this.empty.classList.toggle('mu-hide', !!this.cur || show);
+    if (!show) return;
     this.agenda.replaceChildren(
       h('div.mu-tracker-top', null, h('span.mu-tracker-src', null, icon('crown', 14), 'Matters of the realm'), h('span.mu-dim.mu-small', null, h('span.mu-key', null, 'U'))),
       ...(items.length
         ? items.slice(0, 4).map((i) => h('button.mu-agenda-item', { type: 'button', class: i.tone, onclick: (e: Event) => { e.stopPropagation(); this.deps.open?.(i.open); } }, icon(i.icon, 14), h('span', null, i.text)))
-        : [h('div.mu-small.mu-dim', null, 'The realm is quiet. Your stewards see to the day; walk your lands, or take up another life (V).')]),
+        : this.cur ? [] : [h('div.mu-small.mu-dim', null, 'The realm is quiet. Your stewards see to the day; walk your lands, or take up another life (V).')]),
     );
   }
 
   private paint(o: ReturnType<NonNullable<GameServices['objectives']>['tracked']>, absDay: number): void {
     this.body.classList.toggle('mu-hide', !o);
     this.empty.classList.toggle('mu-hide', !!o || this.agendaSig !== '');
-    if (o) { this.agenda.classList.add('mu-hide'); this.agendaSig = ''; this.agendaAt = -10; }
     this.lastTargetText = '';
     if (!o) return;
     const step = currentStep(o);
