@@ -5,8 +5,7 @@
 //
 // Developer URL parameters: `autostart=1` (skip the menus; `=continue` resumes the saved run), `seed=`,
 // `difficulty=`, `quality=`, `time=0..1`, `season=0..3`, `day=0..3`, `debug=1` (timings + text HUD),
-// `devzone=1` (stand-in villagers and a horse), `shots=1` (screenshot helpers on `window.__game`),
-// `duel=knight` (the knight-duel simulation: a new run starts at once and a knight comes at you, sword drawn).
+// `devzone=1` (stand-in villagers and a horse), `shots=1` (screenshot helpers on `window.__game`).
 import type { AppRoot } from '../main';
 import type { Difficulty } from '../core/domain';
 import type { Speed } from '../core/time';
@@ -16,7 +15,7 @@ import { IdbSaveStore } from '../sim/save-idb';
 import { loadProfile, type SaveStore } from '../sim/save';
 import { createUI } from '../ui';
 import { cursorCss } from '../ui/core/cursors';
-import type { GameUI, GameUIExt } from '../ui/types';
+import type { GameUI } from '../ui/types';
 import { DebugOverlay, emptyTimings, type FrameTimings } from './debug';
 import { AppHost } from './host';
 import { InputLayer } from './input';
@@ -68,12 +67,6 @@ export async function start(root: AppRoot): Promise<void> {
   const store = await openStore();
   const profile = await loadProfile(store);
   const host = new AppHost({ store, profile, params, viewport: root.viewport });
-  // the knight-duel simulation: straight into a fight with a knight, to see how combat works (the main menu's
-  // "Duel a knight", or `?duel=knight` in the address); set before the UI so the menu offers it from the start
-  host.startDuel = async () => {
-    await host.startNewRun({ difficulty: 'knight', practice: true });
-    await startDuel(host, ui as GameUI & Partial<GameUIExt>);
-  };
   const ui = createUI(root.ui, host);
   host.ui = ui;
   root.ready();
@@ -190,11 +183,6 @@ export async function start(root: AppRoot): Promise<void> {
   if (params.has('debug') || params.has('autostart') || params.has('shots') || params.has('hud')) installHooks(host, ui, flags, (dt) => frame(dt, performance.now(), true, false));
   requestAnimationFrame(loop);
 
-  if (params.get('duel')) {
-    await host.startDuel();
-    return;
-  }
-
   // ---- developer shortcut past the menus ----
   const auto = params.get('autostart');
   if (auto) {
@@ -204,32 +192,6 @@ export async function start(root: AppRoot): Promise<void> {
       await host.startNewRun({ difficulty: d && DIFFICULTIES.includes(d) ? d : 'knight' });
     }
   }
-}
-
-/** Waits for the run to be on screen, clears the opening cards, arms the player and brings a knight to fight. */
-async function startDuel(host: AppHost, ui: GameUI & Partial<GameUIExt>): Promise<void> {
-  for (let i = 0; i < 600 && !(host.session && host.screen === 'game'); i++) await new Promise((r) => setTimeout(r, 50));
-  const s = host.session;
-  if (!s) return;
-  for (const id of ui.openPanels?.() ?? []) ui.closePanel?.(id);
-  // settle the zone around the player so the knight has somewhere to stand
-  await new Promise((r) => setTimeout(r, 600));
-  const combat = s.sim.services.combat as unknown as { debug?: { duel(): { fight: number; knight: number } } } | undefined;
-  const r = combat?.debug?.duel() ?? { fight: 0, knight: 0 };
-  // look at him: the camera turns to the way the player faces (towards the knight)
-  const body = s.services.player.body();
-  if (body) {
-    const turn = Math.atan2(Math.sin(body.yaw - s.renderer.getCameraYaw()), Math.cos(body.yaw - s.renderer.getCameraYaw()));
-    s.renderer.orbit(turn, 0);
-  }
-  if (!r.fight) {
-    s.sim.events.emit('notify', { kind: 'warn', text: 'No knight could be found for the duel in this world. Try another seed (?duel=knight&seed=…).' });
-    return;
-  }
-  s.sim.events.emit('notify', {
-    kind: 'info',
-    text: 'The duel: your sword is out. The mouse looks; left click strikes (hold it for a heavy blow), right button guards, Space dodges. The fight ends when one of you falls or yields.',
-  });
 }
 
 function installHooks(host: AppHost, ui: GameUI, flags: { frozen: boolean }, headlessFrame: (dt: number) => void): void {

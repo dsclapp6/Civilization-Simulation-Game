@@ -35,10 +35,6 @@ export interface CombatDebug {
   skirmish(kind: 'bandits' | 'wolves', count: number): number;
   /** Makes the person carry exactly this kit in fights (until the next load). */
   giveKit(person: PersonId, kit: KitOverride): void;
-  /** A duel on foot: a knight (a real one of the land when there is one, else the best man to hand, armed as a
-   *  knight) is brought a few metres ahead of the player, both are given a knight's kit, and the fight begins.
-   *  Returns the fight id (0 when it cannot be set up) and who the knight is. */
-  duel(): { fight: number; knight: PersonId };
 }
 
 const AMBUSH_RADIUS = 85;
@@ -123,6 +119,24 @@ export function installCombat(sim: Simulation, deps: Wave3Deps): CombatModule {
   function onFightEnd(fight: Fight, result: FightResult): void {
     const state = sim.state;
     const pid = state.run.playerId;
+    const duel = duels.get(fight.id);
+    if (duel) {
+      duels.delete(fight.id);
+      const a = state.persons.get(duel.a), b = state.persons.get(duel.b);
+      const down = (id: PersonId): boolean => result.wounded.includes(id) && (book.isHurt(id) || !!state.persons.get(id)?.death);
+      const aLost = !a || a.death || (down(duel.a) && !down(duel.b));
+      const bLost = !b || b.death || (down(duel.b) && !down(duel.a));
+      const winner = aLost && !bLost ? b : bLost && !aLost ? a : undefined;
+      const loser = winner === a ? b : winner === b ? a : undefined;
+      if (winner && loser) {
+        winner.rep.valour = Math.min(100, winner.rep.valour + 3);
+        winner.prestige += 2;
+        state.touch(winner);
+        social?.adjustOpinion(loser.id, winner.id, 4, 'beat me fairly');
+        state.log(sim.absDay, 'combat', `${fullName(winner)} bested ${fullName(loser)} in single combat.`, [winner.id, loser.id]);
+        notify(winner.id === pid ? 'gain' : 'warn', winner.id === pid ? `${loser.first} yields. The duel is yours.` : `You yield to ${winner.first}.`, pid);
+      }
+    }
     const a = assaults.get(fight.id);
     if (a) {
       assaults.delete(fight.id);
@@ -189,7 +203,48 @@ export function installCombat(sim: Simulation, deps: Wave3Deps): CombatModule {
     return { ok: true, message: `You strike at ${victim.first}!` };
   }
 
-  const services: Services = { sim, arena, book, economy, social, zone, player, assault };
+  /** A challenge to single combat, to yielding: honourable, no crime, nobody else joins in. The challenged man
+   *  accepts unless he is hurt, or holds the challenger in contempt and is the weaker. */
+  const duels = new Map<number, { a: PersonId; b: PersonId }>();
+  function challenge(actor: PersonId, otherId: PersonId): ActionOutcome {
+    const state = sim.state;
+    const me = state.persons.get(actor);
+    const other = state.persons.get(otherId);
+    if (!me || !other || other.death) return { ok: false, message: 'They are not there.' };
+    if (arena.inFight(otherId)) return { ok: false, message: 'They are already fighting.' };
+    if (book.isHurt(otherId)) { zone?.say(otherId, 'Not while I bleed.', 2.5); return { ok: false, message: `${other.first} is hurt and will not fight.` }; }
+    armForFight(actor);
+    const where = zone?.agent(otherId);
+    const at: P2 = where ? { x: where.x, z: where.z } : (player?.body() ?? { x: 0, z: 0 });
+    const id = arena.engage([{ faction: 'player', people: [actor] }, { faction: 'challenged', people: [otherId] }], { at, yieldAllowed: true, reason: 'duel' });
+    if (id === 0) return { ok: false, message: 'Nothing comes of it.' };
+    duels.set(id, { a: actor, b: otherId });
+    zone?.say(otherId, other.career === 'knight' ? 'So be it. Guard yourself!' : 'Have at you, then!', 2.5);
+    return { ok: true, message: `You challenge ${other.first}. To the yield!` };
+  }
+
+  /** A fighting man the player controls carries his arms for real: a knight, a man-at-arms, a sergeant or a squire
+   *  with nothing in his hand is given (once) the kit of his station, and it is put on. */
+  const STATION_KIT: Record<string, ReadonlyArray<readonly [string, 'main' | 'off' | 'armour' | 'helmet']>> = {
+    knight: [['sword', 'main'], ['shield', 'off'], ['mail_hauberk', 'armour'], ['kettle_hat', 'helmet']],
+    man_at_arms: [['sword', 'main'], ['shield', 'off'], ['padded_armour', 'armour'], ['cap_helmet', 'helmet']],
+    sergeant: [['sword', 'main'], ['shield', 'off'], ['padded_armour', 'armour'], ['cap_helmet', 'helmet']],
+    squire: [['sword', 'main'], ['shield', 'off']],
+  };
+  function armForFight(person: PersonId): void {
+    const p = sim.state.persons.get(person);
+    if (!p || !economy) return;
+    const kit = STATION_KIT[p.career];
+    if (!kit || economy.inventory(person).equipment.main) return;
+    for (const [good, slot] of kit) {
+      if (economy.inventory(person).equipment[slot]) continue;
+      if ((p.inventory[good] ?? 0) < 1) p.inventory[good] = (p.inventory[good] ?? 0) + 1;
+      economy.equip(person, slot, good);
+    }
+    sim.state.touch(p);
+  }
+
+  const services: Services = { sim, arena, book, economy, social, zone, player, assault, challenge };
   sim.actions.register(createCombatProvider(services));
 
   // ---- the API ----
@@ -223,7 +278,6 @@ export function installCombat(sim: Simulation, deps: Wave3Deps): CombatModule {
     debug: {
       skirmish: (kind, count) => debugSkirmish(kind, count),
       giveKit: () => { /* replaced below */ },
-      duel: () => ({ fight: 0, knight: 0 }), /* replaced below */
     },
     dispose: () => { for (const off of offs.splice(0)) off(); },
   };
@@ -273,11 +327,13 @@ export function installCombat(sim: Simulation, deps: Wave3Deps): CombatModule {
 
   const ev = sim.events;
   offs.push(
-    ev.on('playerSwitched', () => { port.reset(); }),
+    ev.on('playerSwitched', (e) => { port.reset(); armForFight(e.to); }),
     ev.on('playerDied', () => { arena.dropPlayer(); }),
     ev.on('gameOver', () => { arena.reset(); }),
     ev.on('death', (e) => { book.forget(e.person); arena.onDeath(e.person); }),
   );
+  // the lord (or whoever the run is played as) carries the arms of his station from the first morning
+  armForFight(sim.state.run.playerId);
 
   // ---- wolves close in on a lone traveller ----
   let circled = 0;
@@ -340,81 +396,6 @@ export function installCombat(sim: Simulation, deps: Wave3Deps): CombatModule {
     return tidy(arena.engage([{ faction: 'player', people: [pid] }, { faction: 'bandits', people }], { at: body, reason: 'bandits' }), people, []);
   }
   api.debug.giveKit = (person, kit) => arena.setKitOverride(person, kit);
-
-  /** The centre of the field strip nearest to a point, and the direction of its long side (strips are open land). */
-  const openGround = (settlement: number, near: P2): { x: number; z: number; yaw: number } | null => {
-    let best: { x: number; z: number; yaw: number } | null = null;
-    let bd = Infinity;
-    for (const st of sim.world.strips) {
-      if (st.settlement !== settlement || st.poly.length < 3) continue;
-      let x = 0, z = 0;
-      for (const q of st.poly) { x += q.x; z += q.z; }
-      x /= st.poly.length; z /= st.poly.length;
-      const d = Math.hypot(x - near.x, z - near.z);
-      if (d >= bd) continue;
-      // the long side of the strip
-      let yaw = 0, len = 0;
-      for (let i = 0; i < st.poly.length; i++) {
-        const a = st.poly[i], b = st.poly[(i + 1) % st.poly.length];
-        const l = Math.hypot(b.x - a.x, b.z - a.z);
-        if (l > len) { len = l; yaw = Math.atan2(b.x - a.x, b.z - a.z); }
-      }
-      if (len < 20) continue;
-      bd = d;
-      // stand a few metres short of the middle so the knight (eight metres on) is on the strip too
-      best = { x: x - Math.sin(yaw) * 4, z: z - Math.cos(yaw) * 4, yaw };
-    }
-    return best;
-  };
-
-  /** Sword, heater shield, mail and a helm: what a knight fights in on foot. */
-  const KNIGHT_KIT: KitOverride = { weapon: 'sword', shield: 'shield_heater', ranged: null, armour: ['mail_hauberk', 'bascinet'] };
-  api.debug.duel = () => {
-    const body = player?.body();
-    const pid = sim.state.run.playerId;
-    const me = sim.state.persons.get(pid);
-    if (!body || !me) return { fight: 0, knight: 0 };
-    const now = sim.absDay;
-    const fit = (q: { id: PersonId; sex: string; household: number; death?: unknown }, minAge: number): boolean => {
-      const p = sim.state.persons.get(q.id);
-      if (!p || p.death || p.id === pid || p.sex !== 'm' || p.household === me.household || arena.inFight(p.id)) return false;
-      const a = ageYears(p, now);
-      return a >= minAge && a <= 45 && !p.flags.captive;
-    };
-    // a real knight of the land, nearest first; else a grown man of the place, armed as a knight
-    let knight: PersonId = 0;
-    let best = Infinity;
-    for (const p of sim.state.persons.values()) {
-      if (p.career !== 'knight' || !fit(p, 18)) continue;
-      const s = sim.world.settlements[p.settlement];
-      const d = s ? Math.hypot(s.x - body.x, s.z - body.z) : 1e9;
-      if (d < best) { best = d; knight = p.id; }
-    }
-    if (!knight) for (const r of sim.state.residentsOf(me.settlement)) if (fit(r, 18)) { knight = r.id; break; }
-    if (!knight) return { fight: 0, knight: 0 };
-    // open ground: the middle of the nearest field strip of the player's place, the two men facing along it
-    // (between houses the knight would be summoned behind a wall and the camera pressed against it)
-    const ground = openGround(me.settlement, body);
-    if (ground && player?.placeAt) player.placeAt(ground.x, ground.z, ground.yaw);
-    const from = ground ?? { x: body.x, z: body.z, yaw: body.yaw };
-    const at: P2 = { x: from.x + Math.sin(from.yaw) * 8, z: from.z + Math.cos(from.yaw) * 8 };
-    zone?.summon?.(knight, at.x, at.z, from.yaw + Math.PI);
-    arena.setKitOverride(knight, KNIGHT_KIT);
-    arena.setKitOverride(pid, KNIGHT_KIT);
-    // the player carries the same arms for real (what the hands show, what G draws), not only in the arena's books
-    if (economy) {
-      for (const [good, slot] of [['sword', 'main'], ['shield', 'off'], ['mail_hauberk', 'armour'], ['kettle_hat', 'helmet']] as const) {
-        if ((me.inventory[good] ?? 0) < 1) me.inventory[good] = (me.inventory[good] ?? 0) + 1;
-        economy.equip(pid, slot, good);
-      }
-      sim.state.touch(me);
-    }
-    const fight = arena.engage([{ faction: 'player', people: [pid] }, { faction: 'knight', people: [knight] }], { at: { x: from.x, z: from.z }, reason: 'duel', yieldAllowed: true });
-    if (fight === 0) { zone?.dismiss?.(knight); return { fight: 0, knight: 0 }; }
-    const off = api.onFightEnded((r) => { if (r.id !== fight) return; off(); zone?.dismiss?.(knight); });
-    notify('danger', `${fullName(sim.state.persons.get(knight)!)} draws his sword and comes at you.`, pid);
-    return { fight, knight };
-  };
 
   void PROVIDER_ID;
   return api;

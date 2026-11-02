@@ -2,8 +2,7 @@
 // leaving a run, and the loading screen in between. It owns the current `Session` (simulation + modules +
 // renderer) and is the only thing that creates or destroys one.
 import { clamp } from '../core/math';
-import { newProfile, type Profile } from '../sim/legacy';
-import { MemorySaveStore } from '../sim/save-memory';
+import type { Profile } from '../sim/legacy';
 import { hasSavedRun, saveProfile, type SaveStore } from '../sim/save';
 import { Simulation } from '../sim/sim';
 import type { GameServices, GameUI, Settings, UiHost, UiRendererControls, UiScreen } from '../ui/types';
@@ -36,8 +35,6 @@ export class AppHost implements UiHost {
   /** The input layer (set by game.ts): Esc asks it whether the mouse was looking. */
   input: { releaseLook(): boolean; readonly pointerLocked: boolean } | null = null;
   session: Session | null = null;
-  /** The knight-duel simulation (set by game.ts, which owns the UI it needs). */
-  startDuel?: () => Promise<void>;
   screen: UiScreen = 'menu';
   /** Notified whenever a session starts or ends. */
   readonly listeners: Array<(s: Session | null) => void> = [];
@@ -45,8 +42,6 @@ export class AppHost implements UiHost {
   private profileObj: Profile;
   private settingsObj: Settings;
   private busy = false;
-  /** The running session is a practice one (the knight duel): kept in memory, never saved over the real run. */
-  private practice = false;
 
   constructor(private readonly env: HostEnv) {
     this.profileObj = env.profile;
@@ -81,8 +76,7 @@ export class AppHost implements UiHost {
     if (change.quality && this.session) this.session.renderer.setQuality(this.quality());
   }
 
-  /** `practice`: a throwaway run (the knight duel) kept in memory only: the saved run and the records are untouched. */
-  async startNewRun(opts: Parameters<UiHost['startNewRun']>[0] & { practice?: boolean }): Promise<void> {
+  async startNewRun(opts: Parameters<UiHost['startNewRun']>[0]): Promise<void> {
     if (this.busy) return;
     this.busy = true;
     try {
@@ -96,12 +90,10 @@ export class AppHost implements UiHost {
       this.setScreen('loading', { progress: 0.35, label: 'Settling the people…' });
       await paint();
       const t2 = performance.now();
-      const practice = opts.practice === true;
       const sim = Simulation.newGame({
         seed, difficulty: opts.difficulty, generateWorld: () => world,
-        store: practice ? new MemorySaveStore() : this.env.store, profile: practice ? newProfile() : this.profileObj,
+        store: this.env.store, profile: this.profileObj,
       });
-      this.practice = practice;
       const t3 = performance.now();
       applyDevClock(sim, this.env.params);
       await this.begin(sim);
@@ -220,11 +212,9 @@ export class AppHost implements UiHost {
     await this.flush();
     this.session = null;
     for (const fn of this.listeners) fn(null);
-    s.dispose();
-    // a practice run (the duel) leaves the real records alone
-    if (this.practice) { this.practice = false; return; }
     // carry the profile (the records of the run) forward
     this.profileObj = s.sim.profile;
+    s.dispose();
     void saveProfile(this.env.store, this.profileObj).catch(() => {});
   }
 }

@@ -284,6 +284,8 @@ export interface RunState {
   switches: number;
   startedDay: number;
   endedReason: 'extinct' | 'abandoned' | null;
+  /** While the player fights as one of their lord's knights ("Fight as him"), the lord to go back to (0 = none). */
+  liege?: PersonId;
   /** Set while phase === 'choosing': who died and who may be chosen. */
   pendingSuccession: { person: PersonId; cause: DeathCause; eligible: PersonId[] } | null;
 }

@@ -282,3 +282,29 @@ describe('death of the player and game over', () => {
     expect(store.hasRun).toBe(false);
   });
 });
+
+describe('fighting as one of your knights (fightAs / returnToLiege)', () => {
+  it('takes the knight’s place, remembers the lord, and goes back to him', () => {
+    const sim = newSim({ seed: 'champ' });
+    const st = sim.state;
+    const house = mkHouse(sim, 'Champ');
+    const hh = mkHousehold(sim);
+    const lord = mkPerson(sim, { age: 30, house: house.id, household: hh.id, tier: 5 });
+    st.setHead(hh, lord);
+    makePlayer(sim, lord);
+    const knight = mkPerson(sim, { age: 25, house: house.id, household: hh.id, tier: 5 });
+    knight.career = 'knight';
+    expect(sim.dispatch({ type: 'returnToLiege' }).ok).toBe(false);
+    expect(sim.dispatch({ type: 'fightAs', personId: knight.id })).toEqual({ ok: true });
+    expect(st.run.playerId).toBe(knight.id);
+    expect(st.run.liege).toBe(lord.id);
+    expect(lord.flags.player).toBeFalsy();
+    expect(sim.dispatch({ type: 'returnToLiege' })).toEqual({ ok: true });
+    expect(st.run.playerId).toBe(lord.id);
+    expect(st.run.liege).toBe(0);
+    // an ordinary switch ends the service
+    sim.dispatch({ type: 'fightAs', personId: knight.id });
+    sim.dispatch({ type: 'switchCharacter', personId: lord.id });
+    expect(st.run.liege).toBe(0);
+  });
+});

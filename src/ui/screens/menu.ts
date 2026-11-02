@@ -95,15 +95,6 @@ export class MenuLayer {
     const card = h('section.mu-win.sm.mu-menu-card', null, corners(), h('div.mu-menu-card-body', null,
       this.saved ? button('Continue', { variant: 'primary', size: 'big', icon: 'play', class: 'mu-wide', onClick: () => this.deps.continueRun() }) : null,
       button('New run', { variant: this.saved ? '' : 'primary', size: 'big', icon: 'sparkle', class: 'mu-wide', onClick: () => this.go('difficulty') }),
-      this.deps.host.startDuel ? button(this.starting ? 'Making the world…' : 'Duel a knight', {
-        size: 'big', icon: 'swords', class: 'mu-wide', disabled: this.starting, tip: 'Try the combat: a new world, and a knight comes at you on open ground',
-        onClick: () => {
-          if (this.starting) return;
-          this.starting = true;
-          this.go('main');
-          void this.deps.host.startDuel!().catch((err: unknown) => { this.starting = false; this.error = String(err); this.go('main'); });
-        },
-      }) : null,
       button('Records', { size: 'big', icon: 'trend_up', class: 'mu-wide', onClick: () => this.go('records') }),
       button('Settings', { size: 'big', icon: 'cog', class: 'mu-wide', onClick: () => this.go('settings') }),
     ));

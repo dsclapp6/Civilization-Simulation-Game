@@ -51,6 +51,9 @@ export interface CommandMap {
   cancelSkip: unknown;
   setActionTime: { on: boolean };
   switchCharacter: { personId: PersonId };
+  /** Take the place of one of your knights and fight on your behalf; `returnToLiege` brings you back to the lord. */
+  fightAs: { personId: PersonId };
+  returnToLiege: unknown;
   abandonRun: unknown;
 }
 export type Command = { [K in keyof CommandMap]: { type: K } & CommandMap[K] }[keyof CommandMap];
@@ -402,6 +405,21 @@ export class Simulation implements SimContext {
       return ok();
     });
     this.registerCommand('switchCharacter', (c) => (switchTo(this, c.personId) ? ok() : no('that person cannot be taken over (dead, or already you)')));
+    this.registerCommand('fightAs', (c) => {
+      const lord = this.state.run.liege || this.state.run.playerId;
+      if (!switchTo(this, c.personId)) return no('that man cannot be taken over');
+      this.state.run.liege = lord;
+      return ok();
+    });
+    this.registerCommand('returnToLiege', () => {
+      const lord = this.state.run.liege;
+      if (!lord) return no('you serve no lord as his champion');
+      const p = this.state.persons.get(lord);
+      if (!p || p.death) { this.state.run.liege = 0; return no('your lord is gone'); }
+      if (!switchTo(this, lord)) return no('you cannot go back now');
+      this.state.run.liege = 0;
+      return ok();
+    });
     this.registerCommand('abandonRun', () => { abandonRun(this); return ok(); });
   }
 

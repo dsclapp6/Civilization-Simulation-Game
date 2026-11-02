@@ -25,7 +25,7 @@ npm run preview        # serve the build
 ```
 
 The game is the default mode. The main menu offers **Continue** (one run is kept, saved to IndexedDB every few
-seconds), **New run** (difficulty, then the lord you start as), **Duel a knight** (a practice fight, never saved) and
+seconds), **New run** (difficulty, then the lord you start as) and
 the settings. Nothing carries from one run to the next but your records. A new continent takes about four seconds to raise in a browser. Chrome, Edge and Firefox with WebGL2
 are fine; the *quality* setting (low / medium / high) trades shadows and view distance for speed.
 
@@ -35,11 +35,15 @@ You start as **the lord of a manor**: grown, in your own hall, holding the field
 lands. Rule from the first morning in **the ruler's seat (U)**: name the crop of each field's next sowing, send your
 serfs' week-work to building, set capable men to research, raise and knight soldiers, and give your steward standing
 trade orders. At the same time you are one person to make strong: train at the yard and the butts, ride, and fight
-with your own sword. You may live as anyone else at any time, and the House goes on after you.
+with your own sword. Under *Men & arms*, **Fight as him** puts you in one of your knights' place to fight on your
+behalf (U again brings you back to your lord), and any man of arms can be **challenged to a duel** to the yield from the
+action wheel: honourable, no crime, and renown for the victor. You may live as anyone else at any time, and the House
+goes on after you.
 
 Tasks are given **in person**: a gold **!** over someone's head means they have something for you; walk up and speak
-to them to take it up. Gilded **wings** over someone mean a task can be finished with them. Notices, messages, the task
-card and hints each fold away to a small bar (the arrow on each).
+to them to take it up. Gilded **wings** over someone mean a task can be finished with them. The screen starts clear:
+the task card, hints, the clock card, the minimap, notices and messages all start folded to a line or a count (urgent
+notices still show); the arrow on each unfolds it, and the game remembers.
 
 You walk the village in third person with a **free cursor**. Point at a person, a door, a strip or a tree and a label
 says what it is and what a click will do; **click** to walk there and do it (or stand close and press **E**; hold **E** for
@@ -61,7 +65,7 @@ top left corner (the *tracker*), shown by a gold marker in the world, the compas
 | **1 2 3**, **P** | Speed 1×, 3×, 8×; pause |
 | **Y**, **O**, **N** | What now? card, the journal (tasks, today, people, places), minimap on or off |
 | **Tab I H J M L Z** | Character, inventory, family and House, ledger, map and travel, chronicle, sleep or wait |
-| **U** | The ruler's seat: fields and labour, research, men and arms, trade orders, rivals and news |
+| **U** | The ruler's seat: fields and labour, research, men and arms (fight as one of your knights), trade orders, rivals and news |
 | **R B T K C** | Requests and news, wounds, House techniques, realm and politics, command and army |
 | **F1**, **Esc** | Help and controls; Esc leaves mouse-look, else closes a page, else the pause menu |
 
@@ -100,7 +104,7 @@ Choose the entry with `?mode=` on the URL (default `game`):
 
 | `?mode=` | What it is |
 |---|---|
-| `game` | the game. Extras: `duel=knight` (straight into the knight duel, a practice run), `autostart=1`, `seed=abc`, `difficulty=squire\|knight\|lord\|king`, `quality=`, `time=0..1`, `season=0..3`, `debug=1` (frame and system timings), `shots=1` (hooks for tools), `hud=1`, `devzone=1` |
+| `game` | the game. Extras: `autostart=1`, `seed=abc`, `difficulty=squire\|knight\|lord\|king`, `quality=`, `time=0..1`, `season=0..3`, `debug=1` (frame and system timings), `shots=1` (hooks for tools), `hud=1`, `devzone=1` |
 | `world` | fly over a generated continent (renderer) |
 | `gallery` | every building, plant, crop, prop and effect |
 | `chars` | characters, horses, animals and all their animations |

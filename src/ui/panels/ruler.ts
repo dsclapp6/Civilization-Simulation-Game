@@ -34,6 +34,25 @@ function goodsText(ctx: PanelCtx, goods: Readonly<Record<string, number>>): stri
   return parts.length ? parts.join(', ') : 'nothing';
 }
 
+/** The knights who fight for a ruler: of his House, his vassals, or in his pay. */
+function knightsOf(ctx: PanelCtx, v: RealmView, paid: readonly number[]): Array<{ id: number; why: string; hurt: boolean }> {
+  const st = ctx.sim.state;
+  const me = st.persons.get(ctx.playerId());
+  const mine = new Set([...st.titlesHeldBy(ctx.playerId())].map((t) => t.id));
+  const paidSet = new Set(paid);
+  const combat = ctx.sim.services.combat as unknown as { wounds?(p: number): unknown[] } | undefined;
+  const out: Array<{ id: number; why: string; hurt: boolean }> = [];
+  for (const p of st.persons.values()) {
+    if (p.death || p.career !== 'knight' || p.id === ctx.playerId() || p.flags.captive) continue;
+    const vassal = [...st.titlesHeldBy(p.id)].some((t) => mine.has(t.liege));
+    const why = paidSet.has(p.id) ? 'in your pay' : vassal ? 'your vassal' : me && p.house === me.house ? 'of your House' : '';
+    if (!why) continue;
+    out.push({ id: p.id, why, hurt: p.health.hp < 0.5 || (combat?.wounds?.(p.id)?.length ?? 0) > 0 });
+  }
+  void v;
+  return out.sort((a, b) => Number(a.hurt) - Number(b.hurt) || a.id - b.id);
+}
+
 export function rulerPanel(ctx: PanelCtx, startTab: Tab = 'overview'): UiPanel {
   const R = realmOf(ctx);
   const win = createWindow({ title: 'The Ruler’s Seat', subtitle: 'Your lands, your purse, your men', icon: 'castle', size: 'xl', tall: true, onClose: () => ctx.close() });
@@ -192,7 +211,20 @@ export function rulerPanel(ctx: PanelCtx, startTab: Tab = 'overview'): UiPanel {
     };
     const men = R.troops?.(me()) ?? [];
     const dubbable = men.filter((t) => t.kind === 'man_at_arms' || t.kind === 'sergeant');
+    const champions = knightsOf(ctx, v, men.map((t) => t.person));
     return h('div.mu-col.mu-gap-12', null, note(),
+      h('div', null, heading('Your knights', 'helm'),
+        h('p.mu-small.mu-dim', { style: { margin: '0 0 6px' } }, 'Take a knight’s place and fight on your behalf: you play him (his sword, his skill, his wounds) while your lord carries on. Press U as the knight to come back.'),
+        champions.length ? h('div.mu-col.mu-gap-4', null, champions.slice(0, 20).map((k) => h('div.mu-row.mu-between.mu-small', null,
+          h('span', null, icon('helm', 14), ` ${ctx.nameOf(k.id)} — ${k.why}${k.hurt ? ' · hurt' : ''}`),
+          button('Fight as him', { size: 'small', variant: 'primary', icon: 'swords', disabled: k.hurt,
+            tip: k.hurt ? 'He is hurt' : `Take ${ctx.nameOf(k.id)}’s place`,
+            onClick: () => {
+              const r = ctx.dispatch({ type: 'fightAs', personId: k.id });
+              if (r.ok) { ctx.say('quest', `You are ${ctx.nameOf(k.id)}, your lord’s knight. Press U to return to your lord.`); ctx.close(); }
+              else act(r, '');
+            } }))))
+          : empty('No knight serves you yet. Knight a man-at-arms or a sergeant below, or win a knight’s fealty.')),
       where ? h('div.mu-row.mu-gap-8', null, h('span.mu-small', null, 'Raise men at'), where) : null,
       opts.length ? h('div.mu-col.mu-gap-6', null, opts.map(row)) : empty('No men can be raised here.'),
       h('div', null, heading('Men in your pay', 'helm'),
@@ -258,6 +290,19 @@ export function rulerPanel(ctx: PanelCtx, startTab: Tab = 'overview'): UiPanel {
     if (sig === lastSig) return;
     lastSig = sig;
     if (!v) {
+      // a knight fighting on his lord's behalf goes back to the lord from here
+      const liege = ctx.sim.state.run.liege ?? 0;
+      const lord = liege ? ctx.sim.state.persons.get(liege) : undefined;
+      if (lord && !lord.death) {
+        content.replaceChildren(h('div.mu-pad', { style: { padding: '18px' } },
+          empty(`You are fighting on behalf of ${ctx.nameOf(liege)}.`, { icon: 'helm', title: 'A knight in your lord’s service' }),
+          h('div.mu-row', { style: { justifyContent: 'center', marginTop: '10px' } },
+            button(`Return to ${ctx.nameOf(liege)}`, { variant: 'primary', size: 'big', icon: 'castle', onClick: () => {
+              const r = ctx.dispatch({ type: 'returnToLiege' });
+              if (r.ok) { ctx.say('quest', `You are ${ctx.nameOf(liege)} again.`); lastSig = ''; render(); } else act(r, '');
+            } }))));
+        return;
+      }
       content.replaceChildren(h('div.mu-pad', null, empty('You rule nothing. Win or inherit a manor, or live as one who holds one (V on a lord), and this seat is yours.', { icon: 'castle', title: 'No lands' })));
       return;
     }

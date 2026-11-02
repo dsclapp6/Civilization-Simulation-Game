@@ -2,6 +2,7 @@
 // game state — roads, rivers and lakes, the buildings of the places near (your home in gold), the family's strips
 // (gold) among the others, the people about (kin gold, household amber, the rest grey) and the places the HUD
 // points at. A click opens the big map. Cheap: ~8 redraws a second of a few hundred shapes.
+import { foldButton, isCollapsed } from '../core/collapse';
 import { BUILDINGS, type BuildingCategory } from '../../content/types';
 import type { ZoneAgent } from '../../agents/types';
 import { familyOf } from '../../sim/kin';
@@ -60,13 +61,17 @@ export class Minimap {
     this.canvas.addEventListener('click', () => this.deps.openMap());
     this.canvas.setAttribute('data-tip', 'Click to open the map (M)');
     this.el.append(
-      h('div.mu-minimap-head', null, icon('pin', 13), this.place, h('span.mu-grow'), zoomBtn('minus', 'Zoom out', 1), zoomBtn('plus', 'Zoom in', -1)),
+      h('div.mu-minimap-head', null, icon('pin', 13), this.place, h('span.mu-grow'), zoomBtn('minus', 'Zoom out', 1), zoomBtn('plus', 'Zoom in', -1),
+        foldButton('minimap', 'the minimap', (c) => this.el.classList.toggle('folded', c))),
       h('div.mu-minimap-frame', null, this.canvas, h('div.mu-minimap-shade')),
       this.caption,
     );
   }
 
-  setVisible(v: boolean): void { this.el.classList.toggle('mu-hide', !v); }
+  setVisible(v: boolean): void {
+    this.el.classList.toggle('mu-hide', !v);
+    this.el.classList.toggle('folded', isCollapsed('minimap'));
+  }
 
   private setZoom(i: number): void {
     this.zoom = Math.max(0, Math.min(ZOOMS.length - 1, i));

@@ -20,4 +20,6 @@ export interface Services {
   player: PlayerApi | undefined;
   /** The player strikes somebody who has not drawn on them. */
   assault(actor: PersonId, victim: PersonId): ActionOutcome;
+  /** The player challenges a fighting man to single combat, to the yield (no crime). */
+  challenge(actor: PersonId, other: PersonId): ActionOutcome;
 }

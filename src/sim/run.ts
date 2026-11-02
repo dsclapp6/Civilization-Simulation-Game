@@ -337,6 +337,8 @@ export function switchTo(ctx: SimContext, targetId: PersonId): boolean {
   // "your House" is the House of whoever you live as (score, politics, the ruler's realm)
   if (target.house) run.houseId = target.house;
   run.switches++;
+  // taking over someone else ends any champion's service (the fightAs command sets it again)
+  run.liege = 0;
   run.phase = 'alive';
   run.pendingSuccession = null;
   state.dirty.meta = true;

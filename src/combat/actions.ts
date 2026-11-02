@@ -82,6 +82,16 @@ export function createCombatProvider(sv: Services): ActionProvider {
           else if (age < 12) { atk.enabled = false; atk.reason = 'You will not strike a child'; }
           else if (q.flags.captive) { atk.enabled = false; atk.reason = 'They are a prisoner'; }
           out.push(atk);
+          // single combat, to the yield: for a man of arms against a man of arms
+          if (q.sex === 'm' && age >= 16 && SOLDIER_CAREERS.has(q.career) && q.career !== 'archer'
+            && (SOLDIER_CAREERS.has(me.career) || me.rankTier >= 4)) {
+            const d = opt({ id: 'duel', label: `Challenge ${q.first} to a duel`, category: 'combat', target, priority: 4, range: 6, preview: 'Single combat until one yields. Honourable: no crime, and the victor wins renown' });
+            if (sv.arena.inFight(q.id)) { d.enabled = false; d.reason = 'They are already fighting'; }
+            else if (sv.arena.inFight(actor) && sv.arena.fighterOf(actor)?.fight) { d.enabled = false; d.reason = 'You are in a fight already'; }
+            else if (me.health.hp < 0.5 || sv.book.isHurt(actor)) { d.enabled = false; d.reason = 'You are too hurt to fight'; }
+            else if (q.flags.captive) { d.enabled = false; d.reason = 'They are a prisoner'; }
+            out.push(d);
+          }
           if (sv.book.isHurt(q.id)) {
             const o = opt({ id: 'tend', label: `Bind ${q.first}'s wounds`, category: 'social', target, priority: 30, range: 3, seconds: 9, anim: 'kneel', preview: 'Stops the bleeding. Medicine helps' });
             if (!sv.book.wounds(q.id).some((w) => w.care < 1 + (skillOf(me, 'medicine') >= 5 ? 1 : 0))) { o.enabled = false; o.reason = 'Already well bound'; }
@@ -163,6 +173,10 @@ export function createCombatProvider(sv: Services): ActionProvider {
         case 'attack': {
           if (option.target.kind !== 'person') return { ok: false };
           return sv.assault(actor, option.target.id);
+        }
+        case 'duel': {
+          if (option.target.kind !== 'person') return { ok: false };
+          return sv.challenge(actor, option.target.id);
         }
         case 'pell': {
           gainSkill(sim, me, 'melee', 9 * XP_SCALE);

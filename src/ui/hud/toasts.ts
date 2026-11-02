@@ -30,9 +30,9 @@ export class Toasts {
   /** Folded: only the bar with the count shows. Open: the bar shows (to fold them) whenever there are notices. */
   private paint(): void {
     const folded = isCollapsed('toasts');
-    const n = this.live.length;
+    // urgent notices (war, the levy, a fight) show even folded; the rest wait behind the count
+    const n = this.live.filter((l) => !l.input.urgent).length;
     this.el.classList.toggle('folded', folded);
-    this.list.classList.toggle('mu-hide', folded);
     this.bar.classList.toggle('mu-hide', n === 0);
     this.count.textContent = folded ? `${n} ${n === 1 ? 'notice' : 'notices'}` : 'Fold notices';
   }
@@ -41,7 +41,7 @@ export class Toasts {
     const key = t.key ?? `t${++this.seq}`;
     const existing = this.live.find((l) => l.key === key);
     if (existing) { existing.el.remove(); this.live = this.live.filter((l) => l !== existing); }
-    const el = h('div.mu-toast', { class: t.tone },
+    const el = h('div.mu-toast', { class: `${t.tone}${t.urgent ? ' urgent' : ''}` },
       h('span.mu-toast-ico', null, icon(t.icon, 20)),
       h('div.mu-toast-text', null,
         h('div.mu-toast-title', null, t.title),

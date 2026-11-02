@@ -270,6 +270,8 @@ export class Hud {
     this.pauseBtn.addEventListener('click', () => this.togglePause());
     this.clockPlate.addEventListener('click', (e) => { if (!(e.target as Element).closest('button')) this.deps.open({ panel: 'journal', tab: 'today' }); });
     this.clockPlate.classList.add('mu-click');
+    // folded (the default), the card keeps the dial and the time; the day, the place and the speed buttons fold away
+    this.clockPlate.classList.toggle('folded', isCollapsed('clock'));
     this.clockPlate.append(
       h('div.mu-hud-clockrow', null,
         this.dial.el,
@@ -277,6 +279,8 @@ export class Hud {
           this.dateEl,
           h('div.mu-hud-timerow', null, this.timeEl, this.partEl),
         ),
+        h('span.mu-grow'),
+        foldButton('clock', 'the day and speeds', (c) => this.clockPlate.classList.toggle('folded', c)),
       ),
       this.flagsEl,
       this.dayTypeEl,

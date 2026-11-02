@@ -1,10 +1,11 @@
-// Collapsible HUD cards (notices, the message feed, the task tracker, hints): whether each is folded up is a
-// per-viewer preference kept in the browser. Storage may be missing or refuse (private windows): everything
-// still works, folded state then lasts for the session only.
+// Collapsible HUD cards (notices, the message feed, the task tracker, hints, the clock card, the minimap): whether
+// each is folded up is a per-viewer preference kept in the browser. Everything starts FOLDED (a clear screen is the
+// default); what the player unfolds stays unfolded. Storage may be missing or refuse (private windows): everything
+// still works, the choice then lasts for the session only.
 import { h } from './dom';
 import { icon } from './icons';
 
-const KEY = 'millennia.ui.collapsed';
+const KEY = 'millennia.ui.folded';
 const memory = new Map<string, boolean>();
 
 function readAll(): Record<string, boolean> {
@@ -16,7 +17,8 @@ function readAll(): Record<string, boolean> {
 
 export function isCollapsed(name: string): boolean {
   if (memory.has(name)) return memory.get(name) as boolean;
-  const v = readAll()[name] === true;
+  // folded unless the player opened it
+  const v = readAll()[name] !== false;
   memory.set(name, v);
   return v;
 }
