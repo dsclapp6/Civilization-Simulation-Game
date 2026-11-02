@@ -8,6 +8,9 @@ import { ballisticPitch, type Shot } from './projectiles';
 import { absorb, rollLocation, shapeWound, type LocationOpts, type Shaped } from './wounds';
 import { ATTACK_KEYS, DAMAGE_QUALITY } from './weapons';
 
+/** How much further a rider's arm reaches than a man's on foot (m), and how high the saddle is above the ground: arrows below it hit the horse. */
+const MOUNT_REACH = 0.45;
+export const SADDLE = 1.25;
 /** How hard a man who is taking a prisoner hits, against the same man killing. */
 const SUBDUE_FORCE = 0.55;
 /** A prisoner is left with at least this share of his strength: the blow that would kill him only fells him. */
@@ -63,7 +66,8 @@ export function impact(a: Arena, f: Fighter): void {
   const fight = a.fights.get(f.fight);
   if (!atk || !fight) return;
   const w = f.gear.weapon;
-  const reach = w.reach * (f.charge > 1 ? 1 : 1) + 0.2;
+  // from the saddle the arm is higher and longer: a cut reaches further and comes down on the head
+  const reach = w.reach + 0.2 + (f.mounted && !w.mounted ? MOUNT_REACH : 0);
   let best: Fighter | null = null;
   let bestScore = Infinity;
   for (let si = 0; si < fight.sides.length; si++) {
@@ -87,10 +91,12 @@ export function impact(a: Arena, f: Fighter): void {
     f.cooldown += 0.15;
     return;
   }
+  // a rider's blow carries the horse's way: the faster the pace, the harder the stroke (a charge with the point is lanceStrike's)
+  const ride = f.mounted ? 1 + clamp(f.speed * 0.05, 0, 0.3) : 1;
   const dmg = baseDamage(f, atk.dmg, atk.kind === 'bite', a.rng.next());
   const blow: Blow = {
-    kind: atk.kind, dmg: dmg * f.charge, ap: atk.ap, how: f.attackKey, weapon: f.gear.weapon.id, fromX: f.x, fromZ: f.z, melee: true,
-    heightDiff: f.charge > 1 ? 0.9 : 0, accuracy: meleeAccuracy(f),
+    kind: atk.kind, dmg: dmg * f.charge * ride, ap: atk.ap, how: f.attackKey, weapon: f.gear.weapon.id, fromX: f.x, fromZ: f.z, melee: true,
+    heightDiff: (f.charge > 1 ? 0.9 : f.mounted ? 0.7 : 0) - (best.mounted ? 0.7 : 0), accuracy: meleeAccuracy(f),
   };
   const r = applyBlow(a, f, best, blow);
   if (r.outcome === 'hit') { f.hitsLanded++; if (f.isPlayer) a.env.playerHit?.(f, best, false, r.killed); }
@@ -341,7 +347,15 @@ export function scatterOf(f: Fighter, kindFactor = 1): number {
 
 /** What an arrow does when its flight finds a body. Returns true: the arrow stops here. */
 export function arrowStrike(a: Arena, s: Shot, shooter: Fighter | null, v: Fighter, hitY: number): boolean {
-  const rel = (hitY - v.y) / Math.max(0.5, v.height);
+  // under the saddle it is the horse that is hit
+  if (v.mounted && v.mountHp > 0 && hitY - v.y < SADDLE) {
+    const flown = Math.hypot(s.x - s.x0, s.z - s.z0);
+    const fall = clamp(1 - 0.45 * (flown / s.range) * (flown / s.range), 0.4, 1);
+    a.horseStruck(v, s.dmg * 0.7 * fall, s.x - s.vx * 0.2, s.z - s.vz * 0.2);
+    if (shooter) shooter.hitsLanded++;
+    return true;
+  }
+  const rel = (hitY - (v.mounted ? v.y + SADDLE : v.y)) / Math.max(0.5, v.height);
   let loc: HitLocation;
   if (v.st === S.Down) loc = rel > 0.35 ? 'torso' : 'leg_l';
   else if (rel > 0.86) loc = 'head';

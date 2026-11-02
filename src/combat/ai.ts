@@ -7,7 +7,7 @@ import { gap, type Arena, type Fight } from './arena';
 import { D, S, normAngle, type Fighter } from './fighter';
 import { absorbRate } from './aiHelpers';
 import { ballisticPitch } from './projectiles';
-import type { AttackKey } from './weapons';
+import { COUCH_MIN_SPEED, couchable, type AttackKey } from './weapons';
 
 const THINK_PERIOD = 0.11;
 const FLEE_SPEED = 1.0;
@@ -161,7 +161,6 @@ function pickTarget(a: Arena, f: Fighter, fight: Fight): Fighter | null {
 
 /** Speed (m/s) of a destrier at the charge; below `LANCE_MIN` the point has no weight. */
 const LANCE_GALLOP = 9.5;
-const LANCE_MIN = 4.5;
 
 /** A mounted man with a lance: gallop at the foe, strike at the point, wheel away, come round again. True if it took the turn. */
 function lanceThink(a: Arena, f: Fighter, t: Fighter, g: number): boolean {
@@ -175,7 +174,7 @@ function lanceThink(a: Arena, f: Fighter, t: Fighter, g: number): boolean {
   const reach = f.gear.weapon.reach + 0.6;
   if (f.st === S.Idle || f.st === S.Block || f.st === S.Recover) f.set(S.Charge, 'ride_charge', 99);
   const off = Math.abs(normAngle(yawTo(f.x, f.z, t.x, t.z) - f.yaw));
-  if (g <= reach && off < 0.38 && f.speed >= LANCE_MIN) {
+  if (g <= reach && off < 0.38 && f.speed >= COUCH_MIN_SPEED) {
     a.lanceStrike(f, t, f.speed);
     f.wheel = 1.8 + a.rng.next() * 0.8;
     a.toIdle(f);
@@ -187,7 +186,7 @@ function lanceThink(a: Arena, f: Fighter, t: Fighter, g: number): boolean {
 }
 
 function meleeThink(a: Arena, f: Fighter, t: Fighter, g: number, _fight: Fight): void {
-  if (f.mounted && !f.isPlayer && f.gear.weapon.mounted && lanceThink(a, f, t, g)) return;
+  if (f.mounted && !f.isPlayer && couchable(f.gear.weapon) && lanceThink(a, f, t, g)) return;
   const w = f.gear.weapon;
   const reach = w.reach;
   // a man with a bow and a foe on top of him fights with what is at his belt

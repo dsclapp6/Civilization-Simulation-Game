@@ -155,6 +155,10 @@ export class Fighter {
   sidearm: WeaponDef | null = null;
   /** Seconds an NPC rider still wheels away after a pass with the lance. */
   wheel = 0;
+  /** Seconds the horse rears from a wound (drawn rearing; the rider is shaken). */
+  rearT = 0;
+  /** The coat of the horse under him (for the corpse it leaves). */
+  coat = -1;
 
   // ---- troop groups, formations and orders (command.ts) ----
   /** Kind of fighting man for the groups: 0 foot, 1 archers, 2 horse. */

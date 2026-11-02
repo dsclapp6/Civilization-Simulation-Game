@@ -11,7 +11,7 @@ import { gap, type Arena } from './arena';
 import { S, normAngle, type Fighter } from './fighter';
 import { ballisticPitch } from './projectiles';
 import { absorbRate } from './aiHelpers';
-import type { AttackKey } from './weapons';
+import { COUCH_MIN_SPEED, couchable, type AttackKey } from './weapons';
 
 const HEAVY_HOLD = 0.26;
 const QUEUE_SECONDS = 0.4;
@@ -128,7 +128,7 @@ export class PlayerPort implements PlayerCombatPort {
       // ---- the dodge roll's invulnerable middle ----
       if (pf.st === S.Dodge) pf.dodgeI = fr.dodgeT > 0.07 && fr.dodgeT < 0.37 ? 0.1 : 0;
       else if (hasBow) this.rangedIntent(pf, fr, p.id);
-      else if (fr.mounted && w.mounted) this.chargeIntent(pf, fr);
+      else if (fr.mounted && couchable(w)) this.chargeIntent(pf, fr);
       else this.meleeIntent(pf, fr);
     } else {
       this.attackPending = false;
@@ -297,7 +297,7 @@ export class PlayerPort implements PlayerCombatPort {
     const a = this.arena;
     this.chargeCool -= fr.dt;
     const fight = a.fights.get(pf.fight);
-    const couching = this.attackHeld && fr.speed >= 4.5;
+    const couching = this.attackHeld && fr.speed >= COUCH_MIN_SPEED;
     if (couching) {
       if (pf.st !== S.Charge && (pf.st === S.Idle || pf.st === S.Block)) pf.set(S.Charge, 'ride_charge', 99);
     } else if (pf.st === S.Charge) a.toIdle(pf);

@@ -23,8 +23,8 @@ import { BEASTS, BEAST_KEY_BASE, Fighter, R, S, normAngle, turnTo } from './figh
 import { FxQueue } from './fx';
 import { gearOf, type Gear, type GearEnv } from './gear';
 import { Projectiles } from './projectiles';
-import { applyBlow, baseDamage, impact, meleeAccuracy, releaseShot, type Blow } from './strike';
-import { ARMOUR, RANGED, SHIELDS, WEAPONS, type ArmourDef } from './weapons';
+import { SADDLE, applyBlow, baseDamage, impact, meleeAccuracy, releaseShot, type Blow } from './strike';
+import { ARMOUR, RANGED, SHIELDS, WEAPONS, couchWeight, couchable, type ArmourDef } from './weapons';
 import { LOCATION_NAMES, WoundBook, maxHpOf, shapeWound } from './wounds';
 import type { HitLocation } from '../sim/wave3';
 
@@ -330,8 +330,8 @@ export class Arena {
     f.mounted = true;
     f.mountHp = 110;
     f.radius = 0.55;
-    f.sidearm = f.gear.weapon.mounted ? WEAPONS.sword : f.gear.weapon;
-    if (!f.gear.weapon.mounted && !f.gear.rangedMain) f.gear.weapon = WEAPONS.lance;
+    f.sidearm = couchable(f.gear.weapon) ? WEAPONS.sword : f.gear.weapon;
+    if (!couchable(f.gear.weapon) && !f.gear.rangedMain) f.gear.weapon = WEAPONS.lance;
     f.preferRanged = false;
   }
 
@@ -713,6 +713,7 @@ export class Arena {
     f.dodgeCd -= dt;
     f.lastBlow += dt;
     f.guardT += dt;
+    if (f.rearT > 0) f.rearT -= dt;
     f.staminaIdle += dt;
     if (!f.external) this.regen(f, dt);
     switch (f.st) {
@@ -830,11 +831,18 @@ export class Arena {
     return true;
   }
 
-  /** A couched lance meets a body at the gallop: speed is the whole weapon. */
+  /** A couched lance (or spear) meets a body at the canter or gallop: speed is the whole weapon. */
   lanceStrike(f: Fighter, e: Fighter, speed: number): void {
     const atk = f.gear.weapon.attacks.thrust;
-    const mult = clamp(Math.pow(speed / 11, 1.3) * 2.3, 0.6, 2.5);
+    const mult = clamp(Math.pow(speed / 11, 1.3) * 2.3, 0.6, 2.5) * couchWeight(f.gear.weapon);
     f.attackKey = 'thrust'; f.attack = atk; f.heavy = true;
+    // a braced spear meets the charge: the point takes the horse before the lance reaches the man
+    if (this.bracedAgainst(e, f) && this.rng.next() < 0.3 + 0.03 * Math.min(e.melee, 8)) {
+      if (e.person && !e.isPlayer) this.env.fx.add('sparks', e.x, e.y + 1.2, e.z, 0.7);
+      this.horseStruck(f, 60 + this.rng.next() * 55, e.x, e.z);
+      if (f.mounted) this.rattle(f);
+      return;
+    }
     const blow: Blow = {
       kind: atk.kind, dmg: baseDamage(f, atk.dmg, false, this.rng.next()) * mult, ap: atk.ap + 0.15, how: 'thrust', weapon: f.gear.weapon.id,
       fromX: f.x, fromZ: f.z, melee: true, heightDiff: 0.9, accuracy: meleeAccuracy(f) + 0.2,
@@ -842,11 +850,39 @@ export class Arena {
     const r = applyBlow(this, f, e, blow);
     if (r.outcome === 'hit') {
       f.hitsLanded++;
-      if (!r.killed && mult > 1.2 && this.rng.next() < 0.7) this.fall(e);
+      if (!r.killed && mult > 1.2 && this.rng.next() < 0.7) { if (e.mounted && this.rng.next() < 0.55) this.throwRider(e); else this.fall(e); }
       if (this.rng.next() < 0.4) {
         f.gear.weapon = f.sidearm ?? WEAPONS.sword;
-        if (f.isPlayer) this.env.notify('info', 'Your lance shatters on the blow.', f.personId);
+        if (f.isPlayer) this.env.notify('info', f.sidearm ? 'Your lance shatters on the blow.' : 'Your spear breaks on the blow.', f.personId);
       }
+    }
+  }
+
+  /** A man on foot with a spear, facing the rider, steady (not mid-swing, not down): his point is set against the charge. */
+  private bracedAgainst(e: Fighter, rider: Fighter): boolean {
+    if (e.mounted || !e.person || e.gear.weapon.reach < 1.9) return false;
+    if (e.st !== S.Idle && e.st !== S.Block && e.st !== S.Recover) return false;
+    return Math.abs(normAngle(yawTo(e.x, e.z, rider.x, rider.z) - e.yaw)) < 0.7;
+  }
+
+  /** A horse hit hard shakes its rider: a moment of staggering, and the horse rears. */
+  private rattle(rider: Fighter): void {
+    rider.rearT = 0.9;
+    if (rider.st === S.Charge || rider.st === S.Idle) rider.set(S.Stagger, 'stagger', 0.6);
+  }
+
+  /** The rider is out of the saddle (his horse down, or a blow that took him off it): thrown, hurt, on the ground. */
+  throwRider(rider: Fighter): void {
+    if (!rider.mounted) return;
+    rider.unhorse = true;
+    if (rider.isPlayer) { rider.mounted = false; this.env.notify('danger', 'You are thrown from the saddle!', rider.personId); }
+    else this.dismount(rider);
+    // the fall hurts: a blunt blow to a limb or the back
+    const p = rider.person;
+    if (p) {
+      const where = this.rng.pick<HitLocation>(['arm_l', 'arm_r', 'leg_l', 'leg_r', 'torso']);
+      this.env.book.inflict(p, shapeWound(this.rng, where, 'blunt', 8 + this.rng.next() * 12, rider.maxHp), 'a fall from the saddle', 'accident');
+      this.fall(rider);
     }
   }
 
@@ -855,19 +891,24 @@ export class Arena {
     rider.mountHp -= dmg;
     const ang = yawTo(rider.x, rider.z, fromX, fromZ);
     this.env.fx.add('blood', rider.x + Math.sin(ang) * 0.5, rider.y + 0.9, rider.z + Math.cos(ang) * 0.5, 1.2);
+    rider.rearT = 0.8;
     if (rider.mountHp <= 0) {
-      rider.unhorse = true;
-      rider.mounted = false;
+      // the horse goes down where it stands and its rider with it
+      this.addHorseCorpse(rider);
       if (rider.isPlayer) this.env.notify('danger', 'Your horse goes down and throws you!', rider.personId);
-      else this.dismount(rider);
-      // the fall hurts: a blunt blow to a limb or the back
-      const p = rider.person;
-      if (p) {
-        const where = this.rng.pick<HitLocation>(['arm_l', 'arm_r', 'leg_l', 'leg_r', 'torso']);
-        this.env.book.inflict(p, shapeWound(this.rng, where, 'blunt', 8 + this.rng.next() * 12, rider.maxHp), 'a fall from the saddle', 'accident');
-        this.fall(rider);
-      }
+      this.throwRider(rider);
     }
+  }
+
+  /** The body of a horse that was killed under its rider, lying where it fell. */
+  private addHorseCorpse(rider: Fighter): void {
+    const a = rider.person ? this.env.zone?.agent(rider.personId) : null;
+    const coat = a?.draw.mount?.coat ?? (rider.coat >= 0 ? rider.coat : hash3(rider.key, 41) % 6);
+    const draw: AnimalDrawItem = {
+      id: 31_000_000 + rider.key, kind: 'horse', x: rider.x, y: rider.y, z: rider.z, yaw: rider.yaw, anim: 'dead', animTime: 0, moveSpeed: 0,
+      scale: 1, coat, highlight: 0,
+    };
+    this.beastCorpses.push({ draw, until: this.time + CORPSE_SECONDS });
   }
 
   // ---- movement ----
@@ -931,6 +972,7 @@ export class Arena {
     if (f.person) {
       m *= this.env.book.mobility(f.person);
       m *= clamp(1 - f.gear.worn * 0.004, 0.7, 1);
+      if (f.mounted && f.mountHp > 0 && f.mountHp < 55) m *= 0.6 + 0.4 * (f.mountHp / 55);
     } else if (f.beastMax > 0 && f.beastHp < f.beastMax * 0.4) m *= 0.8;
     if (f.stamina < 5) m *= 0.8;
     return m;
@@ -1022,7 +1064,7 @@ export class Arena {
       if ((cx - f.x) * (cx - f.x) + (cz - f.z) * (cz - f.z) > rr * rr) continue;
       const cy = y0 + dy * t;
       const foot = f.y;
-      const top = f.st === S.Down ? foot + 0.45 : foot + f.height;
+      const top = f.st === S.Down ? foot + 0.45 : foot + f.height + (f.mounted ? SADDLE : 0);
       if (cy < foot - 0.05 || cy > top + 0.08) continue;
       if (wallT >= 0 && t > wallT) continue; // behind a wall
       if (t < bestT) { bestT = t; victim = f; hitY = cy; }
@@ -1256,7 +1298,8 @@ export class Arena {
     const sp = f.speed;
     const gait = charging || sp > 6.5 ? 'gallop' : sp > 2.6 ? 'trot' : sp > 0.15 ? 'walk' : 'idle';
     const m = d.mount ?? (d.mount = { coat: hash3(f.key, 41) % 6, anim: gait, animTime: 0 });
-    m.anim = gait;
+    f.coat = m.coat;
+    m.anim = f.rearT > 0 ? 'rear' : gait;
     m.animTime = f.animT;
     // the rider rides unless he is in a blow of his own (a sidearm swing keeps its clip)
     if (f.st === S.Idle || f.st === S.Recover || f.st === S.Block || f.st === S.Charge) {
