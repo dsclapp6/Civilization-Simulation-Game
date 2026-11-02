@@ -153,7 +153,7 @@ export interface ZoneApi {
   setTrackedPerson?(id: PersonId): void;
   /**
    * Civilization pass (docs/CIV.md §1): the full set of quest marks — 'quest' ("!": has something for the player) and
-   * 'turnin' ("?": the player has a task ready to hand in to them). Replaces the previous set; supersedes setQuestGivers
+   * 'turnin' (gilded wings: the player has a task ready to finish with them). Replaces the previous set; supersedes setQuestGivers
    * (which stays: it sets 'quest' marks only). Open happenings requests are always included as 'quest'.
    */
   setQuestMarks?(marks: ReadonlyArray<{ person: PersonId; kind: 'quest' | 'turnin' }>): void;

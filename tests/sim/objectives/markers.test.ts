@@ -95,20 +95,22 @@ describe('world markers', () => {
 });
 
 describe('quest givers', () => {
-  it('are told to the zone: whoever the current step needs, and whoever asks something of the player', () => {
+  it('are told to the zone: "!" over whoever has a task to give, wings over whoever a task is finished with', () => {
     const z = fakeZone();
     const o = objSim({ seed: 's1', zone: z.zone });
+    // the tutorial's first step is to speak to someone: finishing that step with them is a turn-in (wings)
     const head = tracked(o)!.steps[0].target!.id;
     const last = z.givers[z.givers.length - 1];
     expect(last, 'the zone was told at the start').toBeTruthy();
-    expect(last.ids).toContain(head);
-    // a request makes its asker one
+    expect(last.turnin).toContain(head);
+    // a request makes its asker one with a task to give ("!"), before the player has heard of it
     const from = o.adv.happenings.requests().length === 0 ? o.adv.happenings.offerRequest('fetch') : 0;
     expect(from).toBeGreaterThan(0);
     const req = o.adv.happenings.requests()[0];
     o.obj.poll(true);
     const now = z.givers[z.givers.length - 1];
-    expect(now.ids).toContain(req.from);
+    expect(now.quest).toContain(req.from);
+    expect(now.turnin).not.toContain(req.from);
     // the zone is told again only when the set changes
     const calls = z.givers.length;
     o.obj.poll(true);

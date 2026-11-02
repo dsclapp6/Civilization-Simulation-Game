@@ -34,11 +34,16 @@ const done = (name: string): ActionOption => ({
 });
 
 describe('requests as objectives', () => {
-  it('a new request appears as an objective: the asker to hear, what it is, when it lapses', () => {
+  it('a new request waits with the asker ("!") and becomes an objective only when the player speaks to them', () => {
     const o = objSim({ seed: 's1' });
     expect(reqObjs(o)).toHaveLength(0);
     const id = o.adv.happenings.offerRequest('fetch');
     const r = record(o, id);
+    // not handed over from afar: nothing in the journal or tracker, only the offer with its giver
+    expect(reqObjs(o)).toHaveLength(0);
+    expect(o.obj.obj.offered().map((x) => x.giver)).toContain(r.from);
+    o.social.end(talk(o, r.from).id);
+    expect(o.obj.obj.offered().filter((x) => x.giver === r.from)).toHaveLength(0);
     const [ob] = reqObjs(o);
     expect(ob, 'an objective for the request').toBeTruthy();
     expect(ob.state).toBe('active');
@@ -87,10 +92,13 @@ describe('requests as objectives', () => {
     const a = o.adv.happenings.offerRequest('work');
     o.adv.happenings.declineRequest(a);
     o.obj.poll(true); // the next look at the state (in play: the conversation ends, or the slow poll)
-    expect(reqObjs(o).find((x) => x.title === record(o, a).summary)?.state).toBe('expired');
+    // never heard: it simply goes, without a trace in the journal
+    expect(reqObjs(o).find((x) => x.title === record(o, a).summary)).toBeUndefined();
+    expect(o.obj.obj.offered()).toHaveLength(0);
 
     // run until the offer lapses (its window follows the request pacing), then look while it is still listed
     const b = o.adv.happenings.offerRequest('fetch');
+    o.social.end(talk(o, record(o, b).from).id); // heard, but not answered
     for (let i = 0; i < 28 && record(o, b).state === 'offered'; i++) o.sim.advanceDays(0.25);
     o.obj.poll(true);
     expect(record(o, b).state).toBe('expired');
@@ -156,6 +164,8 @@ describe('requests as objectives', () => {
     const id = o.adv.happenings.offerRequest('fetch');
     expect(id).toBeGreaterThan(0);
     const inst = install(o);
+    expect(inst.obj.offered().filter((x) => x.source === 'request')).toHaveLength(1);
+    o.social.end(talk(o, record(o, id).from).id);
     expect(inst.list().filter((x) => x.source === 'request')).toHaveLength(1);
     expect(active(o).length).toBeGreaterThan(0);
   });

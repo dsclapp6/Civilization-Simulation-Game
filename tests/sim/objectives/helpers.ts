@@ -183,8 +183,8 @@ export interface FakeZone {
   zone: Wave3Deps['zone'];
   /** Where the agents stand (people not listed are not in the zone). */
   agents: Map<number, { x: number; z: number }>;
-  /** What the objectives told the zone about quest givers, each call. */
-  givers: Array<{ ids: number[] }>;
+  /** What the objectives told the zone about quest marks, each call: every marked person, and who has which mark. */
+  givers: Array<{ ids: number[]; quest: number[]; turnin: number[] }>;
   /** Whom the objectives asked the zone to mark as the person being looked for, each call (0 clears). */
   tracked: number[];
 }
@@ -198,14 +198,39 @@ export function fakeZone(): FakeZone {
     agent: (id: number) => { const a = agents.get(id); return a ? { personId: id, x: a.x, y: 0, z: a.z, yaw: 0 } : null; },
     whereabouts: () => ({ activity: 'home', settlement: 0, building: -1, indoors: false, x: 123, z: 456, label: '' }),
     nav: { doorOf: () => null },
-    setQuestGivers: (ids: readonly number[]) => { givers.push({ ids: [...ids] }); },
+    setQuestMarks: (marks: ReadonlyArray<{ person: number; kind: 'quest' | 'turnin' }>) => {
+      givers.push({
+        ids: marks.map((m) => m.person),
+        quest: marks.filter((m) => m.kind === 'quest').map((m) => m.person),
+        turnin: marks.filter((m) => m.kind === 'turnin').map((m) => m.person),
+      });
+    },
     setTrackedPerson: (id: number) => { tracked.push(id); },
   } as unknown as Wave3Deps['zone'];
   return { zone, agents, givers, tracked };
 }
 
-/** Runs the calendar to a given hour of a day (hooks fire as in play). */
-export function runTo(o: ObjSim, day: number, hour: number): void {
+/** Speaks to everyone who has something for the player (a "!" over their head), as a player would: what they
+ *  offered is taken up. Returns how many were taken up. */
+export function hearOffers(o: ObjSim): number {
+  let n = 0;
+  const tried = new Set<number>();
+  for (let guard = 0; guard < 8; guard++) {
+    const givers = [...new Set(o.obj.obj.offered().map((x) => x.giver).filter((g): g is number => !!g && !tried.has(g)))];
+    if (!givers.length) break;
+    for (const g of givers) {
+      tried.add(g);
+      const before = o.obj.obj.offered().length;
+      // someone asleep or away cannot be spoken to now: their offer waits, as in play
+      if (talkTo(o, g)) n += before - o.obj.obj.offered().length;
+    }
+  }
+  return n;
+}
+
+/** Runs the calendar to a given hour of a day (hooks fire as in play). By default the scripted player then speaks to
+ *  whoever has something for them (`hearOffers`); pass `hear = false` to leave the offers waiting. */
+export function runTo(o: ObjSim, day: number, hour: number, hear = true): void {
   const target = day + hour / 24;
   // a sleep or wait that is still pending would hold the calendar: let it finish
   for (let g = 0; o.sim.clock.skip && g < 4000; g++) o.sim.step(0.25);
@@ -214,6 +239,7 @@ export function runTo(o: ObjSim, day: number, hour: number): void {
     o.sim.advanceHours(1);
     if (i > 800 || o.sim.absDay <= before) throw new Error(`the calendar is stuck at ${before} (wanted ${target})`);
   }
+  if (hear && o.obj) hearOffers(o);
 }
 
 export type { ObjRec };

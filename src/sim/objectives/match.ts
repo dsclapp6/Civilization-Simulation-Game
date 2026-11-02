@@ -184,7 +184,8 @@ function retarget(O: Obj, o: ObjRec): void {
 export function round(O: Obj, ev: Ev | null): void {
   let any = false;
   for (const o of O.save.list.slice()) {
-    if (o.state !== 'active') continue;
+    // offered ones wait for the player to speak to their giver
+    if (o.state !== 'active' || o.offered) continue;
     let moved = false;
     let seen = ev;
     // a strip task the household has already finished ends the walk to the strip as well

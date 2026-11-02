@@ -27,7 +27,8 @@ export function noticeForRequest(e: SimEvents['request'], ctx: NoticeCtx): Toast
   if (!page || ctx.inFight()) return null;
   if (page === 'journal') {
     // one notice at a time for favours: a newer one replaces an older one that is still showing
-    return { tone: 'gold', icon: 'quill', title: `${ctx.personName(e.from)} asks a favour`, text: e.text, ttl: 12, key: 'journal-request', action: { label: 'Open the journal', request: { panel: 'ext', name: 'requests' } } };
+    // a favour is asked in person: the notice only says who wants a word (the "!" over their head shows where)
+    return { tone: 'gold', icon: 'exclaim', title: `${ctx.personName(e.from)} wants a word with you`, text: 'Go and speak to them to hear what they ask. Look for the ! over their head.', ttl: 10, key: 'journal-request' };
   }
   if (page === 'letters') {
     return { tone: 'gold', icon: 'scroll', title: 'A letter has come', text: e.text, ttl: 14, key: `letter:${e.id}`, action: { label: 'Read the letters', request: politics('standing') } };

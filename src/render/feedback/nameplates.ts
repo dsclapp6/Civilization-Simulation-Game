@@ -14,6 +14,14 @@ import type { CharacterDrawItem, LabelTone } from '../../core/view';
 export const MAX_PLATES = 18;
 /** Range when the sim gives none (m). */
 export const DEFAULT_LABEL_RANGE = 20;
+/** The mark over someone a task can be finished with: a pair of gilded wings (the "!" is for a task to give). */
+const WINGS_SVG = '<svg viewBox="0 0 68 34" aria-hidden="true"><defs><linearGradient id="milw" x1="0" y1="0" x2="0" y2="1">'
+  + '<stop offset="0" stop-color="#fff4c8"/><stop offset=".55" stop-color="#e9b43a"/><stop offset="1" stop-color="#a8740f"/></linearGradient></defs>'
+  + '<g fill="url(#milw)" stroke="#3a2408" stroke-width="1.6" stroke-linejoin="round">'
+  + '<path d="M31 22 C24 8 12 3 2 4 C7 8 9 11 9 13 C5 13 3 15 2 17 C7 17 10 18 11 20 C8 21 6 23 6 26 C14 24 22 26 31 22 Z"/>'
+  + '<path d="M37 22 C44 8 56 3 66 4 C61 8 59 11 59 13 C63 13 65 15 66 17 C61 17 58 18 57 20 C60 21 62 23 62 26 C54 24 46 26 37 22 Z"/></g>'
+  + '<circle cx="34" cy="21" r="3.2" fill="#ffe9a0" stroke="#3a2408" stroke-width="1.4"/></svg>';
+
 /** Quest/track marks show this far even when the name does not (m). */
 export const MARK_RANGE = 75;
 /** The hovered/targeted person is labelled up to this far (m). */
@@ -55,6 +63,10 @@ const CSS = `
 .mil-plate-mark>span{display:block;transform:rotate(-45deg);font:700 12px/15px Georgia,serif;text-align:center;text-shadow:none;}
 .mil-plate.quest .mil-plate-mark{display:block;background:linear-gradient(135deg,#ffe9a0,#e9b43a 60%,#b98319);}
 .mil-plate.quest .mil-plate-mark>span{color:#3a2408;}
+.mil-plate.turnin .mil-plate-mark{display:block;transform:none;width:42px;height:21px;margin-bottom:3px;background:none;box-shadow:none;border-radius:0;
+ filter:drop-shadow(0 0 1px rgba(30,18,6,.95)) drop-shadow(0 0 4px rgba(255,236,170,.65));}
+.mil-plate.turnin .mil-plate-mark>span{transform:none;width:42px;height:21px;}
+.mil-plate.turnin .mil-plate-mark svg{display:block;width:42px;height:21px;}
 .mil-plate.track .mil-plate-mark{display:block;background:linear-gradient(135deg,#d9f1ff,#7cc4ff 60%,#3f86c9);}
 .mil-plate.track .mil-plate-mark>span{color:#0d2440;}
 .mil-plate.markonly .mil-plate-name,.mil-plate.markonly .mil-plate-sub,.mil-plate.nosub .mil-plate-sub{display:none;}
@@ -113,7 +125,7 @@ export function layoutPlates(
     const tone = it.labelTone ?? 'stranger';
     // the hovered one, then people with a task for the player or tracked, then a spoken line (it steps up over
     // others), then kin and the like, nearest first
-    const pri = (focus ? 1e6 : 0) + (it.mark === 'quest' ? 3e4 : it.mark === 'track' ? 2.5e4 : 0) + (speech ? 2e4 : 0) + TONE_WEIGHT[tone] * 900 - d * 10;
+    const pri = (focus ? 1e6 : 0) + (it.mark === 'quest' ? 3e4 : it.mark === 'turnin' ? 2.8e4 : it.mark === 'track' ? 2.5e4 : 0) + (speech ? 2e4 : 0) + TONE_WEIGHT[tone] * 900 - d * 10;
     cands.push({ it, d, pri, text, sub: !!it.sublabel && !speech && (focus || d < SUB_RANGE), focus, speech, sx: 0, sy: 0 });
   }
   cands.sort((a, b) => b.pri - a.pri);
@@ -252,7 +264,8 @@ export class Nameplates {
       if (p.cls !== cls) {
         p.obj.element.className = cls;
         p.cls = cls;
-        p.mark.textContent = mark === 'quest' ? '!' : mark === 'track' ? '•' : '';
+        if (mark === 'turnin') p.mark.innerHTML = WINGS_SVG;
+        else p.mark.textContent = mark === 'quest' ? '!' : mark === 'track' ? '•' : '';
       }
       const name = l.speech ? `“${it.label}”` : it.label ?? '';
       if (p.nameText !== name) { p.name.textContent = name; p.nameText = name; }

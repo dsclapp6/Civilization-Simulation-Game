@@ -95,6 +95,9 @@ export class Zone {
   private modeOff = false;
   /** Nameplates: givers of tasks set from outside, the tracked person, and the folk of open requests (refreshed about once a second). */
   private questHook: ReadonlySet<PersonId> = new Set();
+  /** The objectives' marks by person ('quest' "!" or 'turnin' wings); once given, they replace the request fallback. */
+  private questKinds: ReadonlyMap<PersonId, 'quest' | 'turnin'> = new Map();
+  private marksFromObjectives = false;
   private questFolk: ReadonlySet<PersonId> = new Set();
   private trackedId: PersonId = 0;
   private plateCtx: PlateContext;
@@ -379,12 +382,19 @@ export class Zone {
   // nameplates (plates.ts)
   // ---------------------------------------------------------------------------------------------
 
-  private isQuestGiver(id: PersonId): boolean { return this.questHook.has(id) || this.questFolk.has(id); }
+  private questMarkOf(id: PersonId): 'quest' | 'turnin' | undefined {
+    const k = this.questKinds.get(id);
+    if (k) return k;
+    if (this.questHook.has(id)) return 'quest';
+    // without the objectives' marks, the askers of open requests carry the "!"
+    if (!this.marksFromObjectives && this.questFolk.has(id)) return 'quest';
+    return undefined;
+  }
 
   /** Works out the plate of an agent (who they are to the player) and puts it on the draw item unless they are speaking. */
   refreshPlate(a: Agent): void {
     const viewer = this.state.persons.get(this.state.run.playerId) ?? null;
-    a.plate = makePlate(this.plateCtx, viewer, a.person, this.isQuestGiver(a.personId), a.personId === this.trackedId);
+    a.plate = makePlate(this.plateCtx, viewer, a.person, this.questMarkOf(a.personId) ?? false, a.personId === this.trackedId);
     if (a.speech === null) this.showPlate(a);
   }
 
@@ -418,7 +428,7 @@ export class Zone {
   private refreshMarks(): void {
     for (const a of this.agentsArr) {
       if (a.dead || !a.plate) continue;
-      const mark = this.isQuestGiver(a.personId) ? 'quest' : a.personId === this.trackedId ? 'track' : undefined;
+      const mark = this.questMarkOf(a.personId) ?? (a.personId === this.trackedId ? 'track' : undefined);
       if (mark === a.plate.mark) continue;
       this.refreshPlate(a);
     }
@@ -426,6 +436,13 @@ export class Zone {
 
   setQuestGivers(ids: readonly PersonId[]): void {
     this.questHook = new Set(ids);
+    this.refreshMarks();
+  }
+
+  setQuestMarks(marks: ReadonlyArray<{ person: PersonId; kind: 'quest' | 'turnin' }>): void {
+    this.marksFromObjectives = true;
+    this.questHook = new Set();
+    this.questKinds = new Map(marks.map((m) => [m.person, m.kind]));
     this.refreshMarks();
   }
 

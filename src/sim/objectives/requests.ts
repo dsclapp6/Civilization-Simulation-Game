@@ -93,7 +93,7 @@ export function syncRequests(O: Obj): void {
     if (O.save.list.some((o) => o.source === 'request' && o.data?.req === r.id)) continue;
     O.add({
       source: 'request', key: `req:${r.id}`, title: r.summary, why: r.text, giver: r.from, reward: rewardOf(O, r), dueDay: r.expires,
-      steps: stepsFor(O, r), data: { req: r.id },
+      steps: stepsFor(O, r), data: { req: r.id }, offer: r.state === 'offered',
     });
   }
   // the ones we hold

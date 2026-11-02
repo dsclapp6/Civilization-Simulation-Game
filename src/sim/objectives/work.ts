@@ -50,7 +50,7 @@ function dutyFor(O: Obj, me: Person, emp: Employment): NewObjective | null {
     source: 'job', key: `job:${O.dayNo}`, why: '', dueDay: dueNext(O), reward: employer ? `Your wage, and ${employer.first}'s good opinion` : 'Your wage',
     pay: { opinion: 1 },
   };
-  if (employer) { base.giver = employer.id; base.fine = 1; }
+  if (employer) { base.giver = employer.id; base.fine = 1; base.offer = true; }
   const vars: Vars = { employer: eName, title: emp.title.toLowerCase(), place: '' };
   const why = (): string => T('chores', 'job.why', vars);
 

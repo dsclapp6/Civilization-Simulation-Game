@@ -97,6 +97,13 @@ export function suggest(O: Obj, limit = 4): Suggestion[] {
     if (butts && me.sex === 'm' && O.age(me) >= 12) push(45, T('text', 'sug.holy.butts'), buildingTarget(O, butts));
   }
 
+  // someone with work to hand over in person (the day's chores, the post's duty): the "!" over their head
+  for (const o of O.offered()) {
+    if (o.source === 'request' || !o.giver) continue;
+    const p = O.state.persons.get(o.giver);
+    if (p && !p.death) { push(74, T('text', 'sug.offer', { from: p.first }), personTarget(O, p)); break; }
+  }
+
   // a villager with something to ask
   for (const r of requestsOf(O)) {
     if (r.state !== 'offered' || r.heard) continue;

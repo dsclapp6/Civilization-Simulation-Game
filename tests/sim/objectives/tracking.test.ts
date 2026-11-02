@@ -1,7 +1,7 @@
 // Which objective is tracked: the player's pick while it lives, else the most pressing; the list the HUD and the
 // journal read; the change counter.
 import { describe, expect, it } from 'vitest';
-import { active, objSim, playObjectives, playerOf, recOf, runTo, skipTutorial, tracked } from './helpers';
+import { active, hearOffers, objSim, playObjectives, playerOf, recOf, runTo, skipTutorial, tracked } from './helpers';
 
 describe('the scene-setting line', () => {
   it('names the season, the house, the place and what the household needs first', () => {
@@ -48,6 +48,7 @@ describe('tracking', () => {
     // villagers may already have asked something of their own by now (offers are checked each daytime hour)
     const id = o.adv.happenings.offerRequest('fetch');
     o.obj.poll(true);
+    hearOffers(o);
     const summary = o.adv.happenings.requests().find((r) => r.id === id)!.summary;
     expect(active(o, 'request').some((x) => x.title === summary)).toBe(true);
     expect(tracked(o)?.source).toBe('chore');

@@ -91,6 +91,11 @@ export interface ObjRec {
   tut?: number;
   /** Kind-specific numbers (request id, strip id …). */
   data?: Record<string, number | string>;
+  /** Not yet taken up: the giver has it for the player, who must go and speak to them (a "!" over their head). Until
+   *  then it is not in the tracker or the journal, its steps are not looked at, and leaving it costs nothing. */
+  offered?: boolean;
+  /** Ended while still offered: the player never heard of it, so the journal does not list it. */
+  unseen?: boolean;
 }
 
 export interface NewObjective {
@@ -106,6 +111,8 @@ export interface NewObjective {
   dueDay?: number;
   tut?: number;
   data?: Record<string, number | string>;
+  /** The giver hands it over in person: it starts offered and is taken up by speaking to them (`ObjRec.offered`). */
+  offer?: boolean;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -248,8 +255,30 @@ export class Obj {
 
   // ---- the objectives ----
 
-  /** Live objectives (state active). */
-  active(): ObjRec[] { return this.save.list.filter((o) => o.state === 'active'); }
+  /** Live objectives the player has taken up (state active, not merely offered). */
+  active(): ObjRec[] { return this.save.list.filter((o) => o.state === 'active' && !o.offered); }
+  /** Objectives waiting with their givers: the player has to go and speak to them. */
+  offered(): ObjRec[] { return this.save.list.filter((o) => o.state === 'active' && o.offered); }
+
+  /** The player spoke to `giver`: whatever they had for the player is taken up now. Returns how many. */
+  takeUp(giver: PersonId): number {
+    const got = this.offered().filter((o) => o.giver === giver);
+    for (const o of got) {
+      delete o.offered;
+      o.born = this.dayNo;
+      this.sim.events.emit('objective', { phase: 'added', id: o.id, title: o.title });
+    }
+    if (got.length) {
+      const who = this.state.persons.get(giver);
+      const titles = got.map((o) => o.title.charAt(0).toLowerCase() + o.title.slice(1));
+      const list = titles.length > 1 ? `${titles.slice(0, -1).join(', ')} and ${titles[titles.length - 1]}` : titles[0];
+      const n = Math.floor(((giver * 7 + this.dayNo * 13) % 30) / 10);
+      this.notify(T('chores', `say.set.${n}`, { head: who?.first ?? 'They', player: this.me?.first ?? '', list }), 'quest', giver);
+      this.retrack();
+      this.touch();
+    }
+    return got.length;
+  }
   byKey(key: string): ObjRec | undefined { return this.save.list.find((o) => o.key === key && o.state === 'active'); }
   byId(id: number): ObjRec | undefined { return this.save.list.find((o) => o.id === id); }
   /** The first step not yet done (undefined when all are). */
@@ -269,6 +298,9 @@ export class Obj {
     if (spec.dueDay !== undefined) rec.dueDay = Math.round(spec.dueDay * 1000) / 1000;
     if (spec.tut !== undefined) rec.tut = spec.tut;
     if (spec.data) rec.data = spec.data;
+    // handed over in person: only by speaking to the giver (never the player's own task, never a giver who is gone)
+    const giverP = spec.giver ? this.state.persons.get(spec.giver) : undefined;
+    if (spec.offer && giverP && !giverP.death && giverP.id !== this.playerId) rec.offered = true;
     for (const s of spec.steps) {
       const st: StepRec = { text: s.text, done: false, m: s.m };
       if (s.hint) st.hint = s.hint;
@@ -281,7 +313,7 @@ export class Obj {
     this.trim();
     this.retrack();
     this.touch();
-    this.sim.events.emit('objective', { phase: 'added', id: rec.id, title: rec.title });
+    if (!rec.offered) this.sim.events.emit('objective', { phase: 'added', id: rec.id, title: rec.title });
     return rec;
   }
 
@@ -303,6 +335,14 @@ export class Obj {
     if (o.state !== 'active') return;
     o.state = state;
     o.ended = this.dayNo;
+    // one that was never taken up simply goes: nobody told the player, so there is no reward, fine or notice
+    if (o.offered) {
+      delete o.offered;
+      o.unseen = true;
+      this.retrack();
+      this.touch();
+      return;
+    }
     if (state === 'done') {
       for (const s of o.steps) {
         s.done = true;
@@ -365,7 +405,7 @@ export class Obj {
   /** Chooses the tracked objective: the player's pick while it lives, else the most pressing. */
   retrack(): void {
     const s = this.save;
-    const act = s.list.filter((o) => o.state === 'active');
+    const act = s.list.filter((o) => o.state === 'active' && !o.offered);
     let pick: ObjRec | undefined;
     if (s.pinned) pick = act.find((o) => o.id === s.tracked);
     if (!pick) {
@@ -391,9 +431,9 @@ export class Obj {
   /** Active objectives (tracked first), then the recently finished, newest first. */
   list(): readonly Objective[] {
     if (this.viewList && this.viewVersion === this.version) return this.viewList;
-    const act = this.save.list.filter((o) => o.state === 'active')
+    const act = this.save.list.filter((o) => o.state === 'active' && !o.offered)
       .sort((a, b) => Number(b.tracked) - Number(a.tracked) || SOURCE_RANK[a.source] - SOURCE_RANK[b.source] || a.id - b.id);
-    const fin = this.save.list.filter((o) => o.state !== 'active').sort((a, b) => (b.ended ?? 0) - (a.ended ?? 0) || b.id - a.id);
+    const fin = this.save.list.filter((o) => o.state !== 'active' && !o.unseen).sort((a, b) => (b.ended ?? 0) - (a.ended ?? 0) || b.id - a.id);
     this.viewList = [...act, ...fin];
     this.viewVersion = this.version;
     return this.viewList;

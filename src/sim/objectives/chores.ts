@@ -200,7 +200,7 @@ export function makeChores(O: Obj): number {
   const giver = isHead ? undefined : head;
   const picks: Pick[] = [];
   // someone with a post has the post's duty to do first
-  const cap0 = O.active().some((o) => o.source === 'job') ? 1 : capFor(O, me);
+  const cap0 = O.save.list.some((o) => o.state === 'active' && o.source === 'job') ? 1 : capFor(O, me);
   const add = (spec: NewObjective | null, order: number): void => { if (spec && !picks.some((p) => p.spec.key === spec.key)) picks.push({ spec, order }); };
 
   if (isHolyDay(O.day)) {
@@ -239,20 +239,22 @@ export function makeChores(O: Obj): number {
   let n = 0;
   const titles: string[] = [];
   for (const spec of made) {
+    // the head hands the day's chores over in person: the player goes and speaks to them ("!" over the head)
+    if (giver) spec.offer = true;
     if (O.add(spec)) { n++; titles.push(spec.title.charAt(0).toLowerCase() + spec.title.slice(1)); }
   }
-  if (n > 0) {
+  // a head of household sets their own day; chores from someone else are heard from them in person, not announced
+  if (n > 0 && !giver) {
     const list = titles.length > 1 ? `${titles.slice(0, -1).join(', ')} and ${titles[titles.length - 1]}` : titles[0];
     const vars: Vars = { ...headVars(O, me, giver), list };
-    const key = giver ? `say.set.${Math.floor(hash01(me.id, day, 5) * 3)}` : 'say.set.self';
-    O.notify(T('chores', key, vars), 'quest', giver?.id);
+    O.notify(T('chores', 'say.set.self', vars), 'quest');
   }
   return n;
 }
 
 /** Lapses chores that ran past their time (untouched ones cost the head's goodwill). */
 export function expireOverdue(O: Obj): void {
-  for (const o of O.active()) {
+  for (const o of O.save.list.filter((x) => x.state === 'active')) {
     if (o.dueDay === undefined || O.day < o.dueDay) continue;
     if (o.source === 'tutorial' || o.source === 'request') continue;
     O.finish(o, 'expired');

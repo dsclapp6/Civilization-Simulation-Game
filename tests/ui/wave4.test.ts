@@ -83,13 +83,14 @@ const ctx = (over: Partial<NoticeCtx> = {}): NoticeCtx => ({
 });
 
 describe('notices', () => {
-  it('sends a request to the page it belongs on', () => {
+  it('sends a request to the page it belongs on; a favour is only announced (it is heard in person)', () => {
     const e = { id: 4, from: 9, text: 'Help me.' };
-    expect(noticeForRequest(e, ctx())!.action!.request).toEqual({ panel: 'ext', name: 'requests' });
+    expect(noticeForRequest(e, ctx())!.action).toBeUndefined();
+    expect(noticeForRequest(e, ctx())!.text).toMatch(/speak to them/);
     expect(noticeForRequest(e, ctx({ requestPage: () => 'letters' }))!.action!.request).toEqual({ panel: 'ext', name: 'politics', data: { tab: 'standing' } });
     expect(noticeForRequest(e, ctx({ requestPage: () => 'petitions' }))!.action!.request).toEqual({ panel: 'ext', name: 'politics', data: { tab: 'petitions' } });
     expect(noticeForRequest(e, ctx({ requestPage: () => null }))).toBeNull();
-    expect(noticeForRequest(e, ctx())!.title).toBe('Person9 asks a favour');
+    expect(noticeForRequest(e, ctx())!.title).toBe('Person9 wants a word with you');
     expect(noticeForRequest(e, ctx({ inFight: () => true }))).toBeNull();
   });
 

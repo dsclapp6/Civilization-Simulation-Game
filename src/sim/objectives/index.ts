@@ -132,6 +132,8 @@ export function installObjectives(sim: Simulation, deps: Wave3Deps): ObjectivesR
       return;
     }
     logTalk(O);
+    // whatever the person had for the player is taken up by speaking to them
+    O.takeUp(e.with);
     feed({ t: 'talk', who: e.with });
   }));
   offs.push(on('trade', (e) => {

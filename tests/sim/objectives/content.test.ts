@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CHAINS, hasText, rawText, textKeys, type DictName } from '../../../src/sim/objectives/data';
-import { active, allText, objSim, playObjectives, playerOf, runTo, skipTutorial, walkTo } from './helpers';
+import { active, allText, hearOffers, objSim, playObjectives, playerOf, runTo, skipTutorial, walkTo } from './helpers';
 
 const DICTS: DictName[] = ['tutorial', 'chores', 'goals', 'text'];
 const KNOWN = new Set([
@@ -97,6 +97,7 @@ describe('while the player is away', () => {
     const home = o.sim.state.buildings.get(o.sim.state.households.get(playerOf(o.sim).household)!.home)!;
     walkTo(o, home.x, home.z);
     o.sim.advanceHours(1);
+    hearOffers(o);
     expect(active(o, 'chore').length).toBeGreaterThan(0);
     // away again with chores open: they lapse without a fine
     const head = o.sim.state.persons.get(o.sim.state.households.get(playerOf(o.sim).household)!.head)!;
@@ -114,6 +115,7 @@ describe('while the player is away', () => {
     expect(active(o, 'chore')).toHaveLength(0);
     o.sim.view.setSource('mode', () => 'street');
     o.sim.advanceHours(1);
+    hearOffers(o);
     expect(active(o, 'chore').length).toBeGreaterThan(0);
   });
 });

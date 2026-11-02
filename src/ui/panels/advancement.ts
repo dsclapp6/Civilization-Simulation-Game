@@ -182,8 +182,6 @@ function requestsPanel(ctx: PanelCtx): UiPanel {
     const [label, tone] = STATE_CHIP[r.state];
     const who = h<HTMLButtonElement>('button.mu-chip.mu-click', { type: 'button', tip: 'Who is this?' }, icon('user', 13), r.fromName);
     who.addEventListener('click', () => ctx.open({ panel: 'person', id: r.from }));
-    const money = ctx.sim.state.persons.get(ctx.playerId())?.money ?? 0;
-    const poor = r.type === 'loan' && money < (r.data.pence ?? 0);
     return h('div.mu-card', { class: open ? '' : 'locked' },
       h('div.mu-row.mu-between.mu-top.mu-gap-6', null,
         h('div.mu-row.mu-gap-8', null, icon(TYPE_ICON[r.type], 20), h('h4', null, r.summary)),
@@ -194,9 +192,10 @@ function requestsPanel(ctx: PanelCtx): UiPanel {
       open ? h('div.mu-row.mu-wrap.mu-gap-6', { style: { marginTop: '4px' } },
         r.reward.pence > 0 ? chip(`${formatMoney(r.reward.pence)} ${r.type === 'loan' ? 'back with interest' : 'reward'}`, 'gold', 'coin') : null,
         chip(`+${r.reward.opinion} regard`, '', 'heart'), r.reward.points > 0 ? chip(plural(r.reward.points, 'point'), '', 'star') : null) : null,
-      r.state === 'offered' ? h('div.mu-row.mu-gap-6', { style: { marginTop: '8px' } },
-        button('Agree', { variant: 'primary', icon: 'check', size: 'small', disabled: poor, tip: poor ? 'You cannot afford it' : 'Promise to do this', onClick: () => { const res = H.acceptRequest(r.id); ctx.say(res.ok ? 'quest' : 'warn', res.ok ? `You promise: ${r.summary}.` : res.reason ?? 'It cannot be done.'); render(true); } }),
-        button('Decline', { size: 'small', icon: 'cross', onClick: () => { H.declineRequest(r.id); render(true); } })) : null,
+      // a favour is agreed to face to face: go and speak to the asker (the "!" over their head)
+      r.state === 'offered' ? h('div.mu-row.mu-gap-6.mu-wrap', { style: { marginTop: '8px' } },
+        h('span.mu-small.mu-ink2', null, `Speak to ${r.fromName} to hear it out and give your answer.`),
+        button('Find them', { size: 'small', icon: 'compass', onClick: () => { ctx.game.objectives?.trackPerson(r.from); ctx.say('quest', `${r.fromName} is marked on your compass and map.`); } })) : null,
       r.state === 'accepted' ? h('div.mu-tiny.mu-dim', { style: { marginTop: '6px' } }, hint(r)) : null);
   };
 

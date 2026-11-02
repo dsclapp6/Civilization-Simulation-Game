@@ -2,7 +2,7 @@
 // woodpile; fitted to age and sex; paid a little; ignored chores cost the head's good opinion.
 import { describe, expect, it } from 'vitest';
 import { fullName } from '../../../src/sim/state';
-import { active, addDeadwood, allText, install, objSim, playObjectives, playerOf, recOf, runTo, tracked, type ObjSim } from './helpers';
+import { active, addDeadwood, allText, install, objSim, playObjectives, playerOf, recOf, runTo, skipTutorial, talkTo, tracked, type ObjSim } from './helpers';
 
 /** A village child of the farm with the tutorial played out, ready for the first dawn. */
 function farmDay1(seed = 's1'): ObjSim {
@@ -38,8 +38,8 @@ describe('dawn chores', () => {
       expect(c.steps[0].target, c.title).toBeTruthy();
       expect(c.steps[0].hint, c.title).toBeTruthy();
     }
-    // the head says so, by name
-    expect(notes.find((n) => n.startsWith('quest:'))).toContain(head.first);
+    // the head says so, by name, when the player speaks to them (they were offered, not handed over)
+    expect(notes.some((n) => n.startsWith('quest:') && n.includes(head.first)), notes.join(' | ')).toBe(true);
     for (const t of allText(o.obj.list())) expect(t, t).not.toMatch(/\{\w+\}/);
     // one of them is tracked: the first chore of the day (the tutorial is over)
     expect(tracked(o)?.source).toBe('chore');
@@ -193,5 +193,40 @@ describe('who the chores are for', () => {
       expect(c.giver).toBeUndefined();
       expect(c.title, fullName(me)).toBeTruthy();
     }
+  });
+});
+
+describe('chores are handed over in person', () => {
+  it('wait with the head ("!") until the player speaks to them; one never heard costs nothing', () => {
+    const o = objSim({ seed: 's1' });
+    skipTutorial(o);
+    runTo(o, 1, 5, false);
+    const head = headOf(o);
+    // nothing is assigned from afar: no chore in the tracker or journal, only offers from the head
+    expect(active(o, 'chore')).toHaveLength(0);
+    const offers = o.obj.obj.offered().filter((x) => x.source === 'chore');
+    expect(offers.length).toBeGreaterThan(0);
+    for (const x of offers) expect(x.giver).toBe(head.id);
+    // speaking to the head takes them up
+    expect(talkTo(o, head.id)).toBe(true);
+    expect(o.obj.obj.offered().filter((x) => x.source === 'chore')).toHaveLength(0);
+    expect(active(o, 'chore').length).toBe(offers.length);
+    expect(tracked(o)?.source).toBe('chore');
+
+    // the next day's chores, never heard: they lapse at sunrise without a fine and without a trace
+    const o2 = objSim({ seed: 's1' });
+    skipTutorial(o2);
+    runTo(o2, 1, 5, false);
+    const head2 = headOf(o2);
+    const me = playerOf(o2.sim);
+    const op0 = o2.social.opinion(head2.id, me.id);
+    const unheard = o2.obj.obj.offered().filter((x) => x.source === 'chore').map((x) => x.id);
+    expect(unheard.length).toBeGreaterThan(0);
+    runTo(o2, 2, 7, false);
+    for (const id of unheard) {
+      expect(recOf(o2, id).state).not.toBe('active');
+      expect(o2.obj.list().some((x) => x.id === id)).toBe(false);
+    }
+    expect(o2.social.opinion(head2.id, me.id)).toBeGreaterThanOrEqual(op0 - 0.01);
   });
 });

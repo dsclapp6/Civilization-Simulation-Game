@@ -14,6 +14,9 @@ const ID = { objective: 9001, home: 9002, work: 9003, person: 9004, place: 9005 
 interface MarkingZone {
   /** The people who have something for the player: their nameplate carries the quest mark. */
   setQuestGivers?(ids: readonly PersonId[]): void;
+  /** Both kinds of mark: 'quest' ("!": has a task to give the player) and 'turnin' (wings: a task can be finished
+   *  with them). Preferred over setQuestGivers when the zone has it. */
+  setQuestMarks?(marks: ReadonlyArray<{ person: PersonId; kind: 'quest' | 'turnin' }>): void;
   /** The person the player asked to find (journal "Find"): their nameplate carries the track mark. 0 clears. */
   setTrackedPerson?(id: PersonId): void;
 }
@@ -37,6 +40,26 @@ export function trackedTarget(O: Obj): { target: ObjectiveTarget; objective: num
   if (!tr) return null;
   const step = O.current(tr);
   return step?.target ? { target: step.target, objective: tr.id } : null;
+}
+
+/** Who carries a mark, and which: 'quest' ("!") for people with a task to give, 'turnin' (wings) for people a task
+ *  is finished with. Sorted by person; "!" wins when someone is both. */
+export function questMarks(O: Obj): Array<{ person: PersonId; kind: 'quest' | 'turnin' }> {
+  const kinds = new Map<PersonId, 'quest' | 'turnin'>();
+  const put = (id: PersonId, kind: 'quest' | 'turnin'): void => {
+    if (id <= 0 || id === O.playerId) return;
+    if (kinds.get(id) !== 'quest') kinds.set(id, kind);
+  };
+  for (const o of O.offered()) if (o.giver) put(o.giver, 'quest');
+  for (const o of O.active()) {
+    const cur = O.current(o);
+    if (!cur) continue;
+    // a request taken up but not yet heard out: the asker still has the task to give
+    if (cur.m.k === 'req' && cur.m.at === 'accepted' && o.giver) { put(o.giver, 'quest'); continue; }
+    if (cur.m.k === 'talk' && cur.m.who > 0) put(cur.m.who, 'turnin');
+    else if (cur.target?.kind === 'person' && (cur.m.k === 'act' || cur.m.k === 'talk' || cur.m.k === 'req')) put(cur.target.id, 'turnin');
+  }
+  return [...kinds.entries()].sort((a, b) => a[0] - b[0]).map(([person, kind]) => ({ person, kind }));
 }
 
 export function installMarkers(O: Obj): MarkerHost {
@@ -101,21 +124,16 @@ export function installMarkers(O: Obj): MarkerHost {
   };
 
   const refresh = (): void => {
-    // people the player has business with get a mark over the head
+    // people the player has business with get a mark over the head: "!" for whoever has a task to give (an offer
+    // waiting, or a request still to be heard), wings for whoever a task can be finished with (talked to, handed to)
     const zone = O.deps.zone as (MarkingZone & typeof O.deps.zone) | undefined;
-    if (zone?.setQuestGivers) {
-      const ids = new Set<PersonId>();
-      for (const o of O.active()) {
-        if (o.source === 'request' && o.giver) ids.add(o.giver);
-        const cur = O.current(o);
-        if (cur && cur.m.k === 'talk' && cur.m.who > 0) ids.add(cur.m.who);
-        if (cur?.target?.kind === 'person' && (cur.m.k === 'act' || cur.m.k === 'talk')) ids.add(cur.target.id);
-      }
-      const list = [...ids].sort((a, b) => a - b);
-      const key = list.join(',');
+    if (zone?.setQuestMarks || zone?.setQuestGivers) {
+      const marks = questMarks(O);
+      const key = marks.map((m) => `${m.person}:${m.kind}`).join(',');
       if (key !== givers) {
         givers = key;
-        zone.setQuestGivers(list);
+        if (zone.setQuestMarks) zone.setQuestMarks(marks);
+        else zone.setQuestGivers!(marks.map((m) => m.person));
       }
     }
     // the person asked for with "Find" (the zone gives them the track mark)
