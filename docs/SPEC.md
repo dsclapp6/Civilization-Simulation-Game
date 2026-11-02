@@ -5,16 +5,20 @@
 > public release.
 
 This document is the single source of truth for game design. `docs/ARCHITECTURE.md` covers
-how it is built. Numbers marked *(tune)* are starting values to be balanced in testing.
+how it is built. Later design passes: `docs/CLARITY.md` (clarity & feel), `docs/CIV.md`
+(civilization pass: living as anyone, builder and ruler modes, territory and patrols, resources
+and research currencies, hands-on production, war you can direct, rival towns that grow). Numbers marked *(tune)* are starting values to be balanced in testing.
 
 ---
 
 ## 0. Pillars
 
-1. **You live one life at a time.** You are one person in a fully simulated society. Your
-   character has exactly the same rules as every NPC: same health, same wounds, no buffs.
+1. **You live one life at a time — any life you choose.** You are one person in a fully simulated
+   society and may take over anyone else at any time (§8, civilization pass). Your character has
+   exactly the same rules as every NPC: same health, same wounds, no buffs.
 2. **Authority is earned.** What you can command depends on your rank and offices. As a
-   peasant you control yourself; as a lord you run a manor; as king, the realm.
+   peasant you control yourself and build on what you own; as a lord you run and build a manor;
+   as king, the realm (builder mode and ruler mode follow rank — `docs/CIV.md` §5–6).
 3. **Consequences are real.** Death is permanent. Rivals can out-grow, out-think and destroy
    you. There is no rollback.
 4. **Grindy but never dull.** Long climbs, constant tangible progress, frequent action.
@@ -305,9 +309,11 @@ Management panels in the UI unlock exactly as authority is gained.
 ## 8. Death and switching
 
 - Permadeath. On death: a death screen with the life story, then pick who to continue as.
-- **Eligible to switch to (any time, or on death):** your **family** (blood or marriage), or a
-  member of **your House** (household, sworn men, vassals) of **equal rank tier**.
-- **Game over** when no eligible person remains. Final score recorded; Legacy gold kept.
+- **Eligible to switch to (any time, or on death): anyone alive** (owner's decision, civilization
+  pass — `docs/CIV.md` §2). Family and House are suggested first; *Rule this town* takes over the
+  town's ruler in one click.
+- **Game over** only when the player abandons the run (or nobody is left alive). Final score
+  recorded; Legacy gold kept.
 - An NPC you leave reverts to AI and continues their life.
 
 ---

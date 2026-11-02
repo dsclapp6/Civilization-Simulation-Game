@@ -30,6 +30,10 @@
   "charcoal_mound":{ "name": "Charcoal mound",   "cat": "work",     "w": 5,  "d": 5,  "maxLevel": 1, "blocks": true },
   "bloomery":      { "name": "Bloomery",         "cat": "work",     "w": 6,  "d": 6,  "maxLevel": 2, "blocks": true },
   "quarry":        { "name": "Quarry",           "cat": "work",     "w": 16, "d": 16, "maxLevel": 2, "blocks": false },
+  "slaughterhouse": { "name": "Slaughterhouse",  "cat": "work",     "w": 9,  "d": 6,  "maxLevel": 2, "blocks": true },
+  "clay_pit":      { "name": "Clay pit",         "cat": "work",     "w": 12, "d": 12, "maxLevel": 1, "blocks": false },
+  "salt_pan":      { "name": "Salt pans",        "cat": "work",     "w": 14, "d": 12, "maxLevel": 1, "blocks": false, "needsWater": true },
+  "lumber_camp":   { "name": "Lumber camp",      "cat": "work",     "w": 10, "d": 8,  "maxLevel": 1, "blocks": false },
   "mine":          { "name": "Mine",             "cat": "work",     "w": 6,  "d": 6,  "maxLevel": 2, "blocks": true },
   "dock":          { "name": "Dock",             "cat": "work",     "w": 12, "d": 6,  "maxLevel": 2, "blocks": false, "needsWater": true },
 
@@ -50,6 +54,7 @@
 
   "well":          { "name": "Well",             "cat": "civic",    "w": 2,  "d": 2,  "maxLevel": 1, "blocks": true },
   "stocks":        { "name": "Stocks",           "cat": "civic",    "w": 2,  "d": 1,  "maxLevel": 1, "blocks": false },
+  "gaol":          { "name": "Gaol",             "cat": "civic",    "w": 6,  "d": 6,  "maxLevel": 1, "blocks": true },
   "gallows":       { "name": "Gallows",          "cat": "civic",    "w": 3,  "d": 3,  "maxLevel": 1, "blocks": true },
   "school":        { "name": "School",           "cat": "civic",    "w": 10, "d": 6,  "maxLevel": 2, "blocks": true },
 

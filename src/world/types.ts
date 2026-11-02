@@ -198,6 +198,29 @@ export interface Settlement {
   port: boolean;
 }
 
+// ---------------------------------------------------------------------------------------------
+// Resource deposits (civilization pass, docs/CIV.md §7)
+// ---------------------------------------------------------------------------------------------
+
+/** What the ground holds: ore and stone to dig, clay for bricks, salt to boil, precious metals. */
+export type ResourceKind = 'iron' | 'stone' | 'clay' | 'salt' | 'silver' | 'gold';
+export const RESOURCE_KINDS: readonly ResourceKind[] = ['iron', 'stone', 'clay', 'salt', 'silver', 'gold'];
+
+export interface Deposit {
+  /** Stable id (index in `WorldModel.deposits`). */
+  id: number;
+  kind: ResourceKind;
+  /** Centre of the deposit (m). */
+  x: number;
+  z: number;
+  /** Extent (m): a mine, quarry, clay pit or salt pan must stand within it. */
+  radius: number;
+  /** 0..1: yield per worker-day relative to the best (rich iron in the mountains ≈ 0.9, a thin clay bank ≈ 0.3). */
+  richness: number;
+  /** Settlement whose lands hold it at world generation (-1 = in the wild). */
+  settlement: number;
+}
+
 export interface WorldModel {
   readonly seed: string;
   readonly size: number;
@@ -221,6 +244,8 @@ export interface WorldModel {
   readonly homeKingdom?: number;
   /** Hedgerow segments (x0, z0, x1, z1 flattened) around open-field furlongs; parcel edges are hedged too. */
   readonly hedges?: readonly number[];
+  /** Civilization pass: ore, stone, clay, salt and precious-metal deposits, generated from terrain (src/world, docs/CIV.md §7). */
+  readonly deposits?: readonly Deposit[];
 
   /** Detailed terrain height (m) including detail noise, river beds, and flattening for roads/plots/fields. Fast: called per terrain vertex. */
   heightAt(x: number, z: number): number;

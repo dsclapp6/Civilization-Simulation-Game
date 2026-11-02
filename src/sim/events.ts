@@ -64,6 +64,15 @@ export type SimEvents = {
   objective: { phase: 'added' | 'progress' | 'done' | 'failed' | 'expired'; id: number; title: string };
   /** The player's day closed (they slept, or midnight passed): the summary is ready (objectives.daySummary). */
   dayEnd: { day: number };
+  // ---- civilization pass (docs/CIV.md) ----
+  /** A construction site changed (src/sim/construction). */
+  construction: { phase: 'placed' | 'started' | 'progress' | 'done' | 'cancelled' | 'stalled'; site: number; building: number; settlement: number; kind: string; work: 'build' | 'upgrade' | 'repair' | 'demolish'; house: number };
+  /** News of the realm and its neighbours (src/sim/realm): rivals' works, research, troops, wars. */
+  news: { id: number; kind: string; house: number; settlement: number; text: string; threat: number };
+  /** A research project changed (src/sim/realm). */
+  research: { phase: 'started' | 'done' | 'stalled' | 'abandoned'; project: number; tech: string; house: number; researcher: number };
+  /** Trespass on someone's land (src/sim/territory): seen, warned, escorted, attacked, captured, released. */
+  trespass: { phase: 'seen' | 'warned' | 'escorted' | 'left' | 'attacked' | 'captured' | 'released' | 'escaped'; person: number; house: number; settlement: number; level: 'private' | 'hostile' };
 
   /** Something worth an immediate autosave happened. */
   important: { reason: string };

@@ -17,7 +17,7 @@ import type { SimContext } from './context';
 import type { SimEvents } from './events';
 import { levelProfile, newProfile, type Profile, type StatUpgrades } from './legacy';
 import { registerLifeSystems } from './life';
-import { abandonRun, attachRunHandlers, eligibleSwitchTargets, newRun, switchTo } from './run';
+import { abandonRun, attachRunHandlers, canSwitchTo, eligibleSwitchTargets, newRun, switchTo } from './run';
 import { RunSaver, loadProfile, loadRun, saveProfile, type SaveStore, type SaverOptions } from './save';
 import { hashState, warmUpSerializer } from './serialize';
 import { Scheduler, type Phase, type PhaseInfo, type System } from './scheduler';
@@ -200,6 +200,11 @@ export class Simulation implements SimContext {
   /** Living, free family of any rank plus House members of equal rank (SPEC §8). */
   eligibleSwitchTargets(fromId: PersonId = this.state.run.playerId): PersonId[] {
     return eligibleSwitchTargets(this.state, fromId);
+  }
+
+  /** May the player take over this person now? Anyone alive but the one being played (docs/CIV.md §2). */
+  canSwitchTo(personId: PersonId): boolean {
+    return canSwitchTo(this.state, personId);
   }
 
   /** Takes over a relative or House member (same as the `switchCharacter` command). */
@@ -397,7 +402,7 @@ export class Simulation implements SimContext {
       if (s) this.events.emit('skip', { phase: 'cancel', kind: s.kind, label: s.label });
       return ok();
     });
-    this.registerCommand('switchCharacter', (c) => (switchTo(this, c.personId) ? ok() : no('that character cannot be taken over')));
+    this.registerCommand('switchCharacter', (c) => (switchTo(this, c.personId) ? ok() : no('that person cannot be taken over (dead, or already you)')));
     this.registerCommand('abandonRun', () => { abandonRun(this); return ok(); });
   }
 

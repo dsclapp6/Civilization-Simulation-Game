@@ -1,6 +1,7 @@
 // Public types of the render module (re-exported from renderer.ts).
 import type * as THREE from 'three';
 import type { SimView } from '../core/view';
+import type { BuildingKind } from '../content/types';
 
 export type CameraMode = 'follow' | 'free' | 'map' | 'cinematic';
 export type QualityLevel = 'low' | 'medium' | 'high';
@@ -67,6 +68,18 @@ export interface RenderStats {
 
 export interface GroundPoint { x: number; y: number; z: number }
 
+/** The builder's ghost building (civilization pass). */
+export interface BuildGhost {
+  kind: BuildingKind;
+  level: number;
+  x: number;
+  z: number;
+  rot: number;
+  ok: boolean;
+  /** Footprint corners to outline on the ground. */
+  footprint: ReadonlyArray<{ x: number; z: number }>;
+}
+
 /**
  * Something the UI marks under the cursor or about to be acted on (clarity pass, docs/CLARITY.md §5). The kinds
  * mirror the sim's TargetRef (sim/actions.ts), so a TargetRef can be passed as it is: 'building' and 'strip'
@@ -115,6 +128,13 @@ export interface GameRenderer {
    * Cheap to call every frame (rebuilds only when the target changes).
    */
   setHover?(target: HoverTarget | null): void;
+  /**
+   * Civilization pass (docs/CIV.md §5): the builder's ghost — a translucent building of `kind` at the spot, green when it
+   * fits, red when not, with its footprint outlined; null removes it. Cheap to call every frame.
+   */
+  setGhost?(ghost: BuildGhost | null): void;
+  /** Builder mode's land tint: the land the builder may build on (polygons, world m) shown lightly; null clears. */
+  setBuildArea?(area: ReadonlyArray<ReadonlyArray<{ x: number; z: number }>> | null): void;
 
   // ---- lifecycle ----
   setQuality(q: QualityLevel): void;

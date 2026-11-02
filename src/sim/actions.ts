@@ -56,6 +56,24 @@ export interface ActionOption {
   repeat?: boolean;
   /** Opaque provider payload. */
   data?: unknown;
+  /**
+   * Civilization pass (docs/CIV.md §8): the visible steps of the bout, played in order over its `seconds` (shares of the
+   * whole): the forge's heat → hammer → quench, the butcher's block, the kiln. Each step may change the animation, the held
+   * item and the sound cue the UI plays; the outcome still comes once, at the end. Absent = one `anim` for the whole bout.
+   */
+  steps?: ReadonlyArray<ActionStep>;
+}
+
+export interface ActionStep {
+  /** Share of the bout (the shares sum to 1). */
+  share: number;
+  /** "Heat the bar", "Draw it out", "Quench". */
+  label: string;
+  anim?: AnimState;
+  mainHand?: HeldItem;
+  offHand?: HeldItem;
+  /** Sound cue for the UI's effects ('bellows', 'hammer', 'quench', 'saw', 'chop', 'cut', 'dig', 'stir', 'fire'). */
+  sfx?: string;
 }
 
 export interface ActionGain {

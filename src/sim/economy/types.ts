@@ -263,7 +263,9 @@ export interface Obligation {
 
 export type HouseholdTask =
   | 'fields' | 'garden' | 'livestock' | 'craft' | 'brew' | 'spin' | 'market' | 'wood'
-  | 'service' | 'school' | 'play' | 'rest' | 'auto';
+  | 'service' | 'school' | 'play' | 'rest' | 'auto'
+  /** Civilization pass: works on the household's (or its lord's) construction sites (src/sim/construction). */
+  | 'build';
 
 export interface HouseholdPlanLine {
   person: PersonId;
@@ -362,6 +364,15 @@ export interface EconomyApi {
   dismiss(employer: PersonId, worker: PersonId): Result;
 
   // skills and perks
+  // ---- civilization pass (docs/CIV.md §5–7); optional so older fakes need not implement them ----
+  /**
+   * A household buys goods at a market (default: its settlement's, else the nearest with stock): pays from the purse,
+   * takes from the market's stock, and the goods arrive in its stores after `days` (carting). Partial when stock or money
+   * runs short. Used by construction (materials) and the steward's trade orders (src/sim/realm).
+   */
+  procure?(household: HouseholdId, good: string, qty: number, opts?: { settlement?: number; maxPrice?: number }): { got: number; cost: number; settlement: number; days: number };
+  /** A household sells goods from its stores at a market: income to the purse (partial if the market will not take it all). */
+  sell?(household: HouseholdId, good: string, qty: number, opts?: { settlement?: number; minPrice?: number }): { sold: number; income: number; settlement: number };
   perk(id: string): PerkDef | undefined;
   perkChoices(person: PersonId): PerkChoice[];
   choosePerk(person: PersonId, perkId: string): Result;

@@ -115,8 +115,10 @@ export interface CharacterDrawItem {
   labelTone?: LabelTone;
   /** How far away (m) the nameplate shows; default the renderer's own (≈25 m). Larger for kin, quest people, the hovered one. */
   labelRange?: number;
-  /** Mark above the head: someone with a task/request for the player ('quest'), or the tracked person ('track'). */
-  mark?: 'quest' | 'track';
+  /** Mark above the head: someone with a task/request for the player ('quest', a gold "!"), the person to report to with a
+   *  task ready to hand in ('turnin', a silver "?"), or the tracked person ('track'). Civilization pass: "!"/"?" are drawn as
+   *  far-visible billboards (docs/CIV.md §1). */
+  mark?: 'quest' | 'turnin' | 'track';
   /** For anim 'sit': seat height in metres above the feet (bench, stool, throne). Omit/0 = sit on the ground. */
   seatHeight?: number;
 }

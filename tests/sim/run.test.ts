@@ -188,7 +188,7 @@ describe('who the player may switch to (SPEC §8)', () => {
     expect(eligibleSwitchTargets(st, P.id)).toEqual([baby.id]);
   });
 
-  it('switches on command and refuses ineligible characters', () => {
+  it('switches on command to anyone alive (docs/CIV.md §2), refusing only yourself and the dead', () => {
     const sim = newSim({ seed: 'switch' });
     const st = sim.state;
     const house = mkHouse(sim, 'Sw');
@@ -201,15 +201,22 @@ describe('who the player may switch to (SPEC §8)', () => {
     const stranger = mkPerson(sim, { age: 30, house: mkHouse(sim, 'X').id });
     const switched: string[] = [];
     sim.events.on('playerSwitched', (e) => switched.push(`${e.from}>${e.to}:${e.reason}`));
-    expect(sim.dispatch({ type: 'switchCharacter', personId: stranger.id })).toMatchObject({ ok: false });
+    const dead = mkPerson(sim, { age: 40, house: house.id });
+    killPerson(sim, dead, 'illness', sim.absDay);
     expect(sim.dispatch({ type: 'switchCharacter', personId: P.id })).toMatchObject({ ok: false });
+    expect(sim.dispatch({ type: 'switchCharacter', personId: dead.id })).toMatchObject({ ok: false });
+    expect(sim.canSwitchTo(stranger.id)).toBe(true);
     expect(sim.dispatch({ type: 'switchCharacter', personId: S.id })).toEqual({ ok: true });
     expect(st.run.playerId).toBe(S.id);
     expect(S.flags.player).toBe(true);
     expect(P.flags.player).toBeUndefined();
-    expect(st.run.houseId).toBe(house.id); // the House stays the player's line
-    expect(st.run.switches).toBe(1);
-    expect(switched).toEqual([`${P.id}>${S.id}:voluntary`]);
+    expect(st.run.houseId).toBe(house.id); // same line, same House
+    // a stranger of another House: allowed, and "your House" becomes theirs
+    expect(sim.dispatch({ type: 'switchCharacter', personId: stranger.id })).toEqual({ ok: true });
+    expect(st.run.playerId).toBe(stranger.id);
+    expect(st.run.houseId).toBe(stranger.house);
+    expect(st.run.switches).toBe(2);
+    expect(switched).toEqual([`${P.id}>${S.id}:voluntary`, `${S.id}>${stranger.id}:voluntary`]);
     // an NPC that was left reverts to the AI and lives on
     sim.advanceDays(DAYS_PER_YEAR);
     expect(P.death === null || P.death.cause !== undefined).toBe(true);
@@ -253,7 +260,7 @@ describe('death of the player and game over', () => {
     expect(sim.absDay).toBeGreaterThan(day);
   });
 
-  it('ends the run when no eligible character is left: records the best score, keeps the gold, deletes the save', async () => {
+  it('goes on when the family is gone (anyone may be taken over); ending the run records the best score, keeps the gold, deletes the save', async () => {
     const store = new MemorySaveStore();
     const profile = newProfile();
     const sim = Simulation.newGame({ seed: 'over', difficulty: 'king', generateWorld: mockGenerator('tiny'), store, profile, autosave: { intervalMs: 0 } });
@@ -275,8 +282,17 @@ describe('death of the player and game over', () => {
     }
     expect(st.run.phase).toBe('alive');
     killPerson(sim, P, 'illness', sim.absDay);
+    // no family left to suggest, but the world is full of people: the player chooses anyone
+    expect(st.run.phase).toBe('choosing');
+    expect(st.run.pendingSuccession?.eligible).toEqual([]);
+    expect(gameOvers).toHaveLength(0);
+    const anyone = [...st.persons.values()].find((q) => !q.death && q.id !== P.id)!;
+    expect(sim.dispatch({ type: 'switchCharacter', personId: anyone.id })).toEqual({ ok: true });
+    expect(st.run.phase).toBe('alive');
+    // the run ends when the player gives it up
+    expect(sim.dispatch({ type: 'abandonRun' })).toEqual({ ok: true });
     expect(st.run.phase).toBe('over');
-    expect(st.run.endedReason).toBe('extinct');
+    expect(st.run.endedReason).toBe('abandoned');
     expect(gameOvers).toHaveLength(1);
     expect(profile.levels.medieval.bestScore).toBe(Math.round(points));
     expect(profile.levels.medieval.legacyGold).toBe(gold);

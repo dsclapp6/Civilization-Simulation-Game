@@ -10,6 +10,9 @@
 import type { P2 } from '../core/math';
 import type { AnimState, HeldItem } from '../core/view';
 import type { HouseId, PersonId, TitleId } from './state';
+import type { ConstructionApi } from './construction/types';
+import type { RealmApi } from './realm/types';
+import type { TerritoryApi } from './territory/types';
 
 // ---------------------------------------------------------------------------------------------
 // Combat (src/combat)
@@ -244,4 +247,8 @@ export interface Wave3Services {
   military?: MilitaryApi;
   advancement?: AdvancementApi;
   happenings?: HappeningsApi;
+  // ---- civilization pass (docs/CIV.md); each module registers itself at install ----
+  territory?: TerritoryApi;
+  construction?: ConstructionApi;
+  realm?: RealmApi;
 }

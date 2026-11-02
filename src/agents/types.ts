@@ -151,6 +151,12 @@ export interface ZoneApi {
   setQuestGivers?(ids: readonly PersonId[]): void;
   /** The person the player is tracking (journal "Find"): their plate carries `mark: 'track'`. 0 clears. */
   setTrackedPerson?(id: PersonId): void;
+  /**
+   * Civilization pass (docs/CIV.md §1): the full set of quest marks — 'quest' ("!": has something for the player) and
+   * 'turnin' ("?": the player has a task ready to hand in to them). Replaces the previous set; supersedes setQuestGivers
+   * (which stays: it sets 'quest' marks only). Open happenings requests are always included as 'quest'.
+   */
+  setQuestMarks?(marks: ReadonlyArray<{ person: PersonId; kind: 'quest' | 'turnin' }>): void;
 
   // ---- additive (player module): riding. Optional; without them the player still rides, but the
   // household's animal keeps standing where it was (a second horse is drawn). ----

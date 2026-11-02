@@ -10,6 +10,9 @@ import type { Profile, StatUpgrades } from '../sim/legacy';
 import type { Simulation } from '../sim/sim';
 import type { SocialApi } from '../sim/social/types';
 import type { ObjectivesApi } from '../sim/objectives/types';
+import type { ConstructionApi } from '../sim/construction/types';
+import type { RealmApi } from '../sim/realm/types';
+import type { TerritoryApi } from '../sim/territory/types';
 import type { PersonId } from '../sim/state';
 import type { PanelRequest } from './core/requests';
 
@@ -21,6 +24,10 @@ export interface GameServices {
   readonly player: PlayerApi;
   /** Clarity pass: objectives, suggestions, day summaries (absent in old mocks). */
   readonly objectives?: ObjectivesApi;
+  /** Civilization pass (docs/CIV.md): land and trespass, building, ruling (absent in old mocks). */
+  readonly territory?: TerritoryApi;
+  readonly construction?: ConstructionApi;
+  readonly realm?: RealmApi;
 }
 
 export type QualitySetting = 'low' | 'medium' | 'high';

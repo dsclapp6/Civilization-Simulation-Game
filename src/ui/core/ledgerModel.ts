@@ -8,7 +8,7 @@ import type { IconName } from './icons';
 export const TASK_LABEL: Record<HouseholdTask, string> = {
   fields: 'Work the fields', garden: 'Tend the garden', livestock: 'Mind the animals', craft: 'Work at the craft', brew: 'Brew ale',
   spin: 'Spin and weave', market: 'Go to market', wood: 'Gather wood', service: 'Serve', school: 'Go to school', play: 'Play',
-  rest: 'Rest', auto: 'Let them decide',
+  rest: 'Rest', auto: 'Let them decide', build: 'Work on the building',
 };
 
 export const TASK_ORDER: readonly HouseholdTask[] = [

@@ -19,6 +19,9 @@ import { installPolitics } from '../sim/politics';
 import { installMilitary } from '../sim/military';
 import { installAdvancement } from '../sim/advancement';
 import { installObjectives } from '../sim/objectives';
+import { installConstruction } from '../sim/construction';
+import { installRealm } from '../sim/realm';
+import { installTerritory } from '../sim/territory';
 import type { GameServices, QualitySetting, UiRendererControls } from '../ui/types';
 import { wrapWithDevZone } from './devZone';
 import { MockObjectives } from '../ui/dev/mockObjectives';
@@ -78,6 +81,10 @@ export async function buildSession(sim: Simulation, o: SessionOptions): Promise<
   installAdvancement(sim, w3);
   // clarity pass: what to do now, markers, day summaries
   const objectives = o.fakeObjectives ? new MockObjectives(sim, zone) : installObjectives(sim, w3);
+  // civilization pass (docs/CIV.md): land and trespass, building, ruling
+  const territory = installTerritory(sim, w3);
+  const construction = installConstruction(sim, w3);
+  const realm = installRealm(sim, w3);
   // the camera looks where the character faces: at the start, and after taking over someone else
   const alignCamera = (): void => {
     const b = player.body();
@@ -97,7 +104,7 @@ export async function buildSession(sim: Simulation, o: SessionOptions): Promise<
   const t5 = performance.now();
   await o.progress(0.95, 'Almost there…');
 
-  const services: GameServices = { sim, economy, social, zone, player, objectives };
+  const services: GameServices = { sim, economy, social, zone, player, objectives, territory, construction, realm };
   return {
     loadMs: { assets: t1 - t0, renderer: t2 - t1, modules: t3 - t2, settle: t5 - t4 },
     sim, services, renderer, assets, controls: makeControls(renderer),

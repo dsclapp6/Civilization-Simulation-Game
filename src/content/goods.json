@@ -24,6 +24,7 @@
   "milk":    { "name": "Milk",    "unit": "gallons of milk", "unitOne": "gallon of milk", "category": "food", "basePrice": 0.35, "weight": 3.9, "spoilDays": 1, "food": 0.2 },
   "eggs":    { "name": "Eggs",    "unit": "dozen eggs", "unitOne": "dozen eggs", "category": "food", "basePrice": 0.5, "weight": 0.7, "spoilDays": 10, "food": 0.2, "macro": true, "sold": ["market"] },
   "meat":    { "name": "Meat",    "unit": "pounds of meat", "unitOne": "pound of meat", "category": "food", "basePrice": 0.5, "weight": 0.45, "spoilDays": 6, "food": 0.3, "macro": true, "sold": ["market"] },
+  "salt_meat": { "name": "Salt meat", "unit": "pounds of salt meat", "unitOne": "pound of salt meat", "category": "food", "basePrice": 0.8, "weight": 0.45, "spoilDays": 120, "food": 0.3, "sold": ["market", "slaughterhouse"] },
   "fish":    { "name": "Fish",    "unit": "pounds of fish", "unitOne": "pound of fish", "category": "food", "basePrice": 0.35, "weight": 0.45, "spoilDays": 4, "food": 0.25, "macro": true, "sold": ["market"] },
   "salt":    { "name": "Salt",    "unit": "pounds of salt", "unitOne": "pound of salt", "category": "misc", "basePrice": 0.25, "weight": 0.45, "sold": ["market"] },
   "honey":   { "name": "Honey",   "unit": "pounds of honey", "unitOne": "pound of honey", "category": "food", "basePrice": 1.0, "weight": 0.5, "food": 0.3, "sold": ["market"] },
@@ -40,6 +41,10 @@
   "planks":  { "name": "Planks",  "unit": "planks", "unitOne": "plank", "category": "material", "basePrice": 2.5, "weight": 4, "sold": ["market", "carpenter", "sawpit"] },
   "stone":   { "name": "Stone",   "unit": "blocks of stone", "unitOne": "block of stone", "category": "material", "basePrice": 3.0, "weight": 12, "sold": ["market", "quarry"] },
   "iron_ore": { "name": "Iron ore", "unit": "baskets of iron ore", "unitOne": "basket of iron ore", "category": "material", "basePrice": 1.5, "weight": 8, "sold": ["mine", "bloomery"] },
+  "clay":     { "name": "Clay",     "unit": "loads of clay", "unitOne": "load of clay", "category": "material", "basePrice": 0.6, "weight": 20, "sold": ["clay_pit", "kiln"] },
+  "brick":    { "name": "Bricks",   "unit": "bricks", "unitOne": "brick", "category": "material", "basePrice": 0.25, "weight": 2.5, "sold": ["market", "kiln"] },
+  "silver_ore": { "name": "Silver ore", "unit": "baskets of silver ore", "unitOne": "basket of silver ore", "category": "material", "basePrice": 30, "weight": 8, "sold": ["mine", "market"] },
+  "gold_ore": { "name": "Gold ore", "unit": "pouches of gold ore", "unitOne": "pouch of gold ore", "category": "material", "basePrice": 160, "weight": 2, "sold": ["mine", "market"] },
   "straw":   { "name": "Straw",   "unit": "bundles of straw", "unitOne": "bundle of straw", "category": "material", "basePrice": 0.25, "weight": 4, "sold": ["market"] },
   "hay":     { "name": "Hay",     "unit": "bales of hay", "unitOne": "bale of hay", "category": "material", "basePrice": 0.5, "weight": 8, "spoilDays": 300, "sold": ["market"] },
   "manure":  { "name": "Manure",  "unit": "loads of manure", "unitOne": "load of manure", "category": "material", "basePrice": 0.2, "weight": 10 },
@@ -104,6 +109,8 @@
   "chicken": { "name": "Chicken", "unit": "chickens", "unitOne": "chicken", "category": "livestock", "basePrice": 0.6, "weight": 0, "sold": ["market"] },
 
   "candle":  { "name": "Candle",  "unit": "candles", "unitOne": "candle", "category": "misc", "basePrice": 0.35, "weight": 0.1, "sold": ["market"] },
+  "tallow":   { "name": "Tallow",   "unit": "pounds of tallow", "unitOne": "pound of tallow", "category": "misc", "basePrice": 0.4, "weight": 0.45, "sold": ["market", "slaughterhouse"] },
+  "vellum":   { "name": "Vellum",   "unit": "sheets of vellum", "unitOne": "sheet of vellum", "category": "misc", "basePrice": 3, "weight": 0.05, "sold": ["tannery", "market"] },
   "barrel":  { "name": "Barrel",  "unit": "barrels", "unitOne": "barrel", "category": "misc", "basePrice": 12, "weight": 12, "sold": ["market", "carpenter"] },
   "pot":     { "name": "Cooking pot", "unit": "pots", "unitOne": "pot", "category": "misc", "basePrice": 2, "weight": 1.5, "sold": ["market", "kiln"] },
   "cart":    { "name": "Cart",    "unit": "carts", "unitOne": "cart", "category": "misc", "basePrice": 120, "weight": 0, "sold": ["carpenter"] }

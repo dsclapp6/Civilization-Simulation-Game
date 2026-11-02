@@ -237,9 +237,10 @@ function createTwelveYearOld(state: GameState, rng: Rng, hh: Household): Person 
 // Switching (SPEC §8)
 // ---------------------------------------------------------------------------------------------
 
-/** Living, free people the player may take over after `fromId`: family (blood or marriage) of any
- *  rank, plus members of the player's House (household, sworn people, vassals) of EQUAL rank tier.
- *  Children under MIN_PLAYABLE_AGE are offered only if nobody older qualifies. */
+/** The people SUGGESTED to take over after `fromId` (the death screen's first list, the family panel): family (blood or
+ *  marriage) of any rank, plus members of the player's House (household, sworn people, vassals) of equal rank tier.
+ *  Children under MIN_PLAYABLE_AGE are offered only if nobody older qualifies. Since the civilization pass anyone alive
+ *  may be taken over (`canSwitchTo`, docs/CIV.md §2); this list only orders the suggestions. */
 export function eligibleSwitchTargets(state: GameState, fromId: PersonId, now = state.clock.absDay): PersonId[] {
   const from = state.persons.get(fromId);
   if (!from) return [];
@@ -273,18 +274,24 @@ export function eligibleSwitchTargets(state: GameState, fromId: PersonId, now = 
   return pool.map((e) => e.p.id);
 }
 
-/** Takes over another character. Valid while alive (voluntary switch) or while choosing a successor. */
+/** May the player take over this person now? Anyone alive except the one being played (docs/CIV.md §2). */
+export function canSwitchTo(state: GameState, targetId: PersonId): boolean {
+  const run = state.run;
+  if (run.phase === 'over') return false;
+  const target = state.persons.get(targetId);
+  if (!target || target.death) return false;
+  if (run.phase === 'alive' && targetId === run.playerId) return false;
+  if (run.phase === 'choosing' && run.pendingSuccession && targetId === run.pendingSuccession.person) return false;
+  return true;
+}
+
+/** Takes over another character: anyone alive, while alive (voluntary switch) or while choosing a successor. */
 export function switchTo(ctx: SimContext, targetId: PersonId): boolean {
   const state = ctx.state;
   const run = state.run;
-  if (run.phase === 'over') return false;
+  if (!canSwitchTo(state, targetId)) return false;
   const fromId = run.phase === 'choosing' && run.pendingSuccession ? run.pendingSuccession.person : run.playerId;
-  const target = state.persons.get(targetId);
-  if (!target || target.death || targetId === run.playerId && run.phase === 'alive') return false;
-  const eligible = run.phase === 'choosing' && run.pendingSuccession
-    ? run.pendingSuccession.eligible
-    : eligibleSwitchTargets(state, fromId);
-  if (!eligible.includes(targetId)) return false;
+  const target = state.persons.get(targetId) as Person;
 
   const old = state.persons.get(run.playerId);
   if (old) { delete old.flags.player; state.touch(old); }
@@ -292,6 +299,8 @@ export function switchTo(ctx: SimContext, targetId: PersonId): boolean {
   state.touch(target);
   const reason = run.phase === 'choosing' ? 'death' : 'voluntary';
   run.playerId = targetId;
+  // "your House" is the House of whoever you live as (score, politics, the ruler's realm)
+  if (target.house) run.houseId = target.house;
   run.switches++;
   run.phase = 'alive';
   run.pendingSuccession = null;
@@ -328,7 +337,8 @@ export function handlePlayerDeath(ctx: SimContext, p: Person, cause: DeathCause)
   const eligible = eligibleSwitchTargets(state, p.id);
   state.dirty.meta = true;
   ctx.requestSave('player died');
-  if (eligible.length === 0) {
+  // anyone alive may be taken over (docs/CIV.md §2): the run ends only when nobody is left at all
+  if (eligible.length === 0 && !anyoneAlive(state)) {
     ctx.events.emit('playerDied', { person: p.id, cause, eligible });
     gameOver(ctx, 'extinct');
     return;
@@ -337,6 +347,11 @@ export function handlePlayerDeath(ctx: SimContext, p: Person, cause: DeathCause)
   run.pendingSuccession = { person: p.id, cause, eligible };
   ctx.clock.pause();
   ctx.events.emit('playerDied', { person: p.id, cause, eligible });
+}
+
+function anyoneAlive(state: GameState): boolean {
+  for (const q of state.persons.values()) if (!q.death) return true;
+  return false;
 }
 
 /** Ends the run: records the best score and continent share. Legacy gold was banked as it was earned. */

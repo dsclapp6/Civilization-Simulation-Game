@@ -20,7 +20,7 @@ import type { GameServices } from '../types';
 
 const TASK_WORDS: Record<HouseholdTask, string> = {
   fields: 'in the fields', garden: 'in the garden', livestock: 'with the animals', craft: 'at the craft', brew: 'brewing', spin: 'spinning and weaving',
-  market: 'at market', wood: 'gathering wood', service: 'in service', school: 'at lessons', play: 'at play', rest: 'resting', auto: 'wherever needed',
+  market: 'at market', wood: 'gathering wood', service: 'in service', school: 'at lessons', play: 'at play', rest: 'resting', auto: 'wherever needed', build: 'on the building works',
 };
 
 export function taskWords(t: HouseholdTask): string { return TASK_WORDS[t] ?? t; }
