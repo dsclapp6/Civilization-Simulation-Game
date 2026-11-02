@@ -435,7 +435,7 @@ export function mapPanel(ctx: PanelCtx): UiPanel {
       }
       const s = show && r ? r.project(d.x, 0, d.z) : null;
       const l = s ? ctx.toLocal(s) : null;
-      const vis = onScreen(l, w, hh, 12) && !covered(s, occluders);
+      const vis = onScreen(l, w, hh, 8) && !covered(s, occluders); // an icon is some 17 px across: its edge still shows when its middle is 8 px off
       if (vis && l) { rec.el.style.transform = `translate(${Math.round(l.x)}px, ${Math.round(l.y)}px)`; }
       if (vis !== rec.shown) { rec.shown = vis; rec.el.classList.toggle('mu-hide', !vis); }
     }

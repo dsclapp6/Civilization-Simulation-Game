@@ -183,15 +183,17 @@ the main ones (a crop plan, research started and stopped, archers raised, a trad
 
 ## Measurements
 
-Taken by the flow on a shared machine at a load of 20 to 40, so for a feel and not a budget (nothing here is asserted): a whole
-frame of the game (simulation, agents and interface, no drawing) with nothing open 1.5 ms, and with builder mode open and a ghost
-following the cursor 1.1 ms; `catalogue(me, where)` for the 63 kinds 0.21 ms (asked every two seconds while the Build tab is up;
-`check` for the ghost is memoised by the module); the pages of the seat are built when they are opened or when something they show
-changes, never every frame: Overview 237 ms, Lands & works 34 ms, Fields & labour 52 ms, Research 245 ms, Military 90 ms, Trade 72 ms,
-Diplomacy 35 ms, Rivals 152 ms (Overview and Research are the dearest because the realm works out `researchOptions`, `accounts` and
-`rivals` for them); the footer's `realm.view(me)` is read twice a second; the map, with the camera moving and the borders and the
-icons redrawn, 34 ms for a step, standing still 0.3 ms (the borders are redrawn only when the camera, a layer, the selection or the
-territory changes; the icons are placed only then too); *People here* walks the residents of one place once, when it is opened.
+Taken by the flow on a shared four-core machine that was never idle (load 16 to 40), so for a feel and not a budget (nothing here is
+asserted). Two runs, the first at a load of about 23, the second at about 17: a whole frame of the game (simulation, agents and
+interface, no drawing) with nothing open 1.5 ms / 2.8 ms, and with builder mode open and a ghost following the cursor 1.1 ms / 1.0 ms;
+`catalogue(me, where)` for the 63 kinds 0.2 ms / 0.9 ms (asked every two seconds while the Build tab is up; `check` for the ghost is
+memoised by the module). The pages of the seat are built when they are opened or when something they show changes, never every
+frame: Overview 237 / 21 ms, Lands & works 34 / 23 ms, Fields & labour 52 / 16 ms, Research 245 / 143 ms, Military 90 / 75 ms,
+Trade 72 / 21 ms, Diplomacy 35 / 20 ms, Rivals 152 / 33 ms (Research is the dearest: the realm works out `researchOptions`, which
+looks at every researcher and every place of the House; the first Overview of a run also pays for the books and `rivals`). The
+footer's `realm.view(me)` is read twice a second. The map, with the camera moving and the borders and the icons redrawn, took 34 / 30
+ms for a step and standing still 0.3 / 0.2 ms (the borders are redrawn, and the icons placed, only when the camera, a layer, the
+selection or the territory changes). *People here* walks the residents of one place once, when it is opened.
 
 ## Contract use and changes
 
