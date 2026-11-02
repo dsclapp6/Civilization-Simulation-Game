@@ -434,7 +434,8 @@ export function putIn(C: Construction, rec: SiteRec, days: number): number {
   if (add <= 1e-6) return 0;
   const payer = C.household(rec.household);
   if (rec.pence > 0) {
-    const fee = rec.pence * (add / rec.labour);
+    // rounded as the purse pays (to the farthing's hundredth): an unrounded sliver of a fee at the last step read as "short" for ever
+    const fee = r2(rec.pence * (add / rec.labour));
     if (!payer) return 0;
     const paid = C.spend(payer, fee);
     if (paid < fee - 1e-6) {

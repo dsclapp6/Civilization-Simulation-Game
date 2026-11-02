@@ -106,7 +106,7 @@ export const BASICS: readonly HelpSection[] = [
       'You begin as a child of twelve in a peasant household. Nobody expects glory of you yet: be useful. Your task is written in the top left corner of the screen, with the next step and how to do it; a gold marker in the world, the compass ribbon at the top and the minimap show where it is. Y asks “what now?” whenever you are lost; O opens the journal.',
       'Point the cursor at something: its name and what a click will do appear beside it. Click to walk there and do it, or stand close and press E. Reaping, hauling, tending beasts and fetching water earn the household’s keep, a few pence of your own, and skill that you will need later.',
       'Watch the four little signs under your name: hunger, rest, warmth and mood. A gold sign means you will soon need to eat, sleep, get warm or cheer up; a red one means now. Z sleeps; the bread in your inventory (I) feeds you.',
-      'A day lasts ten minutes at normal speed (about seven of them in daylight) and a year is sixteen days. Do not hurry: use 3× or 8× when you are only waiting, and drop to 1× when you work or fight. When you sleep, the day is written up: what you did, what it earned and what tomorrow holds.',
+      'A day lasts thirty minutes at normal speed (about twenty of them in daylight) and a year is sixteen days. Do not hurry: use 3× or 8× when you are only waiting, and drop to 1× when you work or fight. When you sleep, the day is written up: what you did, what it earned and what tomorrow holds.',
     ],
   },
   {

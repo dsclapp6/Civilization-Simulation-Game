@@ -294,7 +294,7 @@ export class Hud {
     this.clockPlate.append(
       h('div.mu-hud-clockrow', null,
         this.dial.el,
-        h('div.mu-hud-when', { tip: 'A day lasts ten minutes at normal speed. Four days make a season, sixteen a year. Click for today in the journal.' },
+        h('div.mu-hud-when', { tip: 'A day lasts thirty minutes at normal speed. Four days make a season, sixteen a year. Click for today in the journal.' },
           this.dateEl,
           h('div.mu-hud-timerow', null, this.timeEl, this.partEl),
         ),

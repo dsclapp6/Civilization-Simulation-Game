@@ -5,6 +5,7 @@
 // 15 and 20 (pick 1 of 2); perk ids are "<skill>.<name>" so free slots can be counted per skill.
 // Stats: trained = natural growth for the age (people.refreshTrained) + a training bonus earned by
 // use, never above potential × the age decline. The bonus fades slowly when not exercised.
+import { DAY_SECONDS } from '../core/time';
 import type { SkillId, StatId } from '../core/domain';
 import type { SimContext } from './context';
 import { declineFactor, learnFactor, skillLevel } from './people';
@@ -14,13 +15,13 @@ export const PERK_LEVELS = [5, 10, 15, 20] as const;
 
 /**
  * Growth by the bout. The tables of the work actions (experience and stat points per bout) were struck when a game day was
- * a minute of play and a player could fit about four bouts into it. A day is now ten minutes and holds about ten times as
- * many bouts, so each bout's growth is scaled back: a bout is half a game hour of the hero's work, who learns about twice
+ * a minute of play and a player could fit about four bouts into it. A day of ten minutes held about ten times as
+ * many bouts, so each bout's growth was scaled back (and scales with the day's length: a thirty-minute day holds three times the bouts): a bout is half a game hour of the hero's work, who learns about twice
  * as fast per game hour as a capable adult (≈ 1.9 experience a game hour for an NPC, `XP_PER_YEAR`). A youth who practises
  * most days still reaches STR 10 and Archery 3 (the archers' test) at 14 or 15.
  */
-export const XP_SCALE = 0.25;
-export const TRAIN_SCALE = 0.5;
+export const XP_SCALE = 0.25 * (600 / DAY_SECONDS);
+export const TRAIN_SCALE = 0.5 * (600 / DAY_SECONDS);
 
 /** Adds XP (scaled by intellect and Quick learner). Emits `skillLevel` per level gained; returns levels gained. */
 export function gainSkill(ctx: SimContext, p: Person, skill: SkillId, baseXp: number): number {

@@ -26,8 +26,8 @@ eligible is left the run ends and your Legacy gold stays.
 | Key / mouse | Action |
 |---|---|
 | **W A S D** (or arrows) | Move, relative to the camera. The default gait is a jog (3.2 m/s) |
-| **Shift** | Sprint (5.5 m/s, drains stamina; out of breath = walk). On a horse: gallop (11 m/s) |
-| **X** | Toggle slow walk (1.4 m/s; riding: 1.7 m/s) |
+| **Shift** | Sprint (5.5 m/s, drains stamina; out of breath = walk). On a horse (a trot, 3.5 m/s, by default): canter (6 m/s); held 1.2 s, gallop (10 m/s) |
+| **X** | Toggle slow walk (1.4 m/s; riding: a walk, 1.7 m/s) |
 | **Space** | Dodge roll (costs stamina) |
 | **Mouse** (cursor free) | Point at a person, animal, door, strip or tree: a tooltip names it and what a click will do, the cursor shows the kind of action (talk, work, trade, go in, fight, walk here) and the thing is outlined |
 | **Left click** | Walk to what is under the cursor along the paths and do its default action there (bare ground: just walk). Any movement key, **E**, **Q** or a dodge stops the walk; a click on something that cannot be done says why instead of walking |
@@ -36,7 +36,7 @@ eligible is left the run ends and your Legacy gold stays.
 | **E** (hold ½ s) | The action wheel: every option on the target, with reasons for the disabled ones. With nothing in front: rest, sit, sleep (at home) |
 | **G** | Draw or put away the weapon. While it is drawn the mouse looks around (left strikes, right guards; with a bow right draws and aims); a fight draws it by itself and it goes away a few seconds after the fight. The click that takes the mouse is never a blow. Esc frees the mouse, the weapon stays out |
 | **Q** | Stop the timed action in progress (walking away also stops it) |
-| **F** | Mount the household's horse nearby / dismount |
+| **F** | Mount the horse in front of you (your household's, or your lord's if you serve him) / dismount. **Hold F** (½ s) with no horse at hand: call yours — it trots to you from the stable or where you left it |
 | **Y** | The "What now?" card: the tracked task's next step first, then what the hour and the day suggest; choose a line to be shown the way |
 | **O** | The journal: tasks, today, the people you know, places (each with **Find**) |
 | **N** | Show or hide the minimap |
@@ -47,6 +47,7 @@ eligible is left the run ends and your Legacy gold stays.
 | **R** requests and news · **T** House techniques · **K** realm and politics · **C** command and army (the household page of the ledger when you have no troops) | The wave 3 pages. Each also has a button in the dock (bottom right); modules that are not in the run have none |
 | **V** | **Live as** the person under the cursor or in front of you: anyone alive, at any time (see *Living as anyone*) |
 | **B** · **U** | **Builder mode** and **ruler mode** (the seat of government) — civilization pass; each has a dock button too |
+| **4 5 6 7** · **8** · **C** (in a battle where you command men) | Choose a group (all / foot / archers / horse) · the order wheel · the tactical view (outside a battle **C** is the command page) |
 | **Tab**, then *Wounds* | The wounds page is a tab of the character sheet (and the red or gold mark under your name on the HUD opens it): *Bind your wounds* there |
 | **F1** | Help and controls (also in the pause menu): all the keys, first steps, fighting, lords and wars |
 | **Esc** | Leave mouse-look first (it never opens the menu for that press); else close the top page (or the "What now?" card); with nothing open, the pause menu |
@@ -176,6 +177,73 @@ something of you** with *Find* on each.
 When you are made a knight — by your liege, dubbed by a lord, or for valour on the field — a scene card tells the vigil in the church
 and the sword laid on your shoulders ("Arise, Sir …"); from then on you are *Sir …* on the HUD. The same card, told your way, when you
 dub one of your own men in ruler mode. In the middle of a fight it waits as a notice with a *Read it* button.
+
+### Building (B)
+
+**B** opens builder mode wherever you may build: a household head on his own plot and yard, a master at his workshop, a lord (or
+his steward or reeve) anywhere in his manor's lands, a baron and up in all the lands he holds and, in the wild, at outposts. If you
+may build nowhere, a card says why. The camera rises over your land, which is tinted (**W A S D** pan, the **wheel** zooms, **right
+drag** turns; **Esc** or **B** leaves). The catalogue lists what you may raise with its cost (materials, worker-days, money), what it
+needs (a technique, a river, a rise, the coast, a forest, the right deposit, your rank) and what it does; what you may not build says
+why. Pick one: a ghost follows the cursor, green when it fits and red with the reason when it does not (**Q / E** or **Shift + wheel**
+turn it); click to stake out the site, or let **Place for me** find a spot. Click a building of yours to upgrade, repair or pull it
+down; click a site to see its stage, what it waits for (and what is on the way from market), who works there and when it should be
+done, and to cancel it, raise its priority or hire hands. Materials come from your stores, then are bought at the nearest market and
+carted in; the work is done by your household (task *Build*), hired labourers, the manor's week-work and you (**E** at the site: *Work
+on the building*). A building goes up in stages — pegs and lines, footings, frame and walls, roof — with scaffolding for stone.
+
+### Ruling (U)
+
+**U** opens the seat of government for anyone who rules something (a manor, a town, a barony and up; the steward or reeve for what
+their office covers). The game pauses while it is open. Its pages: **Overview** (your lands, treasury and books, stores, people,
+prosperity, strength, works, research, troops, threats, news), **Lands & works** (each settlement and outpost, the building queue),
+**Fields & labour** (which crop each field sows next, the share of labour-service sent to your works, the manor's dues), **Research**
+(a technique is worked out by a person who could know it, at a fitting place, paid in its branch's goods: timber and brick for the
+economy, iron for war, cloth and ale for kinship, vellum and candles for learning — *Buy the rest and start* orders what you lack),
+**Military** (recruit archers, crossbowmen, men-at-arms, sergeants, knights, mercenaries; keep or discharge them; dub a knight; raise
+an army), **Trade** (what your lands yield and lack; standing orders to sell surplus or buy materials at a market), **Diplomacy** and
+**Rivals** (every House near you: strength, what it built, learnt and raised this year, its stance and how much it threatens you).
+**Rule this town** (on the settlement banner, the map and the seat of government) lives as the place's ruler in one click.
+Rival lords run the same loop with the same costs: their towns grow, wall themselves when threatened, found outposts at deposits and
+come for the weak — the news tells you.
+
+### Whose land you are on
+
+The land belongs to someone. On a lord's private ground (his demesne, park, castle grounds) or on the land of a House at war or feud
+with yours, a plaque at the bottom of the screen says whose it is and why you should not be there. People who see you report it, and
+riders come: a knight or sergeant with a few men, who halt you (*"Halt. You are on the lands of Sir Hugh. State your business or be
+gone."*). Answer them (the plaque's *Answer them*, or the card): **Leave** (they see you off the land — the plaque counts the seconds
+and the way to its edge), **State your business** (a task or a job here, market day, your rank, your tongue or a bribe may let you
+stay), **Pay the fine** (poaching: the game is taken), **Yield** (you are taken), or refuse, flee or come back — and they ride you
+down to take you, or worse. At war they skip the talk: *Yield!*
+
+### Taken prisoner
+
+A prisoner is bound and led on foot to the lord's gaol, keep or lock-up and held there. The prisoner's card says by whom, since when
+and what is asked, and the ways out: **wait for ransom** (your House or family pays if it can and cares), **pay it yourself**, **serve
+the sentence** on the lord's works, **try to escape** at night (your Agility and Strength against the watch; caught, it goes worse) —
+or live as someone else. Only an enemy soldier who killed the lord's men, at war, under a cruel lord risks the rope, and is warned.
+
+### Walls, sieges and commanding men
+
+A town at war shuts its gates at night (and always when an army is near), doubles the watch, sends the militia to the walls and, in
+an assault, rings the bells and sends its people indoors. When you storm walls, archers and crossbowmen shoot from the wall-walks and
+towers; the attackers bring a roofed **ram** to the gate (*Push the ram*), raise **ladders** (*Climb the ladder*; defenders throw them
+down) and pour through **breaches** the engines make; a defender can man a place on the wall and shoot. If you command men, **4–7**
+choose a group (all, foot, archers, horse), **8** opens the order wheel — follow me, hold, advance to, charge, loose at, form line,
+shield wall or wedge, retreat — and a click on the ground or an enemy gives a move or an attack. **C** in battle opens the tactical view:
+time slows to a quarter, the camera rises over the field, your groups are banners with their orders drawn on the ground; drag a banner
+to move it, click an enemy to attack. On a horse a held attack at a canter or gallop couches the lance or spear; the sword cuts from
+the saddle.
+
+### Hands-on work
+
+Any recipe can be tried at a workplace you may use — your own, your employer's, or a bench hired for the bout (the fee and the risk are
+shown; a novice wastes material and may spoil the work, but learns). Each bout goes in steps with their own movement and sound — at
+the forge *heat the bar, draw it out, quench, grind and finish* — named under the action bar. Animals: lead your own on a halter (**E**:
+*Lead*, up to four), slaughter a pig, sheep, goat or fowl at home (a cow or ox at the slaughterhouse), butcher the carcass into meat,
+hide and tallow, salt the meat to keep it. New works dig clay, fire bricks, boil salt, fell timber and mine iron, silver and gold where
+the deposits are.
 
 ### Map travel
 

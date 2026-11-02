@@ -44,13 +44,29 @@ const MAX_DISCOUNT = 0.3;
 
 const DEPOSIT_OF: Readonly<Record<string, keyof SourceInfo>> = { stone: 'stone', brick: 'clay', iron: 'iron', salt: 'salt' };
 
+/** Which deposits lie in reach of each settlement, remembered per deposit list of the territory: the ground does not move. */
+const depCache = new WeakMap<readonly object[], Map<number, SourceInfo>>();
+function depsAround(E: Econ, s: Settlement): SourceInfo {
+  const terr = E.sim.services.territory;
+  const list = terr ? terr.deposits() : undefined;
+  let m = list ? depCache.get(list) : undefined;
+  if (list && !m) { m = new Map(); depCache.set(list, m); }
+  let v = m?.get(s.id);
+  if (!v) {
+    v = { stone: depositNear(E, s.x, s.z, REACH, 'stone'), clay: depositNear(E, s.x, s.z, REACH, 'clay'), iron: depositNear(E, s.x, s.z, REACH, 'iron'), salt: depositNear(E, s.x, s.z, REACH, 'salt') };
+    m?.set(s.id, v);
+  }
+  return v;
+}
+
 function sourcesOf(E: Econ, s: Settlement, by: Record<string, number>, own: readonly { kind: string; construction: number }[]): SourceInfo {
   const has = (kind: string): boolean => own.some((b) => b.kind === kind && b.construction >= 1);
+  const d = depsAround(E, s);
   return {
-    stone: has('quarry') || depositNear(E, s.x, s.z, REACH, 'stone'),
-    clay: has('clay_pit') || depositNear(E, s.x, s.z, REACH, 'clay'),
-    iron: has('bloomery') || has('mine') || depositNear(E, s.x, s.z, REACH, 'iron') || (by.iron ?? 0) > 0,
-    salt: has('salt_pan') || depositNear(E, s.x, s.z, REACH, 'salt'),
+    stone: has('quarry') || d.stone,
+    clay: has('clay_pit') || d.clay,
+    iron: has('bloomery') || has('mine') || d.iron || (by.iron ?? 0) > 0,
+    salt: has('salt_pan') || d.salt,
   };
 }
 
@@ -60,7 +76,8 @@ function sourcesOf(E: Econ, s: Settlement, by: Record<string, number>, own: read
  * family moves house) and none of them changes what a works makes. A burnt works still counts until it is pulled down.
  */
 function census(E: Econ): Census {
-  const rev = E.worksRev, size = E.state.buildings.size, terrRef = E.sim.services.territory, terr = terrRef?.version() ?? 0;
+  // the census reads only the territory's deposits, which never move: its version (titles, wars, outposts) is not part of the key
+  const rev = E.worksRev, size = E.state.buildings.size, terrRef = E.sim.services.territory, terr = 0;
   const hit = cache.get(E);
   if (hit && hit.rev === rev && hit.size === size && hit.terr === terr && hit.terrRef === terrRef) return hit;
   const by = new Map<number, Record<string, number>>();
@@ -95,7 +112,12 @@ function census(E: Econ): Census {
  */
 export function attachConstructionEvents(E: Econ): () => void {
   return E.sim.events.on('construction', (e) => {
-    if (e.phase !== 'done' && e.phase !== 'cancelled' && e.phase !== 'placed') return;
+    if (e.phase === 'placed') {
+      // a site just staked out is an unfinished building and adds no works: the census stands, with the new building counted
+      const hit = cache.get(E);
+      if (hit && hit.rev === E.worksRev && hit.size + 1 === E.state.buildings.size) { hit.size++; return; }
+      if (hit && hit.rev === E.worksRev && hit.size === E.state.buildings.size) return; // an upgrade adds no building
+    } else if (e.phase !== 'done' && e.phase !== 'cancelled') return;
     E.worksRev++;
     E.touchMarkets();
   });

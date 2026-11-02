@@ -71,7 +71,7 @@ export const HINTS: readonly HintDef[] = [
   },
   {
     id: 'time', icon: 'hourglass', title: 'Time is yours', keys: [k(KEYMAP.input.speed1), k(KEYMAP.input.speed2), k(KEYMAP.input.speed3), k(KEYMAP.input.pause)],
-    text: 'A day lasts ten minutes; a year is sixteen days. 1, 2 and 3 set the speed (use the fast ones when you are only waiting) and P pauses. Panels pause the world while they are open.',
+    text: 'A day lasts thirty minutes; a year is sixteen days. 1, 2 and 3 set the speed (use the fast ones when you are only waiting) and P pauses. Panels pause the world while they are open.',
     when: (f) => f.seconds > 150 && f.worked >= 1 && !f.speedChanged, done: (f) => f.speedChanged, maxSeconds: 20,
   },
   {

@@ -12,6 +12,12 @@ import { lap, lapReset } from './state';
 const { CELL, N, NN } = G;
 const smoothstep = _smoothstep, Biome = _Biome, bilerp = _bilerp;
 export const TAG_STRIP = 5;
+/** Furlongs lie within this distance (m) beyond the edge of the built-up area (plus the first ring's offset): the owner chose
+ *  fields close to the village so that people who walk at real speeds spend their days working, not walking (docs/CIV.md §3).
+ *  Their strips then end within about 200–240 m of the houses. */
+export const FIELD_REACH = 160;
+/** Strips a settlement's fields reach for before they stop at FIELD_REACH (a hemmed-in village looks farther). */
+const MIN_FIELD_STRIPS = 30;
 
 interface Farm { id: number; x: number; z: number; R: number; maxStrips: number; blockN: [number, number]; }
 
@@ -69,22 +75,27 @@ export function generateFields(ctx: LayoutCtx): void {
     const blocks: { cx: number; cz: number; ang: number; strips: number[] }[] = [];
     const placedStrips: Strip[] = [];
     const r0 = Math.max(st.radius, 40) + 26;
+    const reach = Math.min(farm.R, r0 + FIELD_REACH);
     const ring = (r: number, off: number): { x: number; z: number }[] => {
       const out: { x: number; z: number }[] = [];
-      const n = Math.max(6, Math.round((Math.PI * 2 * r) / 120));
+      const n = Math.max(6, Math.round((Math.PI * 2 * r) / 65));
       for (let a = 0; a < n; a++) {
         const ang = off + (a / n) * Math.PI * 2;
         out.push({ x: farm.x + Math.cos(ang) * (r + fr.range(-26, 26)), z: farm.z + Math.sin(ang) * (r + fr.range(-26, 26)) });
       }
       return out;
     };
+    commonPasture(ctx, farm, fi, ownerAt, fr);
     const phase = fr.range(0, Math.PI * 2);
-    for (let r = r0 + 40, ringIdx = 0; r < farm.R && placedStrips.length < farm.maxStrips; r += 95, ringIdx++) {
+    // the fields lie within `reach`; a village hemmed in by water, hills or woods goes farther out until it has a working three-field
+    // system (MIN_FIELD_STRIPS), as far as its old bounds
+    for (let r = r0 + 30, ringIdx = 0; placedStrips.length < farm.maxStrips && (r < reach || (r < farm.R && placedStrips.length < MIN_FIELD_STRIPS)); r += 48, ringIdx++) {
+      const limit = r < reach ? reach : farm.R;
       const cands = ring(r, phase + ringIdx * 0.37);
       for (const c of cands) {
         if (placedStrips.length >= farm.maxStrips) break;
         if (ownerAt(c.x, c.z) !== fi) continue;
-        if (Math.hypot(c.x - farm.x, c.z - farm.z) > farm.R) continue;
+        if (Math.hypot(c.x - farm.x, c.z - farm.z) > limit) continue;
         if (suit(c.x, c.z) <= 0.05) continue;
         if (ctx.occ.covers(c.x, c.z, 4, (1 << TAG.plot) | (1 << TAG.parcel) | (1 << TAG_STRIP) | (1 << TAG.blocker))) continue;
         // furlong orientation: along the contour on slopes, otherwise coherent random
@@ -97,7 +108,7 @@ export function generateFields(ctx: LayoutCtx): void {
         // snap to neighbours' orientation sometimes to form larger coherent furlongs
         const near = blocks.length ? blocks.reduce((b, q) => (Math.hypot(q.cx - c.x, q.cz - c.z) < Math.hypot(b.cx - c.x, b.cz - c.z) ? q : b)) : null;
         if (near && Math.hypot(near.cx - c.x, near.cz - c.z) < 220 && fr.chance(0.6)) ang = near.ang + (fr.chance(0.25) ? Math.PI / 2 : 0);
-        const L = fr.range(68, 128), sw = fr.range(8.4, 11.6);
+        const L = fr.range(56, 92), sw = fr.range(8.4, 11.6);
         const nMax = fr.int(farm.blockN[0], farm.blockN[1]);
         const dirx = Math.sin(ang), dirz = Math.cos(ang); // strip long axis (local +z of the strip)
         const perpx = Math.cos(ang), perpz = -Math.sin(ang); // across strips (local +x)
@@ -196,9 +207,9 @@ function validateStrip(
   return ccwFromAbove(corners);
 }
 
-function commonLands(
-  ctx: LayoutCtx, farm: Farm, fi: number, owner: Int16Array, ownerAt: (x: number, z: number) => number, fr: ReturnType<LayoutCtx['rng']['fork']>,
-): void {
+/** The common pasture: rectangles hugging the settlement's edge. Laid out before the strips (the fields lie close to the village
+ *  and would otherwise leave the beasts no grazing by the houses). */
+function commonPasture(ctx: LayoutCtx, farm: Farm, fi: number, ownerAt: (x: number, z: number) => number, fr: ReturnType<LayoutCtx['rng']['fork']>): void {
   const s = ctx.s, tm = ctx.tm;
   const st = s.settlements[farm.id];
   const kind = st.kind;
@@ -220,6 +231,14 @@ function commonLands(
     ctx.addParcel(farm.id, 'pasture', q);
     made++;
   }
+}
+
+function commonLands(
+  ctx: LayoutCtx, farm: Farm, fi: number, owner: Int16Array, ownerAt: (x: number, z: number) => number, fr: ReturnType<LayoutCtx['rng']['fork']>,
+): void {
+  const s = ctx.s, tm = ctx.tm;
+  const st = s.settlements[farm.id];
+  const kind = st.kind;
   // ---- meadow: ribbons along the river ----
   let meadows = 0;
   const rs = tm;

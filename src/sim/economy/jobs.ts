@@ -716,10 +716,15 @@ export function workSpot(E: Econ, personId: PersonId, absDay: number): WorkSpot 
         }
         const serf = p.estate === 'unfree' && dayNo % 4 === 1; // week-work on the first day of the week
         const pools = serf && demesne.length > 0 ? [demesne, mine] : [mine, emp && emp.employer ? [] : []];
+        // the strips with work to do, nearest to home first (the owner's choice: no long walks past work waiting nearer); the
+        // household's members spread over the two nearest so they are not all on one strip
+        const from = home ?? centre(E, sid);
+        const far = (id: number): number => { const c = E.stripCentre.get(id); return c ? (c.x - from.x) ** 2 + (c.z - from.z) ** 2 : Infinity; };
         for (const pool of pools) {
           const busy = pool.filter((id) => nextTask(E, state.strips.get(id) as never) !== null);
           if (busy.length === 0) continue;
-          const id = busy[Math.floor(hash01(personId, dayNo, 5) * busy.length)];
+          busy.sort((a, b) => far(a) - far(b) || a - b);
+          const id = busy[Math.floor(hash01(personId, dayNo, 5) * Math.min(2, busy.length))];
           const st = state.strips.get(id) as ReturnType<typeof state.strips.get> & object;
           const c = E.stripCentre.get(id) ?? centre(E, sid);
           const task2 = nextTask(E, st) ?? 'weed';

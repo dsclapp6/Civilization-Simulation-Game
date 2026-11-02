@@ -5,6 +5,7 @@
 import { CAREERS } from '../careers';
 import type { Adv } from '../advancement/core';
 import type { TechDef } from '../advancement/types';
+import { basePriceOf } from '../economy/data';
 import { formatMoney } from '../money';
 import { ageYears, type Household, type HouseId, type Person, type PersonId } from '../state';
 import { bagAdd, round2 } from './bags';
@@ -309,7 +310,8 @@ function orderGoods(R: Rlm, hh: Household, good: string, qty: number, settlement
   const procure = R.economy.procure;
   if (!procure) return null;
   const before = hh.purse;
-  const r = procure.call(R.economy, hh.id, good, Math.ceil(qty), { settlement });
+  // never more than three times the usual price (a market that keeps only a shelf of a good asks a fortune for the last of it)
+  const r = procure.call(R.economy, hh.id, good, Math.ceil(qty), { settlement, maxPrice: Math.max(1, basePriceOf(good) * 3) });
   const paid = round2(before - hh.purse);
   if (paid > 0) bookOut(R, hh.id, paid, 'Goods bought');
   return { got: r.got, days: r.days };
