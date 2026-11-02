@@ -52,11 +52,13 @@ export interface Settings {
   alwaysLook?: boolean;
   /** Clarity pass: the corner minimap (N). Default true. */
   minimap?: boolean;
+  /** Civilization pass (CIV §2): ask for confirmation before living as someone else (V, the action wheel, the lists). Default true. */
+  askBeforeLiveAs?: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   quality: 'medium', mouseSensitivity: 1, invertY: false, volume: 0.7, labels: true, uiScale: 1, pauseInMenus: true, hints: true,
-  alwaysLook: false, minimap: true,
+  alwaysLook: false, minimap: true, askBeforeLiveAs: true,
 };
 
 /** Renderer controls the UI may use (map panel, settings). */
@@ -112,7 +114,15 @@ export interface UiHost {
   releaseMouseLook?(): boolean;
   /** Is the mouse looking (pointer locked) right now? The HUD tells a drawn weapon with a free cursor from one with the mouse taken. */
   mouseLooking?(): boolean;
+  /**
+   * Civilization pass (CIV §2): where the camera is and what it looks at, for the glide from one body to another. Null when
+   * there is no street camera to read (menus, the gallery's fake host). The UI falls back to a fade.
+   */
+  cameraPose?(): CameraPose | null;
 }
+
+/** A camera position and the point it looks at (world metres). */
+export interface CameraPose { position: { x: number; y: number; z: number }; lookAt: { x: number; y: number; z: number } }
 
 export type UiScreen = 'menu' | 'loading' | 'game';
 
