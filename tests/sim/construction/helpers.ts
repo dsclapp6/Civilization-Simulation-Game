@@ -6,6 +6,7 @@ import { dist2, pointInPolygon } from '../../../src/core/math';
 import { installConstruction, type ConstructionInstall } from '../../../src/sim/construction';
 import type { EconomyApi } from '../../../src/sim/economy/types';
 import { newProfile } from '../../../src/sim/legacy';
+import { MemorySaveStore } from '../../../src/sim/save-memory';
 import { Simulation } from '../../../src/sim/sim';
 import type { SocialApi } from '../../../src/sim/social/types';
 import type { BuildingState, Household, Person, Title } from '../../../src/sim/state';
@@ -65,8 +66,10 @@ export function shapedWorld(seed: string, shape: Shape = {}): WorldModel {
   };
 }
 
-export function buildSim(seed = 'cons', shape: Shape = {}): Simulation {
-  return Simulation.newGame({ seed, difficulty: 'knight', generateWorld: (s) => shapedWorld(s, shape), profile: newProfile() });
+export function buildSim(seed = 'cons', shape: Shape = {}, store?: MemorySaveStore): Simulation {
+  return Simulation.newGame({
+    seed, difficulty: 'knight', generateWorld: (s) => shapedWorld(s, shape), profile: newProfile(), store, autosave: store ? { intervalMs: 0 } : undefined,
+  });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -203,14 +206,26 @@ export interface Rig {
 }
 
 /** A tiny world with the fake territory, the economy stub and construction installed; the clock at 8 in the morning. */
-export function rig(seed = 'cons', shape: Shape = {}): Rig {
-  const sim = buildSim(seed, shape);
+export function rig(seed = 'cons', shape: Shape = {}, store?: MemorySaveStore): Rig {
+  const sim = buildSim(seed, shape, store);
+  return equip(sim);
+}
+
+/** Installs the fake territory, the economy stub and construction in a simulation (a new one or a loaded one). */
+export function equip(sim: Simulation, setClock = true): Rig {
   const terr = fakeTerritory(sim);
   const eco = fakeEconomy(sim);
   const deps: Wave3Deps = { economy: eco.api, social: {} as SocialApi };
   const cons = installConstruction(sim, deps);
-  setTime(sim, 8 / 24);
+  if (setClock) setTime(sim, 8 / 24);
   return { sim, eco, terr, cons };
+}
+
+/** Loads the saved run of a store and equips it the same way. */
+export async function reload(store: MemorySaveStore, shape: Shape = {}): Promise<Rig> {
+  const sim = await Simulation.load(store, (s) => shapedWorld(s, shape));
+  if (!sim) throw new Error('nothing to load');
+  return equip(sim, false);
 }
 
 /** Sets the time of day on the current day without firing hooks. */
