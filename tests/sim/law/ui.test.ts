@@ -174,8 +174,12 @@ describe('the plaque', () => {
 
   it('a man being led is told to keep up; a restraint with no case behind it is only named', () => {
     const led = plaque({ ...base, captive: captive({ led: true, building: -1 }), restraint: { kind: 'led', by: 10, reason: 'Bound and led to the lock-up.' } })!;
-    expect(led).toMatchObject({ kind: 'bound', title: 'Bound and led to the lock-up.', action: 'Your options' });
+    expect(led).toMatchObject({ kind: 'bound', title: 'Bound and led to the lock-up', action: 'Your options' });
     expect(led.sub).toMatch(/Keep up/);
+    // where on the first line, why on the second
+    const why = plaque({ ...base, captive: captive({ led: true, building: -1 }), restraint: { kind: 'led', by: 10, reason: "Bound and led to the manor's lock-up at Cyney for trespass in the lord's closes." } })!;
+    expect(why.title).toBe("Bound and led to the manor's lock-up at Cyney");
+    expect(why.sub).toBe("Trespass in the lord's closes. Keep up, or you are dragged.");
     expect(plaque({ ...base, restraint: { kind: 'held', x: 0, z: 0, building: 7, reason: 'In the cell.' } })).toMatchObject({ kind: 'bound', action: null });
   });
 

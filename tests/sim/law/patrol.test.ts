@@ -66,6 +66,72 @@ describe('a trespasser is seen and a patrol comes', () => {
     expect(r.zone.say).toBeDefined();
   });
 
+  it('the lord does not ride after a trespasser himself while anyone else is fit; when he must, it is his own land he speaks of', () => {
+    const r = lawRig({ seed: 'law-lord' });
+    r.lord.career = 'knight';
+    expect(r.law.report(r.stranger.id, r.court.x, r.court.z)).toBe(true);
+    const p = r.law.patrolFor(r.stranger.id)!;
+    expect(p.leader).not.toBe(r.lord.id);
+    expect(p.men).not.toContain(r.lord.id);
+    // nobody else can ride (all held in the cells): the lord goes himself
+    const r2 = lawRig({ seed: 'law-lord2' });
+    r2.lord.career = 'knight';
+    for (const q of r2.sim.state.persons.values()) if (q.id !== r2.lord.id && q.id !== r2.stranger.id) q.flags.captive = true;
+    expect(r2.law.report(r2.stranger.id, r2.court.x, r2.court.z)).toBe(true);
+    rideUp(r2);
+    r2.run(0.2);
+    const p2 = r2.law.patrolFor(r2.stranger.id)!;
+    expect(p2.leader).toBe(r2.lord.id);
+    expect(p2.line).toMatch(/^Halt\. These are my closes\./);
+    expect(p2.line).not.toMatch(/Sir|Lord/);
+  });
+
+  it('a leader who gets no nearer is sent round another way three times, then calls out from where he is if he can see the man, else gives up', () => {
+    const stuck = (seed: string, dist: number, sees: boolean): ReturnType<typeof lawRig> => {
+      const r = lawRig({ seed });
+      (r.zone.nav as { lineClear?: () => boolean }).lineClear = () => sees;
+      r.law.report(r.stranger.id, r.court.x, r.court.z);
+      const p = r.law.patrolFor(r.stranger.id)!;
+      // the men are at their places, and stay there (a pond's edge, a snag in the path)
+      for (const id of [p.leader, ...p.men]) { const a = r.zone.agent(id) ?? r.zone.addAgent(id, 0, 0); a.x = r.court.x + dist; a.z = r.court.z; }
+      return r;
+    };
+    // he can see the man from sixty metres: after the detours he halts him from there
+    const r = stuck('law-snag', 60, true);
+    const p = r.law.patrolFor(r.stranger.id)!;
+    r.zone.commands.length = 0;
+    r.run(5);
+    expect(r.law.patrolFor(r.stranger.id)!.phase).toBe('coming');
+    expect(r.zone.commands.filter((c) => c.order.kind === 'goto')).toHaveLength(0);
+    r.run(3);
+    // six seconds without getting anywhere: everyone is told to go to a point round the way (a canter or a jog), not to stand
+    const gotos = r.zone.commands.filter((c) => c.order.kind === 'goto');
+    expect(gotos.length).toBe(1 + p.men.length);
+    expect(gotos.every((c) => ['canter', 'jog'].includes((c.order as { gait?: string }).gait ?? ''))).toBe(true);
+    r.run(30);
+    const q = r.law.patrolFor(r.stranger.id)!;
+    expect(q.phase).toBe('halt');
+    expect(q.line).toMatch(/^Halt\./);
+    expect(r.zone.commands.filter((c) => c.order.kind === 'goto').length).toBe(3 * (1 + p.men.length));
+    // called out from afar, he is not "running away" because the leader is sixty metres off
+    r.run(12);
+    expect(r.law.patrolFor(r.stranger.id)!.phase).toBe('halt');
+    expect(r.law.patrolFor(r.stranger.id)!.line).toMatch(/^Halt\./);
+    // but walking well away from where he stood is flight
+    r.player.pos.x += 25;
+    r.run(6);
+    expect(r.law.patrolFor(r.stranger.id)!.phase).toBe('attack');
+
+    // out of sight, or too far to call: after the detours the riders give up, and nothing more is said
+    const hidden = stuck('law-snag2', 60, false);
+    hidden.run(45);
+    expect(hidden.law.patrolFor(hidden.stranger.id)).toBeNull();
+    const far = stuck('law-snag3', 120, true);
+    far.run(45);
+    expect(far.law.patrolFor(far.stranger.id)).toBeNull();
+    expect(far.zone.dismissedPeople.length).toBeGreaterThan(0);
+  });
+
   it('gives no choices when no patrol is there, and refuses answers to one that is not waiting', () => {
     const r = lawRig();
     expect(r.law.patrolFor(r.stranger.id)).toBeNull();

@@ -58,7 +58,17 @@ export function pickSquad(
     }
   }
   const candidates: Array<{ p: Person; from: number }> = [];
-  for (const pool of pools) for (const p of pool.people) if (fit(L, p, busy)) candidates.push({ p, from: pool.settlement });
+  // the lord has better things to do than ride after a poacher: he goes only when there is nobody else
+  const lordId = L.lordOf(settlement);
+  let lordHimself: { p: Person; from: number } | null = null;
+  for (const pool of pools) {
+    for (const p of pool.people) {
+      if (!fit(L, p, busy)) continue;
+      if (p.id === lordId && lordId !== 0) { lordHimself = { p, from: pool.settlement }; continue; }
+      candidates.push({ p, from: pool.settlement });
+    }
+  }
+  if (candidates.length === 0 && lordHimself) candidates.push(lordHimself);
   if (candidates.length === 0) return null;
 
   // leader: the witness if he is armed and fit, else the best of the lord's armed men, else an officer, else the strongest man

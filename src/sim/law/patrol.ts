@@ -64,6 +64,13 @@ export interface Patrol {
   home: P2;
   /** Seconds the leader waits for the answer, once warned. */
   impatient: boolean;
+  /** The ride in: where the leader stood when last looked at and when (patrol seconds), the detours ordered round a snag, and when the last ends. */
+  stallAt: P2 | null;
+  stallT: number;
+  detours: number;
+  detourUntil: number;
+  /** The halt was called from a distance (the leader could get no nearer): where the man stood, so that flight is measured from there. */
+  afar: P2 | null;
   /** Kind of captivity if taken, and whether blood was shed in the fight. */
   kind: CaptivityKind;
   bloodshed: boolean;
@@ -158,7 +165,8 @@ export class PatrolSystem {
       id: this.nextId++, target: target.id, settlement, house, lord, level: check.level, cause: check.cause, reason: check.reason,
       leader: squad.leader, men: squad.men, mounted: new Set(squad.mounted), phase: 'coming', t: 0, age: 0, line: '', deadline: Infinity,
       skipTalk, poaching, attackOnSight: !!opts.attackOnSight, triedBusiness: false, triedBribe: false, strayT: 0, warned: 0, fight: 0, exit: null,
-      physical: false, home: { x: opts.x, z: opts.z }, impatient: false, kind: 'trespass', bloodshed: false, marching: false, cell: null, goneT: 0, slowed: false, rev: 0,
+      physical: false, home: { x: opts.x, z: opts.z }, impatient: false, stallAt: null, stallT: 0, detours: 0, detourUntil: 0, afar: null,
+      kind: 'trespass', bloodshed: false, marching: false, cell: null, goneT: 0, slowed: false, rev: 0,
     };
     p.kind = this.kindOf(p, target);
     this.patrols.set(target.id, p);
@@ -264,6 +272,28 @@ export class PatrolSystem {
     }
   }
 
+  /** The ride in has stopped short: round by another bearing (three times), then call out from where he is if he can be seen, else give up. */
+  private detour(p: Patrol, lp: P2, body: P2, d: number): void {
+    const L = this.L;
+    const z = L.zone;
+    if (!z) return;
+    p.detours++;
+    if (p.detours > 3) {
+      const nav = z.nav as typeof z.nav & { lineClear?(x0: number, z0: number, x1: number, z1: number): boolean };
+      if (d <= 70 && nav.lineClear && nav.lineClear(lp.x, lp.z, body.x, body.z)) { this.halt(p); return; }
+      this.finish(p);
+      return;
+    }
+    // a point on the other side of the snag: the same ring about him, turned a little more each time
+    const ang = Math.atan2(lp.x - body.x, lp.z - body.z) + (p.detours % 2 === 1 ? 1 : -1) * Math.ceil(p.detours / 2) * 0.9;
+    const r = clamp(d * 0.8, 22, 60);
+    let x = body.x + Math.sin(ang) * r, zz = body.z + Math.cos(ang) * r;
+    const out = { x: 0, z: 0 };
+    if (!z.nav.walkable(x, zz) && z.nav.nearestWalkable(x, zz, 14, out)) { x = out.x; zz = out.z; }
+    for (const id of [p.leader, ...p.men]) z.command(id, { kind: 'goto', x, z: zz, run: false, gait: p.mounted.has(id) ? 'canter' : 'jog' });
+    p.detourUntil = p.t + 7;
+  }
+
   private say(p: Patrol, text: string, seconds = 6): void {
     p.line = text;
     p.rev++;
@@ -281,6 +311,11 @@ export class PatrolSystem {
 
   private haltLine(p: Patrol): string {
     const lord = this.lordWord(p);
+    // when the lord rides himself it is his own land he speaks of
+    const mine = p.level !== 'hostile' && p.leader === p.lord;
+    const lands = mine ? 'my lands' : `the lands of ${lord}`;
+    const park = mine ? 'my park' : `${lord}'s park`;
+    const closes = mine ? 'my closes' : `${lord}'s closes`;
     if (p.attackOnSight) return p.cause === 'outlaw' || p.kind === 'crime' ? 'There he is! Take him!' : 'I told you to keep off! Take him!';
     if (p.skipTalk) {
       if (p.cause === 'outlaw') return 'An outlaw! Yield, or we cut you down!';
@@ -288,12 +323,12 @@ export class PatrolSystem {
       return `Yield! You are on the lands of ${lord}, at war with you!`;
     }
     if (p.level === 'hostile') return `Halt. You are on the lands of ${lord}. State your business or be gone.`;
-    if (p.poaching) return `Poaching in ${lord}'s park! You'll answer for this.`;
+    if (p.poaching) return `Poaching in ${park}! You'll answer for this.`;
     switch (p.cause) {
-      case 'park': return `Halt! This is ${lord}'s park. What business have you here?`;
+      case 'park': return `Halt! This is ${park}. What business have you here?`;
       case 'castle': return `Halt. The castle is shut. State your business or be gone.`;
-      case 'demesne': return `Halt. These are ${lord}'s closes. State your business or be gone.`;
-      default: return `Halt. You are on the lands of ${lord}. State your business or be gone.`;
+      case 'demesne': return `Halt. These are ${closes}. State your business or be gone.`;
+      default: return `Halt. You are on ${lands}. State your business or be gone.`;
     }
   }
 
@@ -333,8 +368,19 @@ export class PatrolSystem {
         // a leader who cannot get there (stuck, or gone from the zone) is given up on after a while
         if (p.physical && p.t > 160 && !arrived) { this.finish(p); return; }
         if (p.physical && p.t > 1.5 && !lp) { this.finish(p); return; }
-        if (arrived) this.halt(p);
-        else if (p.physical && Math.floor(p.t * 2) !== Math.floor((p.t - dt) * 2) && p.t % 2 < dt) this.order(p);
+        if (arrived) { this.halt(p); break; }
+        // a leader who makes no headway (a pond's edge, a hedge, a gap too narrow for a horse) is sent round another way, and in the end calls out
+        // from where he is when he can see the man, or gives up
+        if (p.physical && lp && body && p.t >= p.detourUntil && d > 15) {
+          if (!p.stallAt) { p.stallAt = { x: lp.x, z: lp.z }; p.stallT = p.t; }
+          else if (p.t - p.stallT >= 6) {
+            // six seconds and he has gone less than a walking man would: he is held up
+            const moved = dist(lp.x, lp.z, p.stallAt.x, p.stallAt.z);
+            p.stallAt = { x: lp.x, z: lp.z }; p.stallT = p.t;
+            if (moved < 6) { this.detour(p, lp, body, d); if (!this.patrols.has(p.target) || p.phase !== 'coming') break; }
+          }
+        }
+        if (p.physical && p.t >= p.detourUntil && Math.floor(p.t * 2) !== Math.floor((p.t - dt) * 2) && p.t % 2 < dt) this.order(p);
         break;
       }
       case 'halt': this.stepHalt(p, me, dt, body); break;
@@ -360,6 +406,9 @@ export class PatrolSystem {
     const L = this.L;
     this.setPhase(p, 'halt');
     p.strayT = 0; p.warned = 0;
+    // called out from afar: flight is walking off from where he stood, not from a leader who cannot come nearer
+    const lp0 = this.leaderPos(p), b0 = L.player?.body();
+    p.afar = lp0 && b0 && dist(lp0.x, lp0.z, b0.x, b0.z) > LAW.haltStray ? { x: b0.x, z: b0.z } : null;
     this.say(p, this.haltLine(p), 9);
     this.order(p);
     // the standoff runs in action time, as a conversation does
@@ -385,8 +434,8 @@ export class PatrolSystem {
     // walking off from the halt is flight; so is running at the men
     const lp = this.leaderPos(p);
     if (body && lp && p.physical) {
-      const d = dist(lp.x, lp.z, body.x, body.z);
-      if (d > LAW.haltStray) {
+      const d = p.afar ? dist(p.afar.x, p.afar.z, body.x, body.z) : dist(lp.x, lp.z, body.x, body.z);
+      if (d > (p.afar ? 14 : LAW.haltStray)) {
         p.strayT += dt;
         if (p.warned === 0 && p.strayT > 1.2) { p.warned = 1; this.say(p, 'Stop! Stand where you are!', 4); this.order(p); }
         else if (p.warned >= 1 && p.strayT > 3.4) { this.attack(p, 'Run, would you? Take him!'); return; }

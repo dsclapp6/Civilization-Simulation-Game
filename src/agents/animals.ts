@@ -76,7 +76,9 @@ export function animalSignature(hh: Household): number {
   let sig = 0;
   for (const k in hh.stores) {
     // (a good of a quality tier is kept as "horse#2": the signature must see horses too, or a horse bought or sold shows only next day)
-    const i = k.search(/[#~]/);
+    let i = k.indexOf('~');
+    const j = k.indexOf('#');
+    if (j >= 0 && (i < 0 || j < i)) i = j;
     const good = i < 0 ? k : k.slice(0, i);
     if (!LIVESTOCK_GOODS.has(good)) continue;
     const n = hh.stores[k];

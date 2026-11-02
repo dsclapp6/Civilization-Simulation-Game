@@ -52,16 +52,22 @@ function lowerFirst(s: string): string { return s.length > 0 ? s.charAt(0).toLow
 export function plaque(i: PlaqueInput): Plaque | null {
   if (i.captive) {
     const days = i.captive.sentenceDays;
-    return i.captive.led || i.restraint?.kind === 'led'
-      ? { kind: 'bound', tone: 'vermilion', icon: 'lock', title: i.restraint?.reason ?? i.captive.text, sub: 'Your hands are bound. Keep up, or you are dragged.', action: 'Your options' }
-      : {
-        kind: 'held', tone: 'vermilion', icon: 'lock', title: `Held in ${i.captive.place ?? 'the lord\'s cell'}`,
-        sub: i.captive.danger ? 'The lord may hang you.'
-          : i.captive.war ? `Ransom asked: ${formatMoney(i.captive.ransom)}`
-            : i.captive.serving ? `Serving: ${days} ${days === 1 ? 'day' : 'days'} left`
-              : i.captive.fine > 0 ? `Fine owed: ${formatMoney(i.captive.fine)}` : 'Waiting on the lord\'s pleasure',
-        action: 'Your options',
-      };
+    if (i.captive.led || i.restraint?.kind === 'led') {
+      // "Bound and led to the manor's lock-up at Cyney for trespass in the lord's closes." → where on the first line, why on the second
+      const text = (i.restraint?.reason ?? i.captive.text).replace(/\.$/, '');
+      const at = text.indexOf(' for ');
+      const where = at > 0 ? text.slice(0, at) : text;
+      const why = at > 0 ? `${text.charAt(at + 5).toUpperCase()}${text.slice(at + 6)}. ` : '';
+      return { kind: 'bound', tone: 'vermilion', icon: 'lock', title: where, sub: `${why}Keep up, or you are dragged.`, action: 'Your options' };
+    }
+    return {
+      kind: 'held', tone: 'vermilion', icon: 'lock', title: `Held in ${i.captive.place ?? 'the lord\'s cell'}`,
+      sub: i.captive.danger ? 'The lord may hang you.'
+        : i.captive.war ? `Ransom asked: ${formatMoney(i.captive.ransom)}`
+          : i.captive.serving ? `Serving: ${days} ${days === 1 ? 'day' : 'days'} left`
+            : i.captive.fine > 0 ? `Fine owed: ${formatMoney(i.captive.fine)}` : 'Waiting on the lord\'s pleasure',
+      action: 'Your options',
+    };
   }
   if (i.restraint) return { kind: 'bound', tone: 'vermilion', icon: 'lock', title: i.restraint.reason, sub: 'You are bound.', action: null };
   const p = i.patrol;
@@ -81,7 +87,7 @@ export function plaque(i: PlaqueInput): Plaque | null {
 
 const STYLE_ID = 'mu-law-hud-style';
 const CSS = `
-.mu-hud > .mu-law-plaque { left: 50%; bottom: 150px; transform: translateX(-50%); max-width: 520px; min-width: 260px; padding: 8px 14px 9px; display: flex; align-items: center; gap: 12px; pointer-events: none; }
+.mu-hud > .mu-law-plaque { left: 50%; bottom: 172px; transform: translateX(-50%); max-width: 520px; min-width: 260px; padding: 8px 14px 9px; display: flex; align-items: center; gap: 12px; pointer-events: none; }
 .mu-law-plaque.mu-hide { display: none; }
 .mu-law-plaque .mu-law-ico { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: rgba(26, 17, 9, 0.92); color: #f2c14e; box-shadow: 0 0 0 1px rgba(255, 244, 205, 0.55); }
 .mu-law-plaque.vermilion .mu-law-ico { color: #ff8f7c; animation: mu-throb 1.6s ease-in-out infinite; }

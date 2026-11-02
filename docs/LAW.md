@@ -40,7 +40,8 @@ owning settlement (or of the House that holds the land) who is in the zone, grow
 * **Who**: a leader — the armed witness if fit, else the best of the lord's armed men (knight, sergeant, man-at-arms, soldier, archer,
   squire), else an officer (sheriff, bailiff, reeve, steward, marshal), else the strongest man — and **1–3 men** (one more on hostile
   land), from the settlement; where it keeps fewer than two soldiers, from the nearest places of the same House (4.5 km). Fit means a
-  free adult man, 17–58, hp ≥ 0.5, not in a fight. **Mounted** as many as the leader's or the lord's household keeps horses
+  free adult man, 17–58, hp ≥ 0.5, not in a fight. The lord himself does not ride after a trespasser while anyone else is fit; when he
+  must, the halt is *"Halt. These are my closes."*. **Mounted** as many as the leader's or the lord's household keeps horses
   (`economy.holding(...).livestock.horse`). They carry spear and heater shield, or lance when mounted or a knight, a torch at night.
 * **Coming**: they are summoned into the zone at the **edge of sight** (168 m from the player, just inside the zone's no-warp radius of
   190 m, along the way from the lord's hall; the leader where he stands if he was the witness) and ordered to `approach` the player: riders

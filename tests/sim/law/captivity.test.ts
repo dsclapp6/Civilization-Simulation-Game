@@ -203,6 +203,17 @@ describe('in the cell', () => {
     return r;
   }
 
+  it('a prisoner is fed: bread and water keep him from starving however long he is held', () => {
+    const r = held({ money: 0 });
+    r.stranger.needs.hunger = 0.02;
+    // (the ration is given at dawn; through the day the hunger falls again, but never to the point of famine)
+    for (let d = 0; d < 5; d++) {
+      r.sim.advanceDays(1);
+      expect(r.stranger.needs.hunger, `day ${d}`).toBeGreaterThan(0.1);
+      expect(r.stranger.death).toBeNull();
+    }
+  });
+
   it('offers waiting for the family, paying the fine, serving the sentence and — at night — escaping', () => {
     const r = held({ money: 50 });
     r.sim.state.clock.absDay = Math.floor(r.sim.absDay) + 0.5;

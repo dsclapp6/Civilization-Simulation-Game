@@ -483,6 +483,8 @@ export function dailyCaptives(L: Law): void {
     const p = L.person(rec.person);
     if (!p || p.death) { L.store.remove(rec); L.store.touch(); continue; }
     if (rec.led) continue;
+    // bread and water: nobody starves in the lord's keeping
+    if (p.needs.hunger < 0.35) { p.needs.hunger = 0.35; L.state.touch(p); }
     const held = Math.floor(L.day) - Math.floor(rec.since);
     // the lord's justice, after the warning
     // (a night must pass after the warning: the days are counted by the calendar)
