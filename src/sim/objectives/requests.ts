@@ -19,10 +19,11 @@ function stepsFor(O: Obj, r: RequestView): SpecStep[] {
   const place = O.settlementById.get(r.settlement);
   const vars = { from: fromName, place: place?.name ?? 'the village' };
   const t = (k: string, extra: Record<string, string | number> = {}): string => T('text', k, { ...vars, ...extra });
-  const step = (text: string, hint: string, m: SpecStep['m'], target = fromTarget, goal?: number): SpecStep => {
+  const step = (text: string, hint: string, m: SpecStep['m'], target = fromTarget, goal?: number, turnin = false): SpecStep => {
     const s: SpecStep = { text, hint, m };
     if (target) s.target = target;
     if (goal !== undefined) { s.goal = goal; s.progress = 0; }
+    if (turnin) s.turnin = true;
     return s;
   };
   if (r.state === 'offered') return [step(t('req.hear'), t('req.hear.hint'), { k: 'req', id: r.id, at: 'accepted' })];
@@ -35,7 +36,7 @@ function stepsFor(O: Obj, r: RequestView): SpecStep[] {
       const pack = O.me ? Math.floor((O.me.inventory[good] ?? 0) * 10) / 10 : 0;
       return [
         step(t('req.fetch.have', { what, have: pack }), t('req.fetch.have.hint'), { k: 'have', good, qty }, undefined, qty),
-        step(t('req.fetch.give'), t('req.fetch.give.hint'), { k: 'req', id: r.id, at: 'done' }),
+        step(t('req.fetch.give'), t('req.fetch.give.hint'), { k: 'req', id: r.id, at: 'done' }, undefined, undefined, true),
       ];
     }
     case 'loan':
@@ -46,7 +47,7 @@ function stepsFor(O: Obj, r: RequestView): SpecStep[] {
       const to = d.target ? O.state.persons.get(d.target) : undefined;
       const dest = d.place !== undefined ? O.settlementById.get(d.place) : undefined;
       const text = t('req.message.go', { to: to ? to.first : 'the recipient', place: dest?.name ?? 'the next village' });
-      return [step(text, t('req.message.hint', { to: to ? to.first : 'them', place: dest?.name ?? 'there' }), { k: 'req', id: r.id, at: 'done' }, to ? personTarget(O, to) : dest ? settlementTarget(O, dest) : undefined)];
+      return [step(text, t('req.message.hint', { to: to ? to.first : 'them', place: dest?.name ?? 'there' }), { k: 'req', id: r.id, at: 'done' }, to ? personTarget(O, to) : dest ? settlementTarget(O, dest) : undefined, undefined, !!to)];
     }
     case 'lost_animal': {
       const x = d.x ?? 0, z = d.z ?? 0;
@@ -128,6 +129,7 @@ function refreshSteps(O: Obj, o: ObjRec, r: RequestView): void {
     const st: StepRec = { text: s.text, done: false, m: s.m };
     if (s.hint) st.hint = s.hint;
     if (s.target) st.target = s.target;
+    if (s.turnin) st.turnin = true;
     if (s.goal !== undefined) { st.goal = s.goal; st.progress = s.progress ?? 0; }
     return st;
   });

@@ -29,7 +29,7 @@ import { suggest } from './suggest';
 import { makeJobs } from './work';
 import type { Objective, ObjectivesApi, ObjectiveTarget } from './types';
 
-export type { ObjectivesApi, Objective, ObjectiveStep, ObjectiveTarget, Suggestion, DaySummary, ObjectiveSource } from './types';
+export type { ObjectivesApi, Objective, ObjectiveStep, ObjectiveTarget, Suggestion, DaySummary, ObjectiveSource, QuestMark } from './types';
 
 /** The API plus the runtime, for tools, tests and the dev pages. */
 export interface ObjectivesRuntime extends ObjectivesApi {
@@ -215,6 +215,7 @@ export function installObjectives(sim: Simulation, deps: Wave3Deps): ObjectivesR
     trackPerson: (person) => { O.save.foundPerson = person > 0 ? person : 0; O.touch(); markers.invalidate(); follow(); },
     trackPlace: (target: ObjectiveTarget | null) => { O.save.foundPlace = target ? { ...target } : null; O.touch(); follow(); },
     found: () => ({ person: O.save.foundPerson, place: O.save.foundPlace }),
+    marks: () => markers.marks(),
     places: () => { const me = O.me; return me ? notablePlaces(O, me) : []; },
     version: () => O.version,
     intro: () => introText(O),

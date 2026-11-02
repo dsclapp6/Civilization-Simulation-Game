@@ -20,7 +20,7 @@ export interface Plate {
   sub: string;
   tone: LabelTone;
   range: number;
-  mark: 'quest' | 'track' | undefined;
+  mark: 'quest' | 'turnin' | 'track' | undefined;
 }
 
 export interface PlateContext {
@@ -101,7 +101,7 @@ function apprenticeOf(c: PlateContext, p: Person): string {
 }
 
 /** Builds the plate of `p` as the player (`viewer`) sees them. */
-export function makePlate(c: PlateContext, viewer: Person | null, p: Person, quest: boolean, tracked: boolean): Plate {
+export function makePlate(c: PlateContext, viewer: Person | null, p: Person, quest: boolean | 'quest' | 'turnin', tracked: boolean): Plate {
   const name = fullName(p);
   const office = officeLine(c, p);
   const job = trade(p);
@@ -139,7 +139,8 @@ export function makePlate(c: PlateContext, viewer: Person | null, p: Person, que
   }
 
   const warm = tone === 'kin' || tone === 'household';
-  const mark: Plate['mark'] = quest ? 'quest' : tracked ? 'track' : undefined;
+  // a task ready to hand in to them ("?") outranks one they have for the player ("!"), which outranks being looked for
+  const mark: Plate['mark'] = quest === 'turnin' ? 'turnin' : quest ? 'quest' : tracked ? 'track' : undefined;
   const range = warm || mark ? PLATE_RANGE_NEAR : tone === 'rival' || tone === 'enemy' ? PLATE_RANGE_WARY : PLATE_RANGE_FAR;
   return { name, sub, tone, range, mark };
 }

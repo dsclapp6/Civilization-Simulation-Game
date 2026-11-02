@@ -74,6 +74,56 @@ describe('nameplates', () => {
     expect(a.draw.mark).toBeUndefined();
   });
 
+  it('carries the quest marks of the objectives: "!" for a task they have, "?" for one that can be handed in to them', () => {
+    const { zone } = rig;
+    const [a, b, c] = zone.agentsArr.filter((x) => !x.person.death && x.draw.mark === undefined);
+    expect(c).toBeTruthy();
+    zone.setQuestMarks?.([{ person: a.personId, kind: 'quest' }, { person: b.personId, kind: 'turnin' }]);
+    expect(a.draw.mark).toBe('quest');
+    expect(b.draw.mark).toBe('turnin');
+    expect(b.draw.labelRange).toBe(PLATE_RANGE_NEAR);
+    expect(c.draw.mark).toBeUndefined();
+    // the new set replaces the old one; a hand-in outranks a task, and both outrank being looked for
+    zone.setTrackedPerson?.(b.personId);
+    zone.setQuestMarks?.([{ person: b.personId, kind: 'quest' }, { person: b.personId, kind: 'turnin' }, { person: c.personId, kind: 'turnin' }]);
+    expect(a.draw.mark).toBeUndefined();
+    expect(b.draw.mark).toBe('turnin');
+    expect(c.draw.mark).toBe('turnin');
+    zone.setQuestMarks?.([]);
+    expect(b.draw.mark).toBe('track');
+    zone.setTrackedPerson?.(0);
+    expect(b.draw.mark).toBeUndefined();
+    // the older call sets "!" marks only and replaces the "?" ones
+    zone.setQuestMarks?.([{ person: a.personId, kind: 'turnin' }]);
+    zone.setQuestGivers?.([b.personId]);
+    expect(a.draw.mark).toBeUndefined();
+    expect(b.draw.mark).toBe('quest');
+    zone.setQuestGivers?.([]);
+  });
+
+  it('tells the compass and the minimap who is marked and where: in the zone where they stand, otherwise by their schedule', () => {
+    const { zone, sim } = rig;
+    const a = zone.agentsArr.find((x) => !x.person.death && x.draw.mark === undefined)!;
+    // someone indoors now (asleep, at table): not an agent, but the schedule knows where
+    const indoor = [...sim.state.residentsOf(vil.id)].find((p) => !p.death && !zone.agent(p.id) && zone.whereabouts(p.id).indoors);
+    expect(indoor).toBeTruthy();
+    zone.setQuestMarks?.([{ person: a.personId, kind: 'turnin' }, { person: indoor!.id, kind: 'quest' }]);
+    const list = zone.markedPeople!();
+    expect(list.length).toBe(2);
+    const ma = list.find((m) => m.person === a.personId)!;
+    expect(ma).toMatchObject({ kind: 'turnin', inZone: true, indoors: false });
+    expect(Math.hypot(ma.x - a.x, ma.z - a.z)).toBeLessThan(0.01);
+    const mi = list.find((m) => m.person === indoor!.id)!;
+    const w = zone.whereabouts(indoor!.id);
+    expect(mi).toMatchObject({ kind: 'quest', inZone: false, indoors: true });
+    expect([mi.x, mi.z]).toEqual([w.x, w.z]);
+    // the same array within a step, a fresh look in the next
+    expect(zone.markedPeople!()).toBe(list);
+    zone.setQuestMarks?.([]);
+    run(sim, 0.2);
+    expect(zone.markedPeople!().length).toBe(0);
+  });
+
   it('a spoken line replaces the plate while it lasts and the plate comes back after', () => {
     const { zone, sim } = rig;
     const a = zone.agentsArr[0];

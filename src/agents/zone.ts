@@ -25,7 +25,7 @@ import { SiteWork } from './sites';
 import { newIntent, Schedule, type Intent } from './schedule';
 import { propsFor } from './props';
 import type {
-  Activity, AgentOrder, InteractCandidate, MoveResult, Whereabouts, ZoneAgent, ZoneAnimal,
+  Activity, AgentOrder, InteractCandidate, MarkedPerson, MoveResult, Whereabouts, ZoneAgent, ZoneAnimal,
 } from './types';
 import { MAX_AGENTS } from './types';
 
@@ -95,8 +95,12 @@ export class Zone {
   /** Set when time jumped (skip, load, switch) so the next step re-places everyone. */
   needResync = true;
   private modeOff = false;
-  /** Nameplates: givers of tasks set from outside, the tracked person, and the folk of open requests (refreshed about once a second). */
+  /**
+   * Nameplates: the marks set from outside (givers of tasks, "!"; people a task can be handed in to, "?"), the tracked person, and the
+   * folk of open requests (refreshed about once a second).
+   */
   private questHook: ReadonlySet<PersonId> = new Set();
+  private turninHook: ReadonlySet<PersonId> = new Set();
   private questFolk: ReadonlySet<PersonId> = new Set();
   private trackedId: PersonId = 0;
   private plateCtx: PlateContext;
@@ -392,12 +396,16 @@ export class Zone {
   // nameplates (plates.ts)
   // ---------------------------------------------------------------------------------------------
 
-  private isQuestGiver(id: PersonId): boolean { return this.questHook.has(id) || this.questFolk.has(id); }
+  /** The quest mark over a person: "?" when something can be handed in to them, "!" when they have a task for the player. */
+  private questMark(id: PersonId): 'quest' | 'turnin' | undefined {
+    if (this.turninHook.has(id)) return 'turnin';
+    return this.questHook.has(id) || this.questFolk.has(id) ? 'quest' : undefined;
+  }
 
   /** Works out the plate of an agent (who they are to the player) and puts it on the draw item unless they are speaking. */
   refreshPlate(a: Agent): void {
     const viewer = this.state.persons.get(this.state.run.playerId) ?? null;
-    a.plate = makePlate(this.plateCtx, viewer, a.person, this.isQuestGiver(a.personId), a.personId === this.trackedId);
+    a.plate = makePlate(this.plateCtx, viewer, a.person, this.questMark(a.personId) ?? false, a.personId === this.trackedId);
     if (a.speech === null) this.showPlate(a);
   }
 
@@ -431,7 +439,7 @@ export class Zone {
   private refreshMarks(): void {
     for (const a of this.agentsArr) {
       if (a.dead || !a.plate) continue;
-      const mark = this.isQuestGiver(a.personId) ? 'quest' : a.personId === this.trackedId ? 'track' : undefined;
+      const mark = this.questMark(a.personId) ?? (a.personId === this.trackedId ? 'track' : undefined);
       if (mark === a.plate.mark) continue;
       this.refreshPlate(a);
     }
@@ -439,7 +447,50 @@ export class Zone {
 
   setQuestGivers(ids: readonly PersonId[]): void {
     this.questHook = new Set(ids);
+    this.turninHook = new Set();
     this.refreshMarks();
+  }
+
+  /** The full set of quest marks (docs/CIV.md §1): replaces the previous marks, both kinds. */
+  setQuestMarks(marks: ReadonlyArray<{ person: PersonId; kind: 'quest' | 'turnin' }>): void {
+    const quest = new Set<PersonId>(), turnin = new Set<PersonId>();
+    for (const m of marks) (m.kind === 'turnin' ? turnin : quest).add(m.person);
+    this.questHook = quest;
+    this.turninHook = turnin;
+    this.refreshMarks();
+  }
+
+  private readonly marked: MarkedPerson[] = [];
+  private markedStep = -1;
+
+  /**
+   * The people with a quest mark and where they are, for the compass and the minimap: agents in the zone where they stand, everyone
+   * else where their schedule has them (inside a building, or beyond the zone). Reused between calls within a step.
+   */
+  markedPeople(): ReadonlyArray<MarkedPerson> {
+    if (this.markedStep === this.stepCount) return this.marked;
+    this.markedStep = this.stepCount;
+    const out = this.marked;
+    let n = 0;
+    const put = (person: PersonId, kind: 'quest' | 'turnin'): void => {
+      const p = this.state.persons.get(person);
+      if (!p || p.death) return;
+      const a = this.byPerson.get(person);
+      let m = out[n];
+      if (!m) { m = { person, kind, x: 0, z: 0, inZone: false, indoors: false }; out[n] = m; }
+      m.person = person; m.kind = kind;
+      if (a && !a.dead) { m.x = a.x; m.z = a.z; m.inZone = true; m.indoors = false; }
+      else {
+        const w = this.sched.whereabouts(p, this.sim.absDay);
+        m.x = w.x; m.z = w.z; m.inZone = false; m.indoors = w.indoors;
+      }
+      n++;
+    };
+    for (const id of this.turninHook) put(id, 'turnin');
+    for (const id of this.questHook) if (!this.turninHook.has(id)) put(id, 'quest');
+    for (const id of this.questFolk) if (!this.turninHook.has(id) && !this.questHook.has(id)) put(id, 'quest');
+    out.length = n;
+    return out;
   }
 
   setTrackedPerson(id: PersonId): void {

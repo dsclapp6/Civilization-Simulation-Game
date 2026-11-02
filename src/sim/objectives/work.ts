@@ -122,7 +122,7 @@ function dutyFor(O: Obj, me: Person, emp: Employment): NewObjective | null {
   if (employer) {
     return {
       ...base, title: T('chores', 'job.title.report', vars), why: why(),
-      steps: [{ text: T('chores', 'job.report.text', vars), hint: T('chores', 'job.report.hint', vars), target: personTarget(O, employer, describePerson(O, employer)), m: { k: 'talk', who: employer.id } }],
+      steps: [{ text: T('chores', 'job.report.text', vars), hint: T('chores', 'job.report.hint', vars), target: personTarget(O, employer, describePerson(O, employer)), m: { k: 'talk', who: employer.id }, turnin: true }],
     };
   }
   return null;

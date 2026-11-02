@@ -71,6 +71,17 @@ export interface DaySummary {
   tomorrow: string[];
 }
 
+/** A person with a mark over their head (docs/CIV.md §1) and what it is about, for the compass, the minimap and the hover card. */
+export interface QuestMark {
+  person: PersonId;
+  /** 'quest' ("!"): they have something for the player; 'turnin' ("?"): the player has a task ready to hand in to them. */
+  kind: 'quest' | 'turnin';
+  /** "Maire wants 7 bundles of firewood", "Hand the firewood to Maire". */
+  text: string;
+  /** The objective it belongs to. */
+  objective: number;
+}
+
 export interface ObjectivesApi {
   /** Active (and recently finished) objectives of the player, tracked first. */
   list(): readonly Objective[];
@@ -92,6 +103,8 @@ export interface ObjectivesApi {
   places?(): ObjectiveTarget[];
   /** A number that changes whenever the objectives (or their progress) change: cheap change detection for the HUD and the journal. */
   version?(): number;
+  /** The people who have something for the player ("!") or can be handed a finished task ("?"), and why. */
+  marks?(): readonly QuestMark[];
   /** The scene-setting line for the first minutes: "Spring. You wake in your father's cottage in Dromore; the barley must go in." */
   intro?(): string;
 }
