@@ -73,7 +73,9 @@ toward the nearest street, and returns the first valid check, or null.
 ## 4. A site's life (`sites.ts`, `progress.ts`)
 
 `place` checks, then creates a **real `BuildingState`** — `plot −1`, an id from `state.nextBuildingId` (so beyond every plot id),
-`construction 0`, `owner` the paying House, no household yet — registers it in `state.buildings` and `buildingsAt`, marks it dirty
+`construction 0`, `owner` the paying House, no household yet (a *home* is held in the payer's name while it is built, because
+`succession.pickHome` and the economy's listings take any home whose `household` is 0, whatever its `construction`; the module
+lets it go when the work is done) — registers it in `state.buildings` and `buildingsAt`, marks it dirty
 (`touchBuilding`: the view, the renderer, the navigation and the saver all see it) and clears the trees and stones where it
 stands (`view.markFelled`). A site record (`SiteRec`) holds the job: materials needed / delivered / on the way, worker-days needed
 and done, cash fees, the payer, the queue priority and today's crew. `upgrade` (next level), `repair` (a share of the cost by the
@@ -133,11 +135,19 @@ for three days (so `site(id)` can say `done`). Events (`construction`): `placed`
 `done`, `cancelled`, with the site, building, settlement, kind, work and House; the player is told with `notify` about their own.
 Notable finished works also go to the chronicle.
 
+## 5b. Seen in the running game
+
+With the real renderer, the real economy and agents and a stand-in territory, a lord's cottage, barn and chapel staked out in a
+town rose from footings to walls to the roof frame (the stone chapel with scaffolding) over four to six game days and stood
+finished, with no browser errors; the walking agents, the view and the saver took the new buildings as they are. (The renderer's
+construction stages are keyed to `BuildingView.construction`, which the module writes in steps of 1/40.)
+
 ## 6. Budgets (measured, shared machine)
 
 `check` 25–55 µs (real generated continent, 10 kinds, territory call excluded; budget 0.2 ms). Hourly work with 50 open sites:
-0.04–0.15 ms per game hour on average, the morning plan 1–6 ms in four shards (budget 0.5 ms per hour). A placement with
-`suggestSpot`: 1–15 ms. `tests/sim/construction/construction.perf.test.ts` (`PERF=1`).
+0.04–0.15 ms per game hour on average, the morning plan 1–6 ms in four shards (budget 0.5 ms per hour). Ten years of the whole continent (`tools/fullsim.ts`
+with a planner placing ~660 works) cost 4.77 ms per game hour against 4.75 without the module; population, prosperity and the
+other yearly figures stayed as they were. A placement with `suggestSpot`: 1–15 ms. `tests/sim/construction/construction.perf.test.ts` (`PERF=1`).
 
 ## 7. Contract changes (all additive)
 
@@ -151,6 +161,9 @@ not implement them).
 * **Territory (A1):** the module asks `landAt` at a footprint's centre and corners (kind, settlement, `title`, `household` of a
   garden or town plot), `depositAt(x, z, kind)`, and reads `version()`; it reads `construction.outposts()` (now with `house`).
   Own-land building needs `landAt(...).household` set for gardens/town plots and kind `garden` or `town`.
+* **Core sim (not the module's to edit; for the integrator):** `succession.pickHome` and `family.HomeAllocator` choose "an empty
+  home" by `!b.household` without looking at `b.construction`; the module works round it for homes it builds (above). They should
+  skip `construction < 1` buildings too, so that nothing else — a burnt-out family, a castellan — is put in a half-built house.
 * **Economy (A4):** the module calls `procure?` and `householdPlan` and reads goods from `Household.stores` by plain key. Please
   (a) treat a member on `'build'` as spending the day on the household's site (the module counts them — `onSite(person)` says
   where they are), (b) refresh caches on the `construction` `done` event, (c) give vacant new homes/workshops the usual listings

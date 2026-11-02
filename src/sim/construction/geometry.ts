@@ -153,8 +153,6 @@ export class Spatial {
   private readonly rivers = new CellGrid<LineEntry>(96);
   private readonly byId = new Map<number, BEntry>();
   private staticBuilt = false;
-  /** Largest half-diagonal of any footprint (so a query box can be grown to catch neighbours). */
-  private readonly maxReach = 36;
 
   constructor(private readonly world: WorldModel, private readonly state: GameState) {}
 
@@ -211,8 +209,7 @@ export class Spatial {
   buildingHit(poly: readonly P2[], cx: number, cz: number, reach: number, margin: (e: BEntry) => number, ignore?: number): BuildingState | null {
     this.syncBuildings();
     let hit: BuildingState | null = null;
-    const q = reach + this.maxReach * 0.0;
-    this.buildings.query(cx - q, cz - q, cx + q, cz + q, (e) => {
+    this.buildings.query(cx - reach, cz - reach, cx + reach, cz + reach, (e) => {
       if (e.b.id === ignore) return false;
       const m = margin(e);
       const dx = e.b.x - cx, dz = e.b.z - cz;
