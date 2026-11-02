@@ -27,9 +27,22 @@ const GARDEN_SEASON = [0.6, 1, 0.7, 0.05] as const;
 const MISC = [0, 0.03, 0.05, 0.14, 0.5, 1.6, 4, 8, 15] as const;
 const PERISHABLE: ReadonlyArray<readonly [string, number]> = [
   ['vegetables', 12], ['bread', 5], ['ale', 24], ['eggs', 10], ['meat', 6], ['fish', 4], ['cheese', 90],
-  // a carcass hung in the larder keeps a couple of days (joint it, and salt the meat), whatever its tier
-  ...Object.values(BEASTS).flatMap((b) => (b.carcass ? [0, 1, 2, 3, 4].map((q) => [`${b.carcass}#${q}`, 2.5] as const) : [])),
 ];
+
+/** A carcass hung in the larder keeps a couple of days (joint it, and salt the meat); then it is rotten, whatever its tier. */
+function rotCarcasses(E: Econ, st: Record<string, number>): void {
+  for (const b of Object.values(BEASTS)) {
+    if (!b.carcass) continue;
+    for (let q = 0; q <= 4; q++) {
+      const key: string = `${b.carcass}#${q}`;
+      if (!(st[key] > 0)) continue;
+      const mark = `~h:${key}`;
+      const hung = st[mark];
+      if (hung === undefined) { st[mark] = Math.round(E.day * 100) / 100; continue; }
+      if (E.day - hung >= (GOODS[b.carcass].spoilDays ?? 3)) { delete st[key]; delete st[mark]; }
+    }
+  }
+}
 
 /** Number of holy days in the `dt` days up to and including `day` (the fourth day of every season is holy). */
 function holyDaysIn(day: number, dt: number): number {
@@ -136,6 +149,7 @@ function householdDay(
   }
 
   // ---- decay, income and spending ----
+  rotCarcasses(E, st);
   for (const [g, days] of PERISHABLE) {
     const v = st[g];
     if (v) { const nv = v * Math.exp(-dt / days); if (nv < 0.02) delete st[g]; else st[g] = Math.round(nv * 100) / 100; }

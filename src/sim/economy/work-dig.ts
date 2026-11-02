@@ -38,15 +38,17 @@ interface DigSpec {
   heavy: number;
   /** Words for the preview: what is dug and the skill. */
   skillName: string;
+  /** Bouts of work one action stands for (a log takes longer to fell than a basket of ore to fill). */
+  bouts: number;
 }
 
 const SPECS: Record<DigWhat, DigSpec> = {
-  stone: { id: 'dig.stone', label: 'Quarry stone', good: 'stone', per: 1.6, tool: 'pick', skill: 'mining', plan: 'dig_stone', anim: 'work_pick', held: 'pick', carry: 'stone', noun: 'blocks of stone', heavy: 1, skillName: 'Masonry and Mining' },
-  iron: { id: 'dig.ore', label: 'Mine iron ore', good: 'iron_ore', per: 1.2, tool: 'pick', skill: 'mining', plan: 'dig_ore', anim: 'work_pick', held: 'pick', carry: 'none', noun: 'baskets of iron ore', heavy: 1, skillName: 'Mining' },
-  silver: { id: 'dig.silver', label: 'Mine silver ore', good: 'silver_ore', per: 0.06, tool: 'pick', skill: 'mining', plan: 'dig_ore', anim: 'work_pick', held: 'pick', carry: 'none', noun: 'baskets of silver ore', heavy: 1, skillName: 'Mining' },
-  gold: { id: 'dig.gold', label: 'Mine gold ore', good: 'gold_ore', per: 0.012, tool: 'pick', skill: 'mining', plan: 'dig_ore', anim: 'work_pick', held: 'pick', carry: 'none', noun: 'pouches of gold ore', heavy: 1, skillName: 'Mining' },
-  clay: { id: 'dig.clay', label: 'Dig clay', good: 'clay', per: 3, tool: 'spade', skill: 'mining', plan: 'dig_clay', anim: 'work_dig', held: 'spade', carry: 'none', noun: 'loads of clay', heavy: 0.8, skillName: 'Mining' },
-  timber: { id: 'dig.timber', label: 'Fell timber', good: 'timber', per: 0.5, tool: 'axe', skill: 'woodcutting', plan: 'dig_timber', anim: 'work_axe', held: 'axe', carry: 'bundle_wood', noun: 'logs', heavy: 1, skillName: 'Woodcutting' },
+  stone: { id: 'dig.stone', label: 'Quarry stone', good: 'stone', per: 1.6, tool: 'pick', skill: 'mining', plan: 'dig_stone', anim: 'work_pick', held: 'pick', carry: 'stone', noun: 'blocks of stone', heavy: 1, skillName: 'Masonry and Mining', bouts: 1 },
+  iron: { id: 'dig.ore', label: 'Mine iron ore', good: 'iron_ore', per: 1.2, tool: 'pick', skill: 'mining', plan: 'dig_ore', anim: 'work_pick', held: 'pick', carry: 'none', noun: 'baskets of iron ore', heavy: 1, skillName: 'Mining', bouts: 1 },
+  silver: { id: 'dig.silver', label: 'Mine silver ore', good: 'silver_ore', per: 0.06, tool: 'pick', skill: 'mining', plan: 'dig_ore', anim: 'work_pick', held: 'pick', carry: 'none', noun: 'baskets of silver ore', heavy: 1, skillName: 'Mining', bouts: 1 },
+  gold: { id: 'dig.gold', label: 'Mine gold ore', good: 'gold_ore', per: 0.012, tool: 'pick', skill: 'mining', plan: 'dig_ore', anim: 'work_pick', held: 'pick', carry: 'none', noun: 'pouches of gold ore', heavy: 1, skillName: 'Mining', bouts: 1 },
+  clay: { id: 'dig.clay', label: 'Dig clay', good: 'clay', per: 3, tool: 'spade', skill: 'mining', plan: 'dig_clay', anim: 'work_dig', held: 'spade', carry: 'none', noun: 'loads of clay', heavy: 0.8, skillName: 'Mining', bouts: 1 },
+  timber: { id: 'dig.timber', label: 'Fell timber', good: 'timber', per: 0.8, tool: 'axe', skill: 'woodcutting', plan: 'dig_timber', anim: 'work_axe', held: 'axe', carry: 'bundle_wood', noun: 'logs', heavy: 1, skillName: 'Woodcutting', bouts: 3 },
 };
 
 /** Works of the land: building kind → what it digs (the mine by its deposit). */
@@ -86,7 +88,7 @@ export function digTerms(E: Econ, p: Person, b: BuildingState): Terms {
 export function digYield(E: Econ, p: Person, b: BuildingState, what: DigWhat, richness: number): number {
   const spec = SPECS[what];
   const lvl = skillLevel(p.skills[spec.skill]);
-  const base = what === 'timber' ? 0.5 + 0.6 * richness : spec.per * richnessFactor(richness);
+  const base = what === 'timber' ? spec.per + 0.5 * richness : spec.per * richnessFactor(richness);
   return base * (1 + 0.04 * lvl) * (1 + perkSum(p, spec.skill, 'yield'));
 }
 
@@ -104,8 +106,8 @@ export function listDig(E: Econ, p: Person, b: BuildingState, out: ActionOption[
   const per = digYield(E, p, b, site.what, site.richness);
   const share = terms.mode === 'lord' ? 'a fifth goes to the lord' : terms.mode === 'hired' ? 'paid by the day, the product is your master\'s' : 'yours';
   const o = option({
-    id: spec.id, label: spec.label, seconds: secondsFor(1, speed), anim: spec.anim, mainHand: spec.held, carry: spec.carry,
-    preview: `About ${per < 1 ? round2(per) : Math.round(per * 10) / 10} ${spec.noun} a bout · ${share} · ${spec.skillName}`,
+    id: spec.id, label: spec.label, seconds: secondsFor(spec.bouts, speed), anim: spec.anim, mainHand: spec.held, carry: spec.carry,
+    preview: `About ${per < 1 ? round2(per) : Math.round(per * 10) / 10} ${spec.noun} ${spec.bouts > 1 ? 'a log' : 'a bout'} · ${share} · ${spec.skillName}`,
     priority: 40, steps: stepsOfPlan(spec.plan), ...base, data: { act: 'dig', building: b.id, what: site.what } as DigData,
   });
   const block = holyDayBlock(E) ?? incapable(p);
@@ -144,15 +146,15 @@ export function digBout(E: Econ, p: Person, d: DigData): ActionOutcome {
     kept = 0;
   } else if (kept > 0) giveOutput(E, p, spec.good, kept);
   if (site.what === 'timber') {
-    const wood = Math.max(1, stoch(E, 1.4));
+    const wood = Math.max(2, stoch(E, 4));
     if (terms.mode === 'hired' && terms.keeper) { bagAdd(terms.keeper.stores, 'firewood', wood); E.state.touchHousehold(terms.keeper); }
     else giveOutput(E, p, 'firewood', wood);
     if (terms.mode !== 'hired') gains.push({ label: 'Firewood', amount: wood, ref: 'firewood' });
   }
   if (site.what === 'stone') { const was = E.notes.dug.get(b.id); E.notes.dug.set(b.id, { blocks: (was && E.day - was.day < 2 ? was.blocks : 0) + n, day: E.day }); E.notes.rev++; }
-  boutDone(E, p, { skill: spec.skill, xp: 8, heavy: spec.heavy, bouts: 1 });
+  boutDone(E, p, { skill: spec.skill, xp: 8, heavy: spec.heavy, bouts: spec.bouts });
   if (site.what === 'stone') giveXp(E, p, 'masonry', 3, 1);
-  wearOut(E, p, tool, 0.025, spec.skill);
+  wearOut(E, p, tool, 0.025 * spec.bouts, spec.skill);
   // the dark has its dangers for the careless
   if (b.kind === 'mine' && lvl < 4 && E.rng('mine').next() < 0.012) {
     p.health.hp = Math.max(0.1, p.health.hp - 0.12);

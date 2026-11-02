@@ -47,13 +47,27 @@ export function carcassesHeld(E: Econ, p: Person, good: string): Array<{ key: st
   return out;
 }
 
+/** The marker in a larder of the day a carcass was hung there (bookkeeping, not a good): macro.ts lets it rot after its days. */
+export const hungKey = (key: string): string => `~h:${key}`;
+
+/** Hangs a fresh carcass in the household's larder. */
+function hang(E: Econ, hh: Household, key: string): void {
+  if (bagGet(hh.stores, key) < 0.99) hh.stores[hungKey(key)] = Math.round(E.day * 100) / 100;
+  bagAdd(hh.stores, key, 1);
+  E.state.touchHousehold(hh);
+}
+
 /** Takes the best carcass of a species out of the pack or the larder; its tier, or null. */
 function takeCarcass(E: Econ, p: Person, good: string): Quality | null {
   const best = carcassesHeld(E, p, good)[0];
   if (!best) return null;
   const hh = E.hhOf(p);
   if (bagGet(p.inventory, best.key) >= 0.99) { bagAdd(p.inventory, best.key, -1); E.state.touch(p); }
-  else if (hh) { bagAdd(hh.stores, best.key, -1); E.state.touchHousehold(hh); }
+  else if (hh) {
+    bagAdd(hh.stores, best.key, -1);
+    if (bagGet(hh.stores, best.key) < 0.99) delete hh.stores[hungKey(best.key)];
+    E.state.touchHousehold(hh);
+  }
   return best.quality;
 }
 
@@ -153,7 +167,7 @@ export function slaughter(E: Econ, p: Person, d: ButcherData): ActionOutcome {
   }
   const tier = carcassTier(E, p, hh);
   const key = keyOf(beast.carcass, tier);
-  giveOutput(E, p, key, 1);
+  hang(E, hh, key);
   gains.unshift({ label: `${['Lean', 'Fair', 'Fat', 'Fine', 'Prime'][tier]} ${GOODS[beast.carcass].name.toLowerCase()}`, amount: 1, ref: key });
   return { ok: true, message: `You slaughter the ${d.animal}: a ${['lean', 'fair', 'fat', 'fine', 'prime'][tier]} carcass hangs ready to joint.`, gains };
 }

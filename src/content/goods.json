@@ -115,9 +115,9 @@
   "pot":     { "name": "Cooking pot", "unit": "pots", "unitOne": "pot", "category": "misc", "basePrice": 2, "weight": 1.5, "sold": ["market", "kiln"] },
   "cart":    { "name": "Cart",    "unit": "carts", "unitOne": "cart", "category": "misc", "basePrice": 120, "weight": 0, "sold": ["carpenter"] },
 
-  "pig_carcass":   { "name": "Pig carcass",   "unit": "pig carcasses",   "unitOne": "pig carcass",   "category": "food", "basePrice": 34,  "weight": 55,  "spoilDays": 2.5, "sold": ["slaughterhouse"] },
-  "sheep_carcass": { "name": "Sheep carcass", "unit": "sheep carcasses", "unitOne": "sheep carcass", "category": "food", "basePrice": 14,  "weight": 22,  "spoilDays": 2.5, "sold": ["slaughterhouse"] },
-  "goat_carcass":  { "name": "Goat carcass",  "unit": "goat carcasses",  "unitOne": "goat carcass",  "category": "food", "basePrice": 11,  "weight": 18,  "spoilDays": 2.5, "sold": ["slaughterhouse"] },
-  "cow_carcass":   { "name": "Beef carcass",  "unit": "beef carcasses",  "unitOne": "beef carcass",  "category": "food", "basePrice": 98,  "weight": 160, "spoilDays": 3,   "sold": ["slaughterhouse"] },
-  "ox_carcass":    { "name": "Ox carcass",    "unit": "ox carcasses",    "unitOne": "ox carcass",    "category": "food", "basePrice": 135, "weight": 220, "spoilDays": 3,   "sold": ["slaughterhouse"] }
+  "pig_carcass":   { "name": "Pig carcass",   "unit": "pig carcasses",   "unitOne": "pig carcass",   "category": "food", "quality": true, "qualityPrice": [0.7, 1, 1.15, 1.3, 1.5], "basePrice": 34, "weight": 55,  "spoilDays": 2.5, "sold": ["slaughterhouse"] },
+  "sheep_carcass": { "name": "Sheep carcass", "unit": "sheep carcasses", "unitOne": "sheep carcass", "category": "food", "quality": true, "qualityPrice": [0.7, 1, 1.15, 1.3, 1.5], "basePrice": 14, "weight": 22,  "spoilDays": 2.5, "sold": ["slaughterhouse"] },
+  "goat_carcass":  { "name": "Goat carcass",  "unit": "goat carcasses",  "unitOne": "goat carcass",  "category": "food", "quality": true, "qualityPrice": [0.7, 1, 1.15, 1.3, 1.5], "basePrice": 11, "weight": 18,  "spoilDays": 2.5, "sold": ["slaughterhouse"] },
+  "cow_carcass":   { "name": "Beef carcass",  "unit": "beef carcasses",  "unitOne": "beef carcass",  "category": "food", "quality": true, "qualityPrice": [0.7, 1, 1.15, 1.3, 1.5], "basePrice": 98, "weight": 160, "spoilDays": 3,   "sold": ["slaughterhouse"] },
+  "ox_carcass":    { "name": "Ox carcass",    "unit": "ox carcasses",    "unitOne": "ox carcass",    "category": "food", "quality": true, "qualityPrice": [0.7, 1, 1.15, 1.3, 1.5], "basePrice": 135, "weight": 220, "spoilDays": 3,   "sold": ["slaughterhouse"] }
 }
