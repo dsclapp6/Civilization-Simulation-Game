@@ -8,8 +8,10 @@ import { adjustOpinion, type HouseId, type Person, type PersonId } from '../stat
 import type { FightResult, FightSide } from '../wave3';
 import { addMan, countKinds, disband, giveOrder, kindAt, nearestSettlementId, removeMen } from './armies';
 import { CFG, UNIT_EXPOSURE, isMounted, isRanged } from './config';
+import { commandSpan, orderAll } from './command';
 import { fightingPower } from './forces';
 import { harm, takeCaptive } from './harm';
+import { isWarCombat, type SiegeSetup, type WarEngageOpts } from './war';
 import type { Mil } from './store';
 import type { Army, BattleOrder, BattleRec, UnitKind } from './types';
 
@@ -95,6 +97,12 @@ export function defendersOf(M: Mil, sid: number, house: HouseId): Fighters {
   }
   const s = M.settlementById.get(sid);
   const town = s && (s.kind === 'town' || s.kind === 'city');
+  // the player, if he lives in the place and can bear arms, stands with its defenders whatever the lots said
+  const me = M.alive(M.playerId);
+  if (me && me.settlement === sid && !seen.has(me.id) && me.sex === 'm' && me.estate !== 'clergy' && !me.flags.captive && me.health.hp > 0.4) {
+    const age = (M.day - me.birthDay) / 16;
+    if (age >= 15 && age <= 60) add(me, me.career === 'archer' ? 'archer' : 'levy');
+  }
   // townsfolk and villagers: a tenth to a sixth of the able men take up what arms they have
   const share = town ? 0.14 : 0.08;
   let n = 0;
@@ -455,21 +463,41 @@ function beginDetail(M: Mil, rec: BattleRec, a: Army, d: Army, mine: Army): void
   const detD = mine === a ? detailOther : detailMine;
   rec.detailA = detA.map((p) => p.id);
   rec.detailD = detD.map((p) => p.id);
-  rec.clock = CFG.detailSeconds;
+  rec.clock = rec.siege >= 0 ? CFG.stormSeconds : CFG.detailSeconds;
 
   // the line forms around the player
   const body = M.playerApi?.body();
   const at = body ? { x: body.x, z: body.z } : { x: rec.x, z: rec.z };
-  // knights and sergeants ride into the line (their charge is the arena's)
+  const storm = rec.siege >= 0;
+  // knights and sergeants ride into the line (their charge is the arena's); at a storm everyone goes on foot
   const riders = new Set<PersonId>();
-  for (const fs of [fa, fd]) fs.people.forEach((p, i) => { if (p.id !== pid && (fs.kinds[i] === 'knight' || fs.kinds[i] === 'sergeant')) riders.add(p.id); });
+  if (!storm) for (const fs of [fa, fd]) fs.people.forEach((p, i) => { if (p.id !== pid && (fs.kinds[i] === 'knight' || fs.kinds[i] === 'sergeant')) riders.add(p.id); });
   const sides: FightSide[] = [
     { faction: `house:${a.house}`, people: rec.detailA.slice(), mounted: rec.detailA.filter((id) => riders.has(id)) },
     { faction: `house:${d.house}`, people: rec.detailD.slice(), mounted: rec.detailD.filter((id) => riders.has(id)) },
   ];
-  rec.fight = combat.engage(sides, { at, yieldAllowed: true, reason: 'battle' });
+  const opts: WarEngageOpts = { at, yieldAllowed: true, reason: storm ? 'storm' : 'battle' };
+  // the player commands the men nearest him in the roster, as many as his rank gives him
+  const level = M.career.commandLevel();
+  const span = commandSpan(level);
+  if (span > 0) opts.command = { side: mine === a ? 0 : 1, span };
+  if (storm) opts.siege = siegeSetup(M, rec, a, detailMine.length);
+  rec.fight = combat.engage(sides, opts);
   M.notify(`Battle is joined at ${M.placeName(rec.settlement)}! ${M.houseName(a.house)} against ${M.houseName(d.house)}.`, 'danger', pid);
   M.touch();
+}
+
+/** What the besiegers brought to this storm, from the siege record: rams, ladders, engines. */
+function siegeSetup(M: Mil, rec: BattleRec, a: Army, attackers: number): SiegeSetup {
+  const siege = M.data.sieges.find((s) => s.settlement === rec.siege);
+  return {
+    settlement: rec.siege, attackers: 0, defenders: 1,
+    rams: Math.min(2, siege?.rams ?? 0),
+    ladders: siege?.ladders ? Math.max(2, Math.min(4, Math.round(attackers / 12))) : 0,
+    engines: Math.min(3, siege?.trebuchets ?? 0),
+    mined: (siege?.mine ?? 0) >= 1,
+    camp: { x: a.x, z: a.z },
+  };
 }
 
 /** The combat module reports a finished fight: remember who won so the battle can conclude. */
@@ -515,6 +543,8 @@ function dropBattle(M: Mil, rec: BattleRec): void {
 }
 
 function concludeDetail(M: Mil, rec: BattleRec): void {
+  // a storm that ran out of time ends where it stands: the macro model settles the rest
+  if (rec.result === '' && rec.fight && M.combat?.disperse) M.combat.disperse(rec.fight);
   const a = M.army(rec.a), d = M.army(rec.d);
   const fr = M.detailResults.get(rec.id);
   M.detailResults.delete(rec.id);
@@ -537,6 +567,8 @@ function concludeDetail(M: Mil, rec: BattleRec): void {
 /** The player's orders to the men he commands: macro stance for an army, `zone.command` for the squad in the detail. */
 export function applyOrder(M: Mil, order: BattleOrder, army: Army, level: 'squad' | 'company' | 'army'): void {
   if (level === 'army') army.stance = order;
+  // a detail fight with troop groups: the order goes to the player's commanded men through the combat module
+  if (isWarCombat(M.combat) && orderAll(M, order)) return;
   const rec = M.data.battles.find((b) => b.a === army.id || b.d === army.id);
   const zone = M.zone;
   if (!zone) return;

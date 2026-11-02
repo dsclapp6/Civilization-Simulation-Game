@@ -17,9 +17,10 @@ export interface Fort {
 }
 
 /** Builds the ring round the settlement's own position (so "away from the centre" means outwards). */
-export function fortify(r: CombatRig, kind: 'wall' | 'palisade' = 'wall', half = 36): Fort {
+export function fortify(r: Pick<CombatRig, 'sim' | 'zone'>, kind: 'wall' | 'palisade' = 'wall', half = 36, sid?: number): Fort {
   let nextId = 700000;
-  const s = r.sim.world.settlements.find((x) => x.kind === 'castle') ?? r.sim.world.settlements[0];
+  const s = (sid !== undefined ? r.sim.world.settlements.find((x) => x.id === sid) : undefined)
+    ?? r.sim.world.settlements.find((x) => x.kind === 'castle') ?? r.sim.world.settlements[0];
   const st = r.sim.state;
   // the world's own gatehouse and towers would confuse the ring: take them down
   const keep = (st.buildingsAt.get(s.id) ?? []).filter((b) => !['gatehouse', 'tower', 'wall', 'palisade'].includes(b.kind));

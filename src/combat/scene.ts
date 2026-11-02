@@ -672,7 +672,12 @@ export class SiegeScene {
     }
     if (g && !this.gateOpened && !this.gateBroken() && inside >= 3) {
       this.openT += dt;
-      if (this.openT > OPEN_GATE_AFTER) { this.gateOpened = true; this.arena.env.notify('warn', 'The gate is thrown open from within!', this.arena.env.ctx.state.run.playerId); }
+      if (this.openT > OPEN_GATE_AFTER) {
+        this.gateOpened = true;
+        // the bar is lifted and the leaves swung back: for everything that reads the building it is a gate that no longer holds
+        if (g.b.damage < GATE_BROKEN_AT) this.damage(g.b, GATE_BROKEN_AT - g.b.damage);
+        this.arena.env.notify('warn', 'The gate is thrown open from within!', this.arena.env.ctx.state.run.playerId);
+      }
     } else if (inside < 3) this.openT = Math.max(0, this.openT - dt);
   }
 

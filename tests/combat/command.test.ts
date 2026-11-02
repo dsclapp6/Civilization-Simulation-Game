@@ -95,7 +95,7 @@ describe('a battle has groups and an AI commander', () => {
     expect(['hold', 'charge']).toContain(d0.order);
     // the archers are in loose order, loosing at will or holding back
     expect(['loose', 'hold', 'advance']).toContain(cmd.find(0, 0, 1)!.order);
-    stepFor(b.r.sim, 120);
+    stepFor(b.r.sim, 420);
     expect(b.results).toHaveLength(1);
     expect(b.results[0].winner === 'house:1' || b.results[0].winner === 'house:2' || b.results[0].winner === null).toBe(true);
   });
