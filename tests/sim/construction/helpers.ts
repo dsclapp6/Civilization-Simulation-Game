@@ -331,3 +331,32 @@ export function workUntilDone(r: Rig, actor: number, building: number, max = 400
   }
   return bouts;
 }
+
+/** Every building is listed once at its settlement; every unfinished building has an open site; no two raised in play overlap. */
+export function invariants(sim: Simulation, cons: ConstructionInstall): string[] {
+  const bad: string[] = [];
+  const seen = new Set<number>();
+  for (const [sid, list] of sim.state.buildingsAt) {
+    for (const b of list) {
+      if (seen.has(b.id)) bad.push(`building ${b.id} listed twice`);
+      seen.add(b.id);
+      if (b.settlement !== sid) bad.push(`building ${b.id} listed at ${sid}, belongs to ${b.settlement}`);
+      if (sim.state.buildings.get(b.id) !== b) bad.push(`building ${b.id} not the registered one`);
+    }
+  }
+  for (const b of sim.state.buildings.values()) {
+    if (!seen.has(b.id)) bad.push(`building ${b.id} missing from buildingsAt`);
+    if (b.plot < 0 && b.construction < 1 && !cons.siteOf(b.id)) bad.push(`unfinished building ${b.id} has no site`);
+    if (b.construction < 0 || b.construction > 1 || b.damage < 0 || b.damage > 1) bad.push(`building ${b.id} out of range`);
+  }
+  for (const s of cons.sites()) {
+    if (!sim.state.buildings.has(s.building)) bad.push(`site ${s.id} without its building`);
+    for (const [g, q] of Object.entries(s.missing)) if (!(q >= 0)) bad.push(`site ${s.id} missing ${g} ${q}`);
+    if (!(s.progress >= 0 && s.progress <= 1)) bad.push(`site ${s.id} progress ${s.progress}`);
+  }
+  for (const hh of sim.state.households.values()) {
+    for (const [g, q] of Object.entries(hh.stores)) if (!(q >= 0)) bad.push(`household ${hh.id} has ${q} ${g}`);
+  }
+  return bad;
+}
+

@@ -33,6 +33,11 @@ export function workFactor(C: Construction, p: Person): number {
   return Math.max(0.1, Math.min(1.4, f));
 }
 
+/** Is the man with an army (called up, marching)? He is not at the building site. */
+function serving(C: Construction, p: Person): boolean {
+  return !!C.sim.services.military?.armyOf(p.id);
+}
+
 /** Careers whose people hire themselves out by the day, in the order they are hired. */
 const HIRED_CAREERS: Record<string, number> = { labourer: 0, cottar: 1, servant: 2, woodward: 3, farmer: 4, shepherd: 5, swineherd: 5, none: 6 };
 
@@ -65,8 +70,8 @@ function poolFor(C: Construction, ctx: PlanCtx, settlement: number): Person[] {
   const player = C.state.run.playerId;
   const out: Person[] = [];
   for (const p of C.state.residentsOf(settlement)) {
-    if (p.id === player || p.rankTier > 2 || p.estate === 'clergy' || p.flags.captive || p.health.hp < 0.5) continue;
-    if (HIRED_CAREERS[p.career] === undefined) continue;
+    if (p.id === player || p.rankTier > 2 || p.estate === 'clergy' || p.flags.captive || p.flags.outlaw || p.health.hp < 0.5) continue;
+    if (HIRED_CAREERS[p.career] === undefined || serving(C, p)) continue;
     const age = ageYears(p, C.absDay);
     if (age < 15 || age > 55) continue;
     out.push(p);
@@ -84,7 +89,7 @@ function serfsOf(C: Construction, ctx: PlanCtx, settlement: number): Person[] {
   const out: Person[] = [];
   const player = C.state.run.playerId;
   for (const p of C.state.residentsOf(settlement)) {
-    if (p.estate !== 'unfree' || p.id === player || p.flags.captive || ageYears(p, C.absDay) < 14 || p.health.hp < 0.5) continue;
+    if (p.estate !== 'unfree' || p.id === player || p.flags.captive || p.flags.outlaw || ageYears(p, C.absDay) < 14 || p.health.hp < 0.5 || serving(C, p)) continue;
     out.push(p);
   }
   const day = C.day;
