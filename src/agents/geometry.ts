@@ -12,6 +12,9 @@ export interface DoorPoint { x: number; z: number; yaw: number }
 const DOOR_X: Partial<Record<BuildingKind, number>> = {
   hovel: -0.5, cottage: -1.4, longhouse: -0.3, townhouse: -1.9, manor_house: -2.6,
   tithe_barn: 6, cowshed: -2.3, stable: 1.4, watermill: -3.2, smithy: -0.6, carpenter: 1.0, tannery: 2.4,
+  // civilization pass: stand-in models (src/assets/buildings/recipes/index.ts) borrow the door of the model they are made from
+  // (slaughterhouse = tannery; clay pit and salt pans = quarry, no door; lumber camp = sawpit, door in the middle; gaol = granary, in the middle)
+  slaughterhouse: 2.4,
   weaver: -1.7, fulling_mill: -3.2, bakehouse: -2.1, brewhouse: 1.8, alehouse: 0.8, tavern: -2.7,
   chapel: -2.9, church: -3.1, abbey_church: 8.8, cathedral: 12, infirmary: -6, keep_stone: 4.4,
   great_hall: -7.7, barracks: -3.3,

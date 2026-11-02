@@ -14,16 +14,18 @@ import { kinshipLabel } from '../sim/api';
 import { AnimalSystem } from './animals';
 import { Agent, St } from './agent';
 import { endOrder, replan, updateAgent } from './behaviour';
-import { ADULT_RADIUS, CHILD_RADIUS, ENTER_RADIUS, LEAVE_RADIUS, NAV_BUILD_BUDGET_MS, PATH_BUDGET_MS, SPAWN_BUDGET_MS, WALK_SPEED } from './config';
+import { ADULT_RADIUS, CHILD_RADIUS, ENTER_RADIUS, LEAVE_RADIUS, NAV_BUILD_BUDGET_MS, PATH_BUDGET_MS, SPAWN_BUDGET_MS } from './config';
 import { SpatialHash } from './hash';
 import { findInteractables } from './interact';
 import { Nav } from './nav';
+import { canJog, runSpeed, walkSpeed } from './pace';
 import { makePlate, type PlateContext } from './plates';
 import { Places } from './places';
+import { SiteWork } from './sites';
 import { newIntent, Schedule, type Intent } from './schedule';
 import { propsFor } from './props';
 import type {
-  Activity, AgentOrder, InteractCandidate, MoveResult, Whereabouts, ZoneAgent, ZoneAnimal,
+  Activity, AgentOrder, InteractCandidate, MarkedPerson, MoveResult, Whereabouts, ZoneAgent, ZoneAnimal,
 } from './types';
 import { MAX_AGENTS } from './types';
 
@@ -93,8 +95,12 @@ export class Zone {
   /** Set when time jumped (skip, load, switch) so the next step re-places everyone. */
   needResync = true;
   private modeOff = false;
-  /** Nameplates: givers of tasks set from outside, the tracked person, and the folk of open requests (refreshed about once a second). */
+  /**
+   * Nameplates: the marks set from outside (givers of tasks, "!"; people a task can be handed in to, "?"), the tracked person, and the
+   * folk of open requests (refreshed about once a second).
+   */
   private questHook: ReadonlySet<PersonId> = new Set();
+  private turninHook: ReadonlySet<PersonId> = new Set();
   private questFolk: ReadonlySet<PersonId> = new Set();
   private trackedId: PersonId = 0;
   private plateCtx: PlateContext;
@@ -121,7 +127,10 @@ export class Zone {
     this.economy = deps.economy;
     this.nav = new Nav(sim.world, sim.state, sim.view);
     this.places = new Places(sim.state, sim.world);
-    this.sched = new Schedule({ state: sim.state, world: sim.world, places: this.places, economy: deps.economy });
+    this.sched = new Schedule({
+      state: sim.state, world: sim.world, places: this.places, economy: deps.economy,
+      sites: new SiteWork(() => sim.services.construction, deps.economy, () => sim.absDay),
+    });
     this.fauna = new AnimalSystem(this);
     this.plateCtx = { state: sim.state, world: sim.world, social: deps.social };
     // conversations refuse people the schedules have asleep indoors (SocialApi.setHooks merges into the current hooks)
@@ -353,7 +362,7 @@ export class Zone {
     a.age = ageYears(p, this.now);
     a.tier = p.rankTier;
     a.radius = a.age < 12 ? CHILD_RADIUS : ADULT_RADIUS;
-    a.baseSpeed = baseSpeed(p, a.age);
+    this.setPace(a);
     a.distFocus = dist;
     a.spawnedAt = this.zoneT;
     a.counter = (p.id * 13) | 0;
@@ -372,19 +381,31 @@ export class Zone {
     if (c.version !== a.draw.lookVersion) { a.draw.look = c.look; a.draw.lookVersion = c.version; }
     a.age = ageYears(a.person, this.now);
     a.tier = a.person.rankTier;
+    this.setPace(a);
     this.refreshPlate(a);
+  }
+
+  /** The person's own walking and running pace and whether they may jog when late (age, build, health: pace.ts). */
+  private setPace(a: Agent): void {
+    a.baseSpeed = walkSpeed(a.person, a.age);
+    a.runSpeed = runSpeed(a.person, a.age);
+    a.canRun = canJog(a.person, a.age);
   }
 
   // ---------------------------------------------------------------------------------------------
   // nameplates (plates.ts)
   // ---------------------------------------------------------------------------------------------
 
-  private isQuestGiver(id: PersonId): boolean { return this.questHook.has(id) || this.questFolk.has(id); }
+  /** The quest mark over a person: "?" when something can be handed in to them, "!" when they have a task for the player. */
+  private questMark(id: PersonId): 'quest' | 'turnin' | undefined {
+    if (this.turninHook.has(id)) return 'turnin';
+    return this.questHook.has(id) || this.questFolk.has(id) ? 'quest' : undefined;
+  }
 
   /** Works out the plate of an agent (who they are to the player) and puts it on the draw item unless they are speaking. */
   refreshPlate(a: Agent): void {
     const viewer = this.state.persons.get(this.state.run.playerId) ?? null;
-    a.plate = makePlate(this.plateCtx, viewer, a.person, this.isQuestGiver(a.personId), a.personId === this.trackedId);
+    a.plate = makePlate(this.plateCtx, viewer, a.person, this.questMark(a.personId) ?? false, a.personId === this.trackedId);
     if (a.speech === null) this.showPlate(a);
   }
 
@@ -418,7 +439,7 @@ export class Zone {
   private refreshMarks(): void {
     for (const a of this.agentsArr) {
       if (a.dead || !a.plate) continue;
-      const mark = this.isQuestGiver(a.personId) ? 'quest' : a.personId === this.trackedId ? 'track' : undefined;
+      const mark = this.questMark(a.personId) ?? (a.personId === this.trackedId ? 'track' : undefined);
       if (mark === a.plate.mark) continue;
       this.refreshPlate(a);
     }
@@ -426,7 +447,50 @@ export class Zone {
 
   setQuestGivers(ids: readonly PersonId[]): void {
     this.questHook = new Set(ids);
+    this.turninHook = new Set();
     this.refreshMarks();
+  }
+
+  /** The full set of quest marks (docs/CIV.md §1): replaces the previous marks, both kinds. */
+  setQuestMarks(marks: ReadonlyArray<{ person: PersonId; kind: 'quest' | 'turnin' }>): void {
+    const quest = new Set<PersonId>(), turnin = new Set<PersonId>();
+    for (const m of marks) (m.kind === 'turnin' ? turnin : quest).add(m.person);
+    this.questHook = quest;
+    this.turninHook = turnin;
+    this.refreshMarks();
+  }
+
+  private readonly marked: MarkedPerson[] = [];
+  private markedStep = -1;
+
+  /**
+   * The people with a quest mark and where they are, for the compass and the minimap: agents in the zone where they stand, everyone
+   * else where their schedule has them (inside a building, or beyond the zone). Reused between calls within a step.
+   */
+  markedPeople(): ReadonlyArray<MarkedPerson> {
+    if (this.markedStep === this.stepCount) return this.marked;
+    this.markedStep = this.stepCount;
+    const out = this.marked;
+    let n = 0;
+    const put = (person: PersonId, kind: 'quest' | 'turnin'): void => {
+      const p = this.state.persons.get(person);
+      if (!p || p.death) return;
+      const a = this.byPerson.get(person);
+      let m = out[n];
+      if (!m) { m = { person, kind, x: 0, z: 0, inZone: false, indoors: false }; out[n] = m; }
+      m.person = person; m.kind = kind;
+      if (a && !a.dead) { m.x = a.x; m.z = a.z; m.inZone = true; m.indoors = false; }
+      else {
+        const w = this.sched.whereabouts(p, this.sim.absDay);
+        m.x = w.x; m.z = w.z; m.inZone = false; m.indoors = w.indoors;
+      }
+      n++;
+    };
+    for (const id of this.turninHook) put(id, 'turnin');
+    for (const id of this.questHook) if (!this.turninHook.has(id)) put(id, 'quest');
+    for (const id of this.questFolk) if (!this.turninHook.has(id) && !this.questHook.has(id)) put(id, 'quest');
+    out.length = n;
+    return out;
   }
 
   setTrackedPerson(id: PersonId): void {
@@ -529,6 +593,17 @@ export class Zone {
     if (p && p.person === person) { this.tmpP.x = p.x; this.tmpP.z = p.z; return this.tmpP; }
     return null;
   }
+
+  /** Where a person is, which way they face and how fast they go (the player's body or an agent), or null; reused between calls. */
+  motionOf(person: PersonId): { x: number; z: number; yaw: number; speed: number } | null {
+    const m = this.motion;
+    const a = this.byPerson.get(person);
+    if (a) { m.x = a.x; m.z = a.z; m.yaw = a.yaw; m.speed = a.st === St.Walk ? a.speed : 0; return m; }
+    const p = this.player;
+    if (p && p.person === person) { m.x = p.x; m.z = p.z; m.yaw = p.yaw; m.speed = Math.hypot(p.vx, p.vz); return m; }
+    return null;
+  }
+  private readonly motion = { x: 0, z: 0, yaw: 0, speed: 0 };
 
   canGreet(): boolean { return this.zoneT - this.lastGreetT > 1.4; }
 
@@ -653,6 +728,11 @@ export class Zone {
   summonAnimal(kind: AnimalKind, x: number, z: number, hostile: boolean): number { return this.fauna.summon(kind, x, z, hostile); }
   dismissAnimal(id: number): void { this.fauna.dismiss(id); }
   claimAnimal(id: number): boolean { return this.fauna.claim(id); }
+  leadAnimal(id: number, person: PersonId): { ok: boolean; reason?: string } {
+    return this.fauna.lead(id, person, this.state.persons.get(person)?.household ?? 0);
+  }
+  releaseLed(id: number): boolean { return this.fauna.unlead(id); }
+  ledBy(person: PersonId): readonly ZoneAnimal[] { return this.fauna.ledBy(person); }
   releaseAnimal(id: number, x: number, z: number, yaw: number): void { this.fauna.release(id, x, z, yaw); }
 
   say(person: PersonId, text: string, seconds = 3): void {
@@ -684,11 +764,7 @@ export class Zone {
   targetOfAgent(a: Agent): TargetRef { return { kind: 'person', id: a.personId }; }
 }
 
-/** Walking speed (m/s) by age, agility and health. */
+/** Walking speed (m/s) by age, agility and health (kept for callers of the old name; see pace.ts). */
 export function baseSpeed(p: Person, age: number): number {
-  let v = WALK_SPEED * (1 + 0.012 * (p.trained.agi - 10));
-  if (age < 12) v *= 0.8 + 0.035 * Math.max(0, age - 4);
-  else if (age > 55) v *= Math.max(0.6, 1 - 0.014 * (age - 55));
-  if (p.health.hp < 0.6) v *= 0.8;
-  return v;
+  return walkSpeed(p, age);
 }

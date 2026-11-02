@@ -61,6 +61,8 @@ export interface ZoneAnimal {
   /** Hostile to people (wolves, cornered boar). */
   hostile: boolean;
   readonly draw: AnimalDrawItem;
+  /** Civilization pass: the person leading it on a halter (0 / absent = nobody). It follows them at their pace. */
+  readonly leader?: PersonId;
 }
 
 export type AgentOrder =
@@ -105,6 +107,18 @@ export interface InteractCandidate {
   /** Distance from the query point (m). */
   distance: number;
   label: string;
+}
+
+/** A person with a quest mark (docs/CIV.md §1) and where to find them. */
+export interface MarkedPerson {
+  person: PersonId;
+  kind: 'quest' | 'turnin';
+  x: number;
+  z: number;
+  /** They are an agent in the zone (drawn, with the mark over their head). */
+  inZone: boolean;
+  /** Not out in the open (in a building by their schedule): not drawn, but the compass and the minimap still show them. */
+  indoors: boolean;
 }
 
 export interface ZoneApi {
@@ -157,6 +171,19 @@ export interface ZoneApi {
    * (which stays: it sets 'quest' marks only). Open happenings requests are always included as 'quest'.
    */
   setQuestMarks?(marks: ReadonlyArray<{ person: PersonId; kind: 'quest' | 'turnin' }>): void;
+
+  // ---- additive (civilization pass): led animals. Optional; the actions *Lead* / *Let go* (src/agents/lead.ts) use them. ----
+  /** The person takes one of their household's animals on a halter (a few at a time): it follows them at their pace. */
+  leadAnimal?(id: number, person: PersonId): { ok: boolean; reason?: string };
+  /** Lets a led animal go. */
+  releaseLed?(id: number): boolean;
+  /** The animals a person leads, in the order they follow. */
+  ledBy?(person: PersonId): readonly ZoneAnimal[];
+  /**
+   * The people with a quest mark over their head right now ('quest' = has something for the player, 'turnin' = a task ready to hand
+   * in to them), with where they are — in the zone or by their schedule, indoors or not — for the compass and the minimap.
+   */
+  markedPeople?(): ReadonlyArray<MarkedPerson>;
 
   // ---- additive (player module): riding. Optional; without them the player still rides, but the
   // household's animal keeps standing where it was (a second horse is drawn). ----

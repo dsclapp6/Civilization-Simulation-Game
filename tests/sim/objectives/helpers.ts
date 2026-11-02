@@ -181,6 +181,8 @@ export function addDeadwood(o: ObjSim, offsets: Array<[number, number]> = [[30, 
 
 export interface FakeZone {
   zone: Wave3Deps['zone'];
+  /** What the objectives told the zone through `setQuestMarks` (only with `fakeZone({ marks: true })`), each call. */
+  marks: Array<Array<{ person: number; kind: 'quest' | 'turnin' }>>;
   /** Where the agents stand (people not listed are not in the zone). */
   agents: Map<number, { x: number; z: number }>;
   /** What the objectives told the zone about quest givers, each call. */
@@ -190,18 +192,20 @@ export interface FakeZone {
 }
 
 /** Just enough of the detail zone for the objectives: agents, whereabouts, doors and the quest-giver hook. */
-export function fakeZone(): FakeZone {
+export function fakeZone(opts: { marks?: boolean } = {}): FakeZone {
   const agents = new Map<number, { x: number; z: number }>();
   const givers: FakeZone['givers'] = [];
   const tracked: number[] = [];
+  const marks: FakeZone['marks'] = [];
   const zone = {
     agent: (id: number) => { const a = agents.get(id); return a ? { personId: id, x: a.x, y: 0, z: a.z, yaw: 0 } : null; },
     whereabouts: () => ({ activity: 'home', settlement: 0, building: -1, indoors: false, x: 123, z: 456, label: '' }),
     nav: { doorOf: () => null },
     setQuestGivers: (ids: readonly number[]) => { givers.push({ ids: [...ids] }); },
     setTrackedPerson: (id: number) => { tracked.push(id); },
+    ...(opts.marks ? { setQuestMarks: (m: ReadonlyArray<{ person: number; kind: 'quest' | 'turnin' }>) => { marks.push(m.map((x) => ({ person: x.person, kind: x.kind }))); } } : {}),
   } as unknown as Wave3Deps['zone'];
-  return { zone, agents, givers, tracked };
+  return { zone, agents, givers, tracked, marks };
 }
 
 /** Runs the calendar to a given hour of a day (hooks fire as in play). */

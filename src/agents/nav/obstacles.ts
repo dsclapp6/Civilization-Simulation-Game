@@ -59,6 +59,7 @@ export class Obstacles {
   bid = new Int32Array(0);
   private hash = new Map<number, number[]>();
   private builtRevision = -1;
+  private builtCount = -1;
 
   private readonly chunks = new Map<number, ChunkSolids>();
   private readonly felledCopy = new Set<number>();
@@ -80,8 +81,10 @@ export class Obstacles {
    */
   refreshBuildings(): boolean {
     const st = this.state;
-    if (st.buildingRevision === this.builtRevision) return false;
+    // (a building put up or pulled down changes the count even when nobody touched the revision)
+    if (st.buildingRevision === this.builtRevision && st.buildings.size === this.builtCount) return false;
     this.builtRevision = st.buildingRevision;
+    this.builtCount = st.buildings.size;
     let h = 0, count = 0;
     for (const b of st.buildings.values()) {
       if (!BUILDINGS[b.kind].blocks) continue;

@@ -17,6 +17,8 @@ import { installSocial } from '../../sim/social';
 import { Simulation } from '../../sim/sim';
 import { generateWorld } from '../../world/generate';
 import type { Settlement, WorldModel } from '../../world/types';
+import type { ConstructionApi, SiteView } from '../../sim/construction/types';
+import type { BuildingState } from '../../sim/state';
 import { installAgents } from '../index';
 import type { Zone } from '../zone';
 
@@ -37,10 +39,12 @@ export interface SceneSpec {
   camera: (ctx: SceneCtx) => Pose;
   /** Refines the pose after the warm-up, from where the people really are. */
   frame?: (ctx: SceneCtx) => Pose | null;
+  /** Sets the scene up after everyone is placed and before the warm-up (a construction site, animals on a halter). */
+  prepare?: (ctx: SceneCtx) => void;
   weather?: 'clear' | 'rain' | 'snow';
 }
 
-interface SceneCtx { world: WorldModel; zone: Zone; s: Settlement; g: (x: number, z: number) => number }
+interface SceneCtx { world: WorldModel; zone: Zone; s: Settlement; g: (x: number, z: number) => number; time: number }
 
 const WEATHER: Record<string, Partial<WeatherView>> = {
   clear: { cloud: 0.12, rain: 0, snow: 0, fog: 0, windX: 2, windZ: 1, temperature: 16, snowCover: 0 },
@@ -117,6 +121,92 @@ function animalPose(c: SceneCtx, kind: string): Pose | null {
     }
   }
   return null;
+}
+
+// ---- dev stand-ins: a construction site with a crew, and animals on a halter (the real modules come from the game) ----
+
+const DEV_SITE_ID = 9_500_001;
+let devSite: { building: BuildingState; site: SiteView; crew: number[] } | null = null;
+let devLed: { leader: number } | null = null;
+
+/** Takes the dev site down again (a scene that follows starts without it). */
+function removeDevSite(zone: Zone): void {
+  if (devSite) {
+    zone.state.buildings.delete(devSite.building.id);
+    const list = zone.state.buildingsAt.get(devSite.building.settlement);
+    if (list) zone.state.buildingsAt.set(devSite.building.settlement, list.filter((b) => b.id !== devSite!.building.id));
+    delete zone.sim.services.construction;
+    devSite = null;
+  }
+  if (devLed) { zone.fauna.unleadAll(devLed.leader); devLed = null; }
+}
+
+/** A cottage going up beside the green, and a crew of the village's labourers and farmers at work on it. */
+function raiseDevSite(c: SceneCtx, progress: number): void {
+  const { zone, s } = c;
+  const sp = zone.places.of(s.id)!;
+  let at: { x: number; z: number } | null = null;
+  for (let r = 16; r < 70 && !at; r += 3) {
+    for (let k = 0; k < 16 && !at; k++) {
+      const x = sp.green.x + Math.cos(k * 0.7 + 0.3) * r, z = sp.green.z + Math.sin(k * 0.7 + 0.3) * r;
+      if ([[0, 0], [7, 0], [-7, 0], [0, 6], [0, -6]].every(([dx, dz]) => zone.nav.walkable(x + dx, z + dz))) at = { x, z };
+    }
+  }
+  at ??= { x: sp.green.x + 20, z: sp.green.z + 20 };
+  const building: BuildingState = {
+    id: DEV_SITE_ID, plot: -1, kind: 'cottage', level: 1, settlement: s.id, construction: progress, damage: 0, onFire: false, owner: 0, household: 0,
+    occupied: false, x: at.x, z: at.z, rot: 0.5, culture: sp.church?.culture ?? (0 as never), seed: 3,
+  };
+  zone.state.buildings.set(building.id, building);
+  zone.state.buildingsAt.get(s.id)?.push(building);
+  zone.state.touchBuilding(building);
+  const crew = [...zone.state.residentsOf(s.id)].filter((p) => !p.death && p.estate !== 'clergy' && p.sex === 'm' && (p.career === 'labourer' || p.career === 'farmer' || p.career === 'cottar' || p.career === 'carpenter') && zone.state.persons.get(p.id)!.health.conditions.length === 0)
+    .filter((p) => (zone.sim.absDay - p.birthDay) / 16 >= 16 && (zone.sim.absDay - p.birthDay) / 16 < 50).slice(0, 8).map((p) => p.id);
+  const site: SiteView = {
+    id: DEV_SITE_ID, building: building.id, kind: 'cottage', work: 'build', settlement: s.id, x: at.x, z: at.z, rot: building.rot, household: 0, house: 0,
+    progress, missing: {}, labourLeft: 12, workers: crew.length, status: 'working', eta: zone.sim.absDay + 2, priority: 0,
+  };
+  const no = { ok: false, reason: 'dev' };
+  const fake: ConstructionApi = {
+    scope: (person) => ({ person, settlements: [], own: [], outposts: false, label: '', household: 0, house: 0 }), catalogue: () => [],
+    check: (_p, _k, x, z, rot) => ({ ok: false, x, z, rot, settlement: -1, footprint: [] }),
+    place: () => no, upgrade: () => no, repair: () => no, demolish: () => no, cancel: () => no, setPriority: () => no,
+    sites: () => [site], site: (id) => (id === site.id ? site : null), siteOf: () => null, outposts: () => [], cost: () => ({ goods: {}, labour: 0, pence: 0 }),
+    suggestSpot: () => null, workersAt: (id) => (id === site.id ? crew : []), version: () => 1,
+  };
+  zone.sim.services.construction = fake;
+  devSite = { building, site, crew };
+}
+
+/** A household's animals on a halter behind its head, who walks to the green (the household is given a few pigs and sheep to bring). */
+function leadDevDrove(c: SceneCtx): void {
+  const { zone, s } = c;
+  const sp = zone.places.of(s.id)!;
+  const st = zone.state;
+  const near = [...st.householdsIn(s.id)].filter((h) => { const b = st.buildings.get(h.home); const hd = st.persons.get(h.head); return !!b && !!hd && !hd.death && Math.hypot(b.x - sp.green.x, b.z - sp.green.z) < 70; });
+  for (const hh of near) {
+    const head = st.persons.get(hh.head)!;
+    const home = st.buildings.get(hh.home)!;
+    hh.stores.pig = Math.max(hh.stores.pig ?? 0, 2);
+    hh.stores.sheep = Math.max(hh.stores.sheep ?? 0, 2);
+    st.touchHousehold(hh);
+    zone.fauna.resync();
+    const own = zone.fauna.list().filter((a) => a.owner === hh.id && (a.kind === 'sheep' || a.kind === 'pig' || a.kind === 'cow' || a.kind === 'goat'));
+    if (own.length < 2) continue;
+    // the head comes out of the door and the animals are brought to him
+    const door = zone.nav.doorOf(home.id)!;
+    const hx = door.x + Math.sin(door.yaw) * 3, hz = door.z + Math.cos(door.yaw) * 3;
+    zone.summon?.(head.id, hx, hz, door.yaw);
+    let n = 0;
+    for (const a of own) {
+      if (n >= 3) break;
+      if (zone.fauna.lead(a.id, head.id, hh.id).ok) n++;
+    }
+    if (n === 0) continue;
+    devLed = { leader: head.id };
+    zone.command(head.id, { kind: 'goto', x: sp.green.x, z: sp.green.z });
+    return;
+  }
 }
 
 export const SCENES: SceneSpec[] = [
@@ -209,6 +299,45 @@ export const SCENES: SceneSpec[] = [
       return lookFrom(c, spot.x, spot.z, yaw + 0.3, 30, 1.9, 0.8);
     },
   },
+  {
+    id: 'commute', describe: 'the morning walk to the fields: a column of walkers on the road, each at their own pace', settlement: pickVillage, season: 1, day: 2,
+    time: (s, season) => sunrise(s, season) + 0.1, warm: 7,
+    frame: (c) => crowdPose(c, (a) => a.st === 1 && a.draw.anim !== 'run' && Math.hypot(a.x - c.s.x, a.z - c.s.z) > 40, 16, 2.4, 40),
+    camera: (c) => {
+      const sp = c.zone.places.of(c.s.id)!;
+      const st = sp.strips[0];
+      const mx = (st.poly[0].x + st.poly[2].x) / 2, mz = (st.poly[0].z + st.poly[2].z) / 2;
+      const yaw = Math.atan2(mx - c.s.x, mz - c.s.z);
+      return lookFrom(c, c.s.x + Math.sin(yaw) * 60, c.s.z + Math.cos(yaw) * 60, yaw + 0.5, 30, 3.6, 1.2);
+    },
+  },
+  {
+    id: 'site', describe: 'a cottage going up beside the green: the crew saws, hammers and hauls timber', settlement: pickVillage, season: 1, day: 2, time: 0.43, warm: 4,
+    prepare: (c) => { raiseDevSite(c, 0.45); },
+    frame: (c) => crowdPose(c, (a) => !!devSite && devSite.crew.includes(a.personId) && Math.hypot(a.x - devSite.building.x, a.z - devSite.building.z) < 16, 11, 2.1, 20),
+    camera: (c) => {
+      const sp = c.zone.places.of(c.s.id)!;
+      return lookFrom(c, sp.green.x + 18, sp.green.z + 18, 2.2, 22, 3.2, 1.2);
+    },
+  },
+  {
+    id: 'lead', describe: 'a villager leads his animals on halters across the green', settlement: pickVillage, season: 1, day: 2, time: 0.4, warm: 5,
+    prepare: (c) => { leadDevDrove(c); },
+    frame: (c) => {
+      if (!devLed) return null;
+      const list = c.zone.fauna.ledBy(devLed.leader);
+      if (list.length === 0) return null;
+      let cx = 0, cz = 0;
+      for (const a of list) { cx += a.x / list.length; cz += a.z / list.length; }
+      const dir = c.zone.positionOf(devLed.leader);
+      const yaw = dir ? Math.atan2(dir.x - cx, dir.z - cz) : 0;
+      return lookFrom(c, cx, cz, yaw + 1.1, 9, 1.8, 0.8);
+    },
+    camera: (c) => {
+      const sp = c.zone.places.of(c.s.id)!;
+      return lookFrom(c, sp.green.x, sp.green.z, 0.8, 24, 2.6, 1);
+    },
+  },
 ];
 
 export function start(root: AppRoot): void {
@@ -293,11 +422,13 @@ export function start(root: AppRoot): void {
     // (`warm` is in minutes of play of a one-minute day: the same stretch of the game day lasts DAY_SECONDS / 60 times longer now)
     const warm = spec.warm * (DAY_SECONDS / 60);
     setClock(spec.season, spec.day, time - spec.warm / 60);
-    const ctx: SceneCtx = { world, zone, s, g };
+    removeDevSite(zone);
+    const ctx: SceneCtx = { world, zone, s, g, time };
     let pose = spec.camera(ctx);
     placeFocus(pose.look.x, pose.look.z);
     renderer.setCameraPose(pose.pos, pose.look, 0);
     zone.resync();
+    spec.prepare?.(ctx);
     run(warm);
     const refined = spec.frame?.(ctx) ?? null;
     if (refined) { pose = refined; placeFocus(pose.look.x, pose.look.z); run(0.5); }

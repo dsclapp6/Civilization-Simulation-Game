@@ -56,6 +56,8 @@ export type Match =
 
 export interface StepRec extends ObjectiveStep {
   m: Match;
+  /** The step is a hand-in: the person it points at is the one to report to ("?" over their head once what it needs is gathered). */
+  turnin?: true;
 }
 
 /** What an objective really brings when it is done (the `reward` text only describes it). */
@@ -99,7 +101,7 @@ export interface NewObjective {
   title: string;
   why: string;
   giver?: PersonId;
-  steps: Array<{ text: string; hint?: string; target?: ObjectiveTarget; m: Match; goal?: number; progress?: number }>;
+  steps: Array<{ text: string; hint?: string; target?: ObjectiveTarget; m: Match; goal?: number; progress?: number; turnin?: boolean }>;
   reward?: string;
   pay?: Reward;
   fine?: number;
@@ -273,6 +275,7 @@ export class Obj {
       const st: StepRec = { text: s.text, done: false, m: s.m };
       if (s.hint) st.hint = s.hint;
       if (s.target) st.target = s.target;
+      if (s.turnin) st.turnin = true;
       if (s.goal !== undefined) { st.goal = s.goal; st.progress = s.progress ?? 0; }
       rec.steps.push(st);
     }

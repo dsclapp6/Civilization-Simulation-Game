@@ -11,8 +11,8 @@
 // say where a farmer, smith, alewife, shepherd, priest, soldier… spends the day.
 import { BUILDINGS, type BuildingKind } from '../content/types';
 import type { P2 } from '../core/math';
-import { hash01 } from '../core/math';
-import { daylight, toDate, type Season } from '../core/time';
+import { hash01, smoothstep } from '../core/math';
+import { DAY_SECONDS, daylight, toDate, type Season } from '../core/time';
 import type { AnimState, BackLook, CarryLook, HeldItem } from '../core/view';
 import { dayPart, isHolyDay, isMarketDay } from '../sim/calendar';
 import type { CareerId } from '../sim/careers';
@@ -21,7 +21,9 @@ import { ageYears, type BuildingState, type GameState, type Person } from '../si
 import { sampleWeather, type WeatherSample } from '../sim/weather';
 import type { Strip, WorldModel } from '../world/types';
 import { doorStand, frontPoint, type DoorPoint } from './geometry';
+import { DETOUR, MAX_HURRY, WALK_BASE, walkSpeed } from './pace';
 import { Places, type SettlementPlaces } from './places';
+import { siteSpot, type SiteSpot, type SiteWork } from './sites';
 import type { Activity, Whereabouts } from './types';
 
 // ---------------------------------------------------------------------------------------------
@@ -83,6 +85,8 @@ export interface Intent {
   prevX: number;
   prevZ: number;
   travel: number;
+  /** While `travel` < 1: the absolute day the walk is due to end (the person set out early enough to be there then, at their own pace). */
+  arrive: number;
   /** Where the person enters/leaves the settlement when `away` flips (a gate). */
   exitX: number;
   exitZ: number;
@@ -92,7 +96,7 @@ export function newIntent(): Intent {
   return {
     activity: 'idle', label: '', settlement: -1, building: -1, indoors: false, away: false, leaving: false, x: 0, z: 0, yaw: 0,
     anim: 'idle', main: 'none', off: 'none', carry: 'none', back: 'none', seat: 0, mode: Mode.Stay, radius: 0, bx: 0, bz: 0,
-    group: -1, from: 0, until: 0, leave: 0, prevX: 0, prevZ: 0, travel: 1, exitX: NaN, exitZ: NaN,
+    group: -1, from: 0, until: 0, leave: 0, prevX: 0, prevZ: 0, travel: 1, arrive: 0, exitX: NaN, exitZ: NaN,
   };
 }
 
@@ -107,7 +111,7 @@ function assign(o: Intent, s: Intent): void {
 function reset(o: Intent): void {
   o.activity = 'idle'; o.label = ''; o.building = -1; o.indoors = false; o.away = false; o.leaving = false; o.yaw = 0;
   o.anim = 'idle'; o.main = 'none'; o.off = 'none'; o.carry = 'none'; o.back = 'none'; o.seat = 0; o.mode = Mode.Stay;
-  o.radius = 0; o.bx = 0; o.bz = 0; o.group = -1; o.travel = 1; o.exitX = NaN; o.exitZ = NaN;
+  o.radius = 0; o.bx = 0; o.bz = 0; o.group = -1; o.travel = 1; o.arrive = 0; o.exitX = NaN; o.exitZ = NaN;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -152,7 +156,7 @@ const WORK: Partial<Record<CareerId, Work>> = {
   tailor: W('home', 'work_spin', 'Sewing', { main: 'distaff', shelter: true }),
   baker: W('door', 'work_knead', 'Baking', { kinds: ['bakehouse'], shelter: true }),
   miller: W('door', 'work_lift', 'At the mill', { kinds: ['watermill', 'windmill', 'fulling_mill'], carry: 'sack' }),
-  butcher: W('home', 'work_hammer', 'Butchering', { main: 'dagger', shelter: true }),
+  butcher: W('door', 'work_hammer', 'Butchering', { kinds: ['slaughterhouse'], main: 'dagger', shelter: true }),
   cooper: W('door', 'work_hammer', 'Coopering', { kinds: ['carpenter', 'sawpit'], main: 'hammer', shelter: true }),
   cobbler: W('home', 'work_hammer', 'Mending shoes', { main: 'hammer', shelter: true }),
   potter: W('home', 'work_knead', 'Throwing pots', { shelter: true }),
@@ -204,6 +208,8 @@ export interface ScheduleDeps {
   world: WorldModel;
   places: Places;
   economy: EconomyApi;
+  /** Who works on which construction site today (absent without the construction module). */
+  sites?: SiteWork;
 }
 
 interface DayTimes {
@@ -212,16 +218,23 @@ interface DayTimes {
   massA: number; massB: number; gatherA: number; afterB: number;
 }
 
-/** Shortest and longest walk (days) the schedule gives between two places: 7 s to 3 game hours at 1×. */
-const TRAVEL_MIN = 0.012;
-const TRAVEL_MAX = 0.3;
 /**
- * Days a walk of `d` metres is given. The day is ten minutes long and people walk their trips (agents.ts shows them): an easy
- * 1.7 m/s over the first hundred metres, a brisk pace on the long ways to the fields (a 400 m walk is 0.24 of a day, 3 m/s).
- * People set out early enough to be there when their next stretch of the day begins.
+ * Shortest and longest walk (days) the schedule gives between two places: 6 s to 204 s (eight game hours) at 1×. A day is ten minutes
+ * (600 s) and people walk at the speed of people (pace.ts), so a long way takes a good part of it: 300 m is a walk of four minutes.
+ * The longest walk the schedule allows is 204 s (about 290 m as the crow flies for an average adult at a brisk pace, 250–340 m by build
+ * and age); a longer one is walked at the best pace the person can keep up, whoever is still on the road when the schedule says they
+ * have arrived is late, and the bodies of people out of sight finish such a walk at once.
  */
-export function tripDays(d: number): number {
-  return Math.min(TRAVEL_MAX, Math.max(TRAVEL_MIN, d <= 100 ? d / 1000 : 0.1 + (d - 100) / 2500));
+const TRAVEL_MIN = 0.01;
+const TRAVEL_MAX = 0.34;
+/**
+ * Days a walk of `d` metres is given at `pace` m/s (default the unhurried adult's walk; the path is longer than the straight line).
+ * People set out early enough to be there when their next stretch of the day begins, each at their own pace (pace.ts `walkSpeed`);
+ * those with a long way go briskly (up to MAX_HURRY times their pace).
+ */
+export function tripDays(d: number, pace: number = WALK_BASE): number {
+  const brisk = 1 + (MAX_HURRY - 1) * 0.8 * smoothstep(100, 250, d);
+  return Math.min(TRAVEL_MAX, Math.max(TRAVEL_MIN, (d * DETOUR) / (Math.max(0.5, pace) * brisk * DAY_SECONDS)));
 }
 
 export class Schedule {
@@ -229,6 +242,8 @@ export class Schedule {
   private readonly world: WorldModel;
   private readonly places: Places;
   private readonly economy: EconomyApi;
+  private readonly sites: SiteWork | undefined;
+  private readonly siteJob: SiteSpot = { x: 0, z: 0, yaw: 0, anim: 'idle', main: 'none', off: 'none', carry: 'none', label: '', haul: false, bx: 0, bz: 0 };
   private readonly times: DayTimes = { sr: 0, ss: 0, wake: 0, chore: 0, mealA: 0, mealB: 0, workEnd: 0, bed: 0, massA: 0, massB: 0, gatherA: 0, afterB: 0 };
   private readonly wx: WeatherSample = { cloud: 0, rain: 0, snow: 0, fog: 0, windX: 0, windZ: 0, temperature: 10 };
   private wxKey = NaN;
@@ -236,10 +251,11 @@ export class Schedule {
   private readonly door: DoorPoint = { x: 0, z: 0, yaw: 0 };
   private readonly door2: DoorPoint = { x: 0, z: 0, yaw: 0 };
   private readonly prev: Intent = newIntent();
+  private readonly prev2: Intent = newIntent();
   private readonly pt: P2 = { x: 0, z: 0 };
 
   constructor(deps: ScheduleDeps) {
-    this.state = deps.state; this.world = deps.world; this.places = deps.places; this.economy = deps.economy;
+    this.state = deps.state; this.world = deps.world; this.places = deps.places; this.economy = deps.economy; this.sites = deps.sites;
   }
 
   // ---- public ----
@@ -350,12 +366,43 @@ export class Schedule {
     if (a.away && b.settlement !== a.settlement && Number.isFinite(b.exitX)) { ox = b.exitX; oz = b.exitZ; }
     const dist = Math.hypot(b.x - ox, b.z - oz);
     if (dist <= 3) return false;
-    const win = tripDays(dist) * (0.85 + 0.3 * hash01(p.id, 77));
+    // everyone leaves a little early for their own pace and the ground they cross (up to a fifth more), so no one is hurried and not all
+    // set out in a block
+    // someone who has gone indoors stays long enough (a few seconds) to be seen go in and not be out again at once
+    const dwell = a.indoors && !a.away ? 0.012 : 0.002;
+    let win = Math.min(TRAVEL_MAX, tripDays(dist, walkSpeed(p, ageYears(p, a.from))) * this.groundTime(ox, oz, b.x, b.z, dist) * (1 + 0.12 * hash01(p.id, 77)));
+    // a walk is over before the stretch it leads to is (nobody is still on the road at bedtime): whoever cannot make it hurries instead
+    win = Math.max(TRAVEL_MIN, Math.min(win, b.until - 0.02 - (a.from + dwell)));
     const t = this.trip;
     t.ox = ox; t.oz = oz; t.win = win;
     // as early as the walk needs, but not before this stretch has begun (a long way after a short stretch ends in the next one)
-    t.leave = Math.max(a.from + 0.002, a.until - win);
+    t.leave = Math.max(a.from + dwell, a.until - win);
     return true;
+  }
+
+  private readonly ground = new Map<number, number>();
+
+  /**
+   * How much longer than on level grass a walk from (ox, oz) to (bx, bz) takes: the ground along the straight line (marsh, woodland floor,
+   * slopes slow a walker as the navigation grid's speed factors do). 1 for short walks; remembered, because the same walks come up again
+   * and again.
+   */
+  private groundTime(ox: number, oz: number, bx: number, bz: number, dist: number): number {
+    if (dist < 40) return 1;
+    const key = (Math.round(ox) * 73856093) ^ (Math.round(oz) * 19349663) ^ (Math.round(bx) * 83492791) ^ (Math.round(bz) * 668265263);
+    const hit = this.ground.get(key);
+    if (hit !== undefined) return hit;
+    const n = Math.max(2, Math.min(24, Math.ceil(dist / 25)));
+    let sum = 0;
+    for (let k = 0; k < n; k++) {
+      const f = (k + 0.5) / n;
+      const c = this.world.walkCostAt(ox + (bx - ox) * f, oz + (bz - oz) * f);
+      sum += Number.isFinite(c) ? Math.max(1, Math.pow(Math.max(c, 0.01), 0.6)) : 1.6;
+    }
+    const m = Math.max(1, Math.min(1.6, sum / n));
+    if (this.ground.size > 20000) this.ground.clear();
+    this.ground.set(key, m);
+    return m;
   }
 
   /** If it is time to set out for the next stretch of the day, turns `o` into that stretch with the walk under way; true if so. */
@@ -373,17 +420,25 @@ export class Schedule {
     o.prevX = ox; o.prevZ = oz;
     o.travel = Math.min(0.999, Math.max(0, t));
     o.leave = leave;
+    o.arrive = leave + T.win;
     return true;
   }
 
   /** A walk that did not fit into the stretch before (a long way after a short stretch) is still going on in this one. */
   private travelTail(p: Person, absDay: number, o: Intent): void {
     const pr = this.prevIntent(p, o.from - 1e-4);
-    if (!this.tripBetween(p, pr, o)) return;
+    if (!this.tripBetween(p, pr, o)) {
+      // no walk into this stretch. The one before it may have been a stay at (about) this very place — a packed meal where the
+      // work is — reached by a long walk that is not over yet
+      if (Math.hypot(pr.x - o.x, pr.z - o.z) > 25 || absDay - pr.from >= TRAVEL_MAX) return;
+      this.plan(p, pr.from - 1e-4, this.prev2, 1);
+      if (!this.tripBetween(p, this.prev2, pr)) return;
+    }
     const T = this.trip;
     if (absDay >= T.leave + T.win) return;
     o.prevX = T.ox; o.prevZ = T.oz;
     o.travel = Math.min(0.999, Math.max(0, (absDay - T.leave) / Math.max(1e-6, T.win)));
+    o.arrive = T.leave + T.win;
     if (o.away) { o.away = false; o.leaving = true; o.indoors = false; }
   }
 
@@ -736,9 +791,8 @@ export class Schedule {
 
   private meal(p: Person, o: Intent, day: number, home: BuildingState | null, sp: SettlementPlaces | null, wet: number, marketDay: boolean): void {
     // The midday meal is a short stretch of the day and a walk takes people a while (tripDays), so nobody goes home for dinner
-    // unless home is (nearly) where they work: a packed meal at the workplace for the rest (as field workers had)
-    const wp = this.workTemplate(p);
-    if (wp && wet < 0.6 && home) {
+    // unless home is (nearly) where they work or what they do: a packed meal where they are for the rest (as field workers had)
+    if (wet < 0.6 && home) {
       this.working(p, o, day, 0.5, this.times, 30, wet, home, sp, marketDay, true);
       if (!o.indoors && !o.away && o.building !== home.id) {
         const dh = Math.hypot(o.x - home.x, o.z - home.z);
@@ -810,6 +864,14 @@ export class Schedule {
   ): void {
     void f; void T;
     const c = p.career;
+    // a construction site they work at today: the day goes to the building (docs/CIV.md §5)
+    if (age >= 12 && this.sites) {
+      const site = this.sites.siteOf(p, day + f);
+      if (site) {
+        if (wet > 0.6) { this.atHome(o, home, true, 'home', 'Waiting out the weather'); return; }
+        if (this.applySite(p, o, site, day)) return;
+      }
+    }
     // the economy decides when it can
     const spot = this.economySpot(p, day);
     if (spot && spot.kind !== 'none') {
@@ -841,6 +903,18 @@ export class Schedule {
         o.indoors = !!home;
       }
     }
+  }
+
+  /** Puts the person at their place on the site and at its work. */
+  private applySite(p: Person, o: Intent, site: import('../sim/construction/types').SiteView, day: number): boolean {
+    const j = siteSpot(p, site, day, this.siteJob);
+    o.activity = 'work'; o.label = j.label; o.building = -1; o.indoors = false;
+    o.x = j.x; o.z = j.z; o.yaw = j.yaw;
+    o.anim = j.anim; o.main = j.main; o.off = j.off; o.carry = j.carry;
+    o.mode = j.haul ? Mode.Errand : Mode.Stay;
+    if (j.haul) { o.bx = j.bx; o.bz = j.bz; }
+    o.group = -1;
+    return true;
   }
 
   /** Economy work spot, cached per person per day. */
@@ -1003,6 +1077,14 @@ export class Schedule {
         return true;
       }
       case 'wood': {
+        // a lumber camp in the settlement's lands is where the woodward works
+        const camp = sp.first('lumber_camp');
+        if (camp) {
+          const cd = BUILDINGS[camp.kind];
+          frontPoint(camp, (hash01(key, 14) - 0.5) * (cd.w - 3), (hash01(key, 15) - 0.5) * (cd.d - 3), this.door2, 0);
+          o.x = this.door2.x; o.z = this.door2.z; o.yaw = hash01(key, 17) * 6.28; o.building = camp.id;
+          return true;
+        }
         const wl = sp.woodlots.length ? sp.woodlots[Math.floor(hash01(key, 13) * sp.woodlots.length) % sp.woodlots.length] : null;
         if (wl) { polyPoint(wl.poly, hash01(key, 14), 0.3 + 0.4 * hash01(key, 15), this.pt); o.x = this.pt.x; o.z = this.pt.z; }
         else { const a = hash01(key, 16) * 6.28; o.x = s.x + Math.cos(a) * (s.radius + 60); o.z = s.z + Math.sin(a) * (s.radius + 60); }

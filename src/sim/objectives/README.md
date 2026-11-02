@@ -47,11 +47,18 @@ passes, and `dayEnd { day }` is emitted (only for a day with something in it, on
 * `sim.view.setSource('worldMarkers')`: the tracked step's target (primary, `kind: 'objective'`, people live via
   `zone.agent` else `zone.whereabouts`), home, work (the employment's building), a person asked for with
   `trackPerson`, a place with `trackPlace`. Ids 9001–9005; the array is reused between frames.
-* Nameplate marks (the zone's hooks, both optional and guarded): `zone.setQuestGivers?.(ids)` is called whenever the
-  set of people with business for the player changes (request askers, the person a talk step needs, the target of an
-  act step), `ids` sorted; `zone.setTrackedPerson?.(id)` whenever the person asked for with "Find" changes (0 clears).
+* Quest marks over heads (civilization pass, docs/CIV.md §1; `markers.ts` `questMarks`): **"!"** (`'quest'`) over anyone who has
+  something for the player — the asker of a request (until the work is done), whoever the current step says to speak to or to do
+  something with, the head of the household while chores of theirs are open — and **"?"** (`'turnin'`) over the person to report to
+  when the current step is a *hand-in* whose needs are met: a fetch request's goods are in the pack (the step carries `turnin`, the
+  mark follows the pack: sell the goods and it goes back to "!"), a message is in hand (the recipient), reporting to the master. A hand-in
+  wins over a task. The marks go to the zone with `zone.setQuestMarks?.(marks)` whenever the set changes (about once a second at most,
+  `person`-sorted, `turnin` first); a zone without it gets `zone.setQuestGivers?.(ids)` with every marked person. `ObjectivesApi.marks()`
+  says what each is about ("Maire wants 7 bundles of firewood", "Give it to Maire", "Wat has work for you: weed the east strip") for the
+  compass, the minimap and the hover card; where they are is `ZoneApi.markedPeople?.()`.
+* `zone.setTrackedPerson?.(id)` whenever the person asked for with "Find" changes (0 clears).
 * Additive API (`types.ts`, all optional): `trackPlace`, `found`, `places` (home, strips, church, market, smithy,
-  alehouse, mill, butts, well, workplace…), `version` (changes whenever the list changes: cheap HUD refresh).
+  alehouse, mill, butts, well, workplace…), `version` (changes whenever the list changes: cheap HUD refresh), `marks` (the quest marks).
 * Events: `objective { phase: added|progress|done|failed|expired, id, title }`, `dayEnd { day }`. Notices
   (`notify`): the head's call at dawn (`quest`), the head's reaction when a chore is done (`social`), the coin they pay
   for it (`gain`), a fine (`loss`).
