@@ -27,7 +27,9 @@ export const KEYMAP = {
     menu: 'Escape', character: 'Tab', inventory: 'KeyI', ledger: 'KeyJ', map: 'KeyM', command: 'KeyC',
     family: 'KeyH', chronicle: 'KeyL', rest: 'KeyZ',
     /** Wave 4 (UI): realm and politics, House techniques, the requests journal, wounds, help and controls. */
-    politics: 'KeyK', techs: 'KeyT', requests: 'KeyR', wounds: 'KeyB', help: 'F1',
+    politics: 'KeyK', techs: 'KeyT', requests: 'KeyR', wounds: 'F2', help: 'F1',
+    /** Build mode: change anything in your lands (docs/CIV.md §5). */
+    build: 'KeyB',
     /** Clarity pass: the journal (objectives, today, people you know), the minimap toggle and the "What now?" card. */
     journal: 'KeyO', minimap: 'KeyN', whatNow: 'KeyY',
     /** The ruler's seat: lands, purse, fields, research, men, trade orders, rivals (docs/CIV.md §6). */

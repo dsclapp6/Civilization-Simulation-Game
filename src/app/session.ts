@@ -161,6 +161,12 @@ export function makeControls(renderer: GameRenderer): UiRendererControls {
       const px = (v.x * 0.5 + 0.5) * el.clientWidth, py = (-v.y * 0.5 + 0.5) * el.clientHeight;
       return Number.isFinite(px) && Number.isFinite(py) ? { x: px, y: py } : null;
     },
+    setGhost: (g) => renderer.setGhost?.(g),
+    setBuildArea: (a) => renderer.setBuildArea?.(a),
+    buildingAt(x, y) {
+      const r = renderer.pick(x, y);
+      return r.type === 'building' ? (r as { id: number }).id : null;
+    },
     screenToGround(x, y) {
       const g = renderer.screenToGround(x, y);
       return g ? { x: g.x, z: g.z } : null;

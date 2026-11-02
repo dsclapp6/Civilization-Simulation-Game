@@ -7,4 +7,5 @@ import './advancement';
 import './military';
 import './ruler';
 import './people';
+import './build';
 export {};

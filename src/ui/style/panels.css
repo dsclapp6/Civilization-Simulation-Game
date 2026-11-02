@@ -375,3 +375,26 @@
 .mu-people-row:hover { background: rgba(255, 244, 205, 0.55); }
 .mu-people-row.me { background: rgba(214, 170, 70, 0.18); }
 .mu-people-who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- build mode (B) ---- */
+.mu-modal.clear.mu-build-land { pointer-events: auto; cursor: crosshair; padding: 0; justify-content: flex-end; }
+.mu-build-dock { pointer-events: auto; align-self: stretch; display: flex; padding: 14px; }
+.mu-build-win { width: 340px; max-height: calc(100vh - 28px); }
+.mu-build-win .mu-win-body { overflow-y: auto; }
+.mu-build-tabs { display: flex; gap: 4px; margin-bottom: 6px; }
+.mu-build-tab { flex: 1; padding: 4px 6px; border: 1px solid var(--rule); background: rgba(255, 244, 205, 0.5); border-radius: 3px; font: inherit; font-size: 13px; cursor: pointer; }
+.mu-build-tab.on { background: var(--gold-leaf, #e9c66a); font-weight: 700; }
+.mu-build-cat { margin: 8px 0 4px; font-variant: small-caps; letter-spacing: 0.08em; font-weight: 700; color: var(--gold); }
+.mu-build-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.mu-build-item { display: flex; flex-direction: column; align-items: flex-start; padding: 4px 6px; border: 1px solid var(--rule); border-radius: 3px; background: rgba(255, 250, 230, 0.7); font: inherit; font-size: 12.5px; cursor: pointer; text-align: left; }
+.mu-build-item:hover { background: #fff6d6; }
+.mu-build-item.sel { outline: 2px solid #5fd16a; }
+.mu-build-item.off { opacity: 0.5; }
+.mu-build-cost { font-size: 11px; color: var(--ink-3); }
+.mu-build-stages { list-style: none; margin: 0; padding: 0; font-size: 13px; line-height: 1.6; }
+.mu-build-stages li.done { color: var(--ink-3); text-decoration: line-through; }
+.mu-build-stages li.next { font-weight: 700; color: var(--ink); }
+.mu-build-tip { position: fixed; pointer-events: none; padding: 3px 8px; border-radius: 3px; background: rgba(20, 14, 6, 0.8); color: #dff5df; font-size: 12.5px; white-space: nowrap; }
+.mu-build-tip:empty { display: none; }
+.mu-build-tip.bad { color: #ffb3a3; }
+.mu-link { background: none; border: none; padding: 0; color: var(--lapis); text-decoration: underline; cursor: pointer; font: inherit; }

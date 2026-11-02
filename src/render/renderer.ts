@@ -9,7 +9,7 @@ import type { CharacterDrawItem, AnimalDrawItem, BuildingView, SimView, StripVie
 import type { AssetLibrary } from '../assets/types';
 import type { WorldModel } from '../world/types';
 import { QUALITY, type QualitySettings } from './quality';
-import type { CameraMode, GameRenderer, GroundPoint, HoverTarget, PickResult, QualityLevel, RenderStats, RendererOptions } from './types';
+import type { BuildGhost, CameraMode, GameRenderer, GroundPoint, HoverTarget, PickResult, QualityLevel, RenderStats, RendererOptions } from './types';
 import { computeAtmosphere, createAtmosphereState } from './sky/atmosphere';
 import { atmoUniforms, installAtmospherePatch } from './sky/atmospherePatch';
 import { Sky } from './sky/sky';
@@ -31,6 +31,7 @@ import { BeaconLayer } from './feedback/beacons';
 import { FloaterLayer } from './feedback/floaters';
 import { Nameplates } from './feedback/nameplates';
 import { HoverLayer } from './feedback/hover';
+import { GhostLayer } from './feedback/ghost';
 
 export type { CameraMode, GameRenderer, GroundPoint, HoverTarget, PickResult, QualityLevel, RenderStats, RendererOptions } from './types';
 
@@ -97,6 +98,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
   const worldProps = new WorldPropsLayer(assets, heightAt);
   const beacons = new BeaconLayer(heightAt, showLabels);
   const floaters = new FloaterLayer();
+  const ghost = new GhostLayer(heightAt);
   const plates = new Nameplates(showLabels);
   let lastBuildings: readonly BuildingView[] = [];
   let lastStrips: readonly StripView[] = [];
@@ -131,6 +133,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
   const lighting = new Lighting(scene);
   lighting.configure(quality.shadows, quality.shadowMapSize, quality.shadowRadius);
 
+  scene.add(ghost.root);
   scene.add(sky.stars, sky.dome, terrain.root, water.root, roads.root, vegetation.root, buildings.root, fields.root, dynamic.root,
     worldProps.root, hover.root, beacons.root, precip.rain, precip.snow);
 
@@ -492,6 +495,8 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
       plates.focusId = target?.kind === 'person' ? id : -1;
       hover.set(target && target.kind !== 'person' && target.kind !== 'animal' ? target : null);
     },
+    setGhost(g: BuildGhost | null): void { ghost.set(g); },
+    setBuildArea(area): void { ghost.setArea(area); },
     setQuality,
     getQuality(): QualityLevel { return quality.level; },
     resize,

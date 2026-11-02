@@ -81,8 +81,8 @@ export interface SiteView {
   /** The BuildingState being raised (construction < 1 until done); for an upgrade, the building upgraded. */
   building: number;
   kind: BuildingKind;
-  /** 'build' | 'upgrade' | 'repair' | 'demolish'. */
-  work: 'build' | 'upgrade' | 'repair' | 'demolish';
+  /** 'build' | 'upgrade' | 'repair' | 'demolish' | 'rebuild' (the same place made into a bigger kind: the seat's growth). */
+  work: 'build' | 'upgrade' | 'repair' | 'demolish' | 'rebuild';
   settlement: number;
   x: number;
   z: number;
@@ -106,6 +106,23 @@ export interface SiteView {
   outpost?: string;
   /** Order in the builder's queue (lower first). */
   priority: number;
+}
+
+export interface SeatStage {
+  label: string;
+  kind: BuildingKind;
+  work: 'build' | 'upgrade' | 'rebuild';
+  done: boolean;
+}
+
+export interface SeatPlan {
+  /** The seat building (the ruling household's home). */
+  seat: number;
+  stages: SeatStage[];
+  /** The next stage to begin (null when all are done or one is under way). */
+  next: (SeatStage & { cost: BuildCost }) | null;
+  /** A stage being built now, if any. */
+  underway: SiteView | null;
 }
 
 export interface OutpostView { id: number; name: string; settlement: number; x: number; z: number; deposit: number; founded: number }
@@ -138,4 +155,10 @@ export interface ConstructionApi {
   workersAt(site: number): readonly PersonId[];
   /** Bumps on any change of sites or outposts (cheap UI refresh). */
   version(): number;
+
+  // ---- additive: the ruler's seat grows into a castle, stage by stage ----
+  /** The stages of the person's seat (done and to come) and the next one with its cost; null when they have no seat. */
+  seatPlan?(person: PersonId): SeatPlan | null;
+  /** Begins the next stage of the seat (paid from the treasury). */
+  expandSeat?(person: PersonId): Result & { site?: number };
 }

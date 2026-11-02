@@ -1,3 +1,4 @@
+import type { BuildingKind } from '../content/types';
 // CONTRACT (wave 2) — what the app hands the DOM UI, and what the UI gives back.
 // Implemented by src/ui/** (`createUI`). The UI reads the sim through these services and the read
 // helpers in src/sim/api.ts, and changes it only through commands, actions and the module APIs.
@@ -72,6 +73,15 @@ export interface UiRendererControls {
   cameraMode?(): 'follow' | 'map' | 'free' | 'cinematic';
   /** Puts the camera somewhere for a cut-scene (switches to 'free'); `setCameraMode('follow')` brings it back. */
   setCameraPose?(position: { x: number; y: number; z: number }, lookAt: { x: number; y: number; z: number }, seconds?: number): void;
+  // ---- build mode (optional) ----
+  /** The builder's ghost (null removes it). */
+  setGhost?(ghost: { kind: BuildingKind; level: number; x: number; z: number; rot: number; ok: boolean; footprint: ReadonlyArray<{ x: number; z: number }> } | null): void;
+  /** Outline of the land the builder may build on (null clears). */
+  setBuildArea?(area: ReadonlyArray<ReadonlyArray<{ x: number; z: number }>> | null): void;
+  /** The building under a screen point, if any (client coordinates). */
+  buildingAt?(x: number, y: number): number | null;
+  /** Ground height at a world point. */
+  heightAt?(x: number, z: number): number;
 }
 
 /** The app side of the UI: lifecycle and meta state. */
