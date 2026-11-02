@@ -19,6 +19,8 @@ export interface SiegeSetup {
   engines: number;
   /** The walls were undermined: a stretch of wall has already come down. */
   mined?: boolean;
+  /** Where the besiegers' camp lies (the gate they meet is the gatehouse nearest it, and their line forms up between the two). */
+  camp?: { x: number; z: number };
 }
 
 /** `engage`'s options as the war code uses them (the contract's, plus the storm and the command). */

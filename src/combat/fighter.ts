@@ -15,6 +15,13 @@ export const S = {
 } as const;
 export type StateId = (typeof S)[keyof typeof S];
 
+/** What a group's order asks of a man this step (command.ts): his own judgement, a place in the formation, an all-out attack, a withdrawal. */
+export const D = { Free: 0, Slot: 1, Charge: 2, Retreat: 3 } as const;
+export type DirMode = (typeof D)[keyof typeof D];
+
+/** What a man is doing in a storm (scene.ts): nothing special, pushing a ram, carrying a ladder, climbing one, or holding a place on the wall. */
+export const R = { None: 0, Ram: 1, Ladder: 2, Climb: 3, Wall: 4 } as const;
+
 export const BEAST_KEY_BASE = 1_000_000_000;
 
 export interface BeastInfo {
@@ -148,6 +155,47 @@ export class Fighter {
   sidearm: WeaponDef | null = null;
   /** Seconds an NPC rider still wheels away after a pass with the lance. */
   wheel = 0;
+
+  // ---- troop groups, formations and orders (command.ts) ----
+  /** Kind of fighting man for the groups: 0 foot, 1 archers, 2 horse. */
+  gk: 0 | 1 | 2 = 0;
+  /** 1 = takes the player's orders; 0 = follows his side's commander (the AI). */
+  layer: 0 | 1 = 0;
+  /** What the group's order asks of this man this step (filled by FightCommand.update). */
+  dMode: DirMode = 0;
+  /** The place in the formation (or the rally point of a retreat) and the facing to keep there. */
+  dx = 0; dz = 0; dYaw = 0;
+  /** Within this gap (m) of an enemy he fights off the slot, and may stray this far (m) from it while he does. */
+  dEngage = 0; dLeash = 0;
+  /** Pace in formation (m/s). */
+  dSpeed = 0;
+  /** His index in his group's file (0 = the tip / the front-right man). */
+  sIdx = 0;
+  /** The enemy an order names (loose at, charge at), or null. */
+  dTarget: Fighter | null = null;
+  /** Shield wall: the guard is kept up while an enemy is close. */
+  dGuard = false;
+  /** The group's formation anchor drifted behind or he is the one holding it up: catch up at a run. */
+  dHurry = false;
+
+  // ---- storms (scene.ts) ----
+  /** What the man does in the storm: ram crew, ladder man, climber, wall archer, gate holder…; 0 = nothing special. */
+  role: number = 0;
+  /** The wall station he holds (a defender on the walk or in a tower), or null. */
+  station: import('./scene').Station | null = null;
+  /** The ladder or ram he works, or null. */
+  work: import('./scene').Work | null = null;
+  /** Standing on the wall-walk: his height is the station's, and only men on the walk can be struck in melee. */
+  onWall = false;
+  /** Seconds he has held a job (ladder climb, ram push). */
+  jobT = 0;
+  /** His height is set by the storm (on a station, on a ladder) rather than by the ground under him. */
+  yFixed = false;
+  /** The storm he is in (set when the fight begins), so the arena need not look it up each step. */
+  sc: import('./scene').SiegeScene | null = null;
+
+  /** Strikes to wound and takes the downed alive (a patrol, the watch): his blows are the flat and the haft, never a killing stroke. */
+  subduing = false;
 
   // ---- tallies ----
   hitsLanded = 0;

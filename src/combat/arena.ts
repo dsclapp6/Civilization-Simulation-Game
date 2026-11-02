@@ -6,16 +6,20 @@ import type { MoveResult, NavApi, ZoneAgent, ZoneAnimal, ZoneApi } from '../agen
 import type { AnimalKind } from '../core/domain';
 import { angleDiff, clamp, dist, hash3, yawTo, type P2 } from '../core/math';
 import type { Rng } from '../core/rng';
-import type { AnimalDrawItem, AnimState, CharacterDrawItem, HeldItem } from '../core/view';
+import type { AnimalDrawItem, AnimState, CharacterDrawItem, HeldItem, SiegeWorkDrawItem } from '../core/view';
 import type { SimContext } from '../sim/context';
 import type { EconomyApi } from '../sim/economy/types';
 import type { SimEvents } from '../sim/events';
 import { skillOf } from '../sim/skills';
 import type { SocialApi } from '../sim/social/types';
 import { ageYears, fullName, type Person, type PersonId } from '../sim/state';
-import type { FightResult, FightSide } from '../sim/wave3';
+import type { BattleGroupView, FightIntent, FightResult, FightSide, GroupKey, GroupOrder } from '../sim/wave3';
+import type { SiegeStatus, WarEngageOpts } from '../sim/military/war';
 import { think } from './ai';
-import { BEASTS, BEAST_KEY_BASE, Fighter, S, normAngle, turnTo } from './fighter';
+import { commanderStep } from './commander';
+import { FightCommand } from './command';
+import { SiegeScene } from './scene';
+import { BEASTS, BEAST_KEY_BASE, Fighter, R, S, normAngle, turnTo } from './fighter';
 import { FxQueue } from './fx';
 import { gearOf, type Gear, type GearEnv } from './gear';
 import { Projectiles } from './projectiles';
@@ -25,6 +29,9 @@ import { LOCATION_NAMES, WoundBook, maxHpOf, shapeWound } from './wounds';
 import type { HitLocation } from '../sim/wave3';
 
 export interface FightSideState { faction: string; members: Fighter[] }
+
+const NO_GROUPS: readonly BattleGroupView[] = [];
+const NO_WORKS: readonly SiegeWorkDrawItem[] = [];
 
 export interface Fight {
   id: number;
@@ -40,6 +47,18 @@ export interface Fight {
   /** The player is one of the fighters. */
   playerIn: boolean;
   check: number;
+  /** Troop groups and orders (battles and storms); absent in a brawl, where every man is his own master. */
+  cmd?: FightCommand;
+  /** The storm: walls, gate, ram, ladders and the men on the wall stations; absent in the open field. */
+  scene?: SiegeScene;
+  /** 'subdue': the side `subdueSide` strikes to wound and takes the downed and the yielding alive (a patrol taking a trespasser). */
+  intent: FightIntent;
+  subdueSide: number;
+  /** Seconds to the next think of the AI commander. */
+  cmdT: number;
+  /** Longest this fight may last (s), and how long it may go on with nothing struck or shot. */
+  maxSeconds: number;
+  quietEnd: number;
 }
 
 /** Everything the arena needs from the rest of the game; all of it optional except the simulation context. */
@@ -76,8 +95,13 @@ export function gap(a: Fighter, b: Fighter): number {
 }
 
 const FLEE_GONE = 55;
+/** Animations a man in the idle state may keep: the walk, the guard, a kneel, and the jobs of a storm. */
+const KEEP_ANIM: ReadonlySet<string> = new Set(['idle', 'walk', 'run', 'block', 'kneel', 'climb', 'push', 'carry_walk', 'work_lift', 'ride_idle', 'ride_walk', 'ride_trot', 'ride_gallop', 'ride_charge']);
 const FIGHT_QUIET_END = 45;
 const MAX_FIGHT_SECONDS = 600;
+/** A storm has an approach to walk, a ram to push and a gate to break: it is given longer. */
+const STORM_QUIET_END = 120;
+const MAX_STORM_SECONDS = 900;
 const DISPERSE_RADIUS = 170;
 const CORPSE_SECONDS = 110;
 
@@ -210,11 +234,13 @@ export class Arena {
     return !!f && f.fight !== 0 && !f.gone;
   }
 
-  engage(sides: FightSide[], opts: { at?: P2; yieldAllowed?: boolean; reason?: string } = {}): number {
+  engage(sides: FightSide[], opts: WarEngageOpts = {}): number {
     const env = this.env;
     const fight: Fight = {
       id: this.nextFight++, sides: [], at: opts.at ?? this.focus(), yieldAllowed: opts.yieldAllowed ?? true,
       reason: opts.reason ?? 'fight', t: 0, quiet: 0, ended: false, startDay: this.absDay, playerIn: false, check: 0,
+      intent: opts.intent ?? 'kill', subdueSide: -1, cmdT: 0,
+      maxSeconds: opts.siege ? MAX_STORM_SECONDS : MAX_FIGHT_SECONDS, quietEnd: opts.siege ? STORM_QUIET_END : FIGHT_QUIET_END,
     };
     const created: Fighter[] = [];
     sides.forEach((s, si) => {
@@ -260,8 +286,43 @@ export class Arena {
     this.place(fight, created);
     this.fights.set(fight.id, fight);
     for (const s of fight.sides) for (const f of s.members) { f.target = null; f.cooldown = 0.3 + (hash3(f.key, fight.id) % 100) / 100; }
+    if (fight.intent === 'subdue') this.startSubdue(fight, opts.subdueSide);
+    if (opts.command || opts.siege || opts.reason === 'battle' || opts.reason === 'storm') this.startCommand(fight, sides, opts);
+    if (opts.siege) this.startScene(fight, opts.siege);
     env.fightsChanged();
     return fight.id;
+  }
+
+  /** A storm: walls, gate, ram, ladders, the defenders on their stations. */
+  private startScene(fight: Fight, setup: NonNullable<WarEngageOpts['siege']>): void {
+    if (setup.attackers === setup.defenders || !fight.sides[setup.attackers] || !fight.sides[setup.defenders]) return;
+    const scene = new SiegeScene(this, fight, setup);
+    fight.scene = scene;
+    for (const side of fight.sides) for (const f of side.members) f.sc = scene;
+    scene.deploy();
+  }
+
+  /** The troop groups of a battle or a storm, with the player's commanded layer if he commands anybody. */
+  private startCommand(fight: Fight, sides: readonly FightSide[], opts: WarEngageOpts): void {
+    const cmd = new FightCommand(fight, this);
+    fight.cmd = cmd;
+    const command = opts.command && opts.command.span > 0 && fight.playerIn ? opts.command : null;
+    cmd.setup(command ? command.side : -1, command ? command.span : 0);
+    if (command) cmd.assignLayers(sides[command.side]?.people ?? []);
+  }
+
+  /** Whoever engages strikes to wound: the side without the player (a patrol taking a trespasser), else the first side listed. */
+  private startSubdue(fight: Fight, wanted: number | undefined): void {
+    let side = wanted ?? -1;
+    if (side < 0 || side >= fight.sides.length) {
+      const pi = fight.sides.findIndex((s) => s.members.some((m) => m.isPlayer));
+      side = pi >= 0 && fight.sides.length === 2 ? 1 - pi : 0;
+    }
+    fight.subdueSide = side;
+    for (const f of fight.sides[side].members) {
+      f.subduing = true;
+      f.preferRanged = false;
+    }
   }
 
   /** An NPC rider: a destrier under him, a lance in his hand (his own weapon stays at the saddle for when it is spent). */
@@ -425,6 +486,11 @@ export class Arena {
     const env = this.env;
     if (this.fighters.length === 0 && env.proj.count === 0 && this.corpses.length === 0 && this.beastCorpses.length === 0 && env.proj.landed.length === 0) return;
     this.time += dt;
+    for (const fight of this.fights.values()) {
+      if (fight.ended) continue;
+      fight.scene?.step(dt);
+      if (fight.cmd) { fight.cmd.update(dt); commanderStep(this, fight, dt); }
+    }
     const list = this.fighters;
     // who acts first rotates every step, so neither side gets the first blow of every exchange
     const n = list.length;
@@ -633,7 +699,7 @@ export class Arena {
         break;
     }
     // a swing that never lands in the animation clip has ended
-    if (f.st === S.Idle && f.anim !== 'idle' && f.anim !== 'walk' && f.anim !== 'run' && f.anim !== 'block' && f.anim !== 'kneel') f.anim = 'idle';
+    if (f.st === S.Idle && !KEEP_ANIM.has(f.anim)) f.anim = 'idle';
   }
 
   private canRise(f: Fighter): boolean {
@@ -774,14 +840,32 @@ export class Arena {
     f.speed = Math.abs(sp);
     f.moving = sp > 0.2;
     // facing
-    if (!Number.isNaN(f.wantYaw) && st !== S.Down && st !== S.Dead && st !== S.Dodge && st !== S.Stagger && st !== S.Hit) {
+    if (!Number.isNaN(f.wantYaw) && st !== S.Down && st !== S.Dead && st !== S.Dodge && st !== S.Stagger && st !== S.Hit && f.role !== R.Climb) {
       const rate = (st === S.Windup || st === S.Recover ? 4.5 : 9.5) * clamp(1 + 0.02 * (f.agi - 10), 0.7, 1.3);
       f.yaw = turnTo(f.yaw, f.wantYaw, rate * dt);
+    }
+    if (f.yFixed) {
+      // on a ladder, a wall station or the wall-walk: the storm sets his height; on the walk he may step along it
+      if (f.onWall && f.station && Math.abs(sp) > 1e-3) this.walkTheWall(f, dx * sp * dt, dz * sp * dt);
+      else f.speed = 0;
+      f.vx = (f.x - f.px) / dt; f.vz = (f.z - f.pz) / dt;
+      if (f.station) f.y = f.station.y;
+      return;
     }
     if (Math.abs(sp) > 1e-3) this.move(f, dx * sp * dt, dz * sp * dt);
     this.separate(f, dt);
     f.vx = (f.x - f.px) / dt; f.vz = (f.z - f.pz) / dt;
     f.y = this.groundY(f.x, f.z);
+  }
+
+  /** A step along the wall-walk: only along the wall, and not far from the station he came to. */
+  private walkTheWall(f: Fighter, dx: number, dz: number): void {
+    const st = f.station!;
+    const tx = Math.cos(st.yaw), tz = -Math.sin(st.yaw);
+    const along = dx * tx + dz * tz;
+    const nx = f.x + tx * along, nz = f.z + tz * along;
+    if (Math.hypot(nx - st.x, nz - st.z) > 9) return;
+    f.x = nx; f.z = nz;
   }
 
   /** How well the body moves: legs, wounds, tiredness and weight on the back. */
@@ -796,6 +880,11 @@ export class Arena {
   }
 
   move(f: Fighter, dx: number, dz: number): void {
+    if (f.sc && !f.onWall) {
+      // a shut gate is solid and a fallen wall is open, whatever the navigation says
+      if (f.sc.move(f, dx, dz, this.tmpP)) return;
+      dx = this.tmpP.x; dz = this.tmpP.z;
+    }
     const nav = this.nav;
     if (nav) {
       nav.move(f.x, f.z, dx, dz, f.radius, this.mr);
@@ -855,12 +944,15 @@ export class Arena {
   }
 
   private shotHits(s: import('./projectiles').Shot, x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): boolean {
+    if (s.kind === 'stone') return false; // engines' stones come down where they come down (onLand)
     let bestT = 2;
     let victim: Fighter | null = null;
     let hitY = 0;
     const dx = x1 - x0, dz = z1 - z0, dy = y1 - y0;
     const len2 = dx * dx + dz * dz;
     const list = this.fighters;
+    const scene = this.fights.get(s.fight)?.scene;
+    const wallT = scene ? scene.blocksShot(this.byKey.get(s.shooter) ?? null, x0, y0, z0, x1, y1, z1) : -1;
     for (let i = 0; i < list.length; i++) {
       const f = list[i];
       if (f.gone || f.st === S.Dead || f.key === s.shooter && s.age < 0.25) continue;
@@ -875,7 +967,20 @@ export class Arena {
       const foot = f.y;
       const top = f.st === S.Down ? foot + 0.45 : foot + f.height;
       if (cy < foot - 0.05 || cy > top + 0.08) continue;
+      if (wallT >= 0 && t > wallT) continue; // behind a wall
       if (t < bestT) { bestT = t; victim = f; hitY = cy; }
+    }
+    if (!victim && wallT >= 0) {
+      // the arrow meets the wall
+      s.x = x0 + dx * wallT; s.y = y0 + dy * wallT; s.z = z0 + dz * wallT;
+      this.env.fx.add('chips', s.x, s.y, s.z, 0.5);
+      return true;
+    }
+    if (victim && scene && scene.roofed(victim) && hash3(s.id, victim.key, 7) % 100 < 72) {
+      // the ram's roof turns it aside
+      s.x = x0 + dx * bestT; s.y = hitY; s.z = z0 + dz * bestT;
+      this.env.fx.add('chips', s.x, s.y, s.z, 0.4);
+      return true;
     }
     if (!victim) return this.bystanderHit(s, x0, z0, y0, dx, dy, dz, len2);
     const shooter = this.byKey.get(s.shooter) ?? null;
@@ -934,8 +1039,8 @@ export class Arena {
       const standing = alive.filter((n) => n > 0).length;
       let why: string | null = null;
       if (standing <= 1) why = standing === 1 ? 'won' : 'mutual';
-      else if (fight.quiet > FIGHT_QUIET_END) why = 'stalemate';
-      else if (fight.t > MAX_FIGHT_SECONDS) why = 'stalemate';
+      else if (fight.quiet > fight.quietEnd) why = 'stalemate';
+      else if (fight.t > fight.maxSeconds) why = 'stalemate';
       else {
         const b = this.env.playerBody();
         if (b && !fight.playerIn && dist(b.x, b.z, fight.at.x, fight.at.z) > DISPERSE_RADIUS) why = 'dispersed';
@@ -981,8 +1086,9 @@ export class Arena {
           if (p.death) { result.dead.push(p.id); continue; }
           if (f.fled || f.gone) result.fled.push(p.id);
           else if (env.book.isHurt(p.id)) result.wounded.push(p.id);
-          // the beaten noble who yielded (or was struck down) is taken for ransom
-          if (winnerSide >= 0 && si !== winnerSide && (f.yielded || f.st === S.Down) && fight.yieldAllowed && p.rankTier >= 5 && !f.fled) {
+          // the beaten noble who yielded (or was struck down) is taken for ransom; a patrol takes anyone it has beaten or who gave up
+          const taken = winnerSide >= 0 && winnerSide === fight.subdueSide;
+          if (winnerSide >= 0 && si !== winnerSide && (f.yielded || f.st === S.Down) && !f.fled && (taken || (fight.yieldAllowed && p.rankTier >= 5))) {
             const captor = this.captorFor(f, live[winnerSide]);
             if (captor && captor.person) result.captured.push({ captive: p.id, captor: captor.personId });
           }
@@ -994,6 +1100,9 @@ export class Arena {
       if (!captive) continue;
       captive.flags.captive = true;
       state.touch(captive);
+      // bound up by his captors: the patrol's man does what he can
+      const captor = state.persons.get(c.captor);
+      if (captor && fight.subdueSide >= 0) env.book.tend(captive, skillOf(captor, 'medicine'), this.rng);
       const ransom = ransomOf(captive);
       env.ctx.events.emit('captured', { captive: c.captive, captor: c.captor, ransom });
       state.log(this.absDay, 'captured', `${fullName(captive)} yielded and was taken for ransom.`, [c.captive, c.captor]);
@@ -1008,6 +1117,7 @@ export class Arena {
       if (!f.isAnimal || f.st === S.Dead) { /* keep the fighter record until swept */ }
       f.gone = true;
     }
+    fight.scene?.dispose();
     env.fightEnded?.(fight, result);
     this.fights.delete(fight.id);
     this.lastResult = result;
@@ -1136,6 +1246,70 @@ export class Arena {
   // ---------------------------------------------------------------------------------------------
 
   anyFight(): boolean { return this.fights.size > 0; }
+
+  // ---------------------------------------------------------------------------------------------
+  // War: groups, orders and the storm (docs/WAR.md)
+  // ---------------------------------------------------------------------------------------------
+
+  /** The fight the player is in, if it has a command layer. */
+  private playerFight(): Fight | null {
+    const pf = this.player;
+    const fight = pf && pf.fight ? this.fights.get(pf.fight) : undefined;
+    if (fight?.cmd) return fight;
+    // the player may be standing by: use the fight nearest him that has troops
+    const b = this.env.playerBody();
+    let best: Fight | null = null;
+    let bd = 400;
+    for (const f of this.fights.values()) {
+      if (!f.cmd || f.ended) continue;
+      const d = b ? dist(b.x, b.z, f.at.x, f.at.z) : 0;
+      if (d < bd) { bd = d; best = f; }
+    }
+    return best;
+  }
+
+  /** The troop groups of the fight near the player: his commanded men, or the enemy's in sight. */
+  groups(side: 'own' | 'enemy'): readonly BattleGroupView[] {
+    const fight = this.playerFight();
+    if (!fight?.cmd) return NO_GROUPS;
+    const b = this.env.playerBody();
+    return fight.cmd.views(side, b?.x ?? fight.at.x, b?.z ?? fight.at.z);
+  }
+
+  /** An order to the player's commanded men of a group. */
+  orderGroup(key: GroupKey, order: GroupOrder): { ok: boolean; reason?: string } {
+    const fight = this.playerFight();
+    const cmd = fight?.cmd;
+    if (!fight || !cmd) return { ok: false, reason: 'There is no battle to command' };
+    const groups = cmd.commanded(key);
+    if (groups.length === 0) return { ok: false, reason: cmd.playerSide < 0 ? 'You command no one here' : 'No one is left in that group' };
+    let ok = false;
+    let reason: string | undefined;
+    for (const g of groups) {
+      const r = cmd.give(g, order, true);
+      if (r.ok) ok = true; else reason = r.reason;
+    }
+    return ok ? { ok: true } : { ok: false, reason };
+  }
+
+  /** The storm near the player, for the HUD. */
+  siegeStatus(): SiegeStatus | null {
+    for (const f of this.fights.values()) if (f.scene && !f.ended) return f.scene.status();
+    return null;
+  }
+
+  /** The siege works of every storm (the `siegeWorks` view source). */
+  siegeWorkDraws(): readonly SiegeWorkDrawItem[] {
+    let n = 0;
+    for (const f of this.fights.values()) if (f.scene && !f.ended) n++;
+    if (n === 0) return NO_WORKS;
+    if (n === 1) { for (const f of this.fights.values()) if (f.scene && !f.ended) return f.scene.draws(); }
+    const out = this.workView;
+    out.length = 0;
+    for (const f of this.fights.values()) if (f.scene && !f.ended) for (const d of f.scene.draws()) out.push(d);
+    return out;
+  }
+  private readonly workView: SiegeWorkDrawItem[] = [];
 
   fightNearPlayer(): boolean {
     for (const f of this.fights.values()) if (f.playerIn) return true;

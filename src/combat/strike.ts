@@ -3,10 +3,30 @@
 import { angleDiff, clamp, yawTo } from '../core/math';
 import type { HitLocation, WoundKind } from '../sim/wave3';
 import { gap, type Arena } from './arena';
-import { S, normAngle, type Fighter } from './fighter';
+import { R, S, normAngle, type Fighter } from './fighter';
 import { ballisticPitch, type Shot } from './projectiles';
-import { absorb, rollLocation, shapeWound, type LocationOpts } from './wounds';
+import { absorb, rollLocation, shapeWound, type LocationOpts, type Shaped } from './wounds';
 import { ATTACK_KEYS, DAMAGE_QUALITY } from './weapons';
+
+/** How hard a man who is taking a prisoner hits, against the same man killing. */
+const SUBDUE_FORCE = 0.55;
+/** A prisoner is left with at least this share of his strength: the blow that would kill him only fells him. */
+const SPARE_HP = 0.14;
+
+/** The wound of a blow struck to take a man alive: it may fell him, it may not kill him. */
+function spareLife(w: Shaped, v: Fighter): void {
+  const p = v.person;
+  if (!p) return;
+  w.mortal = false;
+  const room = Math.max(0, p.health.hp - SPARE_HP) * v.maxHp;
+  if (w.damage > room) {
+    const k = w.damage > 0 ? room / w.damage : 0;
+    w.damage = room;
+    w.rate *= k;
+    w.severity = clamp(room / (v.maxHp * 0.9), 0, 1);
+    w.bleeding = w.rate > 0.0004;
+  }
+}
 
 export type BlowOutcome = 'dodged' | 'blocked' | 'parried' | 'missed' | 'hit' | 'stopped';
 
@@ -50,7 +70,8 @@ export function impact(a: Arena, f: Fighter): void {
     if (si === f.side) continue;
     for (const e of fight.sides[si].members) {
       if (e.gone || e.st === S.Dead || e.st === S.Yield || e.fled && e.st === S.Gone) continue;
-      if (e.st === S.Down && !(f.isPlayer || f.isAnimal || (f.person?.rep.cruelty ?? 0) > 20)) continue;
+      if (e.onWall !== f.onWall && e.role !== R.Climb) continue; // the wall-walk is out of reach of the ground (a ladder's top excepted)
+      if (e.st === S.Down && (f.subduing || !(f.isPlayer || f.isAnimal || (f.person?.rep.cruelty ?? 0) > 20))) continue;
       const d = gap(f, e);
       if (d > reach) continue;
       const dd = Math.max(0.3, Math.hypot(e.x - f.x, e.z - f.z));
@@ -106,8 +127,11 @@ export function meleeAccuracy(f: Fighter): number {
 }
 
 /** Applies one blow to one body. All the rolls come from the combat stream, in a fixed order. */
-export function applyBlow(a: Arena, att: Fighter | null, v: Fighter, b: Blow): BlowResult {
+export function applyBlow(a: Arena, att: Fighter | null, v: Fighter, b0: Blow): BlowResult {
   const env = a.env;
+  // a man taking a prisoner strikes with the flat and the haft: less force, and nothing that kills
+  const subdue = !!att && att.subduing && v.person !== null;
+  const b: Blow = subdue ? { ...b0, dmg: b0.dmg * SUBDUE_FORCE, kind: b0.kind === 'cut' || b0.kind === 'pierce' || b0.kind === 'arrow' ? 'blunt' : b0.kind } : b0;
   const rng = a.rng;
   const fx = env.fx;
   const fight = a.fights.get(v.fight);
@@ -181,6 +205,7 @@ export function applyBlow(a: Arena, att: Fighter | null, v: Fighter, b: Blow): B
     const ab = absorb(rng, v.gear.armour, loc, b.kind, remaining, b.ap);
     deflected = ab.absorbed > 0 && ab.through <= 0.5;
     const shaped = shapeWound(rng, loc, b.kind, ab.through, v.maxHp);
+    if (subdue) spareLife(shaped, v);
     const out = env.book.inflict(v.person, shaped, b.weapon, b.melee ? 'violence' : 'violence');
     damage = shaped.damage;
     hpLost = out.hpLost;
