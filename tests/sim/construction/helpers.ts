@@ -1,18 +1,18 @@
 // Helpers for the construction tests: a mock continent with shaped terrain (a river, a hill, water, deposits), a fake territory
 // service, a stub of the economy's household trade, and builders for lords, stewards and peasants with known rank and land.
 import goodsJson from '../../../src/content/goods.json';
-import type { BuildingKind } from '../../../src/content/types';
+import { BUILDINGS, type BuildingKind } from '../../../src/content/types';
 import { dist2, pointInPolygon } from '../../../src/core/math';
 import { installConstruction, type ConstructionInstall } from '../../../src/sim/construction';
 import type { EconomyApi } from '../../../src/sim/economy/types';
 import { newProfile } from '../../../src/sim/legacy';
 import { Simulation } from '../../../src/sim/sim';
 import type { SocialApi } from '../../../src/sim/social/types';
-import type { Household, Person, Title } from '../../../src/sim/state';
+import type { BuildingState, Household, Person, Title } from '../../../src/sim/state';
 import { createMockWorld } from '../../../src/sim/testing/mockWorld';
 import type { LandInfo, TerritoryApi } from '../../../src/sim/territory/types';
 import type { Wave3Deps } from '../../../src/sim/wave3deps';
-import type { Deposit, River, WorldModel } from '../../../src/world/types';
+import type { Deposit, River, Road, WorldModel } from '../../../src/world/types';
 import { mkHousehold, mkHouse, mkPerson } from '../builders';
 
 export interface Shape {
@@ -22,6 +22,32 @@ export interface Shape {
   walk?: (x: number, z: number) => number;
   rivers?: River[];
   deposits?: Deposit[];
+  roads?: Road[];
+}
+
+/** Where the first village of a seed's tiny continent lies (to shape terrain round it before the simulation exists). */
+export function probeVillage(seed: string): { id: number; x: number; z: number; radius: number } {
+  const s = createMockWorld({ seed, preset: 'tiny' }).settlements.find((x) => x.kind === 'village')!;
+  return { id: s.id, x: s.x, z: s.z, radius: s.radius };
+}
+
+/** A point in the wild: far from every settlement of the seed's tiny continent. */
+export function probeWild(seed: string): { x: number; z: number } {
+  const w = createMockWorld({ seed, preset: 'tiny' });
+  let best = { x: 0, z: 0 }, bd = -1;
+  for (let x = 500; x < 15500; x += 500) {
+    for (let z = 500; z < 15500; z += 500) {
+      let d = Infinity;
+      for (const s of w.settlements) d = Math.min(d, dist2(x, z, s.x, s.z));
+      if (d > bd) { bd = d; best = { x, z }; }
+    }
+  }
+  return best;
+}
+
+/** A point of open ground `d` metres from the village, in the gap between its three open fields. */
+export function openGround(v: { x: number; z: number }, d = 250, angle = 1.64): { x: number; z: number } {
+  return { x: v.x + Math.cos(angle) * d, z: v.z + Math.sin(angle) * d };
 }
 
 /** The tiny mock continent with some of its terrain replaced. */
@@ -35,6 +61,7 @@ export function shapedWorld(seed: string, shape: Shape = {}): WorldModel {
     walkCostAt: shape.walk ?? w.walkCostAt,
     rivers: shape.rivers ?? w.rivers,
     deposits: shape.deposits ?? w.deposits,
+    roads: shape.roads ?? w.roads,
   };
 }
 
@@ -231,14 +258,29 @@ export function peasantWithGarden(r: Rig, tier: 1 | 2 | 3 = 2): { p: Person; hh:
   const hh = mkHousehold(sim, v.id);
   const p = mkPerson(sim, { age: 32, tier, estate: tier === 1 ? 'unfree' : 'free', household: hh.id, settlement: v.id, house: mkHouse(sim, 'Croft').id });
   sim.state.setHead(hh, p);
-  const home = sim.state.buildingsAt.get(v.id)!.find((b) => b.kind === 'cottage' && b.household === 0 && b.construction >= 1)
-    ?? sim.state.buildingsAt.get(v.id)!.find((b) => b.kind === 'hovel' && b.household === 0)!;
+  const home = vacantHome(sim, v.id);
   sim.state.setHome(hh, home.id);
   hh.purse = 400;
   const gx = home.x + Math.sin(home.rot + Math.PI) * 20, gz = home.z + Math.cos(home.rot + Math.PI) * 20;
   r.terr.patches.push({ test: (x, z) => dist2(x, z, gx, gz) < 18 * 18, land: { kind: 'garden', settlement: v.id, household: hh.id, house: 0 } });
   r.terr.bump();
   return { p, hh, x: gx, z: gz };
+}
+
+/** A vacant home in the settlement: an existing one, else a new cottage standing a little way out. */
+export function vacantHome(sim: Simulation, settlement: number): BuildingState {
+  const list = sim.state.buildingsAt.get(settlement)!;
+  const found = list.find((b) => BUILDINGS[b.kind].cat === 'home' && b.household === 0 && b.construction >= 1 && b.kind !== 'manor_house');
+  if (found) return found;
+  const s = sim.world.settlements.find((x) => x.id === settlement)!;
+  const b: BuildingState = {
+    id: sim.state.nextBuildingId++, plot: -1, kind: 'cottage', level: 1, settlement, construction: 1, damage: 0, onFire: false, owner: 0,
+    household: 0, occupied: false, x: s.x + s.radius * 1.3 + 90 + 45 * list.filter((q) => q.plot < 0).length, z: s.z + 20, rot: Math.PI, culture: s.culture, seed: 7,
+  };
+  sim.state.buildings.set(b.id, b);
+  list.push(b);
+  sim.state.touchBuilding(b);
+  return b;
 }
 
 /** A clear patch of a settlement's ground for this builder (the module's own suggestion). */

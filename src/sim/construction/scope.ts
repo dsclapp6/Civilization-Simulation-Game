@@ -162,8 +162,10 @@ function compute(C: Construction, p: Person, held: Title[], regentOf: Title[]): 
   if (topTitle) label = `the ${lowerFirst(topTitle.name)}`;
   else if (auth.size > 0) label = [...auth.values()].sort((a, b) => a.settlement - b.settlement)[0].label;
   else label = p.rankTier >= 3 ? 'your house and workshop' : 'your croft';
-  const payer = own ?? (auth.size > 0 ? [...auth.values()][0].payer : undefined);
-  return { person: p, rank: p.rankTier, isHead, own, auth, byTitle, outposts, role, label, payer, house: p.house };
+  // who pays by default: the household of the greatest title held (a regent's ward), else the person's own
+  const top = [...auth.values()].filter((a) => a.kind === 'lord').sort((a, b) => b.rank - a.rank || a.settlement - b.settlement)[0];
+  const payer = top ? top.payer : own ?? (auth.size > 0 ? [...auth.values()][0].payer : undefined);
+  return { person: p, rank: p.rankTier, isHead, own, auth, byTitle, outposts, role, label, payer, house: top ? top.house : p.house };
 }
 
 /** Why a person has no say at all (for the catalogue when they hold nothing). */

@@ -9,7 +9,7 @@ import type { PersonId } from '../state';
 import type { Construction } from './core';
 import { levelCost, maxPerSettlement, rulesOf, type KindRules } from './data';
 import { footprintCorners, kindName } from './geometry';
-import { rankName, rankReason, scopeInfo, lordTitleAt, type Auth, type ScopeInfo } from './scope';
+import { noScopeReason, rankName, rankReason, scopeInfo, lordTitleAt, type Auth, type ScopeInfo } from './scope';
 import type { OutpostRec } from './save';
 import type { PlacementCheck } from './types';
 
@@ -219,7 +219,7 @@ function groundReasonFor(C: Construction, rules: KindRules, kind: BuildingKind, 
   if (cliffs >= 2) return 'Too rough: cliffs or bog';
   if (rules.slope < 1) {
     const rise = hMax - hMin;
-    const allowed = Math.min(MAX_RISE, rules.slope * Math.max(1, Math.min(def.w, def.d)));
+    const allowed = Math.min(MAX_RISE, rules.slope * Math.sqrt(def.w * def.w + def.d * def.d));
     if (rise > allowed) return 'Too steep';
   }
   void rot;
@@ -316,7 +316,7 @@ export function evaluate(C: Construction, personId: PersonId, kind: BuildingKind
   const out: PlacementCheck = { ok: false, x, z, rot, settlement: -1, footprint: fp };
   const si = scopeInfo(C, personId);
   if (!si) {
-    out.reason = personId && C.living(personId) ? (C.person(personId)?.flags.captive ? 'A prisoner builds nothing' : 'You have no land to build on') : 'Nobody there';
+    out.reason = noScopeReason(C, personId);
     return { check: out, standing: null, si: null };
   }
   const rules = rulesOf(kind);

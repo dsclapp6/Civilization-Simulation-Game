@@ -74,7 +74,7 @@ export function installConstruction(sim: Simulation, deps: Wave3Deps): Construct
       }
       const settlements = [...si.auth.keys()].sort((a, b) => a - b);
       const agentFor = [...si.auth.values()].filter((a) => a.kind !== 'lord').map((a) => a.settlement).sort((a, b) => a - b);
-      const payer = si.own ?? si.payer;
+      const payer = si.payer ?? si.own;
       return {
         person, settlements, own: own.sort((a, b) => a - b), outposts: si.outposts, label: si.label, household: payer?.id ?? 0,
         house: si.house, rank: si.rank, role: si.role, agentFor,
