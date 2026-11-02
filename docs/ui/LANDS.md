@@ -183,17 +183,29 @@ the main ones (a crop plan, research started and stopped, archers raised, a trad
 
 ## Measurements
 
-Taken by the flow on a shared four-core machine that was never idle (load 16 to 40), so for a feel and not a budget (nothing here is
-asserted). Two runs, the first at a load of about 23, the second at about 17: a whole frame of the game (simulation, agents and
-interface, no drawing) with nothing open 1.5 ms / 2.8 ms, and with builder mode open and a ghost following the cursor 1.1 ms / 1.0 ms;
-`catalogue(me, where)` for the 63 kinds 0.2 ms / 0.9 ms (asked every two seconds while the Build tab is up; `check` for the ghost is
-memoised by the module). The pages of the seat are built when they are opened or when something they show changes, never every
-frame: Overview 237 / 21 ms, Lands & works 34 / 23 ms, Fields & labour 52 / 16 ms, Research 245 / 143 ms, Military 90 / 75 ms,
-Trade 72 / 21 ms, Diplomacy 35 / 20 ms, Rivals 152 / 33 ms (Research is the dearest: the realm works out `researchOptions`, which
-looks at every researcher and every place of the House; the first Overview of a run also pays for the books and `rivals`). The
-footer's `realm.view(me)` is read twice a second. The map, with the camera moving and the borders and the icons redrawn, took 34 / 30
-ms for a step and standing still 0.3 / 0.2 ms (the borders are redrawn, and the icons placed, only when the camera, a layer, the
-selection or the territory changes). *People here* walks the residents of one place once, when it is opened.
+Taken by the flow (`node tools/lands-flow.mjs`, printed at its end and never asserted) on a shared four-core machine that was never
+idle. Three runs, at a load of about 23, 17 and 9, so for a feel and not a budget; milliseconds:
+
+| | load 23 | load 17 | load 9 |
+|---|---|---|---|
+| a whole frame of the game (simulation, agents, interface; no drawing), nothing open | 1.5 | 2.8 | 0.9 |
+| the same with builder mode open and a ghost following the cursor | 1.1 | 1.0 | 1.2 |
+| `catalogue(me, where)`, 63 kinds (asked every two seconds while the Build tab is up) | 0.2 | 0.9 | 0.2 |
+| Overview page built | 237 | 21 | 20 |
+| Lands & works | 34 | 23 | 8 |
+| Fields & labour | 52 | 16 | 5 |
+| Research | 245 | 143 | 6 |
+| Military | 90 | 75 | 12 |
+| Trade | 72 | 21 | 4 |
+| Diplomacy | 35 | 20 | 10 |
+| Rivals | 152 | 33 | 16 |
+| the map, a step with the camera moving and the borders and icons redrawn | 34 | 30 | 12 |
+| the map, a step standing still | 0.3 | 0.2 | 0.3 |
+
+The pages of the seat are built when they are opened or when something they show changes (`realm.version()`, `construction.version()`,
+the day, the territory), never every frame; the footer's `realm.view(me)` is read twice a second. The borders of the map are redrawn
+and its icons placed only when the camera, a layer, the selection or the territory changes. `check` for the ghost is memoised by the
+module, so the ghost costs one lookup a frame. *People here* walks the residents of one place once, when it is opened.
 
 ## Contract use and changes
 
