@@ -60,7 +60,7 @@ export interface CombatExt {
   seq: number;
   hurt: Record<number, HurtRec>;
   /** Fighting people's outlaw marks and other small per-person facts the module keeps. */
-  notes?: Record<number, { assaults?: number }>;
+  notes?: Record<number, { assaults?: number; recovering?: boolean }>;
 }
 
 export const BLOOD_DEAD = 0.3;
@@ -314,7 +314,11 @@ export class WoundBook {
     this.state.touch(p);
     this.touch();
     const dead = p.health.hp <= 0 || rec.blood <= BLOOD_DEAD;
-    if (dead) { this.kill(p, cause); return { wound, hpLost, dead: true, down: true, mortal: s.mortal, stun: s.stun }; }
+    if (dead) {
+      this.kill(p, cause);
+      // the player's character is spared (see `spare`): down, not dead
+      return { wound, hpLost, dead: !!p.death, down: true, mortal: !!p.death && s.mortal, stun: s.stun };
+    }
     if (s.mortal) {
       // the blow has found something vital: they go down and have seconds to live
       rec.dying = Math.min(rec.dying ?? 99, 4 + this.ctx.rng('combat').range(0, 26) * (1 - s.severity * 0.5));
@@ -324,10 +328,36 @@ export class WoundBook {
 
   kill(p: Person, cause: DeathCause): void {
     if (p.death) return;
+    // the character you play is not lost to a blow or a fever: they fall gravely hurt and must recuperate
+    if (p.flags.player && cause !== 'old_age') { this.spare(p); return; }
     delete this.ext().hurt[p.id];
     this.touch();
     killPerson(this.ctx, p, cause, this.ctx.absDay);
     this.onDeath?.(p, cause);
+  }
+
+  /** The player's character, struck down: alive, barely; bleeding stopped, recovering (healing runs faster in bed). */
+  spare(p: Person): void {
+    const rec = this.recFor(p.id);
+    rec.blood = Math.max(rec.blood, BLOOD_DEAD + 0.15);
+    delete rec.dying;
+    for (const w of rec.wounds) { w.bleeding = false; w.rate = 0; w.infected = false; w.care = Math.max(w.care, 1); }
+    p.health.hp = round3(Math.max(p.health.hp, 0.06));
+    const e = this.ext();
+    (e.notes ??= {})[p.id] = { ...(e.notes[p.id] ?? {}), recovering: true };
+    this.state.touch(p);
+    this.touch();
+    this.ctx.events.emit('notify', { kind: 'danger', text: 'You fall, gravely wounded, but you live. Recuperate (hold E, or sleep) to mend.', person: p.id });
+  }
+
+  /** Is this person recovering from being struck down (heals faster at rest)? */
+  recovering(id: PersonId): boolean { return !!this.ext().notes?.[id]?.recovering; }
+
+  /** Takes to bed in earnest: healing runs fast until the wounds close. */
+  setRecovering(id: PersonId): void {
+    const e = this.ext();
+    (e.notes ??= {})[id] = { ...(e.notes[id] ?? {}), recovering: true };
+    this.touch();
   }
 
   // ---- time: bleeding by the second, healing by the day ----
@@ -403,7 +433,10 @@ export class WoundBook {
     const rest = 0.6 + 0.4 * p.needs.rest;
     const food = 0.45 + 0.55 * p.needs.hunger;
     const warm = 0.7 + 0.3 * p.needs.warmth;
-    const base = 0.16 * rest * food * warm * (1 + 0.04 * (p.trained.end - 10)) * (1 + 0.02 * Math.min(20, medicine));
+    // recuperating in earnest (rest, care, a bed) mends far faster
+    const recovering = this.recovering(p.id);
+    const base = 0.16 * rest * food * warm * (1 + 0.04 * (p.trained.end - 10)) * (1 + 0.02 * Math.min(20, medicine)) * (recovering ? 2.4 : 1);
+    if (recovering) p.health.hp = round3(Math.min(1, p.health.hp + 0.12));
     let died = false;
     for (let i = rec.wounds.length - 1; i >= 0 && !died; i--) {
       const w = rec.wounds[i];
@@ -447,6 +480,11 @@ export class WoundBook {
     else if (p.health.hp > ceiling + 0.02) p.health.hp = round3(p.health.hp - 0.02);
     if (rec.wounds.length === 0 && rec.blood >= 0.99 && rec.stunned === undefined) {
       delete this.ext().hurt[p.id];
+      const notes = this.ext().notes;
+      if (notes?.[p.id]?.recovering) {
+        delete notes[p.id].recovering;
+        if (p.flags.player) this.ctx.events.emit('notify', { kind: 'gain', text: 'You are on your feet again, mended.', person: p.id });
+      }
       this.dropCondition(p);
       p.health.hp = round3(Math.max(p.health.hp, 0.9));
     } else this.syncCondition(p, rec);

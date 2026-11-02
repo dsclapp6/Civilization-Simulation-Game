@@ -98,7 +98,8 @@ export function testRequirements(E: Econ, p: Person, test: (typeof ENTRY_TESTS)[
 function sexRuleOk(sex: Sex, rule?: Sex): boolean { return !rule || rule === sex; }
 
 /** Fields whose door is shut to one sex (SPEC §6). */
-const SEX_BARRED: Partial<Record<string, Sex>> = { arms: 'f', knighthood: 'f' };
+// arms and knighthood are open to anyone on merit (owner's decision): no career is barred by sex any more
+const SEX_BARRED: Partial<Record<string, Sex>> = {};
 
 export function careerPaths(E: Econ, personId: PersonId): CareerPath[] {
   const p = E.person(personId);
@@ -135,13 +136,18 @@ export function careerPaths(E: Econ, personId: PersonId): CareerPath[] {
         requirements = [req('Aged 16 or more', age >= 16), req(`Capital: ${pd(24)} for a peddler's pack`, money(E, p) >= 24 || own === 'trade'), req('Letters 1 helps', skillLevel(p.skills.letters) >= 1)];
         break;
       case 'arms':
+        // open to anyone who passes the recruiter's test
         requirements = ENTRY_TESTS.length ? testRequirements(E, p, ENTRY_TESTS[0]) : [];
-        open = p.sex === 'm';
+        open = true;
         break;
-      case 'knighthood':
-        requirements = [req('Born to a knightly house', p.estate === 'noble' && p.rankTier >= 4), req('A man', p.sex === 'm')];
-        open = p.sex === 'm' && p.estate === 'noble';
+      case 'knighthood': {
+        // by birth, or by merit: anyone who can fight and ride may win their spurs (or be dubbed by a ruler)
+        const born = p.estate === 'noble' && p.rankTier >= 4;
+        const merit = skillLevel(p.skills.melee) >= 5 && skillLevel(p.skills.riding) >= 3;
+        requirements = [req('Born to a knightly house, or Melee 5 and Riding 3 (a ruler may also dub you)', born || merit), req('Aged 16 or more', age >= 16)];
+        open = (born || merit) && age >= 16;
         break;
+      }
       case 'church':
         requirements = [req('Aged 14 or more', age >= 14), req(`Letters 1 or a gift of ${pd(24)} to the house`, skillLevel(p.skills.letters) >= 1 || money(E, p) >= 24)];
         break;
