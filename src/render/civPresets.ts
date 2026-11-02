@@ -1,7 +1,7 @@
 // World-viewer scenes for the civilization pass (wave B art): quest marks, builder mode (overview camera, land tint,
 // ghosts), orders in battle, construction sites with their materials, deposits, siege works and gates, led animals,
 // the new clips and props. Each preset stages the mock view and the renderer's new controls; `tools/render-shots.mjs civ`
-// shoots them into docs/render/.
+// shoots them into docs/render/civ/.
 import * as THREE from 'three';
 import { BUILDINGS, type BuildingKind } from '../content/types';
 import { clamp } from '../core/math';
