@@ -121,10 +121,13 @@ export function buildArea(C: Construction, personId: PersonId): BuildArea {
   if (hit && hit.key === key) return hit.area;
   if (m.size >= MAX_CACHED && !hit) m.clear(); // (only the player and a few planners ask; a runaway caller cannot grow it)
   const polys: Polygon[] = [];
-  for (const sid of places) polys.push(...landsPolygons(C, sid));
-  polys.push(...outpostLands(C, si));
+  // (a castle that shares its village's lands gets the village's outline: the same array, listed once)
+  const seen = new Set<Polygon>();
+  const add = (list: Polygon[]): void => { for (const q of list) if (!seen.has(q)) { seen.add(q); polys.push(q); } };
+  for (const sid of places) add(landsPolygons(C, sid));
+  add(outpostLands(C, si));
   // a head with no say over the place his household lives in builds on its own plots only
-  if (si.isHead && si.own && !si.auth.has(si.own.settlement)) polys.push(...ownPlots(C, si));
+  if (si.isHead && si.own && !si.auth.has(si.own.settlement)) add(ownPlots(C, si));
   const area: BuildArea = polys;
   m.set(personId, { key, area });
   return area;

@@ -89,6 +89,14 @@ describe('the area a person may build on', () => {
     const single = r.cons.buildArea!(lord.id);
     expect(single).toContain(mine);
     expect(single).not.toContain(other);
+    // two places that share their lands (a castle and its village) are given the same outline: it is listed once
+    const second = [...r.sim.state.titles.values()].find((t) => t.kind === 'manor' && t.place !== v.id)!;
+    r.sim.state.setTitleHolder(second, lord.id);
+    r.terr.bump();
+    expect(r.cons.scope(lord.id).settlements.length).toBeGreaterThanOrEqual(2);
+    (r.terr as unknown as { landsPolygon: (s: number) => unknown }).landsPolygon = () => mine;
+    r.terr.bump();
+    expect(r.cons.buildArea!(lord.id)).toEqual([mine]);
     // nonsense is no answer: the circle is used
     (r.terr as unknown as { landsPolygon: (s: number) => unknown }).landsPolygon = () => [{ x: 1 }, 'x'];
     r.terr.bump();
