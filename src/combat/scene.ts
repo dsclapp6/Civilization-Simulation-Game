@@ -289,17 +289,19 @@ export class SiegeScene {
   /**
    * A garrison seldom has archers enough for its walls, but every castle has bows in its armoury: the lowest of the men who carry
    * no bow take one up (a shortbow and a quiver) until about two of every five defenders shoot, as many as there are stations.
-   * Knights, mounted men and anyone with a shield of rank hold the gate with the sword.
+   * Men without a shield go first; a man at arms who is needed on the wall leaves his shield at the foot of the stairs. Knights and
+   * mounted men hold the gate with the sword.
    */
   private armoury(archers: Fighter[], others: Fighter[], stations: number): void {
     const total = archers.length + others.length;
     const want = Math.min(stations, Math.ceil(total * 0.4));
     if (archers.length >= want) return;
-    const pool = others.filter((f) => !f.mounted && !f.gear.shield && (f.person?.rankTier ?? 0) < 4).sort((p, q) => rank(p) - rank(q) || p.key - q.key);
+    const bow = RANGED.shortbow;
+    if (!bow) return;
+    const pool = others.filter((f) => !f.mounted && (f.person?.rankTier ?? 0) < 4).sort((p, q) => rank(p) - rank(q) || p.key - q.key);
     for (const f of pool) {
       if (archers.length >= want) break;
-      const bow = RANGED.shortbow;
-      if (!bow) break;
+      if (f.gear.shield) { f.gear.worn = Math.max(0, f.gear.worn - f.gear.shield.weight); f.gear.shield = null; }
       f.gear.ranged = bow;
       f.gear.rangedQ = 1;
       f.gear.ammo = 24;

@@ -26,7 +26,6 @@ function duel(seed: string, kit: { weapon: string; ranged?: string | null }, gap
   fa.x = 800; fa.z = 800; fa.yaw = fa.wantYaw = 0;
   fb.x = 800; fb.z = 800 + gap; fb.yaw = fb.wantYaw = Math.PI;
   freeze(fb);
-  fb.hp = 1e6; fb.maxHp = 1e6;
   return { r, fa, fb };
 }
 

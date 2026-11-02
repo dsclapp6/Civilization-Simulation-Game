@@ -94,8 +94,10 @@ loose at range, the horse charge as a wedge, a shield wall locks shields and mov
 keeps a **slot** in the formation relative to a moving anchor (the group's anchor walks at 1.85 m/s for foot, 2.7 for horse; the men
 close up by their cohesion). A man in melee fights where he stands and comes back to his slot after.
 
-**Morale** is per group and moves with the fight: the dead and the fleeing nearby, the odds (as a ratio), the man's rank and whether
-the player is down. A broken group routs. Army size scales a death's effect so that a big host does not fall apart in seconds.
+**Morale** is each man's own: it drifts towards a level set by his health (and his legs) and by the odds, as a ratio of the men still
+standing (a handful against a crowd breaks, an army that has lost a few does not); a blow, and a death nearby, push it down at once,
+scaled by the size of the army so that a big host does not fall apart in seconds. A group's morale (the HUD's bar) is the mean of its
+men's. A man whose courage fails runs, or, if he is noble and the fight allows it, yields.
 
 **The AI commander** (`commander.ts`) gives its groups the same orders every 1.6 s: attackers advance, the horse charge when the foot
 is engaged, archers loose when an enemy is in range, defenders hold (the walls too), the lost (ratio below 0.32, morale below 0.5)
