@@ -259,6 +259,36 @@ export class Obj {
   /** The first step not yet done (undefined when all are). */
   current(o: ObjRec): StepRec | undefined { return o.steps.find((s) => !s.done); }
 
+  /** The skill a task trains: by the work its steps ask for, else by who the doer is (their class and trade). */
+  skillFor(spec: NewObjective): SkillId | null {
+    for (const s of spec.steps) {
+      const m = s.m;
+      if (m.k === 'strip') return 'farming';
+      if (m.k !== 'act') continue;
+      const id = m.ids.join(' ');
+      if (/farm\.|garden|harvest|plough|sow/.test(id)) return 'farming';
+      if (/stock|animal|herd|milk|shear/.test(id)) return 'husbandry';
+      if (/wood|fell|chop/.test(id)) return 'woodcutting';
+      if (/smith|forge/.test(id)) return 'smithing';
+      if (/carp|saw/.test(id)) return 'carpentry';
+      if (/brew/.test(id)) return 'brewing';
+      if (/pell|spar|combat|butts|archery|target/.test(id)) return /butts|archery|target/.test(id) ? 'archery' : 'melee';
+      if (/letter|lesson|school|pray|mass/.test(id)) return 'letters';
+      if (/trade|sell|buy/.test(id)) return 'trade';
+    }
+    const me = this.me;
+    if (!me) return null;
+    const c = me.career;
+    if (['knight', 'squire', 'man_at_arms', 'sergeant', 'soldier'].includes(c)) return 'melee';
+    if (c === 'archer') return 'archery';
+    if (c === 'smith') return 'smithing';
+    if (c === 'carpenter') return 'carpentry';
+    if (c === 'merchant' || c === 'shopkeeper') return 'trade';
+    if (me.estate === 'clergy') return 'letters';
+    if (me.rankTier >= 4) return 'stewardship';
+    return 'farming';
+  }
+
   /** Adds an objective unless one with the same key is live. Returns it, or null when it is a duplicate. */
   add(spec: NewObjective): ObjRec | null {
     if (this.byKey(spec.key)) return null;
@@ -269,6 +299,14 @@ export class Obj {
     if (spec.giver) rec.giver = spec.giver;
     if (spec.reward) rec.reward = spec.reward;
     if (spec.pay) rec.pay = spec.pay;
+    // every task given by someone trains a skill of its kind (farming, a craft, fighting, letters), else of the doer's class
+    if ((spec.source === 'chore' || spec.source === 'job' || spec.source === 'request') && !rec.pay?.skill) {
+      const skill = this.skillFor(spec);
+      if (skill) {
+        rec.pay = { ...(rec.pay ?? {}), skill, xp: 12 };
+        rec.reward = `${rec.reward ? `${rec.reward} · ` : ''}${SKILL_TITLE[skill] ?? skill} practice`;
+      }
+    }
     if (spec.fine) rec.fine = spec.fine;
     if (spec.dueDay !== undefined) rec.dueDay = Math.round(spec.dueDay * 1000) / 1000;
     if (spec.tut !== undefined) rec.tut = spec.tut;
@@ -438,3 +476,9 @@ export class Obj {
 
 /** Stat and skill ids as the `Match` kinds use them, for text. */
 export const STAT_TITLE: Record<StatId, string> = { str: 'Strength', end: 'Endurance', agi: 'Agility', int: 'Intellect', per: 'Perception', cha: 'Charisma' };
+
+/** Skill names for the reward line ("Farming practice"). */
+export const SKILL_TITLE: Partial<Record<SkillId, string>> = {
+  farming: 'Farming', husbandry: 'Husbandry', woodcutting: 'Woodcutting', smithing: 'Smithing', carpentry: 'Carpentry', brewing: 'Brewing',
+  melee: 'Fighting', archery: 'Archery', letters: 'Learning', trade: 'Trade', stewardship: 'Stewardship',
+};

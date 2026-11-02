@@ -69,6 +69,12 @@ export function createCombatProvider(sv: Services): ActionProvider {
             if (!sv.book.wounds(actor).some((w) => w.care < 1)) { o.enabled = false; o.reason = 'Your wounds are already bound'; }
             out.push(o);
           }
+          // rest until mended: the days pass quickly, the wounds close far faster in bed
+          if (hurt || me.health.hp < 0.8) {
+            const r = opt({ id: 'recuperate', label: 'Recuperate', category: 'rest', target, priority: sv.book.recovering(actor) ? 70 : 4, range: 999, preview: 'Take to your bed until you are mended (the days pass)' });
+            if (sv.sim.hostileNear()) { r.enabled = false; r.reason = 'Not with enemies near'; }
+            out.push(r);
+          }
           break;
         }
         case 'person': {
@@ -142,6 +148,13 @@ export function createCombatProvider(sv: Services): ActionProvider {
       if (!me) return { ok: false };
       switch (option.id) {
         case 'wounds': return { ok: true, ui: { panel: 'ext', name: 'wounds', id: actor } };
+        case 'recuperate': {
+          sv.book.tend(me, skillOf(me, 'medicine'), sim.rng('combat'));
+          sv.book.setRecovering(actor);
+          const mended = (): boolean => !sv.book.isHurt(actor) && (st.persons.get(actor)?.health.hp ?? 1) >= 0.85;
+          const r = sim.dispatch({ type: 'waitUntil', until: { test: mended, label: 'Recuperating…', maxDays: 12 } });
+          return { ok: r.ok, message: r.ok ? 'You take to your bed to mend.' : r.reason };
+        }
         case 'bind': {
           const r = sv.book.tend(me, skillOf(me, 'medicine'), sim.rng('combat'));
           if (r.tended > 0) gainSkill(sim, me, 'medicine', 3 * fraction + 1);

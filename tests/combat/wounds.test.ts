@@ -190,3 +190,20 @@ describe('harm off screen', () => {
     stepFor(sim, 0.1);
   });
 });
+
+describe('the character you play is struck down, not killed', () => {
+  it('a fatal blow leaves the player gravely hurt and recovering; rest mends them; anyone else dies', () => {
+    const { sim, combat } = combatRig({ seed: 'spare' });
+    const me = sim.state.persons.get(sim.state.run.playerId)!;
+    combat.book.kill(me, 'battle');
+    expect(me.death).toBeNull();
+    expect(me.health.hp).toBeGreaterThan(0);
+    expect(combat.book.recovering(me.id)).toBe(true);
+    // a few days in bed
+    for (let d = 0; d < 12 && combat.book.isHurt(me.id); d++) sim.advanceDays(1);
+    expect(me.death).toBeNull();
+    const other = adultMen(sim, 1)[0];
+    combat.book.kill(other, 'battle');
+    expect(other.death).not.toBeNull();
+  });
+});
