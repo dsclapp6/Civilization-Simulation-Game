@@ -118,6 +118,8 @@ export class Hud {
 
   // feed, dock, travel, overlays
   private readonly feedEl = h('div.mu-feed');
+  /** The battle command: shown while riding with a host, glowing red before the walls and in the storm. */
+  private readonly battleBtn = h<HTMLButtonElement>('button.mu-battle-btn.mu-hide', { type: 'button', 'aria-label': 'Battle command', tip: 'Battle command: the companies of the assault, their captains and tasks' }, icon('swords', 24));
   /** The lines themselves; the bar under them folds the feed away to a count of messages. */
   private readonly feedList = h('div.mu-feed-list');
   private readonly feedCount = h('span.mu-feed-bar-count');
@@ -201,6 +203,7 @@ export class Hud {
   private needScratch: NeedView[] = [];
 
   constructor(private readonly deps: HudDeps) {
+    this.battleBtn.addEventListener('click', () => deps.open({ panel: 'ext', name: 'battle' }));
     const feedFold = foldButton('feed', 'the messages', () => { this.lastFeedSig = ''; this.paintFeedFold(); });
     this.feedBar.append(icon('scroll', 12), this.feedCount, feedFold);
     this.feedBar.addEventListener('click', () => feedFold.click());
@@ -230,7 +233,7 @@ export class Hud {
     this.el.append(
       this.leftCol, this.rightCol, this.compass.el, this.banner.el, this.dangerEl, this.deps.toasts.el, this.travelEl, this.edge.el, this.dest.el,
       this.gainsEl, this.actionEl, this.promptEl, this.feedEl, this.dockEl, this.savedEl, this.reticle, this.hitFlash, this.downEl, this.combatChip, this.drawnChip,
-      this.hoverCard.el, this.sleepEl,
+      this.hoverCard.el, this.sleepEl, this.battleBtn,
     );
     this.downEl.append(h('div.mu-hud-down-card', null, icon('skull', 30), h('div.mu-hud-down-title', null, 'You are down'), this.downText));
   }
@@ -717,6 +720,9 @@ export class Hud {
   }
 
   private updateSlow(game: GameServices): void {
+    const phase = game.campaign?.phase() ?? null;
+    this.battleBtn.classList.toggle('mu-hide', !phase);
+    this.battleBtn.classList.toggle('hot', phase === 'before' || phase === 'storm');
     const sim = game.sim;
     const id = sim.state.run.playerId;
     const p = sim.state.persons.get(id);

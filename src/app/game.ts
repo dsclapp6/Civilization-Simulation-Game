@@ -15,7 +15,8 @@ import { IdbSaveStore } from '../sim/save-idb';
 import { loadProfile, type SaveStore } from '../sim/save';
 import { createUI } from '../ui';
 import { cursorCss } from '../ui/core/cursors';
-import type { GameUI } from '../ui/types';
+import type { GameUI, GameUIExt } from '../ui/types';
+import { castleScenario } from './scenarios';
 import { DebugOverlay, emptyTimings, type FrameTimings } from './debug';
 import { AppHost } from './host';
 import { InputLayer } from './input';
@@ -67,6 +68,16 @@ export async function start(root: AppRoot): Promise<void> {
   const store = await openStore();
   const profile = await loadProfile(store);
   const host = new AppHost({ store, profile, params, viewport: root.viewport });
+  // scenarios from the main menu (and `?scenario=castle`): a practice run set up in the ordinary game
+  host.startScenario = async (id: string) => {
+    await host.startNewRun({ difficulty: 'knight', practice: true });
+    for (let i = 0; i < 600 && !(host.session && host.screen === 'game'); i++) await new Promise((r) => setTimeout(r, 50));
+    const s = host.session;
+    if (!s) return;
+    for (const pid of (ui as GameUI & Partial<GameUIExt>).openPanels?.() ?? []) (ui as GameUI & Partial<GameUIExt>).closePanel?.(pid);
+    const r = id === 'castle' ? castleScenario(s) : { ok: false, reason: 'No such scenario' };
+    if (!r.ok) s.sim.events.emit('notify', { kind: 'warn', text: `The scenario could not be set up: ${r.reason}` });
+  };
   const ui = createUI(root.ui, host);
   host.ui = ui;
   root.ready();
@@ -197,6 +208,7 @@ export async function start(root: AppRoot): Promise<void> {
         t2 = performance.now();
         g.player.frame?.(dt);
         s.works.update(dt, s.interior.active || !!s.sim.clock.skip);
+        s.campaign.update(dt);
         const focus = g.player.mapFocus?.();
         if (focus) s.renderer.focusMap(focus.x, focus.z, focus.altitude);
         t3 = performance.now();
@@ -233,6 +245,10 @@ export async function start(root: AppRoot): Promise<void> {
 
   if (params.has('debug') || params.has('autostart') || params.has('shots') || params.has('hud')) installHooks(host, ui, flags, (dt) => frame(dt, performance.now(), true, false));
   requestAnimationFrame(loop);
+
+  // `?scenario=castle`: straight into a scenario (a practice run)
+  const scenario = params.get('scenario');
+  if (scenario && host.startScenario) { await host.startScenario(scenario); return; }
 
   // ---- developer shortcut past the menus ----
   const auto = params.get('autostart');

@@ -8,4 +8,5 @@ import './military';
 import './ruler';
 import './people';
 import './build';
+import './battle';
 export {};

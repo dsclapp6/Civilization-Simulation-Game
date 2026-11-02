@@ -212,7 +212,32 @@ export function rulerPanel(ctx: PanelCtx, startTab: Tab = 'overview'): UiPanel {
     const men = R.troops?.(me()) ?? [];
     const dubbable = men.filter((t) => t.kind === 'man_at_arms' || t.kind === 'sergeant');
     const champions = knightsOf(ctx, v, men.map((t) => t.person));
-    return h('div.mu-col.mu-gap-12', null, note(),
+    // ---- plan an attack: the host against a place, the player riding with it ----
+    const camp = ctx.game.campaign;
+    const seat = v.seat !== undefined ? ctx.sim.world.settlements[v.seat] : undefined;
+    const mineSet = new Set([...v.settlements, ...v.vassalSettlements]);
+    const targets = seat ? ctx.sim.world.settlements
+      .filter((s) => !mineSet.has(s.id) && (s.kind === 'castle' || s.kind === 'town' || s.kind === 'city' || s.kind === 'village'))
+      .map((s) => ({ s, d: Math.hypot(s.x - seat.x, s.z - seat.z) }))
+      .sort((a, b) => (a.s.kind === 'castle' ? 0 : 1) - (b.s.kind === 'castle' ? 0 : 1) || a.d - b.d).slice(0, 16) : [];
+    const atk = { target: targets[0]?.s.id ?? -1, rider: 0 };
+    const planCard = camp ? h('div.mu-card', null,
+      h('h4', null, icon('flag', 15), ' Plan an attack'),
+      camp.phase()
+        ? h('p.mu-small', null, `The host is in the field against ${ctx.placeName(camp.target())}. The battle button (bottom right) commands it.`)
+        : h('div.mu-col.mu-gap-6', { style: { marginTop: '6px' } },
+          h('p.mu-small.mu-dim', { style: { margin: 0 } }, 'Raise your host against a place. You ride with it among the men; if night falls on the road it camps, and before the walls it storms at first light.'),
+          h('div.mu-row.mu-wrap.mu-gap-6', null,
+            h('span.mu-small', null, 'Against'),
+            pick('Target', targets.map((x) => ({ value: x.s.id, text: `${x.s.name} (${x.s.kind}, ${(x.d / 1000).toFixed(1)} km)` })), atk.target, (x) => { atk.target = x; }),
+            h('span.mu-small', null, 'Ride as'),
+            pick('Ride as', [{ value: 0, text: 'yourself' }, ...champions.map((k) => ({ value: k.id, text: ctx.nameOf(k.id) }))], 0, (x) => { atk.rider = x; }),
+            button('Raise the host and march', { variant: 'danger', icon: 'flag', disabled: atk.target < 0, onClick: () => {
+              const r = camp.plan(atk.target, atk.rider || undefined);
+              act(r, `The host marches on ${ctx.placeName(atk.target)}.`);
+              if (r.ok) ctx.close();
+            } })))) : null;
+    return h('div.mu-col.mu-gap-12', null, note(), planCard,
       h('div', null, heading('Your knights', 'helm'),
         h('p.mu-small.mu-dim', { style: { margin: '0 0 6px' } }, 'Take a knight’s place and fight on your behalf: you play him (his sword, his skill, his wounds) while your lord carries on. Press U as the knight to come back.'),
         champions.length ? h('div.mu-col.mu-gap-4', null, champions.slice(0, 20).map((k) => h('div.mu-row.mu-between.mu-small', null,

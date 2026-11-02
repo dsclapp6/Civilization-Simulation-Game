@@ -70,6 +70,8 @@ export interface Army {
   orderDay: number;
   /** Contingents of vassal Houses raised with this army (house ids). */
   vassals: HouseId[];
+  /** The place a campaign is against (kept through halts and camps, when `target` is cleared). */
+  objective?: number;
   /** The plan for storming a place: companies, captains, tasks (src/sim/military/plan.ts). */
   plan?: import('./plan').AssaultPlan;
   /** A raid in progress: the settlement, hours left, and what has been done so far. */

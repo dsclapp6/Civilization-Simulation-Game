@@ -398,3 +398,10 @@
 .mu-build-tip:empty { display: none; }
 .mu-build-tip.bad { color: #ffb3a3; }
 .mu-link { background: none; border: none; padding: 0; color: var(--lapis); text-decoration: underline; cursor: pointer; font: inherit; }
+
+/* ---- battle command ---- */
+.mu-battle { display: grid; grid-template-columns: 460px minmax(0, 1fr); gap: 16px; align-items: start; }
+.mu-battle-map { border: 1px solid var(--rule); border-radius: 4px; width: 460px; height: 460px; display: block; }
+.mu-battle-side { display: flex; flex-direction: column; gap: 6px; max-height: 70vh; overflow-y: auto; }
+.mu-battle-kind { display: inline-flex; align-items: center; gap: 3px; font-size: 12.5px; padding: 1px 4px; border: 1px solid var(--rule); border-radius: 3px; }
+@media (max-width: 1000px) { .mu-battle { grid-template-columns: 1fr; } .mu-battle-map { width: 100%; height: auto; } }

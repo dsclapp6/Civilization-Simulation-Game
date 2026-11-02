@@ -105,7 +105,8 @@ export class CareerSystem {
     if (!a || !p) return { ok: false, reason: 'There is no such army' };
     if (a.engaged) return { ok: false, reason: 'The army is in battle' };
     if (M.armyOfPerson.has(p.id)) return { ok: false, reason: 'Already serving in an army' };
-    if (p.sex !== 'm') return { ok: false, reason: 'In this land only men were mustered' };
+    // the levy takes men; a woman who is a fighting man by trade (a knight, a man-at-arms) serves as one
+    if (p.sex !== 'm' && !['knight', 'squire', 'man_at_arms', 'sergeant', 'archer', 'soldier'].includes(p.career)) return { ok: false, reason: 'In this land only men were mustered' };
     if (p.flags.captive) return { ok: false, reason: 'You are a prisoner' };
     const age = (M.day - p.birthDay) / 16;
     if (age < CFG.levyMinAge || age > CFG.levyMaxAge + 5) return { ok: false, reason: 'Men of fifteen to sixty serve' };

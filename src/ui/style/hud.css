@@ -323,3 +323,11 @@
 .mu-hud .mu-hud-prompt { bottom: 62px; }
 .mu-hud .mu-hud-action { bottom: 118px; }
 .mu-hud .mu-hud-gains { bottom: 168px; }
+/* the battle command: a round red seal above the bar, glowing while the storm is near or going in */
+.mu-battle-btn {
+  position: absolute; right: 22px; bottom: 64px; width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center;
+  border: 2px solid #3a0d06; background: radial-gradient(circle at 40% 35%, #c9493a, #7a1810); color: #fff1e6; cursor: pointer; pointer-events: auto;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+}
+.mu-battle-btn.hot { animation: mu-battle-glow 1.4s ease-in-out infinite; }
+@keyframes mu-battle-glow { 0%, 100% { box-shadow: 0 0 0 2px rgba(255, 90, 60, 0.5), 0 0 14px 4px rgba(230, 40, 20, 0.55); } 50% { box-shadow: 0 0 0 3px rgba(255, 120, 80, 0.85), 0 0 26px 10px rgba(240, 50, 20, 0.85); } }

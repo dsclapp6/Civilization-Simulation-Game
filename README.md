@@ -48,6 +48,23 @@ stage by stage, place new buildings (a green ghost fits, a red one says why), cl
 pull it down. Tasks train the skill of their work (farming, a craft, fighting, learning); anyone may win a knight's spurs
 on merit; and the character you play, struck down, lives gravely hurt and recovers (Recuperate takes them to bed).
 
+**War on another castle.** In the ruler's seat, *Men & arms* → **Plan an attack**: choose the castle, ride as yourself
+or as one of your knights, and raise the host. It marches in real hours; if night falls before it reaches the enemy it
+**makes camp** (tents, fires, men sitting about) and strikes it at dawn. Camped before the walls, you sleep (Z) and the
+storm goes in at first light, with you among the men. While the host is before the walls or storming them, the
+**battle button** (bottom right, glowing red) opens **battle command**: a map of the place, your host and each company,
+and the companies of the assault under their captains. Give each a task (bows on the walls, the ram at the gate,
+ladders, charge the breach, hold in reserve), move men between them by fives, name the captains, or **Storm now**.
+The plan shapes the storm: the bows keep the wall-walk down, a well-manned ram breaks the gate, a reserve steadies the
+line. The main menu's **Scenario: the march on the castle** (or `?scenario=castle`) starts you as a knight in a host
+of 250 at dusk on the march against a castle held by 300.
+
+Fighting works from the keyboard alone: with steel out (G), **J** strikes and **K** guards; the camera turns to face a
+foe when the mouse rests. Walking one way for a second turns the camera to look that way. Build a **library** (research
+goes 1.6× faster in it), **stables** (come with horses) and **cowsheds, sheepfolds, pigsties and henhouses** (with their
+beasts). In build mode the **wall line** tool lays a wall from one click to the next, and on each site's *Works* page
+you **set servants to it**: you see them at it in daylight, hammering, sawing and carrying.
+
 Tasks are given **in person**: a gold **!** over someone's head means they have something for you; walk up and speak
 to them to take it up. Gilded **wings** over someone mean a task can be finished with them. The screen starts clear:
 the task card, hints, the clock card, the minimap, notices and messages all start folded to a line or a count (urgent
@@ -113,7 +130,7 @@ Choose the entry with `?mode=` on the URL (default `game`):
 
 | `?mode=` | What it is |
 |---|---|
-| `game` | the game. Extras: `autostart=1`, `seed=abc`, `difficulty=squire\|knight\|lord\|king`, `quality=`, `time=0..1`, `season=0..3`, `debug=1` (frame and system timings), `shots=1` (hooks for tools), `hud=1`, `devzone=1` |
+| `game` | the game. Extras: `autostart=1`, `seed=abc`, `difficulty=squire\|knight\|lord\|king`, `quality=`, `time=0..1`, `season=0..3`, `debug=1` (frame and system timings), `shots=1` (hooks for tools), `hud=1`, `devzone=1`, `scenario=castle` (the march on the castle) |
 | `world` | fly over a generated continent (renderer) |
 | `gallery` | every building, plant, crop, prop and effect |
 | `chars` | characters, horses, animals and all their animations |

@@ -29,6 +29,19 @@ export interface GameServices {
   readonly territory?: TerritoryApi;
   readonly construction?: ConstructionApi;
   readonly realm?: RealmApi;
+  /** Riding with the host against a place (the ruler's seat's "Plan an attack"; the battle command). */
+  readonly campaign?: CampaignApi;
+}
+
+export interface CampaignApi {
+  /** 'march' | 'camp' | 'before' | 'storm', or null when there is no campaign. */
+  phase(): string | null;
+  army(): number;
+  target(): number;
+  /** The lord raises his host against `target`; the player rides with it (as `rideAs`, one of his knights, if given). */
+  plan(target: number, rideAs?: number): { ok: boolean; reason?: string };
+  /** Storm now (before the walls by day). */
+  stormNow(): { ok: boolean; reason?: string };
 }
 
 export type QualitySetting = 'low' | 'medium' | 'high';
@@ -105,6 +118,8 @@ export interface UiHost {
   releaseMouseLook?(): boolean;
   /** Is the mouse looking (pointer locked) right now? The HUD tells a drawn weapon with a free cursor from one with the mouse taken. */
   mouseLooking?(): boolean;
+  /** Scenarios (a practice run, never saved): 'castle' = the march on the castle. */
+  startScenario?(id: string): Promise<void>;
 }
 
 export type UiScreen = 'menu' | 'loading' | 'game';

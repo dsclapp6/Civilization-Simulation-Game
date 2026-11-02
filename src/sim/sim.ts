@@ -39,7 +39,9 @@ export type WaitUntil =
   | 'marketDay'
   | 'cropRipe'
   | number
-  | { test: () => boolean; label?: string; maxDays?: number };
+  | { test: () => boolean; label?: string; maxDays?: number }
+  /** Until a set time, with a label of its own ("On the march…"). */
+  | { at: number; label: string };
 
 /** Commands the UI / player controller can dispatch. Later waves add entries via declaration merging. */
 export interface CommandMap {
@@ -300,11 +302,14 @@ export class Simulation implements SimContext {
     let budget = dt * SKIP_DAYS_PER_SECOND;
     while (this.clock.skip && budget > 1e-9) {
       const d = this.clock.advanceDays(Math.min(budget, 1 / 24));
-      if (d <= 0) break;
-      budget -= d;
-      this.state.dirty.meta = true;
-      this.fireHooks();
-      if (this.saver?.holdingHooks) break;
+      if (d > 0) {
+        budget -= d;
+        this.state.dirty.meta = true;
+        this.fireHooks();
+        if (this.saver?.holdingHooks) break;
+      }
+      // checked even when the clock stands at its target already (a step that reached it may have been cut short by
+      // the saver holding the hooks): otherwise a wait whose target lies between two hours would never end
       const kind = this.clock.skip?.kind;
       const label = this.clock.skip?.label ?? '';
       const res = this.clock.checkSkip();
@@ -313,6 +318,7 @@ export class Simulation implements SimContext {
         this.events.emit('skip', { phase: res === 'done' ? 'end' : 'timeout', kind: kind ?? 'wait', label });
         break;
       }
+      if (d <= 0) break;
     }
   }
 
@@ -393,7 +399,8 @@ export class Simulation implements SimContext {
           maxDays = 64;
           test = () => this.cropsRipeNearPlayer();
         }
-      } else { test = u.test; label = u.label ?? 'Wait'; maxDays = u.maxDays ?? 16; }
+      } else if ('at' in u) { target = u.at; label = u.label; }
+      else { test = u.test; label = u.label ?? 'Wait'; maxDays = u.maxDays ?? 16; }
       if (target !== null && target <= this.clock.absDay) return no('that time has passed');
       this.clock.resume();
       this.clock.startSkip('wait', label, target, test, maxDays);

@@ -198,3 +198,25 @@ describe('Simulation: events and lifecycle', () => {
     expect(sim.dispatch({ type: 'setSpeed', speed: 3 })).toMatchObject({ ok: false });
   });
 });
+
+describe('waits between the hours', () => {
+  it('a wait to a set time between two hours ends there, even when the step that reached it was cut short', () => {
+    const sim = newSim({ seed: 'between' });
+    const day = Math.floor(sim.absDay);
+    const at = day + 19.5 / 24 + (sim.absDay % 1 > 19.5 / 24 ? 1 : 0);
+    const ends: string[] = [];
+    sim.events.on('skip', (e) => ends.push(e.phase));
+    expect(sim.dispatch({ type: 'waitUntil', until: { at, label: 'On the march…' } })).toEqual({ ok: true });
+    // the saver holds the hooks on every step for a while (as when a save slice is due)
+    const saver = (sim as unknown as { saver: { holdingHooks?: boolean } | null });
+    const fake = { holdingHooks: true, tick: () => undefined, requestNow: () => undefined };
+    const real = saver.saver;
+    saver.saver = fake as never;
+    for (let i = 0; i < 200 && sim.absDay < at - 1e-9; i++) sim.step(0.25);
+    saver.saver = real;
+    for (let i = 0; i < 20 && sim.clock.skip; i++) sim.step(0.25);
+    expect(sim.clock.skip).toBeNull();
+    expect(sim.absDay).toBeCloseTo(at, 6);
+    expect(ends).toContain('end');
+  });
+});

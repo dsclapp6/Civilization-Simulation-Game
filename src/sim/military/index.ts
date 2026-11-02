@@ -185,7 +185,7 @@ export function installMilitary(sim: Simulation, deps: Wave3Deps): MilitaryRunti
       let rec = M.data.sieges.find((s) => s.army === armyId);
       if (!rec) {
         // just arrived before the walls: the siege begins, and the storm at once
-        const sid = a.target?.settlement ?? nearestSettlementId(M, a.x, a.z);
+        const sid = a.target?.settlement ?? a.objective ?? nearestSettlementId(M, a.x, a.z);
         if (sid === undefined) return { ok: false, reason: 'There is nothing here to storm' };
         rec = M.sieges.begin(a, sid) ?? undefined;
         if (!rec) return { ok: false, reason: 'The place cannot be besieged' };
@@ -197,11 +197,15 @@ export function installMilitary(sim: Simulation, deps: Wave3Deps): MilitaryRunti
       const a = M.army(armyId);
       if (!a) return null;
       if (!a.plan) a.plan = defaultPlan(M, a);
-      const sid = M.data.sieges.find((s) => s.army === armyId)?.settlement ?? a.target?.settlement ?? nearestSettlementId(M, a.x, a.z);
+      const sid = M.data.sieges.find((s) => s.army === armyId)?.settlement ?? a.target?.settlement ?? a.objective ?? nearestSettlementId(M, a.x, a.z);
       if (sid === undefined) return { plan: a.plan, note: '', defenders: 0, walls: 1, target: -1 };
       const def = defendersOf(M, sid, M.realm.holderOf(sid));
+      // in the storm the garrison stands as an army of its own in the battle
+      const fight = M.data.battles.find((b) => b.siege === sid && b.a === armyId && b.result === '');
+      const held = fight ? M.army(fight.d)?.men.length ?? 0 : 0;
+      const defenders = Math.max(def.people.length, held);
       const walls = fortBonus(M, sid);
-      return { plan: a.plan, note: planEffect(a.plan, a, def.people.length, walls).note, defenders: def.people.length, walls, target: sid };
+      return { plan: a.plan, note: planEffect(a.plan, a, defenders, walls).note, defenders, walls, target: sid };
     },
     setCompanyTask(armyId, company, task) {
       const a = M.army(armyId);
