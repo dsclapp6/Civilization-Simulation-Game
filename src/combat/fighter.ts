@@ -155,6 +155,8 @@ export class Fighter {
   sidearm: WeaponDef | null = null;
   /** Seconds an NPC rider still wheels away after a pass with the lance. */
   wheel = 0;
+  /** The last mobility worked out and until when it stands (arena.mobility). */
+  mobT = 0; mobV = 1;
   /** Seconds the horse rears from a wound (drawn rearing; the rider is shaken). */
   rearT = 0;
   /** The coat of the horse under him (for the corpse it leaves). */
@@ -215,6 +217,7 @@ export class Fighter {
 
   constructor(opts: { person?: Person | null; animalId?: number; animalKind?: AnimalKind | null; gear: Gear }) {
     this.person = opts.person ?? null;
+    this.isAnimal = !opts.person;
     this.personId = opts.person ? opts.person.id : 0;
     this.animalId = opts.animalId ?? 0;
     this.animalKind = opts.animalKind ?? null;
@@ -222,16 +225,19 @@ export class Fighter {
     this.gear = opts.gear;
   }
 
-  get isAnimal(): boolean { return this.person === null; }
+  /** A beast rather than a person (fixed when the fighter is made). */
+  readonly isAnimal: boolean;
 
   /** A beast's running speed (m/s). */
   beastRun(): number { return (this.animalKind && BEASTS[this.animalKind]?.run) || 6; }
 
-  get alive(): boolean { return this.st !== S.Dead && this.st !== S.Gone; }
+  // The state numbers below are S.Down 7, S.Dead 8, S.Yield 10, S.Gone 15: this is the hottest test in the arena, so no lookups.
+  get alive(): boolean { const s = this.st; return s !== 8 && s !== 15; }
 
   /** In the fight: standing or at least able to act. */
   get active(): boolean {
-    return this.st !== S.Dead && this.st !== S.Gone && this.st !== S.Down && this.st !== S.Yield && !this.fled;
+    const s = this.st;
+    return s !== 8 && s !== 15 && s !== 7 && s !== 10 && !this.fled;
   }
 
   set(st: StateId, anim: AnimState, dur = 0): void {

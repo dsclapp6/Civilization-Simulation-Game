@@ -148,6 +148,7 @@ describe('horses', () => {
     const { r, fk } = riderRig('hslow', { weapon: 'dagger' });
     const well = r.combat.arena.mobility(fk);
     fk.mountHp = 20;
+    fk.mobT = 0;
     expect(r.combat.arena.mobility(fk)).toBeLessThan(well * 0.8);
   });
 

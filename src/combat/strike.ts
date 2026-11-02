@@ -213,6 +213,7 @@ export function applyBlow(a: Arena, att: Fighter | null, v: Fighter, b0: Blow): 
     const shaped = shapeWound(rng, loc, b.kind, ab.through, v.maxHp);
     if (subdue) spareLife(shaped, v);
     const out = env.book.inflict(v.person, shaped, b.weapon, b.melee ? 'violence' : 'violence');
+    v.mobT = 0; // a wound changes how he moves at once
     damage = shaped.damage;
     hpLost = out.hpLost;
     killed = out.dead;

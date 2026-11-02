@@ -892,6 +892,7 @@ export class Arena {
     const ang = yawTo(rider.x, rider.z, fromX, fromZ);
     this.env.fx.add('blood', rider.x + Math.sin(ang) * 0.5, rider.y + 0.9, rider.z + Math.cos(ang) * 0.5, 1.2);
     rider.rearT = 0.8;
+    rider.mobT = 0;
     if (rider.mountHp <= 0) {
       // the horse goes down where it stands and its rider with it
       this.addHorseCorpse(rider);
@@ -966,8 +967,15 @@ export class Arena {
     f.x = nx; f.z = nz;
   }
 
-  /** How well the body moves: legs, wounds, tiredness and weight on the back. */
+  /** How well the body moves: legs, wounds, tiredness and weight on the back (worked out a few times a second, not every step). */
   mobility(f: Fighter): number {
+    if (f.mobT > this.time) return f.mobV;
+    f.mobT = this.time + 0.2 + (f.key % 5) * 0.03;
+    f.mobV = this.mobilityNow(f);
+    return f.mobV;
+  }
+
+  private mobilityNow(f: Fighter): number {
     let m = clamp(1 + 0.02 * (f.agi - 10), 0.85, 1.12);
     if (f.person) {
       m *= this.env.book.mobility(f.person);
