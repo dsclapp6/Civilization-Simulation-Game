@@ -97,11 +97,12 @@ describe('late for the schedule', () => {
     zone.detachPlayer();
     sim.view.setSource('mode', () => 'street');
     focus.x = vil.x; focus.z = vil.z;
-    setClock(sim, 1, 2, 0.45);
+    setClock(sim, 1, 2, 0.6); // afternoon work (at 0.45 there is no idle young adult near the focus: they are on their way to the midday meal)
     zone.resync();
     const a = zone.agentsArr.find((q) => q.control === 'ai' && q.age >= 20 && q.age <= 30 && q.st === St.Idle && !q.summoned && q.distFocus < 60)!;
     expect(a).toBeTruthy();
-    a.canRun = able;
+    // the zone refreshes a person's pace from the person every few seconds (setPace): hold the ability fixed for the experiment
+    Object.defineProperty(a, 'canRun', { get: () => able, set: () => undefined, configurable: true });
     // somewhere due at a time; walk there along an open line
     const ang = 0.7;
     let gx = a.x + Math.cos(ang) * metres, gz = a.z + Math.sin(ang) * metres;

@@ -2,6 +2,7 @@
 // rest falls while awake (sleeping restores it), warmth follows clothes, weather, shelter and fire,
 // mood follows food, rest, warmth, rank and what has happened. Unmet needs slow work, block training
 // and finally kill. NPCs' needs stay macro: their food comes from their household's stores.
+import { DAY_SECONDS } from '../../core/time';
 import type { HourInfo } from '../clock';
 import { dayPart } from '../calendar';
 import { decayStatBonus } from '../skills';
@@ -28,13 +29,16 @@ export function needsFactor(p: Person): number {
 }
 
 /**
- * The cost of a work bout in food and strength; `heavy` is 0 (light) to 1 (ploughing, mining, felling). A bout is half a
- * game hour: on top of the hour's ordinary 0.026 hunger and 0.036 rest, heavy work costs about as much again (a hard day of
- * twenty bouts leaves a well-fed player tired by evening, not collapsed).
+ * The cost of a work bout in food and strength; `heavy` is 0 (light) to 1 (ploughing, mining, felling). On a ten-minute day a bout
+ * was half a game hour: on top of the hour's ordinary 0.026 hunger and 0.036 rest, heavy work cost about as much again (a hard day of
+ * twenty bouts left a well-fed player tired by evening, not collapsed). A bout is a fixed few seconds of play, so a longer day holds
+ * more of them (150 on a thirty-minute day), and the cost of each is scaled back by the same factor as its experience (skills.ts
+ * `XP_SCALE`): the day's cost of work is what it was.
  */
 export function drainWork(E: Econ, p: Person, heavy: number): void {
-  p.needs.hunger = r2(clamp01(p.needs.hunger - 0.002 - 0.0055 * heavy));
-  p.needs.rest = r2(clamp01(p.needs.rest - 0.0025 - 0.009 * heavy));
+  const k = 600 / DAY_SECONDS;
+  p.needs.hunger = r2(clamp01(p.needs.hunger - (0.002 + 0.0055 * heavy) * k));
+  p.needs.rest = r2(clamp01(p.needs.rest - (0.0025 + 0.009 * heavy) * k));
   E.state.touch(p);
 }
 

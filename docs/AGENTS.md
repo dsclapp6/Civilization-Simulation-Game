@@ -21,11 +21,11 @@ at the stalls, shoppers drift about the square, and about one adult in six from 
 walks in (appearing at the gate, leaving at noon). Night: indoors asleep, except the watch (garrison and some
 burgesses, torch in hand) and a few revellers. Bad weather sends outdoor workers home / indoors. The sick are in bed.
 
-**A day is ten minutes** and people *walk* between the stretches of it, at the speed of people (see *Walking and running* below). A
+**A day is thirty minutes** and people *walk* between the stretches of it, at the speed of people (see *Walking and running* below). A
 stretch has a `from` and an `until`; the schedule gives the walk to the next place a window by distance, pace and ground (`tripDays`:
 the path is 12 % longer than the straight line, each person walks at their own pace — `pace.ts` `walkSpeed` — over the ground they
 cross — marsh, woodland floor and slopes take longer, `groundTime` — and a long way is walked briskly, up to `MAX_HURRY` times that;
-6 s at least, 204 s (`TRAVEL_MAX` 0.34 of a day, about 290 m for an average adult at a brisk pace) at most) and sets the person off that long before the next
+6 s at least, 600 s (`TRAVEL_MAX`, kept in real seconds — a third of a thirty-minute day — about 850 m for an average adult at a brisk pace) at most) and sets the person off that long before the next
 stretch begins, so they are there when it does (`Intent.leave`, `travel` < 1, `prevX/prevZ` the origin, `arrive` the time the walk
 is due to end). A walk is over before the stretch it leads to is; someone who goes indoors stays at least a few seconds (they are
 not seen going in and coming out at once). A long way after a short stretch spills into the next one — and a walk that began two
@@ -107,12 +107,18 @@ strip · stubble", "Common pasture", "Oak".
   | steps of more than 1 m in sight | 15 (up to 12.6 m) | 0 |
   | share of the movement that is a run | 34–38 % (village, fields, holy day, town) | 0.7–8.4 % (children at play, a few jogging youths and servants) |
 
-* **What it costs the day**: a ten-minute day is 144 times shorter than a real one and people now walk at real speeds, so a field 300 m
-  away is a four-minute walk: farmers whose strips lie 230–430 m from the village are on the road for about 70 % of the day (measured
-  53–79 %; `tests/agents/schedule.test.ts` guards it) — out at dawn, back at dusk — and the long ways are walked briskly (up to
-  `MAX_HURRY`). A walk is given at most `TRAVEL_MAX` (0.34 of a day, 204 s); whoever is still on the road when the schedule says they
-  have arrived is late (seconds late in the village: median 0.3, 90th percentile 13.5). That is the day's real shape on this scale; a
-  nearer field system, a longer day or (for the player) a faster clock are the ways to change it, not faster people.
+* **What it costs the day**: a thirty-minute day is 48 times shorter than a real one and people walk at real speeds, so a field 300 m
+  away is a four-minute walk, a fifth of an hour of the game day. Farmers' strips lie 100–500 m from their doors (a few villages
+  with little land near, up to 800 m). Setting the person off early enough for the way out (`travelAhead`, `tripDays`) and letting
+  the work run to its hour and the walk home follow it into the evening (the *homeward* rule in `tripBetween`: someone who works
+  out of doors and goes home for the evening sets out when the work stretch ends, not a walk before it) keeps them at their places
+  for most of the daylight: measured over the farming people of every village in four seasons (`schedule.intent` sampled every 0.004
+  of a day from sunrise to sunset), they are on the road for 30 % of the daylight and at work for 57 % (before: 39 % and 39 %; on the
+  ten-minute day 76 % of it was walking). A walk is given at most `TRAVEL_MAX` (600 s); whoever is still on the road when the
+  schedule says they have arrived is late (seconds late in the village scene of `walk-check`: median 0.4, 90th percentile 34, longest
+  89). The walks, the dwell indoors and the slack before a stretch ends are all in real seconds (`TRAVEL_MIN`, `DWELL_IN`, `DWELL_OUT`,
+  `WALK_SLACK`), so a longer or shorter day changes how much of the day they are, not how they look. Faster people are not the way to
+  change this; a nearer field system or a longer day are.
 
 ## Construction sites and buildings raised in play (`sites.ts`; docs/CIV.md §5)
 
@@ -226,7 +232,7 @@ hostile). `interactables` scores by distance and facing; strips/parcels via poin
 
 300 agents + 150 animals: ≈ 1.1 ms per sub-step at 1× (agents 0.5, paths 0.3, animals 0.1, scan 0.1; up to
 ≈ 2.4 ms under heavy machine load), ≈ 3–5 ms/frame at 8×; path search ≈ 0.15 ms avg; nav tile ≈ 0.3 ms.
-A village of ~110 agents through a whole ten-minute day: 0.36 ms per sub-step on average, 2.7 ms at the 99th percentile, ~4800 path
+A village of ~110 agents through a whole day (measured when the day was ten minutes; a thirty-minute day is the same sub-steps, three times as many of them): 0.36 ms per sub-step on average, 2.7 ms at the 99th percentile, ~4800 path
 searches (walking everything in sight needs more of them than the old instant trips did; they stay well inside the 1 ms/frame
 budget).
 Civilization pass (walking at the speed of people, sites, led animals), four runs each, the old and the new code side by side on the same

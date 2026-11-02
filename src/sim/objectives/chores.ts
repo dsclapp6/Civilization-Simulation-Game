@@ -3,6 +3,7 @@
 // A chore is a single located step; it pays a little from the household's purse and the head's good opinion,
 // and a chore ignored altogether costs a little of that opinion.
 import { hash01 } from '../../core/math';
+import { DAY_SECONDS } from '../../core/time';
 import { isHolyDay } from '../calendar';
 import { CAREERS } from '../careers';
 import { skillLevel } from '../people';
@@ -184,15 +185,38 @@ function capFor(O: Obj, me: Person): number {
   return O.age(me) < 14 ? 2 : 3;
 }
 
-/** Makes today's chores. Returns how many were made. */
-export function makeChores(O: Obj): number {
+/**
+ * Rounds of chores in a day. The head sets the chores at dawn, one to three, which was a few minutes of work for the ten-minute day they
+ * were tuned for (docs/CLARITY.md §3); a thirty-minute day would leave the player with nothing asked of them for most of it. So the head
+ * asks again through the working day, `CHORE_STEP_HOURS` game hours apart: later rounds top the household's open chores up to the
+ * day's number (never more than three at once, none the player already has), so a player who keeps up with them has work to hand, and
+ * one who does not is not buried.
+ */
+export const CHORE_ROUNDS = Math.max(1, Math.round(DAY_SECONDS / 600));
+export const CHORE_STEP_HOURS = 4;
+/** Chores the player may have open at once. */
+const MAX_OPEN = 3;
+
+/** Which later round of chores (1, 2, ...) the game hour `hour` of the day belongs to, 0 for none. */
+export function choreRoundAt(O: Obj, hour: number): number {
+  if (CHORE_ROUNDS <= 1 || hour > 17) return 0;
+  const k = Math.floor((hour - O.dawnHour()) / CHORE_STEP_HOURS);
+  return k >= 1 ? Math.min(CHORE_ROUNDS - 1, k) : 0;
+}
+
+/** Makes today's chores (`round` 0, at dawn) or tops them up through the day (a later round). Returns how many were made. */
+export function makeChores(O: Obj, round = 0): number {
   const me = O.me;
   if (!me || O.age(me) < 8) return 0;
-  const day = O.dayNo;
-  if (O.save.choresDay >= day) return 0;
+  // a later round: only after dawn's, not on the holy day or in the tutorial, and only while fewer than the day's chores are open
+  if (round > 0 && (O.save.choresDay !== O.dayNo || isHolyDay(O.day) || O.active().some((o) => o.source === 'tutorial'))) return 0;
+  const open = O.active().filter((o) => o.source === 'chore');
+  if (round > 0 && open.length >= (O.age(me) < 14 ? 2 : MAX_OPEN)) return 0;
+  const day = O.dayNo + 1000 * round;
+  if (round === 0 && O.save.choresDay >= O.dayNo) return 0;
   // the player must be at home (their own village or nearby), not away on the road or the map
   if (awayFromHome(O, me)) return 0;
-  O.save.choresDay = day;
+  if (round === 0) { O.save.choresDay = O.dayNo; O.save.choresHour = -1; }
 
   const head = headOf(O, me);
   const hh = O.state.households.get(me.household);
@@ -200,8 +224,9 @@ export function makeChores(O: Obj): number {
   const giver = isHead ? undefined : head;
   const picks: Pick[] = [];
   // someone with a post has the post's duty to do first
-  const cap0 = O.active().some((o) => o.source === 'job') ? 1 : capFor(O, me);
-  const add = (spec: NewObjective | null, order: number): void => { if (spec && !picks.some((p) => p.spec.key === spec.key)) picks.push({ spec, order }); };
+  const cap0 = Math.min(O.active().some((o) => o.source === 'job') ? 1 : capFor(O, me), round > 0 ? capFor(O, me) - open.length : 9);
+  const have = new Set(open.map((o) => o.title));
+  const add = (spec: NewObjective | null, order: number): void => { if (spec && !have.has(spec.title) && !picks.some((p) => p.spec.key === spec.key)) picks.push({ spec, order }); };
 
   if (isHolyDay(O.day)) {
     add(massChore(O, me, giver, day), 0);

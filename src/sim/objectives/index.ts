@@ -14,7 +14,7 @@ import type { ActionEvent } from '../actions';
 import type { Simulation } from '../sim';
 import type { Wave3Deps } from '../wave3deps';
 import { advanceTutorial, startTutorial } from './tutorial';
-import { choreDone, expireOverdue, makeChores } from './chores';
+import { CHORE_STEP_HOURS, choreDone, choreRoundAt, expireOverdue, makeChores } from './chores';
 import { Obj, type ObjRec } from './core';
 import { isStrict } from './data';
 import { notablePlaces } from './directory';
@@ -171,6 +171,14 @@ export function installObjectives(sim: Simulation, deps: Wave3Deps): ObjectivesR
     advanceTutorial(O);
     if (info.day > O.save.choresDay && info.hour >= O.dawnHour(info.day) && info.hour <= 20) dawn();
     else if (info.day > O.save.jobsDay && info.hour >= O.dawnHour(info.day) && info.hour <= 20) { makeJobs(O); }
+    else {
+      // later through the day the head asks again (chores.ts CHORE_ROUNDS)
+      const r = choreRoundAt(O, info.hour);
+      if (r > 0 && O.save.choresDay === info.day && O.save.choresHour < O.dawnHour(info.day) + r * CHORE_STEP_HOURS) {
+        O.save.choresHour = O.dawnHour(info.day) + r * CHORE_STEP_HOURS;
+        if (makeChores(O, r) > 0) round(O, null);
+      }
+    }
     storyHourly(O);
     syncRequests(O);
     if (info.hour % 6 === 0) { retireGoals(O); if (info.day > O.save.goalsDay) refreshGoals(O); }

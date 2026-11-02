@@ -1,7 +1,7 @@
 // The farmer loop (brief: wave2-econ): a 14-year-old works the family strips from plough to flour, sells
 // grain at the market, buys a better sickle, rents more strips and hires a hand.
 import { describe, expect, it } from 'vitest';
-import { skillLevel } from '../../../src/sim/people';
+import { DAY_SECONDS } from '../../../src/core/time';
 import { ageYears } from '../../../src/sim/state';
 import { STAPLE_GRAINS } from '../../../src/sim/economy/diet';
 import { bagGet } from '../../../src/sim/economy/items';
@@ -36,7 +36,10 @@ describe('the farmer loop', () => {
     }
     expect(player.needs.hunger).toBeGreaterThan(0.03); // the scripted player stayed fed
     expect(player.health.hp).toBeGreaterThan(0.5);
-    expect(skillLevel(player.skills.farming)).toBeGreaterThanOrEqual(2);
+    // The season's fixed work (about 135 bouts) earned some 170 experience (Farming 1 to 2) when a day was ten minutes. Experience per bout
+    // is scaled with the length of the day (skills.ts XP_SCALE: a longer day holds more bouts of the same few seconds, so a year of
+    // full-time work earns what it did), so the same bouts teach 600 / DAY_SECONDS as much now.
+    expect(player.skills.farming - farming0).toBeGreaterThan(150 * (600 / DAY_SECONDS));
     expect(player.skills.farming).toBeGreaterThan(farming0);
     expect(player.trained.str).toBeGreaterThan(str0); // heavy work builds strength
     expect(grainOf(hh.stores)).toBeGreaterThan(5);

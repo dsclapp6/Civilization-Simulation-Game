@@ -60,14 +60,14 @@ describe('workers at a site', () => {
     const I = newIntent();
     setClock(sim, 1, 2, 0);
     const day = sim.absDay;
-    const anims = new Set<AnimState>();
+    const anims = new Set<string>();
     let atSite = 0;
     for (const p of workers) {
       zone.sched.intent(p, day + 0.4, I);
       expect(I.activity).toBe('work');
       expect(I.indoors).toBe(false);
       expect(WORK_CLIPS.has(I.anim)).toBe(true);
-      anims.add(I.anim);
+      anims.add(I.carry !== 'none' ? 'carry' : I.anim); // the kinds of work: hammer, saw, pick, spade — and carrying material from the pile
       // outside the footprint of a building that is solid, within a few metres of it
       const d = Math.hypot(I.x - site.x, I.z - site.z);
       if (d > 3 && d < 14) atSite++;

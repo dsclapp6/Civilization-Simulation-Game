@@ -67,7 +67,7 @@ camera, left strikes, right guards, a click on the view takes the mouse) is the 
   church and the market with their distances (a mark past the edge sits at the edge with a chevron). When you enter a
   village or town its **banner** appears for a few seconds: name, kind, county and lord.
 - **Top right**: the date, time of day and a dial, what kind of day it is in words (a working day, market day at Dromore, a
-  holy day) with a tip that a day lasts ten minutes, the place and realm you stand in, and the speed buttons (click the
+  holy day) with a tip that a day lasts thirty minutes, the place and realm you stand in, and the speed buttons (click the
   card for *Today* in the journal). Badges say *Paused*, *Action time* (the calendar crawls while you fight, talk or
   trade) and *Danger nearby*. Under it the **minimap** (**N**): north-up chart of roads, rivers, the buildings of the
   place (your home in gold), the family's strips (gold), people (kin gold, household amber, others grey), markers and
@@ -128,7 +128,7 @@ strokes of the rhythmic ones while the step lasts. The
 
 ## The loop
 
-- **Time.** A day is 10 minutes at 1× (about 7 of them daylight); a season is 4 days (day 4 is the holy day), a year 16 days. You walk in
+- **Time.** A day is 30 minutes at 1× (about 20 of them daylight); a season is 4 days (day 4 is the holy day), a year 16 days. You walk in
   real time at every speed; the speeds fast-forward the world, your work and your walking together.
   Conversations and standoffs slow the calendar twentyfold.
 - **Acting.** Walk up to something and the prompt names the default action (`E  Reap · strip of barley`).

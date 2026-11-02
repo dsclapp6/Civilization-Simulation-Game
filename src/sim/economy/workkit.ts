@@ -19,7 +19,7 @@ import { parseItemKey, type ItemKey, type Quality } from './types';
 
 /** Seconds a bout takes at speed 1 (10 to 15 s; ≈ half a game hour). */
 export const BOUT = 12;
-/** Game hours one bout of work stands for at 1× (a 600 s day: 25 s an hour). */
+/** Game hours one bout of work stands for at 1× (a 1800 s day: 75 s an hour). */
 export const BOUT_HOURS = (BOUT * 24) / DAY_SECONDS;
 /** The hero compresses the chores: per game hour the player does about twice what a capable adult does. */
 export const HERO_FACTOR = 2;

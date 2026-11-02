@@ -1,5 +1,5 @@
 // Tunables of the law (docs/CIV.md §4, docs/LAW.md). Distances in metres, times in simulated seconds unless a name says days.
-// A game day is ten minutes at 1×, so "a day" below is long: sentences are a few days, fines are pence.
+// A game day is thirty minutes at 1×, so "a day" below is long: sentences are a few days, fines are pence.
 
 export const LAW = {
   // ---- being seen ----

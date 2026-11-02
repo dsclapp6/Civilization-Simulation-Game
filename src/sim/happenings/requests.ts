@@ -1,9 +1,10 @@
 // NPC requests to the player (SPEC §18, §21): neighbours ask for help with work, a loan, goods fetched,
 // a message carried, a strayed animal found, a watch kept, a godparent, a marriage. Requests are offered
-// about every two or three game days (SPEC §21: something to deal with every 2-3 minutes), heard and
+// about every eight or nine minutes of play (SPEC §21: something to deal with every 2-3 minutes), heard and
 // answered in conversation (a social topic), tracked in a small journal (the 'requests' panel) and have
 // consequences both ways: rewards, opinion and standing when honoured; lost opinion and honour when
 // accepted and then neglected or when left unanswered.
+import { DAY_SECONDS } from '../../core/time';
 import { isCloseKin } from '../kin';
 import { formatMoney } from '../money';
 import { TIER_MONEY } from '../people';
@@ -20,6 +21,24 @@ const say = (speaker: PersonId, text: string, tone?: DialogueLine['tone']): Dial
 const WORK_IDS = /^(farm|garden|wood|stock|craft|appr|dig)\./;
 const WORK_SKIP = /\.(wait|hire_on)$/;
 const ANIMAL_WORDS: Record<string, string> = { sheep: 'sheep', pig: 'pig', goat: 'goat', cow: 'cow' };
+
+/**
+ * How much longer a game day is than the ten minutes of play the offers were tuned for (the clarity pass: something to deal with every
+ * few minutes of play). What is offered, and how long an offer waits, is about the player's minutes of play, not the calendar: the
+ * chance per hour, the gap between offers and the time an offer stands are all scaled by it, so requests keep turning up at the pace
+ * of the ten-minute day (about one in eight or nine minutes at 1x, `tools/pacing.ts`). (What a request asks, and the days given for
+ * the work, are game time.)
+ */
+const PACE = DAY_SECONDS / 600;
+/**
+ * An hour is PACE times longer than it was, so there are fewer checks per minute of play, and the offers made after the night come in a
+ * burst that fills the journal (at most `maxOpen` stand at once) and then all lapse together: the gap between offers and the time one
+ * stands are a little shorter than the plain scale (0.7 and 0.6 of it), which brings the cadence back to what it was.
+ */
+const GAP = 0.7 / PACE;
+const STAND = 0.6 / PACE;
+/** The chance of an offer in one game hour, from the chance tuned for an hour of a ten-minute day. */
+const hourly = (p: number): number => 1 - Math.pow(1 - Math.min(0.999, p), PACE);
 
 type Builder = (H: Hap, me: Person, from?: PersonId) => RequestRec | null;
 
@@ -73,7 +92,7 @@ function pickRequester(H: Hap, me: Person, ok: (p: Person) => boolean, from?: Pe
 function make(H: Hap, type: RequestType, from: Person, text: string, summary: string, data: RequestRec['data'], reward: RequestRec['reward'], offerDays?: number): RequestRec {
   const r: RequestRec = {
     id: H.save.nextReq++, type, from: from.id, settlement: from.settlement, state: 'offered', offered: H.day,
-    expires: H.day + (offerDays ?? DATA.requests.offerDays), text, summary, data, reward,
+    expires: H.day + (offerDays ?? DATA.requests.offerDays) * STAND, text, summary, data, reward,
   };
   H.save.reqs.push(r);
   H.save.lastOffer = H.day;
@@ -115,7 +134,7 @@ const BUILD: Record<RequestType, Builder> = {
     const pence = amounts[idx];
     if (me.money < pence) return null;
     return make(H, 'loan', from, pickText(H, cfg.ask, vars(me, from, { pence: formatMoney(pence) })), `Lend ${formatMoney(pence)} to ${from.first}`,
-      { pence, interest: cfg.interest }, { pence: Math.round(pence * (1 + cfg.interest)), opinion: 6, points: 2 }, cfg.offerDays);
+      { pence, interest: cfg.interest }, { pence: Math.round(pence * (1 + cfg.interest)), opinion: 6, points: 2 }, cfg.offerDays);  // (the offer's days are scaled by `make`)
   },
   work(H, me, forcedFrom) {
     const cfg = DATA.requests.work;
@@ -227,7 +246,7 @@ export function offerRequest(H: Hap, type: RequestType, from?: PersonId): number
   return r ? r.id : 0;
 }
 
-/** Each daytime hour: possibly offer a new request, keeping to the pacing target (a day is ten minutes of play: about one request every seven or eight). */
+/** Each daytime hour: possibly offer a new request, keeping to the pacing target (one request about every eight or nine minutes of play at 1x, whatever the length of the day). */
 function maybeOffer(H: Hap): void {
   const me = H.state.persons.get(H.playerId);
   if (!me || me.death || H.state.run.phase !== 'alive') return;
@@ -235,9 +254,9 @@ function maybeOffer(H: Hap): void {
   const open = H.save.reqs.filter((r) => r.state === 'offered' || r.state === 'accepted').length;
   if (open >= cfg.maxOpen) return;
   const since = H.day - H.save.lastOffer;
-  if (since < cfg.minGapDays) return;
+  if (since < cfg.minGapDays * GAP) return;
   // a long quiet spell makes the next request likelier
-  const p = cfg.hourlyChance * H.diff('requests') + Math.min(0.5, Math.max(0, since - 1.2) * 0.35);
+  const p = hourly(cfg.hourlyChance * H.diff('requests')) + Math.min(0.5, Math.max(0, since - 1.2 / PACE) * 0.35 * PACE);
   if (!H.rng().chance(p)) return;
   offer(H, me);
 }

@@ -1,6 +1,7 @@
 // NPC requests to the player (SPEC §18, §21): offered, heard and accepted in conversation, completed with
 // rewards or neglected with consequences, tracked in a journal, paced.
 import { describe, expect, it } from 'vitest';
+import { DAY_SECONDS } from '../../../src/core/time';
 import type { ActionOption } from '../../../src/sim/actions';
 import type { Conversation } from '../../../src/sim/social/types';
 import type { Person } from '../../../src/sim/state';
@@ -53,7 +54,7 @@ describe('offering', () => {
     const notes: string[] = [];
     a.sim.events.on('request', (e) => events.push(e.id));
     a.sim.events.on('notify', (e) => { if (e.kind === 'quest') notes.push(e.text); });
-    a.sim.advanceDays(32); // two years: a request every seven minutes or so (a day is ten minutes of play)
+    a.sim.advanceDays(16); // a year: a request every eight minutes or so (a day is thirty minutes of play)
     expect(events.length).toBeGreaterThan(2);
     expect(notes.length).toBeGreaterThanOrEqual(events.length);
     const journal = a.adv.happenings.requests();
@@ -65,7 +66,7 @@ describe('offering', () => {
     }
   });
 
-  it('keeps to the pacing target: about one request every five to ten minutes of play (a day is ten), never more than the cap open', () => {
+  it('keeps to the pacing target: about one request every five to ten minutes of play (whatever the length of the day), never more than the cap open', () => {
     const a = advSim({ seed: 'req-pace' });
     const days: number[] = [];
     a.sim.events.on('request', () => days.push(a.sim.absDay));
@@ -73,9 +74,9 @@ describe('offering', () => {
     for (let d = 0; d < 48; d++) { a.sim.advanceDays(1); maxOpen = Math.max(maxOpen, a.adv.happenings.openRequests().length); }
     // the player answers by declining at once, so the slots keep freeing
     expect(maxOpen).toBeLessThanOrEqual(4);
-    const per = 48 / days.length; // game days between requests
-    expect(per).toBeGreaterThan(0.45);
-    expect(per).toBeLessThan(1.3);
+    const per = ((48 / days.length) * DAY_SECONDS) / 60; // minutes of play between requests
+    expect(per).toBeGreaterThan(4.5);
+    expect(per).toBeLessThan(13);
   });
 
   it('lets the player ask a neighbour whether there is anything to do', () => {

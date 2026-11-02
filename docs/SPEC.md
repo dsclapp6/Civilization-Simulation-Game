@@ -73,11 +73,12 @@ and research currencies, hands-on production, war you can direct, rival towns th
 
 ## 2. Time
 
-- **1 day = 60 s** at 1× *(tune — single constant)*. Daylight ≈ 40 s, night ≈ 20 s, varying
-  by season. **1 season = 4 days; 1 year = 16 days** (≈16 min). People age one year per year,
-  so one adult life ≈ 10–12 h of play and a run spans generations.
+- **1 day = 1800 s (thirty minutes)** at 1× *(tune — single constant `DAY_SECONDS`; the first spec said 60 s, the clarity pass
+  ten minutes, and the owner chose thirty once people walked at real speeds)*. Daylight ≈ 20 min, night ≈ 10 min, varying
+  by season. **1 season = 4 days; 1 year = 16 days** (≈8 h). People age one year per year, so one adult life is some hundreds of
+  hours of play and a run spans generations (the speeds and the skips are how it is played through).
 - **Action time:** while the player is in combat, a duel, a chase or a conversation, the
-  calendar slows 20× (≈1 day per 20 min) so fights don't burn days. Movement stays real-time.
+  calendar slows 20× (≈1 day per 10 h) so fights don't burn days. Movement stays real-time.
 - **Speed:** 1×, 3×, 8×. Fast speeds are refused/cancelled when a hostile is within 150 m
   of the player. Pause is allowed (single-player).
 - **Skips:** *Sleep until dawn*; *Wait until* (dawn / noon / dusk / crop ripe / market day).

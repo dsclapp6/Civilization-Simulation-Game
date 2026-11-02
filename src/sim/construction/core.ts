@@ -32,7 +32,7 @@ export class Construction {
   version = 0;
   /** Cache of views and checks, cleared when `version` or the building registry moves. */
   cacheKey = '';
-  /** The ten-minute stretch of the game day a site's supply was last looked at on someone's asking (not saved: it only keeps the asking cheap). */
+  /** The ten game minutes (a 144th of the game day) a site's supply was last looked at on someone's asking (not saved: it only keeps the asking cheap). */
   readonly supplyHour = new Map<number, number>();
   /** The morning plan in progress (between the first shard of the hour and the last). */
   plan: PlanRun | null = null;

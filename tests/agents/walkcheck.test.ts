@@ -2,6 +2,7 @@
 // walking movement in sight is at 2.0 m/s or slower, everything faster is drawn with the run clip, and nobody in sight is carried across
 // the street. People walk at the speed of people: the median walk is about 1.3 m/s and running is the exception.
 import { beforeAll, describe, expect, it } from 'vitest';
+import { DAY_SECONDS } from '../../src/core/time';
 import { WalkMeter, walkAcceptance, type WalkResult } from '../../src/agents/dev/walkMeter';
 import type { Settlement } from '../../src/world/types';
 import { makeRig, setClock, village, type Rig } from './helpers';
@@ -23,7 +24,7 @@ function measure(dow: number, from: number, to: number, at: { x: number; z: numb
   setClock(sim, 1, dow, from);
   zone.resync();
   const meter = new WalkMeter(sim, zone, focus);
-  const steps = Math.round((to - from) * 600 * 20);
+  const steps = Math.round((to - from) * DAY_SECONDS * 20);
   for (let i = 0; i < steps; i++) meter.step();
   return meter.result(steps);
 }

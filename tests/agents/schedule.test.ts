@@ -55,7 +55,7 @@ describe('whereabouts', () => {
     let atStrip = 0;
     const I = newIntent();
     for (const f of farmers) {
-      // on a ten-minute day the way to the strips is a long walk: at this hour many are still on it, and the intent is the place they walk to
+      // people walk at the speed of people: the way to the strips is a long walk: at this hour many are still on it, and the intent is the place they walk to
       setClock(rig.sim, SUMMER, 2, 0);
       rig.zone.sched.intent(f, rig.sim.absDay + 0.4, I);
       expect(I.indoors).toBe(false);
@@ -150,7 +150,7 @@ describe('whereabouts', () => {
       most = Math.max(most, mine / 96);
     }
     expect(walking).toBeGreaterThan(0);
-    // people walk at the speed of people (a ten-minute day): the fields are a long way for some, a short one for most
+    // people walk at the speed of people (a thirty-minute day): the fields are a long way for some, a short one for most
     expect(walking).toBeLessThan(total * 0.78);
     expect(most).toBeLessThan(0.9);
   });

@@ -62,9 +62,9 @@ describe('clock hooks', () => {
     expect(rb.log).toEqual(ra.log);
   });
 
-  it('advances 1 day per DAY_SECONDS (10 min) at 1x, faster at 3x/8x, not when paused, slower in action time', () => {
+  it('advances 1 day per DAY_SECONDS (30 min) at 1x, faster at 3x/8x, not when paused, slower in action time', () => {
     const c = mk();
-    expect(DAY_SECONDS).toBe(600);
+    expect(DAY_SECONDS).toBe(1800);
     c.advance(DAY_SECONDS);
     expect(c.absDay).toBeCloseTo(1, 9);
     c.setSpeed(8);

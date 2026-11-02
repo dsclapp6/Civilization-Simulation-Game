@@ -15,8 +15,9 @@ export const PERK_LEVELS = [5, 10, 15, 20] as const;
 
 /**
  * Growth by the bout. The tables of the work actions (experience and stat points per bout) were struck when a game day was
- * a minute of play and a player could fit about four bouts into it. A day of ten minutes held about ten times as
- * many bouts, so each bout's growth was scaled back (and scales with the day's length: a thirty-minute day holds three times the bouts): a bout is half a game hour of the hero's work, who learns about twice
+ * a minute of play and a player could fit about four bouts into it. A bout is a fixed few seconds of play whatever the day, so a
+ * day of ten minutes held about ten times as many bouts and a day of thirty minutes (`DAY_SECONDS` 1800) thirty times as many: each
+ * bout's growth is scaled back with the day. A bout is a sixth of a game hour of the hero's work, who learns about twice
  * as fast per game hour as a capable adult (≈ 1.9 experience a game hour for an NPC, `XP_PER_YEAR`). A youth who practises
  * most days still reaches STR 10 and Archery 3 (the archers' test) at 14 or 15.
  */

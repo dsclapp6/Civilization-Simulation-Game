@@ -5,7 +5,7 @@
 // and without a zone (headless, tests) the same phases run on timers.
 import type { P2 } from '../../core/math';
 import { clamp, dist, hash01, yawTo } from '../../core/math';
-import { isNight } from '../../core/time';
+import { DAY_SECONDS, isNight } from '../../core/time';
 import { isMarketDay } from '../calendar';
 import { parseItemKey } from '../economy/types';
 import { formatMoney } from '../money';
@@ -486,7 +486,7 @@ export class PatrolSystem {
     const L = this.L;
     L.sim.events.emit('trespass', { phase: 'left', person: me.id, house: p.house, settlement: p.settlement, level: p.level === 'hostile' ? 'hostile' : 'private' });
     L.store.data.stats.left++;
-    this.escorted.set(me.id, { settlement: p.settlement, until: L.day + LAW.comeBack / 600 });
+    this.escorted.set(me.id, { settlement: p.settlement, until: L.day + LAW.comeBack / DAY_SECONDS });
     if (me.id === L.playerId) L.notify('info', 'You are off the lord\'s land. The riders turn back.');
     this.say(p, 'And stay off.', 4);
     this.goAway(p);
@@ -626,7 +626,7 @@ export class PatrolSystem {
     const body = L.player?.body();
     if (!body || !p.cell) return;
     const metres = dist(body.x, body.z, p.cell.x, p.cell.z) * 1.15;
-    const hours = clamp(metres / 1.25 / 600 * 24, 0.5, 14);
+    const hours = clamp(metres / 1.25 / DAY_SECONDS * 24, 0.5, 14); // the walk takes real seconds; they are this many game hours
     const where = L.holdingPlace(rec.settlement, rec.house).text;
     this.say(p, `It is a long road to ${L.placeName(rec.settlement)}. Move!`, 5);
     L.notify('warn', `You are marched to ${where}: about ${Math.max(1, Math.round(hours))} ${Math.round(hours) <= 1 ? 'hour' : 'hours'} on the road.`);

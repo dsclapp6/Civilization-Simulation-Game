@@ -35,7 +35,7 @@ You walk the village in third person with a **free cursor**. Point at a person, 
 says what it is and what a click will do; **click** to walk there and do it (or stand close and press **E**; hold **E** for
 every option). Hold the **right button** and drag to turn the camera. What you are meant to be doing is written in the
 top left corner (the *tracker*), shown by a gold marker in the world, the compass ribbon and the minimap; **Y** asks
-"what now?" and **O** opens the journal. A day lasts ten minutes, a season four days, a year sixteen: speed it up with
+"what now?" and **O** opens the journal. A day lasts thirty minutes, a season four days, a year sixteen: speed it up with
 **2** and **3** while you wait, slow down when you work or fight. When you sleep, the day is written up.
 
 ![Tracker, compass, minimap and the tooltip that follows the cursor](docs/game/clarity-hover-person.png)

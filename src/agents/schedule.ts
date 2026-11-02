@@ -230,14 +230,22 @@ interface DayTimes {
 }
 
 /**
- * Shortest and longest walk (days) the schedule gives between two places: 6 s to 204 s (eight game hours) at 1×. A day is ten minutes
- * (600 s) and people walk at the speed of people (pace.ts), so a long way takes a good part of it: 300 m is a walk of four minutes.
- * The longest walk the schedule allows is 204 s (about 290 m as the crow flies for an average adult at a brisk pace, 250–340 m by build
- * and age); a longer one is walked at the best pace the person can keep up, whoever is still on the road when the schedule says they
- * have arrived is late, and the bodies of people out of sight finish such a walk at once.
+ * Shortest and longest walk (days) the schedule gives between two places, kept in real seconds so they mean the same at any day length:
+ * 6 s to 600 s (ten minutes) at 1×. People walk at the speed of people (pace.ts), so a long way takes a good part of a day: 300 m is a
+ * walk of four minutes, and a farmer whose strips are 450 m off needs five or six. The longest walk the schedule allows is 600 s (about
+ * 850 m as the crow flies at a brisk pace); a longer one is walked at the best pace the person can keep up, whoever is still on the road
+ * when the schedule says they have arrived is late, and the bodies of people out of sight finish such a walk at once. (204 s, which was
+ * 0.34 of the old ten-minute day, left the farmers of villages with distant fields on the road long after work had begun. 600 s is a
+ * third of a thirty-minute day, about the same fraction of it as before, so the schedule's look-ahead over the end of each stretch costs
+ * what it did.)
  */
-const TRAVEL_MIN = 0.01;
-const TRAVEL_MAX = 0.34;
+const TRAVEL_MIN = 6 / DAY_SECONDS;
+const TRAVEL_MAX = 600 / DAY_SECONDS;
+/** Real seconds a person stays indoors after going in (long enough to be seen go in and not be out again at once), and out of doors. */
+const DWELL_IN = 7.2 / DAY_SECONDS;
+const DWELL_OUT = 1.2 / DAY_SECONDS;
+/** A walk ends this long (real seconds, as days) before the stretch it leads to does. */
+const WALK_SLACK = 12 / DAY_SECONDS;
 /**
  * Days a walk of `d` metres is given at `pace` m/s (default the unhurried adult's walk; the path is longer than the straight line).
  * People set out early enough to be there when their next stretch of the day begins, each at their own pace (pace.ts `walkSpeed`);
@@ -387,14 +395,22 @@ export class Schedule {
     // everyone leaves a little early for their own pace and the ground they cross (up to a fifth more), so no one is hurried and not all
     // set out in a block
     // someone who has gone indoors stays long enough (a few seconds) to be seen go in and not be out again at once
-    const dwell = a.indoors && !a.away ? 0.012 : 0.002;
+    const dwell = a.indoors && !a.away ? DWELL_IN : DWELL_OUT;
     let win = Math.min(TRAVEL_MAX, tripDays(dist, walkSpeed(p, ageYears(p, a.from))) * this.groundTime(ox, oz, b.x, b.z, dist) * (1 + 0.12 * hash01(p.id, 77)));
     // a walk is over before the stretch it leads to is (nobody is still on the road at bedtime): whoever cannot make it hurries instead
-    win = Math.max(TRAVEL_MIN, Math.min(win, b.until - 0.02 - (a.from + dwell)));
+    win = Math.max(TRAVEL_MIN, Math.min(win, b.until - WALK_SLACK - (a.from + dwell)));
     const t = this.trip;
     t.ox = ox; t.oz = oz; t.win = win;
     // as early as the walk needs, but not before this stretch has begun (a long way after a short stretch ends in the next one)
     t.leave = Math.max(a.from + dwell, a.until - win);
+    // The day's work out of doors goes on until its hour, and the way home is walked after it, into the evening (as the way out to
+    // it is walked in the morning, before it): for those with a long way to go a fifth of the day is not spent on the road at the
+    // expense of the work. The evening is long enough to be home before bed.
+    if (a.activity === 'work' && !a.indoors && !a.away && b.activity !== 'work' && b.activity !== 'eat' && b.from - a.until < 0.005 && b.until - b.from > 0.1) {
+      win = Math.max(TRAVEL_MIN, Math.min(win, b.until - WALK_SLACK - a.until));
+      t.win = win;
+      t.leave = a.until;
+    }
     return true;
   }
 

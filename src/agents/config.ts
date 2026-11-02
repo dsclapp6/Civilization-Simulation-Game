@@ -46,7 +46,7 @@ export const SPAWN_BUDGET_MS = 1.0;
 export const WALK_SPEED = 1.3;
 export const RUN_SPEED = 3.2;
 /**
- * A day is ten minutes but people walk at the speed of people: they set out early enough (schedule.ts `tripDays`) to arrive when the
+ * A day is thirty minutes but people walk at the speed of people: they set out early enough (schedule.ts `tripDays`) to arrive when the
  * schedule wants them, at their own pace, hurry at most MAX_HURRY times that when behind, and jog (run clip, 2.8–3.6 m/s) only when
  * badly late and able. Nothing within sight is sped up or carried across the street; only far off, where they are a few pixels high,
  * walkers go a little faster still (WARP_*: beyond SEEN_RADIUS only), so a trip across the fields is over in a believable time.

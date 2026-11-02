@@ -175,7 +175,7 @@ if (spikeMs > 0) {
 let totalMs = 0;
 for (const p of sim.scheduler.profile.values()) totalMs += p.totalMs;
 const perHour = totalMs / (years * 16 * 24);
-// at 8x a game hour lasts DAY_SECONDS / 24 / 8 seconds (3.1 s on a ten-minute day) = that many frames of 60 Hz; the headless run has no agents, zone or player systems
+// at 8x a game hour lasts DAY_SECONDS / 24 / 8 seconds (9.4 s on a thirty-minute day) = that many frames of 60 Hz; the headless run has no agents, zone or player systems
 const framesPerHourAt8x = (DAY_SECONDS / 24 / 8) * 60;
 console.log(`all systems: ${perHour.toFixed(3)} ms per game hour = ${(perHour / framesPerHourAt8x).toFixed(3)} ms per frame at 8x (averaged over the hour)`);
 

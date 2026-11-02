@@ -1,10 +1,11 @@
-// Walking trips (clarity pass): with a ten-minute day people set out early enough to arrive on time, the schedule moves
+// Walking trips (clarity pass): with a thirty-minute day people set out early enough to arrive on time, the schedule moves
 // them continuously, and the agents near the player walk their trips instead of finishing them out of sight.
 import { beforeAll, describe, expect, it } from 'vitest';
 import { MAX_HURRY, SEEN_RADIUS } from '../../src/agents/config';
 import { doorStand } from '../../src/agents/geometry';
 import { newIntent, tripDays } from '../../src/agents/schedule';
 import type { Settlement } from '../../src/world/types';
+import { DAY_SECONDS } from '../../src/core/time';
 import { makeRig, setClock, village, type Rig } from './helpers';
 
 let rig: Rig;
@@ -17,24 +18,25 @@ beforeAll(() => {
 
 describe('trip lengths', () => {
   it('give a walk at the speed of people, each at their own pace, within bounds', () => {
-    // a tenth of a minute at least, a day's half at most
-    expect(tripDays(1)).toBeCloseTo(0.01, 6);
+    // six seconds at least, and (in real seconds, whatever the length of the day) ten minutes at most
+    const MAX = 600 / DAY_SECONDS;
+    expect(tripDays(1)).toBeCloseTo(6 / DAY_SECONDS, 6);
     // 100 m at an unhurried 1.3 m/s along a path a little longer than the line: about 86 s of play
-    expect(tripDays(100) * 600).toBeGreaterThan(80);
-    expect(tripDays(100) * 600).toBeLessThan(95);
-    expect(100 / (tripDays(100) * 600)).toBeLessThan(1.3);
+    expect(tripDays(100) * DAY_SECONDS).toBeGreaterThan(80);
+    expect(tripDays(100) * DAY_SECONDS).toBeLessThan(95);
+    expect(100 / (tripDays(100) * DAY_SECONDS)).toBeLessThan(1.3);
     // a slow walker is given longer, a quick one less
     expect(tripDays(200, 1.0)).toBeGreaterThan(tripDays(200, 1.3));
     expect(tripDays(200, 1.5)).toBeLessThan(tripDays(200, 1.3));
     let prev = 0;
-    for (let d = 5; d < 1200; d += 25) { const t = tripDays(d); expect(t).toBeGreaterThanOrEqual(prev); expect(t).toBeLessThanOrEqual(0.34); prev = t; }
-    expect(tripDays(3000)).toBe(0.34);
+    for (let d = 5; d < 1200; d += 25) { const t = tripDays(d); expect(t).toBeGreaterThanOrEqual(prev); expect(t).toBeLessThanOrEqual(MAX); prev = t; }
+    expect(tripDays(3000)).toBeCloseTo(MAX, 9);
     // a long walk to the fields is a brisk walk (at most MAX_HURRY times the unhurried one), never a run
-    expect(250 / (tripDays(250) * 600)).toBeLessThan(1.3 * 1.3 * 1.01);
+    expect(250 / (tripDays(250) * DAY_SECONDS)).toBeLessThan(1.3 * 1.3 * 1.01);
   });
 });
 
-describe('the schedule on a ten-minute day', () => {
+describe('the schedule on a thirty-minute day', () => {
   it('moves people continuously: they are not carried across the village between two samples a second apart', () => {
     const { zone, sim, world } = rig;
     const I = newIntent();
@@ -46,7 +48,7 @@ describe('the schedule on a ten-minute day', () => {
         for (const p of sim.state.residentsOf(s.id).slice(0, 60)) {
           if (p.death) continue;
           let prev: { x: number; z: number } | null = null;
-          for (let t = day; t < day + 1; t += 0.002) {
+          for (let t = day; t < day + 1; t += 1.2 / DAY_SECONDS) { // samples 1.2 real seconds apart
             zone.sched.intent(p, t, I);
             const vis = !I.away && (I.travel < 1 || !I.indoors);
             let x = I.x, z = I.z;
@@ -90,7 +92,7 @@ describe('the schedule on a ten-minute day', () => {
   });
 });
 
-describe('agents on a ten-minute day', () => {
+describe('agents on a thirty-minute day', () => {
   it('walk their trips in sight: no one is carried across the street, and people come out of doors', () => {
     const { zone, sim, focus } = rig;
     zone.detachPlayer();
@@ -102,7 +104,7 @@ describe('agents on a ten-minute day', () => {
     const seen = new Set<number>(zone.agentsArr.map((a) => a.personId));
     let jumps = 0, near = 0, atDoor = 0;
     const door = { x: 0, z: 0, yaw: 0 };
-    for (let i = 0; i < 6000; i++) { // five minutes of play: from early morning to the middle of the day
+    for (let i = 0; i < 0.5 * DAY_SECONDS * 20; i++) { // from early morning to the middle of the day (half a game day of play)
       sim.step(1 / 20);
       const ids = new Set<number>();
       for (const a of zone.agentsArr) {

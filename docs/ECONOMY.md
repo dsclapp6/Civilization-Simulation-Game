@@ -15,20 +15,24 @@ A game day is one *working day*: wages, prices and rations are the historical pe
 2d a day, a gallon of wheat costs 1d). A game year is only 16 days, so a year's flows are 16 days' worth: a
 household eats about 17 gallons of grain a year, and a strip gives 30 to 40 gallons.
 
-**The day is ten minutes of play** (`DAY_SECONDS = 600`, clarity pass): a game hour is 25 s at 1×, daylight about
-seven minutes, a year 2 h 40 min. Everything the calendar runs (needs per hour, markets, households, growth, rents) simply runs
-ten times slower in real time. What had to be retuned is everything counted *per bout* of the player's work, because a bout
-(12 s) is now half a game hour (`BOUT_HOURS` 0.48) and a day holds fifty of them:
+**The day is thirty minutes of play** (`DAY_SECONDS = 1800`: ten minutes in the clarity pass, thirty by the owner's choice once
+villagers walked at real speeds): a game hour is 75 s at 1×, daylight about twenty minutes, a year 8 h. Everything the calendar runs
+(needs per hour, markets, households, growth, rents) runs three times slower in real time than in the clarity pass, and what is
+counted per game day keeps its meaning. What is retuned is everything counted *per bout* of the
+player's work, because a bout (12 s) is now a sixth of a game hour (`BOUT_HOURS` 0.16) and a day holds a hundred and fifty of them
+(the tables were struck for a day of a minute, then of ten, so each constant below scales with `DAY_SECONDS`):
 
-* **The hero works about twice as fast per game hour as a capable adult** (`HERO_FACTOR`): one bout ≈ one hour of a labourer's
-  work. Piece pay is at NPC rates per unit of work: a bout pays `wage × BOUT_DAYS` (0.096 of a day's wage), week-work credit
-  the same, so ten bouts are a labourer's day and a hard day's work of twenty pays about twice that.
-* Strip tasks take more bouts (`TASK_BOUTS`): plough 7, harrow 3, sow 4, weed 5, reap 7, bind 5 (a strip is reaped in a minute and
-  a half). Felling a tree stays three bouts.
-* Experience and stat training per bout are scaled back (`XP_SCALE` 0.25, `TRAIN_SCALE` 0.5, in `sim/skills.ts`), tool wear by
-  `WEAR_SCALE` (a third), the hunger and tiredness a bout costs are about half a game hour's worth on top of the hour's own
-  (`needs.ts drainWork`). A youth who practises most days still has STR 10 and Archery 3 at 14 or 15 (the archer test), a
-  14-year-old farmer is Farming 2 after a year on three strips.
+* **The hero works about twice as fast per game hour as a capable adult** (`HERO_FACTOR`): one bout ≈ a third of a labourer's hour.
+  Piece pay is at NPC rates per unit of work: a bout pays `wage × BOUT_DAYS` (0.032 of a day's wage), week-work credit the same, so
+  thirty bouts are a labourer's day and a hard day's work of sixty pays about twice that.
+* Strip tasks take as many bouts as before (`TASK_BOUTS`: plough 7, harrow 3, sow 4, weed 5, reap 7, bind 5 — a strip is reaped in a
+  minute and a half of play, which is now a twentieth of a day). Felling a tree stays three bouts.
+* Experience and stat training per bout are scaled back with the day (`XP_SCALE` 0.083, `TRAIN_SCALE` 0.167, in `sim/skills.ts`:
+  0.25 and 0.5 times 600 / `DAY_SECONDS`), tool wear by `WEAR_SCALE` (about a ninth), and the hunger and tiredness a bout costs
+  likewise (`needs.ts drainWork`, scaled by the same factor), so a day of work earns, wears and tires as it did. A youth who
+  practises most days still has STR 10 and Archery 3 at 14 or 15 (the archer test). Work that is a fixed amount of bouts (the
+  strips of a field) teaches a third as much per bout, so a 14-year-old farmer is a third of the way to Farming 2 after one season's
+  work on three strips, and gets there across the year by filling the days between with other work.
 * Anything that was a count of bouts per day (errand pay, request work counts, bark and rapport limits that read real time) was
   rescaled; things that are counts of *days* (rents, deadlines in days, the 4-day week) are as they were.
 
@@ -97,7 +101,7 @@ Yield = settlement base × crop ratio × field fertility × weather × the kingd
 × lateness. The base is calibrated so that a normal year feeds the continent. A tenth goes to the parish priest
 (tithe), seed corn is set aside, and a sixteenth of what is ground goes to the lord's mill.
 
-Player bouts (12 seconds at speed 1, half a game hour; a game day is 600 seconds):
+Player bouts (12 seconds at speed 1, 0.16 of a game hour; a game day is 1800 seconds):
 
 | task | bouts | notes |
 |---|---|---|
@@ -108,7 +112,7 @@ Player bouts (12 seconds at speed 1, half a game hour; a game day is 600 seconds
 | mill (8 gallons a bout) | | at the village mill, a sixteenth to the miller |
 
 *Expected pace*: one spring strip, harrow to winnowed grain, is about 45 bouts (nine minutes of work) spread over the
-growing days (the farmer-loop test measures about ten game days for three strips); it gives about 35 gallons, worth
+growing days (the farmer-loop test measures about eight game days for three strips); it gives about 35 gallons, worth
 20 to 35d, for about 8d of labour at NPC rates. Each task shows on the strip while it is under way (`StripView.task/work`,
 `stripfeed.ts`).
 

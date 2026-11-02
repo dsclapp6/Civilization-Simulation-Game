@@ -1,6 +1,6 @@
 // Headless pacing check (SPEC §21): runs a player-free continent (the character just lives in the village)
 // and reports how often something turns up for the player, so the targets can be tuned. Times are minutes of play at 1x:
-// a game day is DAY_SECONDS / 60 = ten of them, a year 2 h 40 min. Objectives (tutorial, chores, a job, goals: sim/objectives)
+// a game day is DAY_SECONDS / 60 = thirty of them, a year 8 h. Objectives (tutorial, chores, a job, goals: sim/objectives)
 // fill the gaps between what happenings bring, so this tool measures only the happenings:
 //   - a request from a neighbour about every 5-10 minutes; a disaster, feast or notice near by about every 10-15 (SPEC §21)
 //   - something to improve (a technique within reach) every 15-45 minutes early on

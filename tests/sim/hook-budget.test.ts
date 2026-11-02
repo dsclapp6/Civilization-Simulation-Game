@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DAY_SECONDS } from '../../src/core/time';
 import { newSim } from './helpers';
 
 describe('calendar work is spread over frames', () => {
@@ -18,7 +19,8 @@ describe('calendar work is spread over frames', () => {
     }
     const hours: number[] = [];
     sim.events.on('hourStarted', (h) => hours.push(h.hourIndex));
-    for (let f = 0; f < 4000; f++) { // 200 s: about eight game hours of a 10-minute day
+    const frames = Math.round((8 / 24) * DAY_SECONDS / 0.05); // eight game hours
+    for (let f = 0; f < frames; f++) {
       perFrame = 0;
       sim.step(0.05);
       if (perFrame > maxPerFrame) maxPerFrame = perFrame;

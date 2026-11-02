@@ -2,13 +2,16 @@
 
 Playtest verdict: days far too fast; no clear way to know what is going on, how to do things, who is who
 or where you are; no visible impact from work; odd cursor behaviour. This pass fixes those without
-changing what the game is (SPEC). Decisions by the owner: **10-minute days, 16-day years kept.**
+changing what the game is (SPEC). Decisions by the owner: **10-minute days, 16-day years kept** (the days were later made **thirty minutes**, once villagers walked at real speeds: see §1).
 
 ## 1. Time
 
-- `DAY_SECONDS = 600` (core/time). One game hour = 25 s at 1×; daylight ≈ 7 min. Calendar systems keep
-  their per-day/per-year balance; they simply run 10× slower in real time. A year ≈ 2.7 h at 1×.
-- **Player work is measured in game time.** A work bout is 10–15 s real (≈ half a game hour). The player
+- `DAY_SECONDS = 1800` (core/time; 600 in the clarity pass itself, thirty minutes by the owner's choice afterwards, because people walk
+  at real speeds and on a ten-minute day farmers spent three quarters of the daylight on the road). One game hour = 75 s at 1×;
+  daylight ≈ 20 min. Calendar systems keep their per-day/per-year balance; they simply run three times slower in real time than
+  they did at ten minutes. A year ≈ 8 h at 1×.
+- **Player work is measured in game time.** A work bout is 10–15 s real (≈ half a game hour at ten minutes a day, a sixth at thirty:
+  the numbers below are those of the ten-minute day, and per bout they scale with `DAY_SECONDS`, see ECONOMY.md). The player
   works about **2× as productively per game hour as a capable adult NPC** (the hero compresses chores, so a
   task feels snappy but is still a real job): reaping an ordinary strip ≈ 6–8 bouts (≈ 1.5 min), ploughing a
   strip with a team similar, felling a tree 3–5 bouts. Piece pay is at NPC rates per unit of work, so a full
@@ -16,7 +19,11 @@ changing what the game is (SPEC). Decisions by the owner: **10-minute days, 16-d
 - **Stats and skills by game time:** training and XP per game hour of work ≈ 2× an NPC's. A youth who works
   and practises most days reaches STR 10 and Archery 3 (the archer test) at about 14–15, as before.
 - **Pacing (SPEC §21) is by real minutes:** something to deal with every 2–3 min — now mostly from objectives
-  (tutorial, daily chores, job, goals) plus requests and events, scaled for the longer day.
+  (tutorial, daily chores, job, goals) plus requests and events. What is offered by the clock is scaled to the length of the day so that
+  it holds per minute of play: requests (`happenings/requests.ts` `PACE`: the chance per hour, the gap and the time an offer stands)
+  and the household's chores (set again every four game hours of the working day, three rounds a day, `objectives/chores.ts`
+  `CHORE_ROUNDS`). Festivals, weddings, funerals and disasters are calendar events and come once per game year as before, so they are
+  three times rarer per minute of play; `tools/pacing.ts` reports the cadence.
 - Villagers **walk** their routes now that a day is long enough (leaving early enough to arrive on time);
   only trips entirely out of view may complete off-screen.
 
@@ -27,7 +34,7 @@ One module (`src/sim/objectives`, contract `types.ts`) owns what the player shou
 | Source | Example | When |
 |---|---|---|
 | tutorial | "Meet your family" → "Fetch water from the well" → "Help on the family's strip" → "Sleep at home" | First in-game day; a different chain per birth class (farm child, craftsman's child, merchant's child, page in a lord's hall) |
-| chore | "Sow the barley on the north strip (Father)", "Gather 2 loads of firewood", "Feed the pigs" | Each dawn the household head sets 1–3, fitted to season, age, sex and the household plan |
+| chore | "Sow the barley on the north strip (Father)", "Gather 2 loads of firewood", "Feed the pigs" | Each dawn the household head sets 1–3, fitted to season, age, sex and the household plan; twice more through the working day he tops them up |
 | job | "Work at Wat's smithy until noon: 4 tasks" | While employed |
 | goal | "Join the archers: STR 8.9/10, Archery 1/3", "Save 24d for a good sickle", "Choose your path at 14 (in 1 year)" | Always a few, from career paths, savings targets, ambitions |
 | request | (bridged from happenings) "Agnes asks for 4 bundles of firewood" | When villagers ask |

@@ -3,7 +3,7 @@
 // events, messages). Randomness comes from the named stream 'happenings'.
 import { dist, dist2 } from '../../core/math';
 import type { Rng } from '../../core/rng';
-import { DAYS_PER_YEAR, toDate } from '../../core/time';
+import { DAYS_PER_YEAR, DAY_SECONDS, toDate } from '../../core/time';
 import type { Settlement, WorldModel } from '../../world/types';
 import type { Simulation } from '../sim';
 import { type GameState, type PersonId } from '../state';
@@ -14,7 +14,8 @@ import type { HappeningKind, HappeningRec, RequestRec } from './types';
 
 export const HAP_KEY = 'happenings';
 const RECENT_CAP = 40;
-const REQUEST_CAP = 40;
+/** The journal keeps the open requests and the latest settled ones: about forty for each ten minutes of the game day (requests come in minutes of play). */
+const REQUEST_CAP = 40 * Math.max(1, Math.round(DAY_SECONDS / 600));
 
 export interface QueuedGathering { at: number; kind: HappeningKind; settlement: number; persons: number[]; name: string }
 

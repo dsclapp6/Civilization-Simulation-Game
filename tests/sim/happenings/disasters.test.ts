@@ -203,6 +203,8 @@ describe('winter', () => {
     const zone = {
       summonAnimal: (kind: string, x: number, z: number, hostile: boolean) => { summoned.push([kind, x, z, hostile]); return summoned.length; },
       dismissAnimal: (id: number) => { dismissed.push(id); },
+      // a wedding, a christening or a funeral that falls in these days gathers its people at the church door (festivals.ts `gather`)
+      nav: { doorOf: () => null }, agent: () => null, command: () => undefined, say: () => undefined,
     };
     const a = advSim({ seed: 'wolves', zone: zone as never, noon: false });
     // the player module is absent: give the happenings a body to hunt near

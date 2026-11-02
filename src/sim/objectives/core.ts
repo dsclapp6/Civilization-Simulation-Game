@@ -145,6 +145,8 @@ export interface ObjSave {
   foundPlace: ObjectiveTarget | null;
   tut: { cls: string; stage: number; done: boolean; since: number };
   choresDay: number;
+  /** The latest game hour (of the day `choresDay`) at which a later round of chores was made (chores.ts `CHORE_ROUNDS`); -1 for none. */
+  choresHour: number;
   jobsDay: number;
   goalsDay: number;
   log: DayLog;
@@ -163,7 +165,7 @@ export function newLog(day: number): DayLog {
 export function newObjSave(): ObjSave {
   return {
     v: 1, next: 1, person: 0, list: [], tracked: 0, pinned: false, foundPerson: 0, foundPlace: null,
-    tut: { cls: '', stage: 0, done: false, since: 0 }, choresDay: -1, jobsDay: -1, goalsDay: -1, log: newLog(0), sums: [], closed: -1,
+    tut: { cls: '', stage: 0, done: false, since: 0 }, choresDay: -1, choresHour: -1, jobsDay: -1, goalsDay: -1, log: newLog(0), sums: [], closed: -1,
     seen: {}, n: { added: 0, done: 0, failed: 0, expired: 0 },
   };
 }
@@ -425,6 +427,7 @@ export class Obj {
     s.foundPlace = null;
     s.tut = { cls: '', stage: 0, done: true, since: this.dayNo };
     s.choresDay = -1;
+    s.choresHour = -1;
     s.jobsDay = -1;
     s.goalsDay = -1;
     s.seen = {};
