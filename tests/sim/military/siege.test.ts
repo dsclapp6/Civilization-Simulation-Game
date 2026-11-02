@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { militaryContext } from '../../../src/sim/military';
 import { foodStock, wallIntegrity, fortBonus } from '../../../src/sim/military/siege';
 import { planEffect } from '../../../src/sim/military/plan';
+import { addMan } from '../../../src/sim/military/armies';
 import type { AdvancementApi } from '../../../src/sim/wave3';
 import { mkPerson } from '../builders';
 import { declareWar, fakeCombat, fakePolitics, milSim } from './helpers';
@@ -11,8 +12,8 @@ function royals(sim: ReturnType<typeof milSim>['sim']): number[] {
 }
 
 /** The attacker raises an army, camps it a few hundred metres from `castle` and orders the siege. */
-function setupSiege(seed: string, opts: { tech?: boolean; strong?: boolean; fortress?: boolean } = {}) {
-  const ctx = milSim({ seed });
+function setupSiege(seed: string, opts: { tech?: boolean; strong?: boolean; fortress?: boolean; body?: boolean } = {}) {
+  const ctx = milSim({ seed, body: opts.body });
   const { sim, mil } = ctx;
   const pol = fakePolitics(sim);
   fakeCombat(sim, 0.5);
@@ -170,5 +171,28 @@ describe('the assault plan (companies, captains, tasks)', () => {
     expect(mil.setCaptain!(id, ram.id, A.commander).ok).toBe(true);
     // the storm can be ordered at once
     expect(mil.stormNow!(id).ok).toBe(true);
+  });
+
+  it('the retreat breaks off the storm in good order: the battle ends, the siege is lifted, the host turns home', () => {
+    const t = setupSiege('retreat-a', { body: true });
+    const { mil, id, M, sim } = t;
+    const A = M.army(id)!;
+    // the player rides in the host, so the storm is fought out around him (it does not resolve at once)
+    const me = sim.state.persons.get(sim.state.run.playerId)!;
+    if (!A.men.includes(me.id)) addMan(M, A, me, 'knight');
+    expect(mil.stormNow!(id).ok).toBe(true);
+    expect(M.data.battles.some((b) => b.a === id)).toBe(true);
+    const before = A.men.length;
+    const r = mil.retreat!(id);
+    expect(r.ok).toBe(true);
+    expect(M.data.battles.some((b) => b.a === id || b.d === id)).toBe(false);
+    expect(M.data.sieges.some((s) => s.army === id)).toBe(false);
+    const after = M.army(id);
+    expect(after).toBeDefined();
+    expect(after!.intent).toBe('return');
+    // an orderly withdrawal: most of the host comes away
+    expect(after!.men.length).toBeGreaterThan(before * 0.6);
+    // and from the march it simply turns back
+    expect(mil.retreat!(999999).ok).toBe(false);
   });
 });

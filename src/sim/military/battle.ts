@@ -578,3 +578,48 @@ export function battleInfo(M: Mil): Array<{ id: number; x: number; z: number; a:
 }
 
 export { addMan, countKinds, adjustOpinion };
+
+// ---------------------------------------------------------------------------------------------
+// The retreat
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * The army sounds the retreat: from a battle (the field is lost, but an orderly withdrawal costs far fewer men than a
+ * rout: the rearguard holds while the rest fall back), from a siege (it is lifted), or from the march (it turns home).
+ */
+export function soundRetreat(M: Mil, army: Army): { ok: boolean; reason?: string; lost?: number } {
+  const rec = M.data.battles.find((b) => (b.a === army.id || b.d === army.id) && b.result === '');
+  let lost = 0;
+  if (rec) {
+    const a = M.army(rec.a), d = M.army(rec.d);
+    if (!a || !d) { dropBattle(M, rec); }
+    else {
+      if (rec.fight && M.combat?.disperse) M.combat.disperse(rec.fight);
+      M.detailResults.delete(rec.id);
+      const ours = rec.a === army.id ? 'a' : 'd';
+      const before = army.men.length;
+      const [fa, fd] = fieldFighters(M, rec, a, d);
+      const res = resolve(M, fa, fd, { x: rec.x, z: rec.z });
+      res.attWon = ours === 'd';
+      // the rearguard holds: a fraction of what a rout would cost, the enemy's loss small (they did not press home)
+      if (ours === 'a') { res.attLoss = Math.min(res.attLoss, 0.03 + res.attLoss * 0.35); res.defLoss *= 0.4; }
+      else { res.defLoss = Math.min(res.defLoss, 0.03 + res.defLoss * 0.35); res.attLoss *= 0.4; }
+      res.routed = 'none';
+      res.margin = Math.min(res.margin, 0.2);
+      conclude(M, rec, a, d, fa, fd, res, undefined);
+      lost = Math.max(0, before - (M.army(army.id)?.men.length ?? 0));
+    }
+  }
+  const siege = M.data.sieges.find((s) => s.army === army.id);
+  if (siege) M.sieges.lift(siege, 'the besiegers sounded the retreat');
+  const still = M.army(army.id);
+  if (!still) return { ok: true, lost };
+  still.intent = 'return';
+  still.stance = 'hold';
+  still.objective = undefined;
+  still.plan = undefined;
+  giveOrder(M, still, { kind: 'return' });
+  M.touch();
+  if (M.concernsPlayer(still.house)) M.notify(`The trumpets sound the retreat: the host falls back${lost ? ` (${lost} men lost in the withdrawal)` : ''} and turns for home.`, 'warn');
+  return { ok: true, lost };
+}

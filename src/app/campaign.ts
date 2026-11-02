@@ -303,6 +303,26 @@ export class CampaignMode {
     this.say(text, 'gain');
   }
 
+  /** Sound the retreat (the battle command's button): the host breaks off and turns for home; you fall back with it. */
+  retreat(): { ok: boolean; reason?: string } {
+    const s = this.save();
+    if (!s || s.phase === 'done') return { ok: false, reason: 'There is no host in the field' };
+    const M = militaryContext(this.sim);
+    const a = M.army(s.army);
+    const t = this.sim.world.settlements[s.target];
+    const r = this.mil()?.retreat?.(s.army) ?? { ok: false, reason: 'No such army' };
+    if (!r.ok) return r;
+    // in the storm you fall back with the rearguard, out of bowshot
+    if (s.phase === 'storm' && t) {
+      const me = this.player.body() ?? { x: a?.x ?? t.x, z: a?.z ?? t.z };
+      const dx = me.x - t.x, dz = me.z - t.z, d = Math.hypot(dx, dz) || 1;
+      this.player.placeAt(t.x + (dx / d) * (d + 160), t.z + (dz / d) * (d + 160), Math.atan2(dx, dz));
+    }
+    void a;
+    this.end(s.phase === 'march' ? 'The host turns back for home.' : 'We fall back from the walls. Another day.');
+    return { ok: true };
+  }
+
   /** "Storm now": before the walls in daylight the commander need not wait (the battle command's button). */
   stormEarly(): { ok: boolean; reason?: string } {
     const s = this.save();

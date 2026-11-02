@@ -135,6 +135,7 @@ export async function buildSession(sim: Simulation, o: SessionOptions): Promise<
       return planAttack(sim, campaign, me, target, rideAs ? { rideAs } : {});
     },
     stormNow: () => campaign.stormEarly(),
+    retreat: () => campaign.retreat(),
   };
   offs.push(sim.events.on('playerSwitched', () => works.clear()));
 

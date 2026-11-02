@@ -331,6 +331,8 @@ export interface MilitaryRuntime extends MilitaryApi {
   // ---- additive: campaigns the player plans and rides with ----
   /** Storms the place the army is before now (begins the siege first when it has only just arrived). */
   stormNow?(army: number): Result;
+  /** Sound the retreat: break off the battle (an orderly withdrawal), lift the siege, turn the host for home. */
+  retreat?(army: number): Result & { lost?: number };
   /** Brings an army up to strength with fresh men of these kinds (sworn to its House; a muster of hired swords and levies). */
   reinforce?(army: number, counts: Partial<Record<UnitKind, number>>): number;
   /** Puts a garrison of these kinds into a place for its lord (they live there and defend it). */

@@ -110,6 +110,21 @@ export function battlePanel(ctx: PanelCtx): UiPanel {
     g.fillStyle = '#1b1208'; g.fillText('your host', hx, hz + 18);
   };
 
+  // the retreat asks twice: the first click arms it
+  let armed = false;
+  const retreatBtn = (phase: string): HTMLElement => h('div', { style: { marginTop: '10px' } }, button(
+    armed ? 'Click again to sound the retreat' : phase === 'march' ? 'Turn back' : 'Sound the retreat', {
+      variant: armed ? 'danger' : 'ghost', icon: 'flag',
+      tip: phase === 'storm' ? 'Break off the storm: the rearguard holds while the host falls back (far fewer lost than in a rout); the siege is lifted' : 'Give up the attack and march home',
+      onClick: () => {
+        if (!armed) { armed = true; render(); return; }
+        armed = false;
+        const r = camp.retreat!();
+        act(r, 'The retreat is sounded.');
+        if (r.ok) ctx.close();
+      },
+    }));
+
   const render = (): void => {
     const plan = mil.assaultPlan!(army);
     const A = mil.armyDetail(army);
@@ -151,6 +166,7 @@ export function battlePanel(ctx: PanelCtx): UiPanel {
       phase === 'before' || phase === 'march'
         ? h('div', { style: { marginTop: '10px' } }, button('Storm now', { variant: 'danger', size: 'big', icon: 'swords', tip: 'Before the walls in daylight: send the storm in at once', onClick: () => { const r = camp.stormNow(); act(r, 'The storm goes in!'); if (r.ok) ctx.close(); } }))
         : phase === 'storm' ? h('p.mu-small.mu-bold', { style: { marginTop: '10px' } }, 'The storm is going in. Changes reach the companies at once.') : null,
+      camp.retreat && phase && phase !== 'done' ? retreatBtn(phase) : null,
     ].filter((x): x is HTMLElement => x !== null));
     draw();
   };

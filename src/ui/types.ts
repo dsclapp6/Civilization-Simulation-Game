@@ -42,6 +42,8 @@ export interface CampaignApi {
   plan(target: number, rideAs?: number): { ok: boolean; reason?: string };
   /** Storm now (before the walls by day). */
   stormNow(): { ok: boolean; reason?: string };
+  /** Sound the retreat: break off the storm or the march and turn for home. */
+  retreat?(): { ok: boolean; reason?: string };
 }
 
 export type QualitySetting = 'low' | 'medium' | 'high';

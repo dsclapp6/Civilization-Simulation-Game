@@ -11,7 +11,7 @@ import type { Simulation } from '../sim';
 import {
   addMan, armiesOf, detailOf, disband, giveOrder, nearestSettlementId, raise, removeMen, settlementPoint, upkeepDay, viewOf,
 } from './armies';
-import { battleInfo, checkContacts, defendersOf, onFightEnded, stepBattles } from './battle';
+import { battleInfo, checkContacts, defendersOf, onFightEnded, stepBattles, soundRetreat } from './battle';
 import { defaultPlan, planEffect } from './plan';
 import { fortBonus } from './siege';
 import { dailyCampaign, defendHour, hourlyArmies, queueHour, thinkHour } from './campaign';
@@ -166,6 +166,10 @@ export function installMilitary(sim: Simulation, deps: Wave3Deps): MilitaryRunti
     },
     hireMercenaries(house, count, kind) {
       return hire(M, house, count, kind);
+    },
+    retreat(armyId) {
+      const a = M.army(armyId);
+      return a ? soundRetreat(M, a) : { ok: false, reason: 'No such army' };
     },
     stormNow(armyId) {
       const a = M.army(armyId);
