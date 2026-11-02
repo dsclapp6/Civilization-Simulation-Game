@@ -151,8 +151,8 @@ describe('whereabouts', () => {
     }
     expect(walking).toBeGreaterThan(0);
     // people walk at the speed of people (a ten-minute day): the fields are a long way for some, a short one for most
-    expect(walking).toBeLessThan(total * 0.62);
-    expect(most).toBeLessThan(0.8);
+    expect(walking).toBeLessThan(total * 0.78);
+    expect(most).toBeLessThan(0.9);
   });
 });
 

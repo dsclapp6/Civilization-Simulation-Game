@@ -32,7 +32,8 @@ const DONE: ReadonlySet<string> = new Set(['done', 'cancelled']);
 
 export class SiteWork {
   private readonly byPerson = new Map<PersonId, SiteView>();
-  private key = '';
+  private version = -1;
+  private hour = -1;
   private api: ConstructionApi | undefined;
 
   constructor(
@@ -50,8 +51,8 @@ export class SiteWork {
     if (Math.floor(absDay) !== Math.floor(now)) return null;
     let version = 0;
     try { version = c.version(); } catch { return null; }
-    const key = `${version}:${Math.floor(now * 24)}`;
-    if (c !== this.api || key !== this.key) { this.api = c; this.key = key; this.rebuild(c); }
+    const hour = Math.floor(now * 24);
+    if (c !== this.api || version !== this.version || hour !== this.hour) { this.api = c; this.version = version; this.hour = hour; this.rebuild(c); }
     return this.byPerson.size === 0 ? null : this.byPerson.get(p.id) ?? null;
   }
 

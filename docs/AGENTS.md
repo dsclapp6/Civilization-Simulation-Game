@@ -24,7 +24,7 @@ burgesses, torch in hand) and a few revellers. Bad weather sends outdoor workers
 stretch has a `from` and an `until`; the schedule gives the walk to the next place a window by distance, pace and ground (`tripDays`:
 the path is 12 % longer than the straight line, each person walks at their own pace — `pace.ts` `walkSpeed` — over the ground they
 cross — marsh, woodland floor and slopes take longer, `groundTime` — and a long way is walked briskly, up to `MAX_HURRY` times that;
-6 s at least, 156 s (`TRAVEL_MAX` 0.26 of a day, 200 m at a brisk pace) at most) and sets the person off that long before the next
+6 s at least, 204 s (`TRAVEL_MAX` 0.34 of a day, 260 m at a brisk pace) at most) and sets the person off that long before the next
 stretch begins, so they are there when it does (`Intent.leave`, `travel` < 1, `prevX/prevZ` the origin, `arrive` the time the walk
 is due to end). A walk is over before the stretch it leads to is; someone who goes indoors stays at least a few seconds (they are
 not seen going in and coming out at once). A long way after a short stretch spills into the next one — and a walk that began two
@@ -101,15 +101,17 @@ strip · stubble", "Common pasture", "Oak".
   | the five scenes, 1× | before | after |
   |---|---|---|
   | walk-clip movement at 2.0 m/s or slower | 55–93 % (67 % overall) | 100 % |
-  | walk clip, median / 98th percentile / fastest (village) | 1.97 / 3.36 / 5.05 m/s | 1.43 / 1.95 / 1.97 m/s |
+  | walk clip, median / 98th percentile / fastest (village) | 1.97 / 3.36 / 5.05 m/s | 1.33 / 1.80 / 1.97 m/s |
   | movement faster than 2.0 m/s that was not on the run clip | 409 456 samples | 0 |
   | steps of more than 1 m in sight | 15 (up to 12.6 m) | 0 |
-  | share of the movement that is a run | 34–38 % (village, town) | 0.8–11 % (a handful of youths, children at play) |
+  | share of the movement that is a run | 34–38 % (village, fields, holy day, town) | 0.7–8.4 % (children at play, a few jogging youths and servants) |
 
 * **What it costs the day**: a ten-minute day is 144 times shorter than a real one and people now walk at real speeds, so a field 300 m
-  away is a four-minute walk: farmers whose strips lie 250–450 m from the village are on the road for much of the day — out at dawn,
-  back at dusk — and the long ways are walked briskly. That is the day's real shape on this scale; a nearer field system, a longer
-  day or (for the player) a faster clock are the ways to change it, not faster people.
+  away is a four-minute walk: farmers whose strips lie 230–430 m from the village are on the road for about 70 % of the day (measured
+  53–79 %; `tests/agents/schedule.test.ts` guards it) — out at dawn, back at dusk — and the long ways are walked briskly (up to
+  `MAX_HURRY`). A walk is given at most `TRAVEL_MAX` (0.34 of a day, 204 s); whoever is still on the road when the schedule says they
+  have arrived is late (seconds late in the village: median 0.3, 90th percentile 13.5). That is the day's real shape on this scale; a
+  nearer field system, a longer day or (for the player) a faster clock are the ways to change it, not faster people.
 
 ## Construction sites and buildings raised in play (`sites.ts`; docs/CIV.md §5)
 

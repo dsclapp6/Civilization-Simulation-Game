@@ -60,6 +60,8 @@ export const WALK_SPEED_BASE = WALK_SPEED;
 /** Speed changes at this rate (m/s per second): a walker eases into a stride and out of it. */
 export const ACCEL = 1.9;
 export const DECEL = 3.2;
-/** A walk is hurried (and a jog begun) when the person would be late by this many seconds even if they hurried; the jog ends below JOG_END. */
+/** A walker keeps their own pace while they would be at most this many seconds late, and hurries (up to MAX_HURRY) beyond that. */
+export const LATE_OK = 20;
+/** A jog begins when the person would be late by this many seconds even if they hurried; the jog ends below JOG_END. */
 export const JOG_START = 45;
 export const JOG_END = 10;

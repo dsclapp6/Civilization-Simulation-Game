@@ -7,7 +7,7 @@ import type { AnimState } from '../core/view';
 import { ageYears, hasFlag } from '../sim/state';
 import { Agent, Ph, St } from './agent';
 import { DAY_SECONDS } from '../core/time';
-import { ACCEL, DECEL, ENTER_RADIUS, JOG_END, JOG_START, SEEN_RADIUS, WARP_FAR, WARP_MAX, WARP_NEAR } from './config';
+import { ACCEL, DECEL, ENTER_RADIUS, JOG_END, JOG_START, LATE_OK, SEEN_RADIUS, WARP_FAR, WARP_MAX, WARP_NEAR } from './config';
 import { DETOUR, GROUND_MAX, MAX_HURRY, RUN_CLIP_OFF, RUN_CLIP_ON, WALK_TOP, gaitSpeed, loadFactor } from './pace';
 import { Mode, type Intent } from './schedule';
 import type { Zone } from './zone';
@@ -137,7 +137,8 @@ function paceFor(z: Zone, a: Agent, rem: number): number {
   else if (late > JOG_START && a.canRun) a.jog = true;
   if (a.jog) return Math.max(1, a.runSpeed / cruise);
   if (left <= 1) return rem > 6 ? MAX_HURRY : 1;
-  return Math.max(1, Math.min(MAX_HURRY, rem / left / cruise));
+  // a few seconds' lateness is no reason to hurry: people keep their own pace unless they would be noticeably behind
+  return Math.max(1, Math.min(MAX_HURRY, rem / (left + LATE_OK) / cruise));
 }
 
 /** First pace for a walk about to begin: the way is not known yet, so the straight line and a little more. */

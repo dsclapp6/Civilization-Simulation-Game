@@ -219,14 +219,14 @@ interface DayTimes {
 }
 
 /**
- * Shortest and longest walk (days) the schedule gives between two places: 6 s to 156 s (three game hours) at 1×. A day is
- * ten minutes (600 s) and people walk at the speed of people (pace.ts), so a long way takes a good part of it: 300 m is a walk of four
- * minutes. The longest walk the schedule allows is 156 s (200 m at a brisk pace); a longer one is walked at the best pace the person
- * can keep up, whoever is still on the road when the schedule says they have arrived is late, and the bodies of people out of sight
- * finish such a walk at once.
+ * Shortest and longest walk (days) the schedule gives between two places: 6 s to 204 s (eight game hours) at 1×. A day is ten minutes
+ * (600 s) and people walk at the speed of people (pace.ts), so a long way takes a good part of it: 300 m is a walk of four minutes.
+ * The longest walk the schedule allows is 204 s (260 m at a brisk pace); a longer one is walked at the best pace the person can keep up,
+ * whoever is still on the road when the schedule says they have arrived is late, and the bodies of people out of sight finish such a
+ * walk at once.
  */
 const TRAVEL_MIN = 0.01;
-const TRAVEL_MAX = 0.26;
+const TRAVEL_MAX = 0.34;
 /**
  * Days a walk of `d` metres is given at `pace` m/s (default the unhurried adult's walk; the path is longer than the straight line).
  * People set out early enough to be there when their next stretch of the day begins, each at their own pace (pace.ts `walkSpeed`);

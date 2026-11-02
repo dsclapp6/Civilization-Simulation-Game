@@ -27,8 +27,8 @@ describe('trip lengths', () => {
     expect(tripDays(200, 1.0)).toBeGreaterThan(tripDays(200, 1.3));
     expect(tripDays(200, 1.5)).toBeLessThan(tripDays(200, 1.3));
     let prev = 0;
-    for (let d = 5; d < 1200; d += 25) { const t = tripDays(d); expect(t).toBeGreaterThanOrEqual(prev); expect(t).toBeLessThanOrEqual(0.26); prev = t; }
-    expect(tripDays(3000)).toBe(0.26);
+    for (let d = 5; d < 1200; d += 25) { const t = tripDays(d); expect(t).toBeGreaterThanOrEqual(prev); expect(t).toBeLessThanOrEqual(0.34); prev = t; }
+    expect(tripDays(3000)).toBe(0.34);
     // a long walk to the fields is a brisk walk (at most MAX_HURRY times the unhurried one), never a run
     expect(250 / (tripDays(250) * 600)).toBeLessThan(1.3 * 1.3 * 1.01);
   });
