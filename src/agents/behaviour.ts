@@ -8,8 +8,9 @@ import { ageYears, hasFlag } from '../sim/state';
 import { Agent, Ph, St } from './agent';
 import { DAY_SECONDS } from '../core/time';
 import { ACCEL, DECEL, ENTER_RADIUS, JOG_END, JOG_START, LATE_OK, SEEN_RADIUS, WARP_FAR, WARP_MAX, WARP_NEAR } from './config';
-import { DETOUR, GROUND_MAX, MAX_HURRY, RUN_CLIP_OFF, RUN_CLIP_ON, WALK_TOP, gaitSpeed, loadFactor } from './pace';
+import { DETOUR, GROUND_MAX, HORSE_ACCEL, HORSE_CANTER, HORSE_DECEL, MAX_HURRY, RUN_CLIP_OFF, RUN_CLIP_ON, WALK_TOP, gaitSpeed, horseSpeed, loadFactor, rideClips } from './pace';
 import { Mode, type Intent } from './schedule';
+import type { AgentGait } from './types';
 import type { Zone } from './zone';
 
 const TURN_RATE = 7;
@@ -55,6 +56,7 @@ function signature(I: Intent): number {
   h = (h * 31 + I.main.length * 5 + I.main.charCodeAt(0)) | 0;
   h = (h * 31 + I.carry.length) | 0;
   h = (h * 31 + I.group) | 0;
+  h = (h * 31 + Math.round(I.elev)) | 0;
   return h;
 }
 
@@ -70,6 +72,8 @@ export function replan(z: Zone, a: Agent, spawning: boolean): void {
   const due = I.travel < 1;
   const sig = signature(I);
   if (sig === a.sig && !spawning) return;
+  // a man on a post whose day has changed (the alert is over) goes down the stair inside and is seen at his next place a little later
+  if (!spawning && a.elev > 0.5 && I.elev <= 0.5 && a.control === 'ai') { a.dead = true; z.hide(a.personId, z.now + 0.011); return; }
   const hadSpot = a.sig !== 0;
   a.sig = sig;
   a.activity = I.away || I.leaving ? 'travel' : I.activity;
@@ -82,7 +86,7 @@ export function replan(z: Zone, a: Agent, spawning: boolean): void {
   a.facing = NaN;
   a.leg = 0; a.ph = Ph.Work; a.timer = WORK_ANIMS.has(a.anim) ? 6 + 24 * rnd(a, 3) : 2 + 8 * rnd(a, 3);
   a.bx = I.bx; a.bz = I.bz;
-  a.wantIn = false; a.wantAway = false;
+  a.wantIn = false; a.wantAway = false; a.wantUp = false;
   a.building = I.building;
   a.tyaw = I.yaw;
   if (I.away || I.leaving) {
@@ -92,9 +96,16 @@ export function replan(z: Zone, a: Agent, spawning: boolean): void {
   } else if (I.indoors && I.building >= 0) {
     a.wantIn = true;
     if (z.nav.doorInto(I.building, z.door)) { a.tx = z.door.x; a.tz = z.door.z; a.tyaw = z.door.yaw; } else { a.tx = I.x; a.tz = I.z; }
+  } else if (I.elev > 0.5 && !spawning && a.elev <= 0.5) {
+    // a post on a wall or a tower: he walks to the foot of the stair (the ground beside the post) and goes up
+    a.wantUp = true;
+    a.postX = I.x; a.postZ = I.z;
+    const out = z.tmpP;
+    if (z.nav.nearestWalkable(I.x, I.z, 14, out)) { a.tx = out.x; a.tz = out.z; } else { a.tx = I.x; a.tz = I.z; }
   } else {
     a.tx = I.x; a.tz = I.z;
   }
+  if (spawning) a.wantUp = false;
   // props now (walking agents show them too: a sack on the shoulder, a hoe in hand)
   const d = a.draw;
   d.mainHand = a.main; d.offHand = a.off; d.back = a.back;
@@ -294,17 +305,28 @@ export function updateAgent(z: Zone, a: Agent, dt: number): void {
   else if (a.overlay !== '') a.overlay = '';
 
   a.dx = a.x - x0; a.dz = a.z - z0;
-  if (a.dx !== 0 || a.dz !== 0) { a.y = z.nav.groundY(a.x, a.z); }
+  if (a.dx !== 0 || a.dz !== 0) { a.y = z.nav.groundY(a.x, a.z) + a.elev; }
   a.dy = a.y - y0;
   const v = Math.sqrt(a.dx * a.dx + a.dz * a.dz) / dt;
   a.speed = v;
   // the stride the renderer draws follows the ground speed, smoothed over a fraction of a second (no stutter from a nudge by a neighbour)
   a.msm = v < 0.02 ? 0 : a.msm + (v - a.msm) * Math.min(1, dt * 12);
   d.moveSpeed = a.msm * z.clockSpeed;
+  if (a.mounted) rideLook(a);
   // speech bubble: a spoken line replaces the nameplate while it lasts
   if (a.speech !== null) {
     if (z.zoneT >= a.speechUntil) { a.speech = null; z.showPlate(a); } else d.label = a.speech;
   } else if (z.debugLabels) d.label = `${a.person.first}: ${a.intentLabel}`;
+}
+
+/** A rider is drawn on his horse: the clips follow the ground speed (docs/CIV.md §3), the horse under him in step. */
+function rideLook(a: Agent): void {
+  const d = a.draw;
+  const c = rideClips(a.msm);
+  if (d.anim !== c.rider) { d.anim = c.rider; d.animTime = 0; }
+  const m = d.mount;
+  if (m) { m.coat = a.mountCoat; m.anim = c.horse; m.animTime = d.animTime; }
+  else d.mount = { coat: a.mountCoat, anim: c.horse, animTime: d.animTime };
 }
 
 function waiting(z: Zone, a: Agent, dt: number): void {
@@ -348,9 +370,17 @@ function walk(z: Zone, a: Agent, dt: number): void {
   // how fast: the person's own walk (or run) at the pace asked for, slowed by what they carry and the ground, easing into the stride
   // and into the stop. Only far from the player (beyond SEEN_RADIUS) is a walker hurried along a little.
   const wp = warp(a.distFocus);
-  let want = gaitSpeed(a.baseSpeed * a.paceScale * loadFactor(a.draw.carry) * a.tf) * wp;
-  if (lastLeg && dist < 1.8) want *= 0.5 + 0.5 * (dist / 1.8);
-  a.vel += clamp(want - a.vel, -DECEL * dt, ACCEL * dt);
+  let want: number;
+  if (a.mounted) {
+    // a rider goes at the horse's gait asked of him (pace.ts HORSE_*), eased in and out more quickly than a man afoot
+    want = a.rideTo * Math.min(1.08, a.tf) * wp;
+    if (lastLeg && dist < 2.4) want *= 0.35 + 0.65 * (dist / 2.4);
+    a.vel += clamp(want - a.vel, -HORSE_DECEL * dt, HORSE_ACCEL * dt);
+  } else {
+    want = gaitSpeed(a.baseSpeed * a.paceScale * loadFactor(a.draw.carry) * a.tf) * wp;
+    if (lastLeg && dist < 1.8) want *= 0.5 + 0.5 * (dist / 1.8);
+    a.vel += clamp(want - a.vel, -DECEL * dt, ACCEL * dt);
+  }
   const v = a.vel;
   // step away from others (ranks, the player) while keeping the way
   if (a.distFocus > SEEN_RADIUS + 20) { z.sepX = 0; z.sepZ = 0; } else z.separation(a);
@@ -358,7 +388,7 @@ function walk(z: Zone, a: Agent, dt: number): void {
   const sp = Math.sqrt(vx * vx + vz * vz);
   // a walker pushed aside by a crowd never goes faster than a walk
   const running = a.draw.anim === 'run' ? v / wp > RUN_CLIP_OFF : v / wp > RUN_CLIP_ON;
-  const cap = running ? v * 1.12 + 0.12 : Math.min(WALK_TOP + 0.02, v * 1.12 + 0.1);
+  const cap = a.mounted ? v * 1.12 + 0.3 : running ? v * 1.12 + 0.12 : Math.min(WALK_TOP + 0.02, v * 1.12 + 0.1);
   let sp2 = sp;
   if (sp > cap) { vx *= cap / sp; vz *= cap / sp; sp2 = cap; }
   const mr = z.mr;
@@ -374,7 +404,7 @@ function walk(z: Zone, a: Agent, dt: number): void {
   // face the way of travel
   a.yaw = turnToward(a.yaw, Math.atan2(vx, vz), TURN_RATE * dt);
   // animation: the clip follows the ground speed (the run clip only when really running; the far-off speed-up is not shown)
-  if (a.overlay === '') {
+  if (a.overlay === '' && !a.mounted) {
     const real = sp2 / wp;
     const run = a.draw.anim === 'run' ? real > RUN_CLIP_OFF : real > RUN_CLIP_ON;
     setAnim(a, run ? 'run' : a.draw.carry !== 'none' ? 'carry_walk' : 'walk');
@@ -423,6 +453,14 @@ function arrive(z: Zone, a: Agent): void {
     return;
   }
   if (a.wantIn) { a.st = St.Door; return; }
+  if (a.wantUp) {
+    // at the foot of the stair: in at the wall, up, and out on the top (the scan shows him on his post a few seconds later)
+    a.st = St.Ghost;
+    const dx = a.postX - a.x, dz = a.postZ - a.z;
+    const d = Math.hypot(dx, dz) || 1;
+    a.ghostX = a.x + (dx / d) * Math.min(1.6, d); a.ghostZ = a.z + (dz / d) * Math.min(1.6, d);
+    return;
+  }
   legDone(z, a);
 }
 
@@ -645,7 +683,12 @@ function ghost(z: Zone, a: Agent, dt: number): void {
   setAnim(a, a.draw.carry !== 'none' ? 'carry_walk' : 'walk');
   a.draw.moveSpeed = 1.5 * z.clockSpeed;
   a.yaw = turnToward(a.yaw, Math.atan2(dx, dz), TURN_RATE * dt);
-  if (d <= v) { a.x = a.ghostX; a.z = a.ghostZ; a.dead = true; z.hide(a.personId, a.arriveBy + 0.001); return; }
+  if (d <= v) {
+    a.x = a.ghostX; a.z = a.ghostZ; a.dead = true;
+    // up a stair takes a few seconds: he is seen on the top after that
+    z.hide(a.personId, a.wantUp ? Math.max(a.arriveBy, z.now) + 0.011 : a.arriveBy + 0.001);
+    return;
+  }
   a.x += (dx / d) * v; a.z += (dz / d) * v;
 }
 
@@ -675,14 +718,61 @@ function script(z: Zone, a: Agent, dt: number): void {
     case 'goto':
       if (a.st === St.Walk) { walk(z, a, dt); return; }
       if (a.st === St.Wait) { waiting(z, a, dt); return; }
-      if (a.orderT < dt * 1.5) { goTo(z, a, o.x, o.z, o.run ? 2.2 : 1.1); return; }
-      a.order = null; setAnim(a, 'idle');
+      if (a.orderT < dt * 1.5) {
+        // a rider goes at the gait ordered, a man at his walk or (told to hurry) his run
+        const g = o.gait ?? (o.run ? 'jog' : 'walk');
+        a.gait = g; a.rideTo = horseSpeed(g);
+        goTo(z, a, o.x, o.z, g === 'walk' ? 1.1 : Math.max(2.2, a.runSpeed / a.baseSpeed));
+        return;
+      }
+      a.order = null; a.rideTo = 0; setAnim(a, 'idle');
       return;
+    case 'approach': {
+      const m = z.motionOf(o.target);
+      if (!m) { a.rideTo = 0; setAnim(a, 'idle'); return; }
+      const want = o.distance ?? 3;
+      const d = Math.hypot(m.x - a.x, m.z - a.z);
+      // as fast as ordered when far, slowing as he closes (a horse gallops, canters, trots, walks; a man runs, then walks)
+      const top = o.gait ?? (a.mounted ? 'trot' : 'walk');
+      const near: AgentGait = a.mounted ? (d > 70 ? 'gallop' : d > 28 ? 'canter' : d > 12 ? 'trot' : 'walk') : (d > 14 ? 'jog' : 'walk');
+      const g: AgentGait = GAIT_RANK[near] < GAIT_RANK[top] ? near : top;
+      a.gait = g;
+      a.rideTo = horseSpeed(g);
+      a.paceScale = g === 'walk' ? 1.15 : Math.max(2.2, a.runSpeed / a.baseSpeed);
+      if (d <= want + 0.8) {
+        // up with him: stands, facing him
+        a.rideTo = 0;
+        if (a.st !== St.Idle) { a.st = St.Idle; a.pathN = a.pathI = 0; }
+        a.yaw = turnToward(a.yaw, yawTo(a.x, a.z, m.x, m.z), TURN_RATE * 0.8 * dt);
+        setAnim(a, 'idle');
+        return;
+      }
+      // the place to stand: `want` metres from him, on the line to us, turned to one side so the men do not queue in his shadow
+      const ang = Math.atan2(a.x - m.x, a.z - m.z) + (o.side ?? 0) * 0.5;
+      chase(z, a, m.x + Math.sin(ang) * want, m.z + Math.cos(ang) * want, dt);
+      if (a.st === St.Walk) walk(z, a, dt); else if (a.st === St.Wait) waiting(z, a, dt);
+      return;
+    }
     case 'follow': {
       const lead = z.positionOf(o.leader);
-      if (!lead) { setAnim(a, 'idle'); return; }
+      if (!lead) { setAnim(a, 'idle'); a.rideTo = 0; return; }
       const dist = Math.hypot(lead.x - a.x, lead.z - a.z);
       const want = o.distance ?? 2.2;
+      if (a.mounted) {
+        // a rider keeps the leader's pace (never faster than a canter) and rides on after him as he walks
+        const lm = z.motionOf(o.leader);
+        a.rideTo = clamp((lm ? lm.speed : 0) * 1.05 + Math.max(0, dist - want) * 0.6, 0, HORSE_CANTER);
+        if (dist <= want + 0.4) {
+          a.rideTo = 0;
+          if (a.st !== St.Idle) { a.st = St.Idle; a.pathN = a.pathI = 0; }
+          a.yaw = turnToward(a.yaw, yawTo(a.x, a.z, lead.x, lead.z), TURN_RATE * 0.5 * dt);
+          setAnim(a, 'idle');
+          return;
+        }
+        chase(z, a, lead.x, lead.z, dt);
+        if (a.st === St.Walk) walk(z, a, dt); else if (a.st === St.Wait) waiting(z, a, dt);
+        return;
+      }
       if (a.st === St.Walk) {
         // keep to the leader's pace
         a.paceScale = clamp(0.8 + (dist - want) / 5, 0.7, 2.4);
@@ -722,9 +812,25 @@ function script(z: Zone, a: Agent, dt: number): void {
   }
 }
 
+const GAIT_RANK: Record<AgentGait, number> = { walk: 0, jog: 1, trot: 1, canter: 2, gallop: 3 };
+
+/**
+ * Keeps going to a point that moves (a person walking): a fresh path when the point has moved far from where the last one was aimed,
+ * and at the latest every second or so while it is not near; a path in hand is followed meanwhile. Sets Wait/Walk like `goTo`.
+ */
+function chase(z: Zone, a: Agent, tx: number, tz: number, dt: number): void {
+  a.apT -= dt;
+  const moved = Math.hypot(tx - a.apX, tz - a.apZ);
+  if (a.st === St.Idle || (a.apT <= 0 && moved > 2.2) || a.apT < -3) {
+    a.apT = 0.7; a.apX = tx; a.apZ = tz;
+    goTo(z, a, tx, tz, a.paceScale);
+  }
+}
+
 /** An order is over: back to the routine, except for summoned people, who stay put until dismissed. */
 export function endOrder(a: Agent): void {
   a.order = null;
+  a.rideTo = 0;
   if (a.summoned) { a.st = St.Idle; return; }
   a.control = 'ai'; a.replanAt = 0; a.sig = 0;
 }

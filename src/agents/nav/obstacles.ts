@@ -1,7 +1,8 @@
 // Static solids for collision and planning: building footprints (oriented boxes) from the sim's
 // buildings, and tree trunks and large rocks (circles) from the world scatter, minus anything felled.
 // Queries are allocation-free; trunks load lazily per 64 m scatter chunk.
-import { BUILDINGS } from '../../content/types';
+import { BUILDINGS, type BuildingKind } from '../../content/types';
+import type { FortView } from '../../core/view';
 import type { GameState } from '../../sim/state';
 import { CHUNKS_PER_SIDE, CHUNK_SIZE, type ScatterItem, type ScatterKind, type WorldModel } from '../../world/types';
 import { hash3 } from '../../core/math';
@@ -68,6 +69,37 @@ export class Obstacles {
 
   constructor(private readonly world: WorldModel, private readonly state: GameState) {}
 
+  /** Civilization pass: fortifications whose state differs from "whole" — a shut gate is solid, a broken gate and a breach are passable. */
+  private fort = new Map<number, 'solid' | 'open'>();
+
+  /** Is this building a solid for people: by its kind, unless the military module says a gate is shut (solid) or a gate/breach is open. */
+  solidOf(id: number, kind: BuildingKind): boolean {
+    const mode = this.fort.size > 0 ? this.fort.get(id) : undefined;
+    return mode === 'solid' ? true : mode === 'open' ? false : BUILDINGS[kind].blocks;
+  }
+
+  /**
+   * Takes the fortifications' state (gates shut, broken, breaches >= 0.5). True when anything changed: the next `refreshBuildings`
+   * (which compares the solids' geometry, now including this state) rebuilds the boxes and says which tiles are stale.
+   */
+  applyForts(list: readonly FortView[]): boolean {
+    const next = new Map<number, 'solid' | 'open'>();
+    for (const f of list) {
+      const b = this.state.buildings.get(f.building);
+      if (!b) continue;
+      if (b.kind === 'gatehouse') {
+        if (f.gate === 'shut') next.set(b.id, 'solid');
+        else if (f.gate === 'broken') next.set(b.id, 'open');
+      } else if (f.breach >= 0.5) next.set(b.id, 'open');
+    }
+    let changed = next.size !== this.fort.size;
+    if (!changed) for (const [id, m] of next) if (this.fort.get(id) !== m) { changed = true; break; }
+    if (!changed) return false;
+    this.fort = next;
+    this.builtRevision = -1;
+    return true;
+  }
+
   /** Rectangles (x0, z0, x1, z1 …) whose navigation tiles are stale after the last building change. */
   readonly dirty: number[] = [];
   private geomHash = 0;
@@ -87,7 +119,7 @@ export class Obstacles {
     this.builtCount = st.buildings.size;
     let h = 0, count = 0;
     for (const b of st.buildings.values()) {
-      if (!BUILDINGS[b.kind].blocks) continue;
+      if (!this.solidOf(b.id, b.kind)) continue;
       count++;
       h = (h + hash3(b.id, Math.round(b.x * 8) ^ (Math.round(b.rot * 64) << 20), Math.round(b.z * 8) ^ b.kind.length)) | 0;
     }
@@ -125,7 +157,7 @@ export class Obstacles {
     const list: { id: number; x: number; z: number; rot: number; hw: number; hd: number }[] = [];
     for (const b of st.buildings.values()) {
       const def = BUILDINGS[b.kind];
-      if (!def.blocks) continue;
+      if (!this.solidOf(b.id, b.kind)) continue;
       list.push({ id: b.id, x: b.x, z: b.z, rot: b.rot, hw: def.w / 2, hd: def.d / 2 });
     }
     const n = list.length;

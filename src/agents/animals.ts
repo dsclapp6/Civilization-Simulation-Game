@@ -226,7 +226,7 @@ export class AnimalSystem {
   claim(id: number): boolean {
     const a = this.byId.get(id);
     if (!a || a.dead || a.kind !== 'horse' || a.hostile || a.claimed) return false;
-    a.claimed = true; a.flee = 0; a.leader = 0;
+    a.claimed = true; a.flee = 0; a.leader = 0; a.draw.ledBy = undefined;
     return true;
   }
 
@@ -382,7 +382,7 @@ export class AnimalSystem {
   /** Takes a beast out of the herd for the day (it was sold, slaughtered, or is no longer the household's). */
   private remove(a: Animal): void {
     a.dead = true;
-    a.leader = 0;
+    a.leader = 0; a.draw.ledBy = undefined;
     this.gone.add(a.id);
   }
 
@@ -420,7 +420,7 @@ export class AnimalSystem {
     const taken = new Set(this.ledBy(person).map((q) => q.leadSlot));
     let slot = 0;
     while (taken.has(slot)) slot++;
-    a.leader = person; a.leadSlot = slot; a.leadWait = 0; a.leadFar = 0;
+    a.leader = person; a.draw.ledBy = person; a.leadSlot = slot; a.leadWait = 0; a.leadFar = 0;
     a.flee = 0; a.timer = 0; a.st = A.Walk;
     return { ok: true };
   }
@@ -440,7 +440,7 @@ export class AnimalSystem {
   }
 
   private letGo(a: Animal): void {
-    a.leader = 0; a.leadWait = 0; a.leadFar = 0;
+    a.leader = 0; a.draw.ledBy = undefined; a.leadWait = 0; a.leadFar = 0;
     a.st = A.Idle; a.timer = 2 + 2 * hash01(a.id, a.counter);
     a.anchorX = a.x; a.anchorZ = a.z; a.area = Math.min(a.area, 6);
   }
@@ -450,13 +450,15 @@ export class AnimalSystem {
     const z = this.zone;
     const lead = z.motionOf(a.leader);
     if (!lead) {
-      // its leader is not in the open (gone in at a door): it waits there, and in the end is let go
+      // its leader is not in the open (gone in at a door): it waits there, and in the end is let go (no rope to draw meanwhile)
       a.st = A.Idle;
+      a.draw.ledBy = undefined;
       a.leadWait += dt;
       if (a.leadWait > 90) this.letGo(a);
       return;
     }
     a.leadWait = 0;
+    a.draw.ledBy = a.leader;
     const info = a.info;
     // behind the leader in a line (a few make a small drove: alternately to one side and the other)
     const gap = 1.9 + 1.3 * a.leadSlot;

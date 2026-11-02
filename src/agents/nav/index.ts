@@ -1,7 +1,7 @@
 // The navigation service (NavApi): ground height including bridge decks, walkability, speed by
 // terrain, sliding collision for agents and the player, A* path finding, door points.
 import { BUILDINGS } from '../../content/types';
-import type { SimView } from '../../core/view';
+import type { FortView, SimView } from '../../core/view';
 import type { P2 } from '../../core/math';
 import type { GameState } from '../../sim/state';
 import type { WorldModel } from '../../world/types';
@@ -113,6 +113,19 @@ export class Nav implements NavApi {
     this.grid.update(fx, fz, budgetMs);
   }
 
+  /**
+   * The fortifications' state from the military module (`view.forts()`): a shut gate is solid for people, a broken gate and a breach of
+   * half the wall or more are passable. The tiles round whatever changed are rebuilt now.
+   */
+  applyForts(forts: readonly FortView[]): boolean {
+    if (!this.obstacles.applyForts(forts)) return false;
+    if (this.obstacles.refreshBuildings()) {
+      const d = this.obstacles.dirty;
+      for (let i = 0; i < d.length; i += 4) this.grid.invalidateRect(d[i], d[i + 1], d[i + 2], d[i + 3]);
+    }
+    return true;
+  }
+
   /** Builds everything around the focus now (loading screens, resync after a teleport). */
   prepare(fx: number, fz: number): void {
     this.grid.setCentre(fx, fz);
@@ -220,6 +233,11 @@ export class Nav implements NavApi {
 
   nearestWalkable(x: number, z: number, maxDist: number, out: P2): boolean {
     return this.finder.nearestWalkable(x, z, maxDist, out);
+  }
+
+  /** Is the straight line clear of walls, buildings and trunks (what can be seen from one point to the other)? */
+  lineClear(x0: number, z0: number, x1: number, z1: number): boolean {
+    return this.finder.lineClear(x0, z0, x1, z1);
   }
 
   doorOf(buildingId: number): { x: number; z: number; yaw: number } | null {

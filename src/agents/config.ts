@@ -27,6 +27,8 @@ export const PLAN_MARGIN = 1.1;
 // ---- bodies ----
 export const ADULT_RADIUS = 0.28;
 export const CHILD_RADIUS = 0.22;
+/** A rider and his horse (the body that collides). */
+export const RIDER_RADIUS = 0.55;
 
 // ---- budgets ----
 /** Per-frame budget (ms) of the incremental nav-tile builder. */
