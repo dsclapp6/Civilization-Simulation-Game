@@ -552,9 +552,10 @@ export class BuildingSystem {
         const key = this.cacheKey(e.view, 2);
         if (this.isWarm(key)) continue;
         const b = e.view;
+        const f = this.forts.get(b.id);
         this.assets.building({
           kind: b.kind, level: b.level, culture: b.culture, seed: b.seed,
-          construction: b.construction, damage: b.damage, ownerColor: b.ownerColor, lod: 2,
+          construction: b.construction, damage: b.damage, ownerColor: b.ownerColor, lod: 2, gate: f?.gate, breach: f?.breach,
         }).dispose();
         this.keySeen.set(key, this.frame);
         this.genCooldown = 6;
