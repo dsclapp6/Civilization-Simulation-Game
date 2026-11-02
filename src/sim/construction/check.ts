@@ -1,7 +1,7 @@
 // Is this a valid site? (the ghost asks every frame, so it is cheap: ≤ 0.2 ms) Who may build there (the land and who holds it), may
 // they build this (rank, technique, how many the place may keep), does the ground suit it (water, slope, a river bank, a rise, a
 // deposit, the coast, woodland) and is the way clear (buildings and sites, strips, roads). Also where a builder could put one.
-import { BUILDINGS, BUILDING_KINDS, type BuildingKind } from '../../content/types';
+import { BUILDINGS, type BuildingKind } from '../../content/types';
 import { dist2, yawTo, type P2 } from '../../core/math';
 import type { Deposit, ResourceKind } from '../../world/types';
 import type { LandInfo } from '../territory/types';
@@ -9,7 +9,7 @@ import type { PersonId } from '../state';
 import type { Construction } from './core';
 import { levelCost, maxPerSettlement, rulesOf, type KindRules } from './data';
 import { footprintCorners, kindName } from './geometry';
-import { noScopeReason, rankName, rankReason, scopeInfo, lordTitleAt, type Auth, type ScopeInfo } from './scope';
+import { noScopeReason, rankReason, scopeInfo, lordTitleAt, type Auth, type ScopeInfo } from './scope';
 import type { OutpostRec } from './save';
 import type { PlacementCheck } from './types';
 
@@ -222,7 +222,6 @@ function groundReasonFor(C: Construction, rules: KindRules, kind: BuildingKind, 
     const allowed = Math.min(MAX_RISE, rules.slope * Math.sqrt(def.w * def.w + def.d * def.d));
     if (rise > allowed) return 'Too steep';
   }
-  void rot;
   switch (rules.terrain) {
     case 'river': {
       let best = Infinity;
@@ -353,6 +352,8 @@ export function evaluate(C: Construction, personId: PersonId, kind: BuildingKind
 // ---------------------------------------------------------------------------------------------
 
 const GOLDEN = 2.399963229728653;
+/** Most places `suggest` tries (each is a full check). */
+const MAX_TRIES = 420;
 
 /** Which way a door should face at a point: toward the nearest street, else toward the centre of the place. */
 function facing(C: Construction, x: number, z: number, cx: number, cz: number): number {
@@ -361,57 +362,54 @@ function facing(C: Construction, x: number, z: number, cx: number, cz: number): 
   return yawTo(x, z, cx, cz);
 }
 
+interface Candidate { x: number; z: number; rot: number }
+
+/** Candidate spots at the deposits of the kinds a building needs, nearest to `origin` first. */
+function depositCandidates(C: Construction, kinds: readonly ResourceKind[], origin: P2, home: P2 | undefined): Candidate[] {
+  const found: Deposit[] = [];
+  if (C.territory) {
+    for (const k of kinds) found.push(...C.territory.depositsNear(origin.x, origin.z, 3500, k));
+  } else {
+    for (const d of C.world.deposits ?? []) if (kinds.includes(d.kind) && dist2(d.x, d.z, origin.x, origin.z) <= 3500 * 3500) found.push(d);
+  }
+  found.sort((a, b) => dist2(origin.x, origin.z, a.x, a.z) - dist2(origin.x, origin.z, b.x, b.z) || a.id - b.id);
+  const out: Candidate[] = [];
+  for (const d of found.slice(0, 8)) {
+    for (let i = 0; i < 16; i++) {
+      const r = i === 0 ? 0 : Math.sqrt(i / 16) * d.radius * 0.8;
+      const a = i * GOLDEN;
+      const x = d.x + Math.cos(a) * r, z = d.z + Math.sin(a) * r;
+      out.push({ x, z, rot: home ? yawTo(x, z, home.x, home.z) : 0 });
+    }
+  }
+  return out;
+}
+
 export function suggest(C: Construction, personId: PersonId, kind: BuildingKind, settlement: number, near?: P2): PlacementCheck | null {
   const si = scopeInfo(C, personId);
   if (!si) return null;
   const rules = rulesOf(kind);
   const def = BUILDINGS[kind];
   const s = settlement >= 0 ? C.settlementById.get(settlement) : undefined;
-  const radius = Math.max(40, s ? s.radius * 1.3 : 400);
-  const candidates: Array<{ x: number; z: number; rot: number }> = [];
+  const person = si.person;
+  const home = s ? { x: s.x, z: s.z } : C.settlementById.get(person.settlement);
+  const origin: P2 | undefined = near ?? (s ? { x: s.x, z: s.z } : home ? { x: home.x, z: home.z } : undefined);
+  if (!origin) return null;
+  let candidates: Candidate[] = [];
 
-  if (rules.terrain === 'deposit' && C.territory) {
-    // at a deposit of the kind, near the point (or the settlement)
-    const cx = near?.x ?? s?.x ?? si.person.settlement, cz = near?.z ?? s?.z ?? 0;
-    const origin = near ?? (s ? { x: s.x, z: s.z } : undefined);
-    if (origin) {
-      void cx; void cz;
-      const found: Deposit[] = [];
-      for (const k of rules.deposits ?? []) found.push(...C.territory.depositsNear(origin.x, origin.z, 3500, k));
-      found.sort((a, b) => dist2(origin.x, origin.z, a.x, a.z) - dist2(origin.x, origin.z, b.x, b.z) || a.id - b.id);
-      for (const d of found.slice(0, 8)) {
-        for (let i = 0; i < 18; i++) {
-          const r = i === 0 ? 0 : Math.sqrt(i / 18) * d.radius * 0.8;
-          const a = i * GOLDEN;
-          const x = d.x + Math.cos(a) * r, z = d.z + Math.sin(a) * r;
-          candidates.push({ x, z, rot: yawTo(x, z, origin.x, origin.z) });
-        }
-      }
+  if (rules.terrain === 'deposit') {
+    candidates = depositCandidates(C, rules.deposits ?? [], origin, home ? { x: home.x, z: home.z } : undefined);
+  } else if (settlement >= 0 || near) {
+    const radius = Math.max(40, s ? s.radius * 1.3 : 200);
+    let ox = origin.x, oz = origin.z;
+    if (!near && s) {
+      const ownHome = si.own && si.own.settlement === settlement && !si.auth.has(settlement) ? C.state.buildings.get(si.own.home) : undefined;
+      if (ownHome) { ox = ownHome.x; oz = ownHome.z; } // a head building for himself starts at his own door
+      else if (rules.cat === 'farm' || rules.cat === 'resource') { ox = s.x + Math.cos(kind.length) * s.radius * 0.7; oz = s.z + Math.sin(kind.length) * s.radius * 0.7; } // working buildings lie out at the edge
     }
-  } else if (rules.terrain === 'deposit') {
-    for (const d of C.world.deposits ?? []) {
-      if (!(rules.deposits ?? []).includes(d.kind)) continue;
-      if (s && dist2(d.x, d.z, s.x, s.z) > 3500 * 3500) continue;
-      for (let i = 0; i < 12; i++) {
-        const r = i === 0 ? 0 : Math.sqrt(i / 12) * d.radius * 0.8;
-        const a = i * GOLDEN;
-        candidates.push({ x: d.x + Math.cos(a) * r, z: d.z + Math.sin(a) * r, rot: s ? yawTo(d.x, d.z, s.x, s.z) : 0 });
-      }
-    }
-  } else {
-    let ox = near?.x ?? s?.x ?? 0, oz = near?.z ?? s?.z ?? 0;
-    // a household head building for themselves starts at their own door
-    if (!near && (si.role === 'head' || (!si.auth.has(settlement) && si.own))) {
-      const home = si.own ? C.state.buildings.get(si.own.home) : undefined;
-      if (home) { ox = home.x; oz = home.z; }
-    } else if (!near && s && (rules.cat === 'farm' || rules.cat === 'resource')) {
-      // working buildings lie out at the edge of the place
-      ox = s.x + Math.cos(kind.length) * s.radius * 0.7; oz = s.z + Math.sin(kind.length) * s.radius * 0.7;
-    }
-    const cx = s?.x ?? ox, cz = s?.z ?? oz;
+    const cx = s?.x ?? origin.x, cz = s?.z ?? origin.z;
     const step = Math.max(5, Math.min(def.w, def.d) * 0.9);
-    const rings = Math.ceil(radius / step);
-    for (let i = 0; i < rings * 7 && candidates.length < 700; i++) {
+    for (let i = 0; candidates.length < 700; i++) {
       const r = step * Math.sqrt(i + 0.5) * 0.95;
       if (r > radius) break;
       const a = i * GOLDEN;
@@ -420,17 +418,16 @@ export function suggest(C: Construction, personId: PersonId, kind: BuildingKind,
     }
   }
 
-  const tries = Math.min(candidates.length, 600);
+  const tries = Math.min(candidates.length, MAX_TRIES);
   for (let i = 0; i < tries; i++) {
     const c = candidates[i];
-    const e = evaluate(C, personId, kind, c.x, c.z, c.rot);
-    if (e.check.ok && (settlement < 0 ? e.check.settlement < 0 || e.check.outpost !== undefined : e.check.settlement === settlement)) return e.check;
-    // a walled slot may fit turned a quarter
-    if (!e.check.ok && /Overlaps|On the road|On a strip/.test(e.check.reason ?? '')) {
-      const f = evaluate(C, personId, kind, c.x, c.z, c.rot + Math.PI / 2);
-      if (f.check.ok && (settlement < 0 ? true : f.check.settlement === settlement)) return f.check;
+    for (const turn of [0, Math.PI / 2]) {
+      const e = evaluate(C, personId, kind, c.x, c.z, c.rot + turn);
+      const here = settlement < 0 ? e.check.settlement < 0 || e.check.outpost !== undefined : e.check.settlement === settlement;
+      if (e.check.ok && here) return e.check;
+      // a slot that is tight may fit turned a quarter; anything else is not worth turning for
+      if (!/Overlaps|On the road|On a strip/.test(e.check.reason ?? '')) break;
     }
   }
-  void BUILDING_KINDS; void rankName;
   return null;
 }

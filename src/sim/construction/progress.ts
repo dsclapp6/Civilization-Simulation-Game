@@ -205,8 +205,6 @@ function planSite(C: Construction, ctx: PlanCtx, rec: SiteRec): void {
   const holy = isHolyDay(C.absDay);
   const crewCap = maxCrew(rec.labour);
   let units = 0, household = 0, week = 0, hired = 0;
-  const reps: Person[] = [];
-  const waitingNote = (): string => sup.text || 'Waiting';
 
   if (!holy && cap > 0.001) {
     // 1. the household's own, on the 'build' task
@@ -260,7 +258,6 @@ function planSite(C: Construction, ctx: PlanCtx, rec: SiteRec): void {
         if (paid < wage - 1e-6) break;
         C.credit(C.household(p.household), p, wage);
         rec.crew.push(p.id);
-        reps.push(p);
         ctx.busy.add(p.id);
         ctx.taken.set(rec.settlement, (ctx.taken.get(rec.settlement) ?? 0) + 1);
         units += f;
@@ -271,7 +268,6 @@ function planSite(C: Construction, ctx: PlanCtx, rec: SiteRec): void {
   }
   rec.from = [r3(household), r3(week), r3(hired)];
   rec.perDay = r3(Math.min(units, cap));
-  void reps;
 
   // how it stands
   const before = rec.status;
@@ -285,7 +281,7 @@ function planSite(C: Construction, ctx: PlanCtx, rec: SiteRec): void {
   } else if (cap <= 0.001) {
     rec.idle += sup.stuck && !sup.coming ? 1 : 0;
     rec.status = rec.idle >= 2 ? 'stalled' : 'waiting';
-    rec.note = waitingNote();
+    rec.note = sup.text || 'Waiting';
   } else {
     rec.idle++;
     rec.status = rec.idle >= 2 ? 'stalled' : 'waiting';
