@@ -58,6 +58,8 @@ export function buildPanel(ctx: PanelCtx): UiPanel {
 
   // ---- state ----
   let placing: BuildOption | null = null;
+  /** A wall or palisade is laid in a line: the first click sets where it starts. */
+  let lineFrom: { x: number; z: number } | null = null;
   let rot = cam.yaw + Math.PI;
   let mouse: { x: number; y: number } | null = null;
   let selected = -1;
@@ -77,10 +79,20 @@ export function buildPanel(ctx: PanelCtx): UiPanel {
     if (!placing || !mouse) { ctl.setGhost(null); return; }
     const g = ctl.screenToGround(mouse.x, mouse.y);
     if (!g) { ctl.setGhost(null); return; }
-    const chk = C.check(me(), placing.kind, g.x, g.z, rot);
+    const segment = !!BUILDINGS[placing.kind].segment;
+    // a wall follows the line from where it starts to the cursor
+    const r0 = segment && lineFrom ? Math.atan2(-(g.z - lineFrom.z), g.x - lineFrom.x) : rot;
+    const chk = C.check(me(), placing.kind, g.x, g.z, r0);
     ghostReason = chk.ok ? '' : chk.reason ?? '';
-    ctl.setGhost({ kind: placing.kind, level: 1, x: g.x, z: g.z, rot, ok: chk.ok, footprint: chk.footprint });
-    tipEl.textContent = chk.ok ? `${BUILDINGS[placing.kind].name}: click to stake it out · Q / E turn it` : ghostReason;
+    ctl.setGhost({ kind: placing.kind, level: 1, x: g.x, z: g.z, rot: r0, ok: chk.ok, footprint: chk.footprint });
+    if (segment) {
+      const len = lineFrom ? Math.hypot(g.x - lineFrom.x, g.z - lineFrom.z) : 0;
+      const n = lineFrom ? Math.max(1, Math.round(len / (BUILDINGS[placing.kind].w + 0.05))) : 0;
+      ctl.setBuildArea?.(lineFrom ? [[lineFrom, { x: g.x, z: g.z }, { x: g.x + 0.01, z: g.z + 0.01 }]] : null);
+      tipEl.textContent = lineFrom
+        ? `${Math.round(len)} m: ${n} lengths, ${formatMoney(placing.cost.pence * n)} · click to lay it`
+        : `${BUILDINGS[placing.kind].name}: click where it starts, then where it ends`;
+    } else tipEl.textContent = chk.ok ? `${BUILDINGS[placing.kind].name}: click to stake it out · Q / E turn it` : ghostReason;
     tipEl.classList.toggle('bad', !chk.ok);
     tipEl.style.left = `${mouse.x + 16}px`;
     tipEl.style.top = `${mouse.y + 14}px`;
@@ -120,9 +132,22 @@ export function buildPanel(ctx: PanelCtx): UiPanel {
         h('div.mu-build-grid', null, items.map((o) => h('button.mu-build-item', {
           type: 'button', class: `${o.ok ? '' : 'off'}${placing?.kind === o.kind ? ' sel' : ''}`,
           tip: `${o.does}\n${formatMoney(o.cost.pence)} · ${goodsLine(o.cost.goods)} · ${plural(o.cost.labour, 'worker-day')}${o.ok ? '' : `\n${o.reason}`}`,
-          onclick: () => { placing = placing?.kind === o.kind ? null : o; selected = -1; sig = ''; render(); updateGhost(); },
+          onclick: () => { placing = placing?.kind === o.kind ? null : o; lineFrom = null; selected = -1; sig = ''; render(); updateGhost(); },
         }, h('span.mu-build-name', null, o.name), h('span.mu-build-cost', null, formatMoney(o.cost.pence))))));
     }));
+  };
+
+  /** Who of your own is set to a site, and buttons to set more to it or send them home. */
+  const peopleRow = (site: number): HTMLElement => {
+    const on = C!.workersAt(site);
+    const free = C!.assignable?.(me(), site) ?? [];
+    const names = on.slice(0, 4).map((id) => ctx.nameOf(id).split(' ')[0]).join(', ');
+    return h('div.mu-row.mu-wrap.mu-gap-6', { style: { marginTop: '6px' } },
+      h('span.mu-small', null, icon('users', 13), on.length ? ` ${names}${on.length > 4 ? ` and ${on.length - 4} more` : ''} at work` : ' None of your people at it'),
+      button(`Set ${Math.min(4, free.length)} to it`, { size: 'small', icon: 'plus', disabled: free.length === 0,
+        tip: free.length ? 'Your servants first, then the serfs and labourers of the place' : 'Nobody free to set to it',
+        onClick: () => say(C!.assign!(me(), site, [...on, ...free.slice(0, 4)]), 'They go to the work.') }),
+      on.length ? button('Send them home', { size: 'small', onClick: () => say(C!.assign!(me(), site, []), 'They go back to their day.') }) : null);
   };
 
   const worksPage = (): HTMLElement => {
@@ -133,6 +158,7 @@ export function buildPanel(ctx: PanelCtx): UiPanel {
         s.status === 'working' ? button('Stop', { size: 'small', variant: 'danger', onClick: () => say(C!.cancel(me(), s.id), 'The work is stopped.') }) : chip(s.status, s.status === 'done' ? 'green' : '')),
       h('div.mu-small.mu-dim', null, s.note ?? `${pct(s.progress)} done`),
       bar(s.status === 'done' ? 'green' : 'gold', s.progress, { thin: true }).el,
+      s.status === 'working' && C?.assign ? peopleRow(s.id) : null,
       h('button.mu-link.mu-small', { type: 'button', onclick: () => { cam.x = s.x; cam.z = s.z; placeCamera(); } }, 'Look at it'))));
   };
 
@@ -217,6 +243,14 @@ export function buildPanel(ctx: PanelCtx): UiPanel {
     if (d.button === 0 && placing && C) {
       const g = ctl?.screenToGround(e.clientX, e.clientY);
       if (!g) return;
+      if (BUILDINGS[placing.kind].segment && C.placeLine) {
+        if (!lineFrom) { lineFrom = { x: g.x, z: g.z }; updateGhost(); return; }
+        const r = C.placeLine(me(), placing.kind, lineFrom, g);
+        say(r, `The ${placing.name.toLowerCase()} is laid out.`);
+        if (r.ok) { lineFrom = e.shiftKey ? { x: g.x, z: g.z } : null; if (!e.shiftKey) { placing = null; ctl?.setGhost?.(null); tipEl.textContent = ''; } }
+        ctl?.setBuildArea?.(null);
+        return;
+      }
       const r = C.place(me(), placing.kind, g.x, g.z, rot);
       say(r, `The ${placing.name.toLowerCase()} is staked out.`);
       if (r.ok && !e.shiftKey) { placing = null; ctl?.setGhost?.(null); tipEl.textContent = ''; }
@@ -227,7 +261,7 @@ export function buildPanel(ctx: PanelCtx): UiPanel {
       selected = id ?? -1;
       sig = ''; render();
     }
-    if (d.button === 2 && placing) { placing = null; ctl?.setGhost?.(null); tipEl.textContent = ''; sig = ''; render(); }
+    if (d.button === 2 && placing) { placing = null; lineFrom = null; ctl?.setGhost?.(null); ctl?.setBuildArea?.(null); tipEl.textContent = ''; sig = ''; render(); }
   }
   const keys = (e: KeyboardEvent): void => {
     if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
@@ -266,6 +300,7 @@ export function buildPanel(ctx: PanelCtx): UiPanel {
     },
     tick() { render(); },
     onEscape() {
+      if (lineFrom) { lineFrom = null; ctl?.setBuildArea?.(null); updateGhost(); return true; }
       if (placing) { placing = null; ctl?.setGhost?.(null); tipEl.textContent = ''; sig = ''; render(); return true; }
       return false;
     },

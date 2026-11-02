@@ -8,6 +8,7 @@ import { createAssetLibrary, type MillenniaAssetLibrary } from '../assets/librar
 import { wrapAngle } from '../core/math';
 import { installPlayer } from '../player';
 import { InteriorMode } from './interior';
+import { WorksView } from './works';
 import type { HoverMark, PickPort, PickRay } from '../player/types';
 import { createRenderer } from '../render/renderer';
 import type { GameRenderer } from '../render/types';
@@ -39,6 +40,8 @@ export interface Session {
   readonly controls: UiRendererControls;
   /** Inside a building (the room is drawn instead of the world). */
   readonly interior: InteriorMode;
+  /** Your own people seen at the building sites they are set to. */
+  readonly works: WorksView;
   dispose(): void;
 }
 
@@ -118,9 +121,12 @@ export async function buildSession(sim: Simulation, o: SessionOptions): Promise<
     return { ...hud, prompt: interior.prompt() };
   };
 
+  const works = new WorksView(sim, zone, player);
+  offs.push(sim.events.on('playerSwitched', () => works.clear()));
+
   const services: GameServices = { sim, economy, social, zone, player, objectives, territory, construction, realm };
   return {
-    interior,
+    interior, works,
     loadMs: { assets: t1 - t0, renderer: t2 - t1, modules: t3 - t2, settle: t5 - t4 },
     sim, services, renderer, assets, controls: makeControls(renderer),
     dispose() {

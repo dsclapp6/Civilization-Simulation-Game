@@ -40,6 +40,8 @@ interface SiteRec {
   toLevel?: number;
   /** For a rebuild, the kind the building becomes. */
   toKind?: BuildingKind;
+  /** People of the builder's own set to work here (besides the hired hands). */
+  workers?: PersonId[];
 }
 
 interface ConSave { v: 1; next: number; sites: SiteRec[]; gone: number[] }
@@ -284,6 +286,8 @@ export function installConstruction(sim: Simulation, deps: Wave3Deps): Construct
     return { ok: false, reason: 'It is not yours to change' };
   };
 
+  /** Set while a line of wall is laid: one notice for the whole run, not one per length. */
+  let quiet = false;
   const place: ConstructionApi['place'] = (person, kind, x, z, rot) => {
     if (NOT_BUILT.has(kind)) return { ok: false, reason: 'That is not raised by one lord' };
     const chk = check(person, kind, x, z, rot);
@@ -305,7 +309,7 @@ export function installConstruction(sim: Simulation, deps: Wave3Deps): Construct
     list.push(b);
     st.touchBuilding(b);
     const site = newSite({ building: id, kind, work: 'build', settlement: b.settlement, household: hh, house: p?.house ?? 0, labour: c.labour, priority: 1 });
-    sim.events.emit('notify', { kind: 'info', text: `The site of a ${BUILDINGS[kind].name.toLowerCase()} is staked out (${formatMoney(c.pence)}).`, person });
+    if (!quiet) sim.events.emit('notify', { kind: 'info', text: `The site of a ${BUILDINGS[kind].name.toLowerCase()} is staked out (${formatMoney(c.pence)}).`, person });
     return { ok: true, site: site.id };
   };
 
@@ -368,7 +372,9 @@ export function installConstruction(sim: Simulation, deps: Wave3Deps): Construct
   const crewOf = (s: SiteRec): number => {
     const pop = st.residentsOf(s.settlement).filter((p) => !p.death && ageYears(p, sim.absDay) >= 16).length;
     const share = realm()?.worksShare(s.settlement) ?? 0;
-    return 3 + Math.round(pop * share * 0.25);
+    // the hired hands, the week-work sent to the works, and your own people set to it (who work a little harder)
+    const own = (s.workers ?? []).filter((id) => { const p = st.persons.get(id); return !!p && !p.death; }).length;
+    return 3 + Math.round(pop * share * 0.25) + Math.round(own * 1.3);
   };
   const toView = (s: SiteRec): SiteView => {
     const b = st.buildings.get(s.building);
@@ -514,8 +520,70 @@ export function installConstruction(sim: Simulation, deps: Wave3Deps): Construct
     return place(person, n.kind, spot.x, spot.z, spot.rot);
   };
 
+  // ---- your own people at the works ----
+  const SERVING: ReadonlySet<string> = new Set(['servant', 'labourer', 'farmer', 'serf', 'none', 'cottar', 'shepherd', 'woodward', 'carpenter', 'mason']);
+  const assignable = (person: PersonId, siteId: number): PersonId[] => {
+    const s = save().sites.find((x) => x.id === siteId);
+    const me = st.persons.get(person);
+    if (!s || !me) return [];
+    const busy = new Set(save().sites.filter((x) => x.status === 'working' && x.id !== siteId).flatMap((x) => x.workers ?? []));
+    const out: Array<{ id: PersonId; rank: number }> = [];
+    const hh = st.households.get(payer(person));
+    const fit = (id: PersonId): boolean => {
+      const p = st.persons.get(id);
+      if (!p || p.death || id === person || busy.has(id) || p.flags.player || p.flags.captive) return false;
+      const a = ageYears(p, sim.absDay);
+      return a >= 14 && a <= 60;
+    };
+    // the household's servants and retainers first, then the place's serfs and labourers
+    for (const id of hh?.members ?? []) if (fit(id) && st.persons.get(id)!.rankTier <= 3) out.push({ id, rank: 0 });
+    for (const p of st.residentsOf(s.settlement)) {
+      if (out.length >= 40) break;
+      if (!fit(p.id) || out.some((o) => o.id === p.id) || p.rankTier > 2 || !SERVING.has(p.career)) continue;
+      out.push({ id: p.id, rank: p.estate === 'unfree' ? 1 : 2 });
+    }
+    return out.sort((a, b) => a.rank - b.rank || a.id - b.id).map((o) => o.id);
+  };
+  const assign = (person: PersonId, siteId: number, workers: readonly PersonId[]): Result => {
+    const s = save().sites.find((x) => x.id === siteId);
+    if (!s || s.status !== 'working') return { ok: false, reason: 'No work under way there' };
+    const b = st.buildings.get(s.building);
+    if (b && !mayWorkOn(person, b).ok) return { ok: false, reason: 'It is not yours to order' };
+    const allowed = new Set(assignable(person, siteId));
+    s.workers = workers.filter((id) => allowed.has(id) || (s.workers ?? []).includes(id)).slice(0, 40);
+    touch();
+    return { ok: true };
+  };
+  /** Segments along a line: each one turned along it, set end to end. */
+  const placeLine = (person: PersonId, kind: BuildingKind, from: P2, to: P2): Result & { sites?: number[]; skipped?: number } => {
+    const def = BUILDINGS[kind];
+    if (!def.segment) return { ok: false, reason: 'Only walls and palisades are laid in a line' };
+    const len = Math.hypot(to.x - from.x, to.z - from.z);
+    if (len < def.w * 0.5) return { ok: false, reason: 'Too short' };
+    if (len > 400) return { ok: false, reason: 'Too long for one order (400 m at most)' };
+    const n = Math.max(1, Math.round(len / (def.w + 0.05)));
+    const ux = (to.x - from.x) / len, uz = (to.z - from.z) / len;
+    // local x runs along the line: the rotation that turns (1, 0) onto (ux, uz)
+    const rot = Math.atan2(-uz, ux);
+    const total = cost(kind, 1).pence * n;
+    const purse = st.households.get(payer(person))?.purse ?? 0;
+    if (purse < total) return { ok: false, reason: `${n} lengths cost ${formatMoney(total)}; the treasury holds ${formatMoney(purse)}` };
+    const sites: number[] = [];
+    let skipped = 0;
+    quiet = true;
+    try {
+      for (let i = 0; i < n; i++) {
+        const t = (i + 0.5) * (len / n);
+        const r = place(person, kind, from.x + ux * t, from.z + uz * t, rot);
+        if (r.ok && r.site) sites.push(r.site); else skipped++;
+      }
+    } finally { quiet = false; }
+    if (sites.length) sim.events.emit('notify', { kind: 'info', text: `${sites.length} lengths of ${def.name.toLowerCase()} are staked out${skipped ? ` (${skipped} could not be laid: something is in the way)` : ''}.`, person });
+    return sites.length ? { ok: true, sites, skipped } : { ok: false, reason: 'No length of it could be laid there', skipped };
+  };
+
   const api: ConstructionApi = {
-    seatPlan, expandSeat,
+    seatPlan, expandSeat, assignable, assign, placeLine,
     scope, catalogue, check, place, upgrade, repair, demolish, cancel,
     setPriority: (person, siteId, priority) => {
       const s = save().sites.find((x) => x.id === siteId);
@@ -543,7 +611,10 @@ export function installConstruction(sim: Simulation, deps: Wave3Deps): Construct
       }
       return null;
     },
-    workersAt: () => [],
+    workersAt: (siteId) => {
+      const s = save().sites.find((x) => x.id === siteId);
+      return s && s.status === 'working' ? (s.workers ?? []).filter((id) => !st.persons.get(id)?.death) : [];
+    },
     version: () => version,
   };
   sim.services.construction = api;

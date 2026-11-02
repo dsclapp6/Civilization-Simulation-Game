@@ -196,6 +196,7 @@ export async function start(root: AppRoot): Promise<void> {
         s.sim.step(dt);
         t2 = performance.now();
         g.player.frame?.(dt);
+        s.works.update(dt, s.interior.active || !!s.sim.clock.skip);
         const focus = g.player.mapFocus?.();
         if (focus) s.renderer.focusMap(focus.x, focus.z, focus.altitude);
         t3 = performance.now();

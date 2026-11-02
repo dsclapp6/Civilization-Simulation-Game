@@ -114,3 +114,26 @@ describe('libraries, stables and farms', () => {
     expect(realm.researchOptions(me.id).some((op) => op.places.includes(lb.id))).toBe(true);
   });
 });
+
+describe('walls and your own people at the works', () => {
+  it('lays a wall in lengths along a line, and assigned servants make the work go faster', () => {
+    const { o, con, me, view } = lordSim('lordtest');
+    const s = view.settlements[0];
+    const st = o.sim.world.settlements[s];
+    // a line through open ground well out from the houses
+    const a = con.suggestSpot(me.id, 'tower', s, { x: st.x + 120, z: st.z })!;
+    const r = con.placeLine!(me.id, 'palisade', { x: a.x, z: a.z }, { x: a.x + 24, z: a.z });
+    expect(r.ok, r.reason).toBe(true);
+    expect(r.sites!.length).toBeGreaterThanOrEqual(3);
+    const first = con.site(r.sites![0])!;
+    const crew0 = con.site(r.sites![0])!.workers;
+    const people = con.assignable!(me.id, first.id);
+    expect(people.length).toBeGreaterThan(0);
+    expect(con.assign!(me.id, first.id, people.slice(0, 4)).ok).toBe(true);
+    expect(con.workersAt(first.id)).toHaveLength(Math.min(4, people.length));
+    expect(con.site(first.id)!.workers).toBeGreaterThan(crew0 - 0.5);
+    // people at work on one site are not offered for another
+    const second = r.sites![1];
+    for (const id of con.workersAt(first.id)) expect(con.assignable!(me.id, second)).not.toContain(id);
+  });
+});

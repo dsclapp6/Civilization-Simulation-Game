@@ -161,4 +161,12 @@ export interface ConstructionApi {
   seatPlan?(person: PersonId): SeatPlan | null;
   /** Begins the next stage of the seat (paid from the treasury). */
   expandSeat?(person: PersonId): Result & { site?: number };
+
+  // ---- additive: your own people put to the works ----
+  /** People the builder may set to work on a site: the household's servants, then the place's serfs and labourers. */
+  assignable?(person: PersonId, site: number): PersonId[];
+  /** Sets who works on a site (replaces the list; empty releases them). They walk there and work in daylight. */
+  assign?(person: PersonId, site: number, workers: readonly PersonId[]): Result;
+  /** A run of wall (or palisade) from one point to another: one site per segment along the line. */
+  placeLine?(person: PersonId, kind: BuildingKind, from: { x: number; z: number }, to: { x: number; z: number }): Result & { sites?: number[]; skipped?: number };
 }
