@@ -72,7 +72,7 @@ export function tacticalPanel(ctx: PanelCtx): UiPanel {
     const p = r.project(field0.x, gy, field0.z);
     const w = window.innerWidth, hh = window.innerHeight;
     if (p && Math.abs(p.x - w / 2) < w * 0.22 && Math.abs(p.y - hh / 2) < hh * 0.28) return;
-    r.setCameraPose?.({ x: field0.x, y: gy + field0.distance * 0.9, z: field0.z - field0.distance * 0.55 }, { x: field0.x, y: gy, z: field0.z }, 0.8);
+    r.setCameraPose?.({ x: field0.x, y: gy + field0.distance * 0.9, z: field0.z - field0.distance * 0.55 }, { x: field0.x, y: gy, z: field0.z }, 0);
     usedPose = true;
   }
 

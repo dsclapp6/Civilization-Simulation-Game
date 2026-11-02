@@ -110,7 +110,7 @@ const CSS = `
 .mu-bt-banner { position: absolute; left: 0; top: 0; transform: translate(-50%, -100%); pointer-events: none; display: flex; flex-direction: column; align-items: center; }
 .mu-bt-banner .flag { display: flex; align-items: center; gap: 4px; padding: 2px 8px 3px; border-radius: 3px 3px 10px 10px; font-size: 12px; font-weight: 700; white-space: nowrap;
   color: #2a1b0f; background: linear-gradient(180deg, #f6dd8c, #d8a935); border: 1px solid #7a5410; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); }
-.mu-bt-banner .pole { width: 2px; height: calc(14px + var(--lift, 0px)); background: #3a2a1a; box-shadow: 0 0 2px #000; }
+.mu-bt-banner .pole { width: 2px; height: calc(22px + var(--lift, 0px)); background: #3a2a1a; box-shadow: 0 0 2px #000; }
 .mu-bt-banner .ord { font-size: 10.5px; font-weight: 400; font-style: italic; opacity: 0.85; }
 .mu-bt-banner.enemy .flag { color: #fbeee9; background: linear-gradient(180deg, #d4503a, #8e1c10); border-color: #4b0c06; }
 .mu-bt-banner.sel .flag { box-shadow: 0 0 0 2px #fff6cf, 0 1px 6px rgba(0, 0, 0, 0.7); }
@@ -186,7 +186,8 @@ export class BannerLayer {
       }
       el.classList.toggle('sel', side === 'own' && (selected === g.key || selected === 'all'));
       el.classList.toggle('hot', hot);
-      const y = this.groundY(g.x, g.z) + 4.2;
+      // just over the heads of the group: a banner higher than the camera would be thrown off the top of the screen from behind a man's shoulder
+      const y = this.groundY(g.x, g.z) + 2.1;
       const p = r?.project(g.x, y, g.z) ?? null;
       if (!p || p.x < -80 || p.y < -80 || p.x > window.innerWidth + 80 || p.y > window.innerHeight + 80) {
         el.style.display = 'none';

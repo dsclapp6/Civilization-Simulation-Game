@@ -79,7 +79,8 @@ async function shot(name, { settle = true } = {}) {
   if (process.env.WAR_DEBUG) console.log('war: shot', name, 'begins');
   // the renderer's own settle() builds everything in view in one blocking call, which on a shared box with little memory to spare can
   // take the tab down; drawing frames lets it stream within its usual budget, with a pause for the garbage collector between them
-  if (settle) for (let i = 0; i < 5; i++) { const t0 = Date.now(); await page.evaluate(() => window.__game.draw()); if (process.env.WAR_DEBUG) console.log('war: draw', i, Date.now() - t0, 'ms'); await page.waitForTimeout(60); }
+  if (settle === 'full') await page.evaluate(() => window.__game.settle());
+  else if (settle) for (let i = 0; i < 5; i++) { const t0 = Date.now(); await page.evaluate(() => window.__game.draw()); if (process.env.WAR_DEBUG) console.log('war: draw', i, Date.now() - t0, 'ms'); await page.waitForTimeout(60); }
   if (process.env.WAR_DEBUG) console.log('war: shot', name, 'streamed');
   // the HUD is the UI's frame: draw (the camera moves), let the UI update from that camera (banners are projected), draw again
   await page.evaluate(() => { const g = window.__game; g.draw(); g.tick(0.07); g.draw(); });
@@ -253,9 +254,9 @@ try {
     }
     if (want('tactical', 'orders')) {
       await page.keyboard.press('KeyC');
-      await page.waitForTimeout(700);
+      await page.waitForTimeout(2600);
       await advance(0.6);
-      await shot('tactical', { settle: false });
+      await shot('tactical', { settle: 'full' });
       console.log('war: tactical open', await page.evaluate(() => window.__ui.isOpen('battle')), 'speed', await page.evaluate(() => window.__m.sim.view.clock().speed));
       await page.keyboard.press('KeyC');
       await page.waitForTimeout(400);
