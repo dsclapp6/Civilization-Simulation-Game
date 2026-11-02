@@ -332,9 +332,15 @@ function buildItem(kind: Exclude<HeldItem, 'none'>, look: CharacterLook | null):
       b.color(WOOD_LIGHT).flag(MAT.wood).sphere(0, -0.03, 0.42, 0.05, 0.04, 0.05, 6, 3);
       break;
     case 'cleaver':
-      // civilization pass stand-in (wave B art may refine): a wooden grip and a broad, square-ended blade below it
-      shaft(b, -0.07, 0.09, 0.014, 0.016, 5);
-      b.color(IRON).flag(MAT.steel).box(0, -0.035, 0.18, 0.01, 0.1, 0.17);
+      // a butcher's cleaver (CIV §8): a riveted wooden grip and iron bolster, a broad deep blade hanging below its thick
+      // spine with a bright ground edge, the hanging hole in the far corner
+      shaft(b, -0.075, 0.075, 0.015, 0.017, 6);
+      b.color(IRON).flag(MAT.steel).box(0, 0, 0.085, 0.016, 0.03, 0.025);
+      for (const z of [-0.04, 0.02]) b.color(0xc8ccd2).flag(MAT.steel).box(0, 0, z, 0.034, 0.009, 0.009);
+      b.color(IRON).flag(MAT.steel).box(0, -0.05, 0.19, 0.009, 0.115, 0.19);
+      b.color(shade(IRON, 1.18)).box(0, 0.006, 0.19, 0.012, 0.012, 0.19);
+      b.color(0xd8dce2).box(0, -0.104, 0.19, 0.006, 0.014, 0.188);
+      b.color(0x141210).box(0, -0.016, 0.255, 0.011, 0.024, 0.024);
       break;
     case 'dagger':
       b.color(LEATHER).flag(MAT.leather).tube(0, 0, -0.05, 0, 0, 0.05, 0.015, 0.014, 5);

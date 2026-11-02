@@ -4,10 +4,16 @@
 // a tree was felled. Only near the focus (≈ 300 m), with stable ids, recomputed only when something that matters
 // changes, and the version moves only when the list really differs. Pure reading of the state (the transient
 // notes in feednotes.ts are drawn, never saved).
+// Civilization pass (docs/CIV.md §5, §8): the materials lying at building sites (what has come in and not yet gone into
+// the work, from the construction service's site views), the results at the new works from their keepers' stores
+// (carcasses on the slaughterhouse's rail and joints, hides, tallow; brick hacks at kilns, clay at pits, salt at the
+// pans, trunks at lumber camps), and a carcass hanging in the yard of a home whose larder holds one (`~h:` markers).
 import type { P2 } from '../../core/math';
 import { hash01, pointInPolygon } from '../../core/math';
 import { toDate } from '../../core/time';
 import type { WorldPropView } from '../../core/view';
+import type { SiteView } from '../construction/types';
+import { BUILDINGS } from '../../content/types';
 import type { ScatterItem } from '../../world/types';
 import { peekExtra } from '../farming';
 import type { BuildingState, Household, StripState } from '../state';
@@ -25,7 +31,19 @@ const BARN_KINDS: ReadonlySet<string> = new Set(['barn', 'tithe_barn', 'granary'
 const TREES: ReadonlySet<string> = new Set(['oak', 'beech', 'birch', 'ash', 'willow', 'pine', 'spruce', 'apple']);
 
 /** Where each kind of prop lives in the id space (a prop's id is `base + n`, so ids never collide and stay stable). */
-const BASE = { stook: 1e9, hay: 2e9, wood: 3e9, sack: 4e9, stone: 5e9, stump: 6e9 };
+const BASE = { stook: 1e9, hay: 2e9, wood: 3e9, sack: 4e9, stone: 5e9, stump: 6e9, site: 7e9, works: 8e9, larder: 9e9 };
+
+/** What lies at a site for each material, and the stock a full pile (size 8) stands for. */
+const SITE_GOODS: readonly { good: string; kind: string; steps: readonly number[] }[] = [
+  { good: 'timber', kind: 'timber_stack', steps: [0.5, 4, 10, 20, 35, 55, 80, 120] },
+  { good: 'planks', kind: 'plank_pile', steps: [0.5, 5, 12, 25, 40, 60, 90, 130] },
+  { good: 'stone', kind: 'stone_pile', steps: [0.5, 10, 25, 50, 100, 180, 300, 500] },
+  { good: 'brick', kind: 'brick_stack', steps: [1, 20, 50, 100, 200, 400, 700, 1000] },
+  { good: 'straw', kind: 'straw_bundles', steps: [0.5, 5, 10, 20, 35, 55, 80, 120] },
+  { good: 'clay', kind: 'clay_heap', steps: [0.5, 3, 8, 15, 25, 40, 60, 90] },
+];
+const CARCASSES = ['pig_carcass', 'sheep_carcass', 'goat_carcass', 'cow_carcass', 'ox_carcass'] as const;
+const WORKS: ReadonlySet<string> = new Set(['slaughterhouse', 'kiln', 'clay_pit', 'salt_pan', 'lumber_camp']);
 
 /** Pile size 1..8 from a stock: how many of the thresholds it reaches. */
 function pileCount(stock: number, thresholds: readonly number[]): number {
@@ -94,7 +112,7 @@ export class PropFeed {
     const now = E.sim.absDay;
     const key = [
       Math.floor(now * 24), E.farmRev, st.stripRevision, st.householdRevision, st.buildingRevision, E.sim.view.felledVersion(),
-      Math.round(focus.x / 40), Math.round(focus.z / 40), E.notes.rev, E.notes.felled.length,
+      Math.round(focus.x / 40), Math.round(focus.z / 40), E.notes.rev, E.notes.felled.length, E.sim.services.construction?.version?.() ?? 0,
     ].join(':');
     if (key === this.lastKey) return;
     this.lastKey = key;
@@ -143,6 +161,9 @@ export class PropFeed {
           const stocked = hh.id === mine;
           const n = Math.max(pileCount(countGood(hh.stores, 'firewood'), FIREWOOD_STEPS), stocked || hh.kind !== 'family' ? 0 : seasonalWood(season, hh.id));
           if (n > 0) pushAt(out, BASE.wood + b.id, 'woodpile', b, -def.w / 2 - 1.2, -def.d * 0.15, 0.5 * Math.PI, n);
+          // a carcass hanging in the yard while the larder holds one (slaughtered at home, waiting to be jointed)
+          const carc = carcassCount(hh.stores);
+          if (carc > 0) pushAt(out, BASE.larder + b.id, 'carcass_hanging', b, def.w / 2 + 1.4, -def.d * 0.2, -0.4, 1);
           // grain goes to the barn if the household has one, else it sits by the door
           if (!barnOf.has(hh.id)) {
             const sacks = Math.max(pileCount(grainOf(hh.stores), GRAIN_STEPS), stocked || !farms.has(hh.id) ? 0 : seasonalGrain(season, hh.id));
@@ -156,10 +177,21 @@ export class PropFeed {
           const sacks = Math.max(pileCount(grainOf(hh.stores), GRAIN_STEPS), stocked || !farms.has(hh.id) ? 0 : seasonalGrain(season, hh.id));
           if (sacks > 0) pushAt(out, BASE.sack + b.id, 'sack_pile', b, def.w / 2 + 0.9, def.d / 2 - 0.9, 0.2, sacks);
         }
+      } else if (WORKS.has(b.kind)) {
+        worksProps(out, b, E.state.households.get(b.household) ?? null, now);
       } else if (b.kind === 'quarry') {
         const dug = E.notes.dug.get(b.id);
         const fresh = dug && now - dug.day < 2 ? dug.blocks : 0;
         pushAt(out, BASE.stone + b.id, 'stone_pile', b, def.w / 2 - 2, def.d / 2 - 1.5, 0.4, Math.min(8, 3 + Math.floor(hash01(b.id, 3, 9) * 3) + Math.floor(fresh / 2)));
+      }
+    }
+
+    // ---- building sites: the materials that have come in and not yet gone into the work ----
+    const C = E.sim.services.construction;
+    if (C) {
+      for (const sv of C.sites()) {
+        if (sv.status === 'done' || sv.status === 'cancelled' || !near(sv.x, sv.z, 30)) continue;
+        siteProps(out, sv);
       }
     }
 
@@ -261,7 +293,88 @@ function sizeOf(b: BuildingState): { w: number; d: number } {
 const SIZES: Record<string, { w: number; d: number }> = {
   hovel: { w: 5, d: 4 }, cottage: { w: 8, d: 5 }, longhouse: { w: 14, d: 6 }, townhouse: { w: 6, d: 10 }, manor_house: { w: 18, d: 10 },
   barn: { w: 14, d: 8 }, tithe_barn: { w: 24, d: 10 }, granary: { w: 6, d: 6 }, quarry: { w: 16, d: 16 },
+  slaughterhouse: { w: 9, d: 6 }, kiln: { w: 4, d: 4 }, clay_pit: { w: 12, d: 12 }, salt_pan: { w: 14, d: 12 }, lumber_camp: { w: 10, d: 8 },
 };
+
+/** Carcasses hanging in a household's larder (the `~h:` markers say since when; the count is the goods'). */
+function carcassCount(stores: Record<string, number>): number {
+  let n = 0;
+  for (const g of CARCASSES) n += countGood(stores, g);
+  return Math.floor(n + 0.01);
+}
+
+/**
+ * The new works show what their keepers hold (a household the economy keeps by the day holds little: then the works
+ * show the ordinary look of a working place on most days, from a hash of the building and the day).
+ */
+function worksProps(out: WorldPropView[], b: BuildingState, hh: Household | null, now: number): void {
+  const stores = hh?.stores ?? {};
+  const day = Math.floor(now);
+  const busy = hash01(b.id, day, 13) < 0.7;
+  const def = sizeOf(b);
+  const id = (k: number) => BASE.works + b.id * 16 + k;
+  switch (b.kind) {
+    case 'slaughterhouse': {
+      // carcasses on the rail under the eaves (left of the wide door), joints on a rack, a hide on its frame, tallow
+      const carc = Math.min(3, carcassCount(stores) || (busy ? 1 + Math.floor(hash01(b.id, day, 14) * 2) : 0));
+      for (let i = 0; i < carc; i++) pushAt(out, id(i), 'carcass_hook', b, -3.4 + i * 0.75, def.d / 2 - 0.5 - 0.15, 0, 1);
+      // behind the house: joints on a rack, a hide on its frame; the tallow pot at the end wall
+      if (countGood(stores, 'meat') + countGood(stores, 'salt_meat') > 0.5 || busy) pushAt(out, id(4), 'meat_joints', b, -1.6, -def.d / 2 - 0.7, 0, 1);
+      if (countGood(stores, 'hide') > 0.2 || busy) pushAt(out, id(5), 'hide_frame', b, 1.0, -def.d / 2 - 0.8, Math.PI, 1);
+      if (countGood(stores, 'tallow') > 0.5 || (busy && hash01(b.id, day, 15) < 0.5)) pushAt(out, id(6), 'tallow_pot', b, -def.w / 2 - 0.7, 0.6, 0, 1);
+      return;
+    }
+    case 'kiln': {
+      const n = Math.max(pileCount(countGood(stores, 'brick'), [1, 20, 50, 100, 200, 400, 700, 1000]), busy ? 2 + Math.floor(hash01(b.id, day, 16) * 3) : 1);
+      pushAt(out, id(0), 'brick_stack', b, def.w / 2 + 1.6, 0.4, Math.PI / 2, n);
+      return;
+    }
+    case 'clay_pit': {
+      const n = Math.max(pileCount(countGood(stores, 'clay'), [0.5, 3, 8, 15, 25, 40, 60, 90]), busy ? 3 : 1);
+      pushAt(out, id(0), 'clay_heap', b, 2.4, def.d / 2 - 1.6, 0, n);
+      return;
+    }
+    case 'salt_pan': {
+      const n = Math.max(pileCount(countGood(stores, 'salt'), [0.5, 10, 25, 50, 90, 140, 200, 300]), busy ? 2 : 1);
+      pushAt(out, id(0), 'salt_heap', b, -def.w / 2 + 4.6, def.d / 2 - 1.1, 0, n);
+      return;
+    }
+    case 'lumber_camp': {
+      const n = Math.max(pileCount(countGood(stores, 'timber'), [0.5, 2, 4, 7, 10, 14, 19, 25]), busy ? 3 + Math.floor(hash01(b.id, day, 17) * 3) : 2);
+      pushAt(out, id(0), 'log_pile', b, 1.2, def.d / 2 + 1.3, 0, n);
+      return;
+    }
+  }
+}
+
+/** The materials lying at a site: what has come in less what the work has used so far, in piles beside it. */
+function siteProps(out: WorldPropView[], sv: SiteView): void {
+  const need = sv.cost?.goods ?? {};
+  const def = SITE_FOOTPRINT[sv.kind] ?? { w: 8, d: 6 };
+  const c = Math.cos(sv.rot), s = Math.sin(sv.rot);
+  let slot = 0;
+  for (const g of SITE_GOODS) {
+    const total = need[g.good] ?? 0;
+    if (total <= 0) continue;
+    const delivered = Math.max(0, total - (sv.missing[g.good] ?? 0));
+    const used = sv.work === 'demolish' ? 0 : total * Math.min(1, sv.progress * 1.08);
+    const here = sv.work === 'demolish' ? total * 0.35 * sv.progress : delivered - used;
+    const n = pileCount(here, g.steps);
+    if (n <= 0) continue;
+    // along the left side, then the right, a pile every two metres from the front
+    const side = slot < 3 ? -1 : 1;
+    const k = slot % 3;
+    const lx = side * (def.w / 2 + 1.5), lz = def.d / 2 - 0.9 - k * 2.1;
+    out.push({
+      id: BASE.site + sv.id * 16 + slot, kind: g.kind, x: sv.x + lx * c + lz * s, z: sv.z - lx * s + lz * c,
+      rot: sv.rot + Math.PI / 2 + (hash01(sv.id, slot, 4) - 0.5) * 0.3, scale: 1, count: n,
+    });
+    slot++;
+  }
+}
+
+/** Footprints of every kind a site may be (content/buildings.json, the w × d the models are built to). */
+const SITE_FOOTPRINT: Record<string, { w: number; d: number }> = Object.fromEntries(Object.entries(BUILDINGS).map(([k, d]) => [k, { w: d.w, d: d.d }]));
 
 function grainOf(stores: Record<string, number>): number {
   let n = 0;

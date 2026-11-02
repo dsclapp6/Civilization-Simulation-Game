@@ -71,7 +71,10 @@ export type PropKind =
   | 'pell' | 'campfire' | 'cauldron' | 'plough' | 'harrow' | 'boat' | 'signpost' | 'washing_line' | 'dung_heap'
   | 'well_bucket' | 'lantern_post'
   // results of work (clarity pass): a stook of sheaves, a single sheaf, a hay cock, a felled tree's stump and logs
-  | 'stook' | 'sheaf' | 'hay_cock' | 'stump' | 'logs';
+  | 'stook' | 'sheaf' | 'hay_cock' | 'stump' | 'logs'
+  // civilization pass (CIV §5, §7, §8): the new work's results and building sites' materials (assets/props/civProps.ts)
+  | 'carcass_hook' | 'carcass_hanging' | 'carcass_block' | 'hide_frame' | 'meat_joints' | 'tallow_pot'
+  | 'brick_stack' | 'clay_heap' | 'salt_heap' | 'log_pile' | 'timber_stack' | 'straw_bundles';
 
 /** Shared colour palette so terrain, models and UI agree. Values are 0xRRGGBB. */
 export interface Palette {

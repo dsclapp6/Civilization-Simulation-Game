@@ -50,6 +50,8 @@ interface CharState {
   hidden: boolean;
   lastFull: number;
   lastX: number; lastY: number; lastZ: number;
+  /** Where the character stood at its last full animation (the bone matrices are from then). */
+  fullX: number; fullY: number; fullZ: number;
   // picking
   px: number; py: number; pz: number; top: number; mounted: boolean; yaw: number; radius: number;
 }
@@ -268,7 +270,7 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
       id: item.id, seed: hash3(item.id, 7919) & 0x7fffffff, slot: -1, lookVersion: -1, lookRef: null,
       body: null, main: null, mainKey: '#', off: null, offKey: '#', back: null, backKey: '#', carry: null, carryKey: '#',
       lod: 0, eqMain: '', eqOff: '', eqBack: '', eqCarry: '', eqLook: -1, eqMount: -3, anim: null, horse: null, seen: frame, ready: false, hidden: true, lastFull: -999,
-      lastX: 0, lastY: 0, lastZ: 0, px: 0, py: 0, pz: 0, top: 1.7, mounted: false, yaw: 0, radius: 0.3,
+      lastX: 0, lastY: 0, lastZ: 0, fullX: 0, fullY: 0, fullZ: 0, px: 0, py: 0, pz: 0, top: 1.7, mounted: false, yaw: 0, radius: 0.3,
     };
   }
 
@@ -337,6 +339,7 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
     st.mounted = !!horse;
     st.radius = 0.2 * a.dims.H;
     st.lastX = item.x; st.lastY = item.y; st.lastZ = item.z;
+    st.fullX = item.x; st.fullY = item.y; st.fullZ = item.z;
     st.lastFull = frame;
   }
 
@@ -466,7 +469,20 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
     horseCache.clear();
   }
 
-  const layer: CharacterLayer & { stats: typeof stats; crowd: SkinnedCrowd; options: typeof options } = { object, update, pick, dispose, stats, crowd, options };
+  /**
+   * World position of a character's hand this frame (civilization pass: the halter rope, bound wrists), from its last
+   * full animation moved with it since; false when the character is not drawn.
+   */
+  function handPos(id: number, side: 'L' | 'R', out: THREE.Vector3): boolean {
+    const st = states.get(id);
+    if (!st || !st.anim || st.hidden || !st.ready || Number.isNaN(originX)) return false;
+    const W = st.anim.world, o = (side === 'L' ? HB.handL : HB.handR) * 12;
+    // the fist, a little down the hand from the wrist joint
+    out.set(W[o + 3] - W[o + 1] * 0.06 + originX + (st.lastX - st.fullX), W[o + 7] - W[o + 5] * 0.06 + (st.lastY - st.fullY), W[o + 11] - W[o + 9] * 0.06 + originZ + (st.lastZ - st.fullZ));
+    return true;
+  }
+
+  const layer: CharacterLayer & { stats: typeof stats; crowd: SkinnedCrowd; options: typeof options; handPos: typeof handPos } = { object, update, pick, dispose, stats, crowd, options, handPos };
   return layer;
 }
 

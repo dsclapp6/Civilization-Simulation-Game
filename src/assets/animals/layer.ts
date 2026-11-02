@@ -28,6 +28,8 @@ interface AnimalState {
   hidden: boolean;
   lastFull: number;
   lastX: number; lastY: number; lastZ: number;
+  /** Where the animal stood at its last full animation. */
+  fullX: number; fullY: number; fullZ: number;
   px: number; py: number; pz: number; yaw: number; len: number; height: number;
 }
 
@@ -127,6 +129,7 @@ export function createAnimalLayer(palette: Palette): AnimalLayer {
     crowd.setParams(st.slot, item.highlight, item.anim === 'hit' ? Math.max(0, 1 - item.animTime * 4) : 0);
     st.px = item.x; st.py = item.y; st.pz = item.z; st.yaw = item.yaw;
     st.lastX = item.x; st.lastY = item.y; st.lastZ = item.z;
+    st.fullX = item.x; st.fullY = item.y; st.fullZ = item.z;
     st.lastFull = frame;
   }
 
@@ -167,7 +170,7 @@ export function createAnimalLayer(palette: Palette): AnimalLayer {
         st = {
           id: item.id, seed: hash3(item.id, 104729) & 0x7fffffff, slot: -1, chunk: null, key: '', bird: false,
           qd: null, bd: null, qs: null, bs: null, seen: frame, hidden: true, lastFull: -999,
-          lastX: 0, lastY: 0, lastZ: 0, px: 0, py: 0, pz: 0, yaw: 0, len: 1, height: 1,
+          lastX: 0, lastY: 0, lastZ: 0, fullX: 0, fullY: 0, fullZ: 0, px: 0, py: 0, pz: 0, yaw: 0, len: 1, height: 1,
         };
         states.set(item.id, st);
       }
@@ -226,6 +229,19 @@ export function createAnimalLayer(palette: Palette): AnimalLayer {
 
   function dispose(): void { crowd.dispose(); states.clear(); cache.clear(); }
   void time;
-  const layer: AnimalLayer & { stats: typeof stats; crowd: SkinnedCrowd; options: typeof options } = { object, update, pick, dispose, stats, crowd, options };
+  /** World position of a quadruped's halter (the nose band, below the eyes) this frame; false when not drawn or a bird. */
+  function headPos(id: number, out: THREE.Vector3): boolean {
+    const st = states.get(id);
+    if (!st || st.hidden || st.bird || !st.qs || !st.qd || Number.isNaN(originX)) return false;
+    const W = st.qs.world, o = QB.head * 12;
+    // forward along the head (local +z) and a little down: where the halter's rope ring hangs
+    const f = st.qd.len * 0.12;
+    out.set(W[o + 3] + W[o + 2] * f - W[o + 1] * f * 0.6 + originX + (st.lastX - st.fullX),
+      W[o + 7] + W[o + 6] * f - W[o + 5] * f * 0.6 + (st.lastY - st.fullY),
+      W[o + 11] + W[o + 10] * f - W[o + 9] * f * 0.6 + originZ + (st.lastZ - st.fullZ));
+    return true;
+  }
+
+  const layer: AnimalLayer & { stats: typeof stats; crowd: SkinnedCrowd; options: typeof options; headPos: typeof headPos } = { object, update, pick, dispose, stats, crowd, options, headPos };
   return layer;
 }

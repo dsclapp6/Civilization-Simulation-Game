@@ -73,6 +73,8 @@ export const ALL_ANIMS: AnimState[] = [
   'draw_bow', 'aim_bow', 'shoot_bow', 'aim_crossbow', 'shoot_crossbow', 'reload_crossbow',
   'hit', 'stagger', 'fall', 'dead',
   'ride_idle', 'ride_walk', 'ride_trot', 'ride_gallop', 'ride_charge', 'mount', 'dismount',
+  // civilization pass
+  'bound', 'bound_walk', 'climb', 'push',
 ];
 export const ALL_ANIMAL_ANIMS: AnimalAnim[] = ['idle', 'graze', 'walk', 'trot', 'run', 'lie', 'sleep', 'eat', 'attack', 'hit', 'dead'];
 export const ALL_KINDS: AnimalKind[] = ['horse', 'ox', 'cow', 'sheep', 'pig', 'goat', 'chicken', 'goose', 'dog', 'cat', 'deer', 'boar', 'wolf', 'fox', 'hare'];
