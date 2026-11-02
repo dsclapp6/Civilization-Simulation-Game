@@ -96,6 +96,7 @@ for (const [W, H] of sizes) {
         return { id: 'liveAs', captures: true, pauses: 'never', escape: 'close', el };
       });
     });
+    await page.mouse.move(Math.round(W * 0.5), Math.round(H * 0.8)); // the pointer starts at the corner otherwise, and points at whatever lies there
     await frames(10);
 
     // ---------------------------------------------------------------- a child: the cards that say why
@@ -124,7 +125,7 @@ for (const [W, H] of sizes) {
       await page.locator('.mu-map-detail').getByRole('button', { name: 'People here' }).click();
       await frames(3);
       await shot('map-people');
-      await page.getByRole('button', { name: 'Places' }).click();
+      await page.getByRole('button', { name: 'Places', exact: true }).click();
       await frames(3);
       const pt = await page.evaluate((w) => {
         for (const e of document.querySelectorAll('.mu-map-dep:not(.mu-hide)')) {
@@ -187,7 +188,8 @@ for (const [W, H] of sizes) {
       await page.locator('.mu-bld-qrow').first().click();
       await frames(24);
       await shot('builder-site');
-      // a standing building
+      // a standing building (the site's card is put away first: it would lie over the land to click)
+      await page.locator('.mu-bld-inspector > .mu-btn').first().click();
       await page.getByRole('tab', { name: /Build/ }).click();
       await frames(2);
       const target = await page.evaluate(() => {

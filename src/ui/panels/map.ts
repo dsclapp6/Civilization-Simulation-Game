@@ -237,7 +237,7 @@ export function mapPanel(ctx: PanelCtx): UiPanel {
     const offer = ruleOffer(ctx.game, selected);
     const input = h<HTMLInputElement>('input.mu-input.mu-grow', { type: 'search', placeholder: `Search the people of ${name}…`, 'aria-label': 'Search people', value: peopleQuery });
     input.addEventListener('input', () => { peopleQuery = input.value; refill(); });
-    const chips = h('div.mu-bld-cats');
+    const chips = h('div.mu-map-pchips');
     for (const g of ROLE_GROUPS) {
       if (g.id !== 'all' && !counts[g.id]) continue;
       const b = h<HTMLButtonElement>('button.mu-chip.mu-click', { type: 'button', class: g.id === peopleGroup ? 'lapis' : '' }, g.label, h('b', null, String(counts[g.id])));
@@ -430,7 +430,7 @@ export function mapPanel(ctx: PanelCtx): UiPanel {
         const el = h('div.mu-map-dep', { tip: depositTip({ kind, richness: d.richness }, owner ? owner.text : whoseLands(null, null), outpost?.name), style: { '--c': cssColor(DEPOSIT_COLOR[kind]) } }, icon(DEPOSIT_ICON[kind], 11));
         el.addEventListener('click', () => { selectedDeposit = d.id; view = 'places'; applyView(); });
         depLayer.appendChild(el);
-        rec = { el, shown: false };
+        rec = { el, shown: true }; // on the screen until the first look says it is not (it would sit at the corner otherwise)
         depEls.set(d.id, rec);
       }
       const s = show && r ? r.project(d.x, 0, d.z) : null;
@@ -448,7 +448,7 @@ export function mapPanel(ctx: PanelCtx): UiPanel {
       if (!rec) {
         const el = h('div.mu-map-out', { tip: `${o.name}: an outpost of ${ctx.placeName(o.settlement)}` }, icon('flag', 13), h('span', null, o.name));
         outLayer.appendChild(el);
-        rec = { el, shown: false };
+        rec = { el, shown: true };
         outEls.set(o.id, rec);
       }
       const s = r ? r.project(o.x, 0, o.z) : null;

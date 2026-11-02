@@ -23,6 +23,7 @@
 .mu-map-out svg { color: #f0a24a; }
 .mu-dep-badge { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; border: 2px solid #2a1b0f; color: #2a1b0f; flex: none; }
 .mu-map-people { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; position: relative; z-index: 2; }
+.mu-map-pchips { display: flex; flex-wrap: wrap; gap: 4px; }
 .mu-map-phead { display: flex; align-items: center; gap: 10px; padding: 0 26px 8px 28px; }
 .mu-map-plist { flex: 1 1 0; min-height: 0; padding: 0 14px 10px 20px; }
 .mu-map-prow { padding: 5px 8px; gap: 8px; }
@@ -41,11 +42,13 @@
 
 /* ================================================================== builder mode */
 .mu-bld-root { display: contents; }
-.mu-modal.clear:has(.mu-bld-root) { justify-content: flex-end; padding-top: 210px; padding-bottom: 72px; }
+.mu-modal.clear:has(.mu-bld-root) { justify-content: flex-end; padding-top: 210px; padding-bottom: 112px; }
+@media (max-height: 800px) { .mu-modal.clear:has(.mu-bld-root) { padding-bottom: 72px; } } /* a low screen keeps the room: the dock's top row lies under the window */
 .mu-modal .mu-win.mu-bld-win { max-width: 420px; height: 100%; min-height: 0; margin-left: auto; }
 .mu-bld-body { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; position: relative; z-index: 2; }
 .mu-bld-top { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 8px 22px 6px 26px; }
 .mu-bld-top .mu-input { min-height: 30px; }
+.mu-bld-where { flex: 0 0 38%; min-width: 0; }
 .mu-bld-cats { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 3px; scrollbar-width: thin; }
 .mu-bld-cats .mu-chip { cursor: pointer; flex: none; }
 .mu-bld-cats .mu-chip b { font-size: 11.5px; color: var(--gold); }
@@ -59,13 +62,14 @@
 .mu-bld-row.dis .mu-bld-ico { color: var(--ink-3); }
 .mu-bld-main b { font-size: 15px; }
 .mu-bld-why-not { line-height: 1.25; margin-top: 1px; white-space: normal; }
-.mu-bld-foot { flex: none; display: flex; align-items: flex-start; gap: 8px; padding: 8px 22px 12px 26px; border-top: 3px double var(--rule); font-size: 12.5px; color: var(--ink-3); background: linear-gradient(180deg, rgba(251, 231, 160, 0.3), rgba(255, 244, 210, 0.1)); position: relative; z-index: 2; }
+.mu-bld-foot { flex: none; display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 8px 22px 12px 26px; border-top: 3px double var(--rule); font-size: 12.5px; color: var(--ink-3); background: linear-gradient(180deg, rgba(251, 231, 160, 0.3), rgba(255, 244, 210, 0.1)); position: relative; z-index: 2; }
+.mu-bld-foot-text { display: flex; align-items: flex-start; gap: 8px; }
 .mu-bld-foot svg { color: var(--gold); flex: none; margin-top: 1px; }
 /* the inspector: a card beside the window with the kind chosen, or the building or site clicked */
-.mu-bld-inspector { position: absolute; right: 450px; top: 210px; width: 356px; max-height: calc(100% - 282px); overflow: auto; z-index: 6; padding: 14px 18px 16px 20px; border-radius: 3px; background: var(--paper); box-shadow: 0 0 0 1px #1f1309, 0 0 0 3px rgba(172, 130, 58, 0.9), 0 0 0 4px #1f1309, 0 14px 34px rgba(0, 0, 0, 0.55), inset 0 0 30px rgba(120, 78, 22, 0.25); pointer-events: auto; scrollbar-width: thin; animation: mu-pop 0.14s var(--ease) both; }
+.mu-bld-inspector { position: absolute; right: 450px; top: 96px; width: 356px; max-height: calc(100% - 180px); overflow: auto; z-index: 6; padding: 14px 18px 16px 20px; border-radius: 3px; background: var(--paper); box-shadow: 0 0 0 1px #1f1309, 0 0 0 3px rgba(172, 130, 58, 0.9), 0 0 0 4px #1f1309, 0 14px 34px rgba(0, 0, 0, 0.55), inset 0 0 30px rgba(120, 78, 22, 0.25); pointer-events: auto; scrollbar-width: thin; animation: mu-pop 0.14s var(--ease) both; }
 .mu-bld-inspector > .mu-btn.icon { position: absolute; right: 8px; top: 8px; z-index: 2; }
 /* the tool in hand: a bar along the bottom of the view, so the land above it stays free to point at */
-.mu-bld-tool { position: absolute; left: 330px; right: 458px; bottom: 112px; z-index: 6; max-height: 190px; overflow: auto; padding: 10px 16px 12px 18px; border-radius: 3px; background: var(--paper); box-shadow: 0 0 0 1px #1f1309, 0 0 0 3px rgba(172, 130, 58, 0.9), 0 0 0 4px #1f1309, 0 14px 34px rgba(0, 0, 0, 0.55), inset 0 0 30px rgba(120, 78, 22, 0.25); pointer-events: auto; scrollbar-width: thin; animation: mu-pop 0.14s var(--ease) both; }
+.mu-bld-tool { position: absolute; left: 330px; right: 458px; bottom: 96px; z-index: 6; max-height: 214px; overflow: auto; padding: 10px 16px 12px 18px; border-radius: 3px; background: var(--paper); box-shadow: 0 0 0 1px #1f1309, 0 0 0 3px rgba(172, 130, 58, 0.9), 0 0 0 4px #1f1309, 0 14px 34px rgba(0, 0, 0, 0.55), inset 0 0 30px rgba(120, 78, 22, 0.25); pointer-events: auto; scrollbar-width: thin; animation: mu-pop 0.14s var(--ease) both; }
 .mu-bld-tool h4 { font-size: 18px; margin: 0; }
 .mu-bld-tool-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 18px; align-items: start; }
 .mu-bld-tool-act { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; min-width: 150px; }
@@ -84,9 +88,9 @@
 .mu-bld-cursor.bad .mu-bld-cursor-main { color: var(--vermilion); font-weight: 700; }
 .mu-bld-cursor.ok .mu-bld-cursor-main { color: #1d4a1c; font-weight: 700; }
 .mu-bld-cursor-sub { margin-top: 2px; font-size: 12px; color: var(--ink-3); }
-.mu-bld-hint { position: absolute; left: 20px; right: 470px; bottom: 76px; margin: 0 auto; width: fit-content; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px; padding: 6px 14px 7px; border-radius: 3px; background: rgba(26, 17, 9, 0.78); color: #f2e3bf; font-size: 12.5px; pointer-events: none; z-index: 5; }
+.mu-bld-hint { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--ink-2); font-size: 12px; }
 .mu-bld-hintitem { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
-.mu-bld-hintitem .mu-key { height: 20px; min-width: 20px; font-size: 11px; }
+.mu-bld-hintitem .mu-key { height: 19px; min-width: 19px; font-size: 10.5px; }
 .mu-bld-confirm { position: absolute; left: 330px; right: 458px; top: 92px; margin: 0 auto; width: fit-content; z-index: 8; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 10px 16px; border-radius: 3px; background: var(--paper); box-shadow: 0 0 0 1px #1f1309, 0 0 0 3px rgba(214, 170, 70, 0.95), 0 0 0 4px #1f1309, 0 10px 26px rgba(0, 0, 0, 0.55); pointer-events: auto; }
 .mu-bld-confirm-text { display: flex; align-items: center; gap: 8px; font-weight: 700; }
 .mu-bld-name { position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%); z-index: 12; width: 360px; padding: 16px 18px 14px; border-radius: 3px; background: var(--paper); box-shadow: 0 0 0 1px #1f1309, 0 0 0 3px rgba(214, 170, 70, 0.95), 0 0 0 4px #1f1309, 0 14px 40px rgba(0, 0, 0, 0.6); pointer-events: auto; }

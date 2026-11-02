@@ -155,6 +155,8 @@ try {
     const deps = await page.locator('.mu-map-dep:not(.mu-hide)').count();
     const depTotal = await sim(() => window.__game.session.sim.world.deposits.length);
     check('the deposits are drawn as icons (those on the screen)', deps > 20 && deps <= depTotal, `${deps} of ${depTotal}`);
+    const strays = await page.evaluate(() => [...document.querySelectorAll('.mu-map-dep:not(.mu-hide)')].filter((e) => { const b = e.getBoundingClientRect(); return !e.style.transform || b.right < 0 || b.bottom < 0 || b.left > window.innerWidth || b.top > window.innerHeight; }).length);
+    check('and only those: none is left unplaced at the corner or off the screen', strays === 0, String(strays));
     await page.locator('.mu-map-layer', { hasText: 'Iron ore' }).click();
     await frames(3);
     const deps2 = await page.locator('.mu-map-dep:not(.mu-hide)').count();
@@ -395,7 +397,9 @@ try {
   await page.getByRole('button', { name: 'Work this first' }).click();
   await frames(2);
   check('and the priority', (await page.locator('.mu-rul-note, .mu-bld-toast').count()) >= 0);
-  // pick a standing building in the world: its card with what can be done to it
+  // pick a standing building in the world: its card with what can be done to it (the site's card is put away first: it lies over the land)
+  await page.locator('.mu-bld-inspector > .mu-btn').first().click();
+  await frames(2);
   await page.getByRole('tab', { name: /Build/ }).click();
   await frames(2);
   await frames(30);

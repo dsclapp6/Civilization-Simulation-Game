@@ -108,7 +108,6 @@ class BuilderMode {
   private readonly tabsEl: TabsHandle;
   private readonly body = h('div.mu-bld-body');
   private readonly cursor = h('div.mu-bld-cursor.mu-hide');
-  private readonly hint = h('div.mu-bld-hint');
   private readonly confirmBar = h('div.mu-bld-confirm.mu-hide');
   private readonly nameCard = h('div.mu-bld-name.mu-hide');
   private readonly toastEl = h('div.mu-bld-toast.mu-hide');
@@ -175,8 +174,7 @@ class BuilderMode {
     this.win.body.classList.add('flush');
     this.win.body.append(this.tabsEl.el, h('div.mu-tabbar-rule'), this.body);
     this.win.setTitle('Builder', this.scope.label);
-    this.root.append(this.win.el, this.inspector, this.toolbar, this.cursor, this.hint, this.confirmBar, this.nameCard, this.toastEl);
-    this.hint.append(...hintKeys());
+    this.root.append(this.win.el, this.inspector, this.toolbar, this.cursor, this.confirmBar, this.nameCard, this.toastEl);
     this.refreshOptions(true);
     this.render();
   }
@@ -667,7 +665,7 @@ class BuilderMode {
   private renderBuild(): void {
     const places = whereOptions(this.scope, this.sim.state.persons.get(this.ctx.playerId())?.settlement ?? 0, (id) => this.ctx.placeName(id));
     const counts = categoryCounts(this.options);
-    const whereSel = h<HTMLSelectElement>('select.mu-input.mu-grow', { 'aria-label': 'Where to build' },
+    const whereSel = h<HTMLSelectElement>('select.mu-input.mu-bld-where', { 'aria-label': 'Where to build' },
       places.map((p) => h('option', { value: String(p.id), selected: p.id === this.where }, `${p.label}${p.hint ? ` (${p.hint})` : ''}`)));
     whereSel.addEventListener('change', () => this.setWhere(Number(whereSel.value)));
     const search = h<HTMLInputElement>('input.mu-input.mu-grow', { type: 'search', placeholder: 'Search the catalogue…', 'aria-label': 'Search buildings', value: this.query });
@@ -682,11 +680,12 @@ class BuilderMode {
     for (const c of CATEGORY_ORDER) if (this.options.some((o) => o.category === c)) cats.append(mkCat(c, CATEGORY_LABEL[c], counts[c], CATEGORY_ICON[c]));
     const unavail = iconButton(this.showUnavailable ? 'eye_off' : 'per', this.showUnavailable ? 'Hide what you cannot raise here' : 'Show what you cannot raise here, with the reason why not', () => { this.showUnavailable = !this.showUnavailable; this.renderBuild(); }, { small: true });
     const top = h('div.mu-bld-top', null,
-      places.length > 1 ? h('div.mu-row.mu-gap-6', null, icon('pin', 16), whereSel) : null,
-      h('div.mu-row.mu-gap-6', null, search, unavail),
+      h('div.mu-row.mu-gap-6', null, places.length > 1 ? whereSel : null, search, unavail),
       cats);
     const list = h('div.mu-bld-scroll.mu-scroll.mu-bld-list');
-    const foot = h('div.mu-bld-foot', null, icon('hammer', 15), h('span', null, 'Pick a building, then click the land. Click a building or a site in the world to look at it.'));
+    const foot = h('div.mu-bld-foot', null,
+      h('div.mu-bld-foot-text', null, icon('hammer', 14), h('span', null, 'Pick a building, then click the land. Click a building or a site in the world to look at it.')),
+      h('div.mu-bld-hint', null, ...hintKeys()));
     replace(this.body, top, list, foot);
     this.listEl = list;
     this.renderList();
@@ -802,7 +801,7 @@ class BuilderMode {
       reasonLine(o.ok ? null : o.reason),
       h('div.mu-row.mu-wrap.mu-gap-6', { style: { marginTop: '6px' } },
         goods.map((l) => l.kind === 'good' && l.good ? goodLine(this.eco, l.good, l.qty, holdOf(stores, l.good)) : h('span.mu-good-line', null, icon(l.kind === 'labour' ? 'hammer' : 'coin', 15), h('span', null, l.text)))),
-      Object.keys(lack).length ? h('div.mu-tiny.mu-dim', { style: { marginTop: '3px' } }, `Short in your stores: ${Object.entries(lack).map(([g, q]) => describeGood(this.eco, g, q)).join(', ')} — bought at the nearest market and carted in.`) : h('div.mu-tiny.mu-good', { style: { marginTop: '3px' } }, 'Your stores hold all the materials.'),
+      Object.keys(lack).length ? h('div.mu-tiny.mu-dim', { style: { marginTop: '3px' } }, `Short: ${Object.entries(lack).map(([g, q]) => describeGood(this.eco, g, q)).join(', ')} — bought at the market and carted in.`) : h('div.mu-tiny.mu-good', { style: { marginTop: '3px' } }, 'Your stores hold all the materials.'),
       req.length ? h('div.mu-bld-req.row', null, req.map((r) => h('span.mu-bld-reqline', { class: r.tone ?? '' }, icon(r.icon, 14), r.text))) : null);
     const act = h('div.mu-bld-tool-act');
     append(act,
@@ -942,8 +941,7 @@ function hintKeys(): HTMLElement[] {
     item([k('Wheel')], 'zoom'),
     item([k('Right drag')], 'turn'),
     item([k('Q'), k('E')], 'rotate'),
-    item([k('Esc')], 'put down / leave'),
-    item([k('B')], 'leave'),
+    item([k('Esc'), k('B')], 'put down, leave'),
   ];
 }
 
