@@ -285,3 +285,8 @@
 .mu-tracker.folded .mu-tracker-empty { display: none; }
 .mu-tracker.folded .mu-tracker-title { margin-bottom: 0; font-size: 15px; }
 .mu-guide.folded p, .mu-guide.folded .mu-guide-keys, .mu-guide.folded .mu-guide-foot { display: none; }
+.mu-hud-clockrow > .mu-fold { align-self: flex-start; }
+.mu-hud-clock.folded { padding: 6px 10px 7px; }
+.mu-hud-clock.folded .mu-hud-speeds, .mu-hud-clock.folded .mu-hud-place, .mu-hud-clock.folded .mu-hud-daytype { display: none; }
+.mu-minimap.folded .mu-minimap-frame, .mu-minimap.folded .mu-minimap-caption, .mu-minimap.folded .mu-minimap-btn { display: none; }
+.mu-toasts.folded .mu-toast:not(.urgent) { display: none; }

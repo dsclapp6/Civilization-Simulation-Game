@@ -31,6 +31,20 @@ are fine; the *quality* setting (low / medium / high) trades shadows and view di
 
 ## How it plays
 
+You start as **the lord of a manor**: grown, in your own hall, holding the fields, the purse and the men of your
+lands. Rule from the first morning in **the ruler's seat (U)**: name the crop of each field's next sowing, send your
+serfs' week-work to building, set capable men to research, raise and knight soldiers, and give your steward standing
+trade orders. At the same time you are one person to make strong: train at the yard and the butts, ride, and fight
+with your own sword. Under *Men & arms*, **Fight as him** puts you in one of your knights' place to fight on your
+behalf (U again brings you back to your lord), and any man of arms can be **challenged to a duel** to the yield from the
+action wheel: honourable, no crime, and renown for the victor. You may live as anyone else at any time, and the House
+goes on after you.
+
+Tasks are given **in person**: a gold **!** over someone's head means they have something for you; walk up and speak
+to them to take it up. Gilded **wings** over someone mean a task can be finished with them. The screen starts clear:
+the task card, hints, the clock card, the minimap, notices and messages all start folded to a line or a count (urgent
+notices still show); the arrow on each unfolds it, and the game remembers.
+
 You walk the village in third person with a **free cursor**. Point at a person, a door, a strip or a tree and a label
 says what it is and what a click will do; **click** to walk there and do it (or stand close and press **E**; hold **E** for
 every option). Hold the **right button** and drag to turn the camera. What you are meant to be doing is written in the
@@ -51,6 +65,7 @@ top left corner (the *tracker*), shown by a gold marker in the world, the compas
 | **1 2 3**, **P** | Speed 1×, 3×, 8×; pause |
 | **Y**, **O**, **N** | What now? card, the journal (tasks, today, people, places), minimap on or off |
 | **Tab I H J M L Z** | Character, inventory, family and House, ledger, map and travel, chronicle, sleep or wait |
+| **U** | The ruler's seat: fields and labour, research, men and arms (fight as one of your knights), trade orders, rivals and news |
 | **R B T K C** | Requests and news, wounds, House techniques, realm and politics, command and army |
 | **F1**, **Esc** | Help and controls; Esc leaves mouse-look, else closes a page, else the pause menu |
 
