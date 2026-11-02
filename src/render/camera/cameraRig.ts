@@ -4,7 +4,7 @@
 // slerp.
 import * as THREE from 'three';
 import { clamp, lerp, smoothstep } from '../../core/math';
-import type { CameraMode } from '../types';
+import type { CameraMode, OverviewView } from '../types';
 
 export interface CameraEnv {
   heightAt(x: number, z: number): number;
@@ -28,6 +28,12 @@ const PITCH_LIFTS = [0, 0.12, 0.24, 0.36];
 /** Yaw swings (rad, either side) tried before the boom is pulled in close to a wall. */
 const YAW_SWINGS = [0.35, 0.7, 1.05];
 const MAP_MAX = 30000;
+/** Overview camera (builder mode, tactical view): default pitch (~55°), its range, and the glide in and out (s). */
+const OV_PITCH = 0.96, OV_PITCH_MIN = 0.62, OV_PITCH_MAX = 1.36, OV_GLIDE = 0.8;
+
+interface Overview { cx: number; cz: number; radius: number; lx: number; lz: number; dist: number; yaw: number; pitch: number;
+  /** Smoothed values the camera actually shows. */
+  sx: number; sz: number; sdist: number; syaw: number; spitch: number }
 
 export class CameraRig {
   readonly camera: THREE.PerspectiveCamera;
@@ -74,6 +80,9 @@ export class CameraRig {
   /** Over-the-shoulder aim blend (0 normal follow … 1 aiming a bow or crossbow) and its target. */
   private aimK = 0;
   private aimWant = false;
+  /** The overview camera while it is on, and the mode it returns to. */
+  private ov: Overview | null = null;
+  private ovPrev: CameraMode = 'follow';
 
   constructor(aspect: number, private readonly env: CameraEnv) {
     this.camera = new THREE.PerspectiveCamera(55, aspect, 0.2, 60000);
@@ -82,6 +91,14 @@ export class CameraRig {
   }
 
   setMode(mode: CameraMode, transition = 1.4): void {
+    if (this.ov) {
+      // an explicit mode change ends the overview (with the same glide)
+      this.ov = null;
+      this.transFrom = { pos: this.camera.position.clone(), quat: this.camera.quaternion.clone(), fov: this.camera.fov };
+      this.transT = 0;
+      this.transDur = Math.max(0.01, transition);
+      if (mode === this.mode) return;
+    }
     if (mode === this.mode) return;
     this.transFrom = { pos: this.camera.position.clone(), quat: this.camera.quaternion.clone(), fov: this.camera.fov };
     this.transT = 0;
@@ -105,6 +122,11 @@ export class CameraRig {
   }
 
   orbit(dYaw: number, dPitch: number): void {
+    if (this.ov) {
+      this.ov.yaw += dYaw;
+      this.ov.pitch = clamp(this.ov.pitch + dPitch, OV_PITCH_MIN, OV_PITCH_MAX);
+      return;
+    }
     switch (this.mode) {
       case 'free':
         this.freeYaw += dYaw;
@@ -121,6 +143,10 @@ export class CameraRig {
 
   zoom(steps: number): void {
     const f = Math.pow(1.15, steps);
+    if (this.ov) {
+      this.ov.dist = clamp(this.ov.dist * f, 20, Math.max(20, 2.2 * this.ov.radius));
+      return;
+    }
     if (this.mode === 'map') {
       const next = this.mapAlt * f;
       if (next < MAP_MIN && this.autoMapZoom && steps < 0) { this.setMode('follow'); this.distance = 40; return; }
@@ -138,6 +164,19 @@ export class CameraRig {
   }
 
   pan(dx: number, dy: number, viewportHeight: number): void {
+    if (this.ov) {
+      // drag the land under the cursor: screen right / up in metres at the look-at point
+      const o = this.ov;
+      const mpp = (2 * o.dist * Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2)) / Math.max(1, viewportHeight);
+      const s = Math.sin(o.yaw), c = Math.cos(o.yaw);
+      // forward on the ground = (sin yaw, cos yaw), right = (-cos yaw, sin yaw); like the map, the look-at point moves by
+      // (-right · dx + forward · dy) — the land follows a dragging cursor, W (dy > 0) goes forward, D (dx < 0) right
+      const k = 1 / Math.max(0.35, Math.sin(o.pitch));
+      o.lx += (dx * c + dy * s * k) * mpp;
+      o.lz += (-dx * s + dy * c * k) * mpp;
+      this.clampOverview();
+      return;
+    }
     if (this.mode === 'map') {
       const metresPerPixel = (2 * this.mapAlt * Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2)) / Math.max(1, viewportHeight);
       const s = Math.sin(this.mapYaw), c = Math.cos(this.mapYaw);
@@ -165,7 +204,67 @@ export class CameraRig {
     this.freePos.y += up * speed * dt;
   }
 
+  /**
+   * Builder mode and the tactical view (GameRenderer.setOverview): an overhead camera at ~55° over a circle of land,
+   * gliding in from wherever the camera is (~0.8 s). orbit / zoom / pan drive it; null glides back to the mode that was
+   * active before (an explicit setMode or setPose also ends it).
+   */
+  setOverview(v: OverviewView | null, glide = OV_GLIDE): void {
+    this.transFrom = { pos: this.camera.position.clone(), quat: this.camera.quaternion.clone(), fov: this.camera.fov };
+    this.transT = 0;
+    this.transDur = Math.max(0.01, glide);
+    if (!v) {
+      if (!this.ov) { this.transFrom = null; return; }
+      this.ov = null;
+      this.mode = this.ovPrev;
+      return;
+    }
+    if (!this.ov) this.ovPrev = this.mode;
+    const radius = Math.max(10, Number.isFinite(v.radius) ? v.radius : 200);
+    const yaw = v.yaw ?? this.getYaw();
+    const dist = clamp(v.distance ?? Math.min(2.2 * radius, Math.max(60, radius * 0.9)), 20, Math.max(20, 2.2 * radius));
+    const keep = this.ov;
+    this.ov = {
+      cx: v.x, cz: v.z, radius, lx: v.x, lz: v.z, dist, yaw, pitch: keep?.pitch ?? OV_PITCH,
+      sx: v.x, sz: v.z, sdist: dist, syaw: yaw, spitch: keep?.pitch ?? OV_PITCH,
+    };
+  }
+
+  /** Is the overview camera on? */
+  get overviewOn(): boolean { return this.ov !== null; }
+  /** The camera mode reported to the outside: 'free' while the overview is on (it is not the follow camera). */
+  get reportedMode(): CameraMode { return this.ov ? 'free' : this.mode; }
+  /** The mode the overview returns to (the sim's view mode may change meanwhile). */
+  setOverviewReturn(mode: CameraMode): void { this.ovPrev = mode; }
+
+  private clampOverview(): void {
+    const o = this.ov!;
+    const dx = o.lx - o.cx, dz = o.lz - o.cz, d = Math.hypot(dx, dz);
+    if (d > o.radius) { o.lx = o.cx + (dx / d) * o.radius; o.lz = o.cz + (dz / d) * o.radius; }
+  }
+
+  private computeOverview(out: Pose, dt: number): void {
+    const o = this.ov!;
+    const k = dt > 0 ? 1 - Math.exp(-dt * 10) : 1;
+    o.sx += (o.lx - o.sx) * k; o.sz += (o.lz - o.sz) * k;
+    o.sdist += (o.dist - o.sdist) * k;
+    let dy = o.yaw - o.syaw;
+    dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+    o.syaw += dy * k;
+    o.spitch += (o.pitch - o.spitch) * k;
+    const ws = this.env.worldSize;
+    const ground = Math.max(0, this.env.heightAt(clamp(o.sx, 0, ws), clamp(o.sz, 0, ws)));
+    const look = this.tmp2.set(o.sx, ground, o.sz);
+    const cp = Math.cos(o.spitch), sp = Math.sin(o.spitch);
+    const pos = this.tmp.set(look.x - Math.sin(o.syaw) * cp * o.sdist, ground + sp * o.sdist, look.z - Math.cos(o.syaw) * cp * o.sdist);
+    // never inside a hill between the camera and the land
+    const under = this.env.heightAt(clamp(pos.x, 0, ws), clamp(pos.z, 0, ws));
+    if (pos.y < under + 6) pos.y = under + 6;
+    this.lookPose(out, pos, look, 50);
+  }
+
   setPose(position: { x: number; y: number; z: number }, lookAt: { x: number; y: number; z: number }, transition: number): void {
+    this.ov = null;
     if (transition > 0 || this.mode !== 'free') {
       this.transFrom = { pos: this.camera.position.clone(), quat: this.camera.quaternion.clone(), fov: this.camera.fov };
       this.transT = 0;
@@ -196,6 +295,7 @@ export class CameraRig {
 
   /** Current yaw the camera faces (0 = +z). */
   getYaw(): number {
+    if (this.ov) return this.ov.syaw;
     if (this.mode === 'free') return this.freeYaw;
     if (this.mode === 'map') return this.mapYaw;
     return this.mode === 'follow' ? this.yaw + this.yawOff : this.yaw;
@@ -385,13 +485,14 @@ export class CameraRig {
   update(dt: number, focus: THREE.Vector3 | null): void {
     const f = this.focusTmp.copy(focus ?? this.target);
     const live = this.live;
-    switch (this.mode) {
+    if (this.ov) this.computeOverview(live, dt);
+    else switch (this.mode) {
       case 'follow': this.computeFollow(live, f, dt); break;
       case 'map': this.computeMap(live); break;
       case 'free': this.computeFree(live); break;
       case 'cinematic': this.computeCinematic(live, f, dt); break;
     }
-    if (this.mode !== 'follow' && focus) {
+    if ((this.mode !== 'follow' || this.ov) && focus) {
       // keep the follow target warm so returning to follow is smooth
       this.target.copy(focus);
       this.targetValid = true;

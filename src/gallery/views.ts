@@ -8,6 +8,7 @@ import type { FxEvent } from '../core/view';
 import type { FxLayer, PropKind } from '../assets/types';
 import type { MillenniaBuildingAsset, MillenniaAssetLibrary } from '../assets/library';
 import { PROP_KINDS } from '../assets/props/props';
+import { buildSiegeWork, charBuilder, engineArmAngle } from '../assets/siege';
 import { CROP_KINDS } from '../assets/crops';
 import { PALETTE } from '../assets/palette';
 import { Ground } from '../world/types';
@@ -17,7 +18,7 @@ export const SCATTER_KINDS: ScatterKind[] = [
   'bush', 'bramble', 'reeds', 'fern', 'grass_tuft', 'flowers',
   'rock_small', 'rock_large', 'boulder', 'stump', 'log', 'deadtree',
 ];
-export const FX_KINDS: FxEvent['kind'][] = ['dust', 'blood', 'sparks', 'smoke', 'fire', 'splash', 'chips', 'chaff', 'impact', 'hearth_smoke'];
+export const FX_KINDS: FxEvent['kind'][] = ['dust', 'blood', 'sparks', 'smoke', 'fire', 'splash', 'chips', 'chaff', 'impact', 'hearth_smoke', 'steam'];
 export const CATEGORIES: BuildingCategory[] = ['home', 'farm', 'work', 'social', 'trade', 'church', 'civic', 'defence', 'camp'];
 
 export interface Label { text: string; pos: THREE.Vector3; sub?: string; }
@@ -46,6 +47,9 @@ export interface BuildingOpts {
   damage: number;
   owner: number;
   seed: number;
+  /** Civilization pass: a gatehouse's gate and a wall's breach (FortView). */
+  gate?: 'open' | 'shut' | 'broken';
+  breach?: number;
 }
 
 function newState(title: string): ViewState {
@@ -132,7 +136,7 @@ function dressGround(lib: MillenniaAssetLibrary, st: ViewState, root: THREE.Grou
 }
 
 function placeBuilding(lib: MillenniaAssetLibrary, st: ViewState, root: THREE.Group, kind: BuildingKind, o: BuildingOpts, x: number, z: number, label?: string, sub?: string): MillenniaBuildingAsset {
-  const a = lib.building({ kind, level: o.level, culture: o.culture, seed: o.seed, construction: o.construction, damage: o.damage, ownerColor: o.owner });
+  const a = lib.building({ kind, level: o.level, culture: o.culture, seed: o.seed, construction: o.construction, damage: o.damage, ownerColor: o.owner, gate: o.gate, breach: o.breach });
   a.object.position.set(x, 0, z);
   root.add(a.object);
   const def = BUILDINGS[kind];
@@ -222,11 +226,123 @@ export function sheetStates(lib: MillenniaAssetLibrary, root: THREE.Group, kind:
   const def = BUILDINGS[kind];
   const st = newState(`${def.name} — construction and damage`);
   const gx = def.w + 3, gz = def.d + 7;
-  const cons = [0.02, 0.2, 0.35, 0.5, 0.65, 0.8, 0.95];
-  cons.forEach((c, i) => placeBuilding(lib, st, root, kind, { ...o, culture, level, construction: c, damage: 0 }, (i - (cons.length - 1) / 2) * gx, -gz / 2, '', `built ${Math.round(c * 100)}%`));
+  // the construction stages in a row (with their material piles), the damage states in front
+  const cons = STAGE_COLUMNS.filter(([, c]) => c < 1);
+  cons.forEach(([name, c], i) => {
+    const x = (i - (cons.length - 1) / 2) * gx;
+    placeBuilding(lib, st, root, kind, { ...o, culture, level, construction: c, damage: 0 }, x, -gz / 2, '', `${name} ${Math.round(c * 100)}%`);
+    if (c >= 0.06 && c < 0.92) sitePiles(kind).slice(0, 2).forEach((pk, j) => {
+      const p = lib.prop(pk, j + 1, Math.max(1, Math.round(8 * (1 - c))));
+      p.position.set(x - def.w / 2 + 0.9 + j * 1.6, 0, -gz / 2 + def.d / 2 + 1.6);
+      p.rotation.y = 0.3 + j * 0.8;
+      p.scale.setScalar(0.8);
+      root.add(p);
+    });
+  });
   const dmg = [0, 0.25, 0.5, 0.75, 1];
   dmg.forEach((d, i) => placeBuilding(lib, st, root, kind, { ...o, culture, level, construction: 1, damage: d }, (i - (dmg.length - 1) / 2) * gx, gz / 2, '', `damage ${Math.round(d * 100)}%`));
   st.cam = { az: -20, el: 34, k: 0.8 };
+  return st;
+}
+
+/** Gates and breaches (FortView): the gatehouse at both levels open, shut and battered in; walls and palisades breached. */
+export function sheetForts(lib: MillenniaAssetLibrary, root: THREE.Group, culture: CultureId, o: Omit<BuildingOpts, 'culture' | 'level' | 'construction' | 'damage'>): ViewState {
+  const st = newState('Gates and breaches');
+  const base = { ...o, culture, construction: 1, damage: 0 };
+  // the six gatehouses side by side, their gates (+z) to the camera
+  const gx = BUILDINGS.gatehouse.w + 4;
+  ([1, 2] as const).forEach((level, li) => (['open', 'shut', 'broken'] as const).forEach((gate, i) => {
+    placeBuilding(lib, st, root, 'gatehouse', { ...base, level, gate }, (li * 3 + i - 2.5) * gx, -14, 'Gatehouse', `L${level} ${gate}`);
+  }));
+  [0, 0.25, 0.5, 0.75, 1].forEach((breach, i) => {
+    placeBuilding(lib, st, root, 'wall', { ...base, level: 1, breach }, (i - 2) * 8.5, 10, 'Wall', `breach ${breach}`);
+    placeBuilding(lib, st, root, 'palisade', { ...base, level: 1, breach }, (i - 2) * 8.5, 20, 'Palisade', `breach ${breach}`);
+  });
+  st.cam = { az: -14, el: 24, k: 0.72 };
+  return st;
+}
+
+/** Siege works (SimView.siegeWorks): ladders, a ram with its log, a mantlet, a trebuchet and a mangonel; burning and broken. */
+export function sheetSiege(lib: MillenniaAssetLibrary, root: THREE.Group): ViewState {
+  const st = newState('Siege works');
+  const mats = lib.sharedMaterials?.();
+  const put = (kind: 'ladder' | 'ram' | 'mantlet' | 'trebuchet' | 'mangonel', x: number, z: number, opts: { swing?: number; charred?: boolean; length?: number; label: string; tilt?: number }) => {
+    const sm = buildSiegeWork(kind, 0, opts.length ?? 7);
+    if (opts.charred) { charBuilder(sm.body, 0.85); if (sm.part) charBuilder(sm.part, 0.85); }
+    const g = new THREE.Group();
+    const body = sm.body.toGeometry({ mat: 0, surf: true, aoHeight: 0.5, aoStrength: 0.2 });
+    if (body) { const m = new THREE.Mesh(body, mats?.opaqueDS ?? new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true })); m.castShadow = true; m.receiveShadow = true; g.add(m); st.disposables.push(body); }
+    if (sm.part) {
+      const pg = sm.part.toGeometry({ mat: 0, surf: true });
+      if (pg) {
+        const piv = new THREE.Object3D();
+        piv.position.set(...sm.pivot);
+        if (kind === 'ram') piv.rotation.x = -((opts.swing ?? 0.5) - 0.45) * 0.62;
+        else if (kind === 'trebuchet' || kind === 'mangonel') piv.rotation.x = engineArmAngle(kind, opts.swing ?? 0);
+        const m = new THREE.Mesh(pg, mats?.opaqueDS ?? new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true }));
+        m.castShadow = true;
+        piv.add(m);
+        g.add(piv);
+        st.disposables.push(pg);
+      }
+    }
+    g.position.set(x, 0, z);
+    if (opts.tilt) g.rotation.z = opts.tilt;
+    root.add(g);
+    st.bounds.expandByPoint(new THREE.Vector3(x - 4, 0, z - 6));
+    st.bounds.expandByPoint(new THREE.Vector3(x + 4, kind === 'trebuchet' ? 12 : 5, z + 6));
+    st.labels.push({ text: opts.label, pos: new THREE.Vector3(x, 0, z + 5) });
+  };
+  put('ladder', -22, 0, { label: 'Ladder', length: 8 });
+  put('ram', -13, 0, { label: 'Ram (struck)', swing: 1 });
+  put('mantlet', -4, 0, { label: 'Mantlet' });
+  put('trebuchet', 7, 0, { label: 'Trebuchet (cocked)', swing: 0 });
+  put('mangonel', 18, 0, { label: 'Mangonel (loosed)', swing: 1 });
+  put('ram', -13, 14, { label: 'Ram (burning)', swing: 0.2, charred: true });
+  put('trebuchet', 7, 14, { label: 'Trebuchet (thrown)', swing: 1 });
+  put('mantlet', -4, 14, { label: 'Mantlet (broken)', charred: true, tilt: 0.42 });
+  st.cam = { az: -22, el: 22, k: 0.8 };
+  return st;
+}
+
+/** The named construction stages (sim `stageOf`) and the progress each is shown at on the stages sheet. */
+export const STAGE_COLUMNS: readonly [string, number][] = [
+  ['pegs', 0.02], ['trenches', 0.06], ['footings', 0.17], ['frame', 0.35], ['walls', 0.56], ['rafters', 0.685], ['roof', 0.8], ['finishing', 0.96], ['done', 1],
+];
+
+/** Material piles a site of this kind keeps (gallery dressing; in play they are world props from the sim's site view). */
+function sitePiles(kind: BuildingKind): PropKind[] {
+  const def = BUILDINGS[kind];
+  const stone = def.cat === 'church' || def.cat === 'defence' || kind === 'well' || kind === 'market_cross' || kind === 'gaol' || kind === 'kiln';
+  if (def.w * def.d < 10) return stone ? ['stone_pile'] : ['plank_pile'];
+  return stone ? ['stone_pile', 'logs', 'plank_pile'] : ['logs', 'plank_pile', 'stone_pile'];
+}
+
+/** Every kind of a building category (or the kinds named) at each construction stage, with material piles beside the sites. */
+export function sheetStages(lib: MillenniaAssetLibrary, root: THREE.Group, cats: BuildingCategory[], culture: CultureId, o: Omit<BuildingOpts, 'culture' | 'level' | 'construction' | 'damage'>, only?: BuildingKind[]): ViewState {
+  const kinds = only?.length ? only : BUILDING_KINDS.filter((k) => cats.includes(BUILDINGS[k].cat));
+  const st = newState(`Construction stages — ${only?.length ? only.map((k) => BUILDINGS[k].name).join(', ') : cats.join(', ')}`);
+  let z = 0;
+  kinds.forEach((kind) => {
+    const def = BUILDINGS[kind];
+    const gx = def.w + 5;
+    const rz = z + def.d / 2;
+    STAGE_COLUMNS.forEach(([name, c], i) => {
+      const x = (i - (STAGE_COLUMNS.length - 1) / 2) * gx;
+      placeBuilding(lib, st, root, kind, { ...o, culture, level: 1, construction: c, damage: 0 }, x, -rz, i === 0 ? def.name : name, i === 0 ? name : undefined);
+      if (c >= 0.06 && c < 0.92) {
+        // piles at the front corner (a full pile early on, smaller as the work uses them up)
+        sitePiles(kind).forEach((pk, j) => {
+          const p = lib.prop(pk, j + 1, Math.max(1, Math.round(8 * (1 - c))));
+          p.position.set(x + def.w / 2 + 1.2, 0, -rz + def.d / 2 - 0.8 - j * 1.7);
+          p.rotation.y = 0.4 + j;
+          root.add(p);
+        });
+      }
+    });
+    z += def.d + 9;
+  });
+  st.cam = { az: -16, el: 38, k: 0.6 };
   return st;
 }
 

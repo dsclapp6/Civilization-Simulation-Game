@@ -2,6 +2,7 @@
 // faint wheel ruts, replacing the stair-stepped road colouring of fine terrain tiles (those tiles
 // leave roads out; coarse distant tiles still paint them). Built per 512 m tile, time-sliced and
 // cached; cut where a road crosses a bridge (the bridge deck carries it).
+import { BUILD_TINT_PARS, createBuildAreaUniforms, type BuildAreaUniforms } from './feedback/buildArea';
 import * as THREE from 'three';
 import { clamp, hash01 } from '../core/math';
 import { Ground, type Road, type WorldModel } from '../world/types';
@@ -34,6 +35,8 @@ export class RoadSystem {
 
   /** Optional shared weather uniforms (terrain's), so roads take snow and rain like the ground. */
   weather: { uSnowCover: { value: number }; uWetness: { value: number } } = { uSnowCover: { value: 0 }, uWetness: { value: 0 } };
+  /** Optional shared builder's land tint (the terrain's), so roads darken outside the buildable land like the ground. */
+  build: BuildAreaUniforms = createBuildAreaUniforms();
 
   constructor(private readonly world: WorldModel, palette: Palette, radius: number) {
     this.radius = radius;
@@ -48,14 +51,15 @@ export class RoadSystem {
     });
     this.material.name = 'roads';
     this.material.onBeforeCompile = (shader) => {
-      Object.assign(shader.uniforms, this.weather);
+      Object.assign(shader.uniforms, this.weather, this.build);
       shader.uniforms.uRoadDirt = { value: this.roadColor.clone() };
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nattribute vec3 aRoad;\nvarying vec3 vRoad;\nvarying float vRoadFade;')
+        .replace('#include <common>', '#include <common>\nattribute vec3 aRoad;\nvarying vec3 vRoad;\nvarying float vRoadFade;\nvarying vec3 vRdWorld;')
         .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRoad = aRoad;')
         // ribbons only where terrain tiles are fine enough to match their draping; beyond, the
         // terrain paints the road itself (render/terrain/nodeBuilder.ts)
         .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+vRdWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;
 vRoadFade = 1.0 - smoothstep(${FADE_START.toFixed(1)}, ${FADE_END.toFixed(1)}, distance((modelMatrix * vec4(transformed, 1.0)).xyz, cameraPosition));`);
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', `#include <common>
@@ -64,6 +68,8 @@ uniform float uWetness;
 uniform vec3 uRoadDirt;
 varying vec3 vRoad;
 varying float vRoadFade;
+varying vec3 vRdWorld;
+${BUILD_TINT_PARS}
 float rdHash(vec2 p) { p = fract(p * vec2(233.34, 851.73)); p += dot(p, p + 23.45); return fract(p.x * p.y); }
 float rdNoise(vec2 p) {
   vec2 i = floor(p); vec2 f = fract(p); vec2 w = f * f * (3.0 - 2.0 * f);
@@ -100,10 +106,11 @@ float rdNoise(vec2 p) {
   float snowy = smoothstep(0.05, 0.6, uSnowCover) * (0.55 + 0.35 * smoothstep(0.2, 0.9, a)) * (1.0 - rut * 0.6);
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.78, 0.8, 0.84), snowy);
   diffuseColor.rgb *= 1.0 - uWetness * 0.28 * (1.0 - snowy);
+  diffuseColor.rgb = mlBuildTint(diffuseColor.rgb, mlBuildIn(vRdWorld.xz));
   diffuseColor.a *= vRoadFade;
 }`);
     };
-    this.material.customProgramCacheKey = () => 'millennia-roads';
+    this.material.customProgramCacheKey = () => 'millennia-roads-2';
     const roads = world.roads;
     for (let r = 0; r < roads.length; r++) {
       const pts = roads[r].points;

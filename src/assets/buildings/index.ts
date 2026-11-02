@@ -5,7 +5,7 @@ import type { CultureId } from '../../core/domain';
 import type { P2 } from '../../core/math';
 import { F, Layer, MAT_COUNT, Mat, MeshBuilder, prng, type V3 } from '../core/builder';
 import { newOut, type AnimPart, type Ctx, type EmitterSpec, type FlagSpec } from './parts';
-import { applyConstruction, applyDamage } from './states';
+import { applyBreach, applyConstruction, applyDamage, CONSTRUCTION_BREAKS, constructionOfStep, constructionStep } from './states';
 import { STYLES } from './style';
 import { RECIPES } from './recipes';
 
@@ -20,6 +20,10 @@ export interface NormalizedRequest {
   damage: number;
   owner: number;
   lod: 0 | 1 | 2;
+  /** Gatehouse gate (FortView). */
+  gate: 'open' | 'shut' | 'broken';
+  /** Quantised breach of a wall or palisade (0, 0.25 … 1). */
+  breach: number;
 }
 
 export interface BuiltAnim {
@@ -47,26 +51,34 @@ export interface BuiltBuilding {
   triangles: number;
 }
 
-export const CONSTRUCTION_STEPS = 10;
+/** Construction models cached per kind (stage-aligned bins, states.ts CONSTRUCTION_BREAKS). */
+export const CONSTRUCTION_STEPS = CONSTRUCTION_BREAKS.length;
+export { constructionStep, constructionOfStep };
 export const DAMAGE_STEPS = 4;
 export const SEED_BUCKETS = 4;
 
-export function normalizeRequest(req: { kind: BuildingKind; level: number; culture: CultureId; seed: number; construction?: number; damage?: number; ownerColor?: number; lod?: 0 | 1 | 2 }): NormalizedRequest {
+/** Kinds whose models show a breach (FortView.breach) and a gate (FortView.gate). */
+export const BREACH_KINDS: ReadonlySet<BuildingKind> = new Set<BuildingKind>(['wall', 'palisade']);
+export const GATE_KINDS: ReadonlySet<BuildingKind> = new Set<BuildingKind>(['gatehouse']);
+
+export function normalizeRequest(req: { kind: BuildingKind; level: number; culture: CultureId; seed: number; construction?: number; damage?: number; ownerColor?: number; lod?: 0 | 1 | 2; gate?: 'open' | 'shut' | 'broken'; breach?: number }): NormalizedRequest {
   const def = BUILDINGS[req.kind];
   const level = Math.max(1, Math.min(def.maxLevel, Math.round(req.level || 1)));
   const c = req.construction ?? 1;
-  const construction = c >= 1 ? 1 : Math.min(CONSTRUCTION_STEPS - 1, Math.max(0, Math.floor(c * CONSTRUCTION_STEPS))) / CONSTRUCTION_STEPS + 0.5 / CONSTRUCTION_STEPS;
+  const construction = constructionOfStep(constructionStep(c));
   const d = req.damage ?? 0;
   const damage = Math.round(Math.max(0, Math.min(1, d)) * DAMAGE_STEPS) / DAMAGE_STEPS;
   return {
     kind: req.kind, level, culture: STYLES[req.culture] ? req.culture : 'anglo',
     seedBucket: ((req.seed | 0) % SEED_BUCKETS + SEED_BUCKETS) % SEED_BUCKETS,
     construction, damage, owner: req.ownerColor ?? 0xa8302a, lod: req.lod ?? 0,
+    gate: GATE_KINDS.has(req.kind) && (req.gate === 'shut' || req.gate === 'broken') ? req.gate : 'open',
+    breach: BREACH_KINDS.has(req.kind) ? Math.round(Math.max(0, Math.min(1, req.breach ?? 0)) * 4) / 4 : 0,
   };
 }
 
 export function requestKey(n: NormalizedRequest): string {
-  return `${n.kind}|${n.level}|${n.culture}|${n.seedBucket}|${n.construction.toFixed(2)}|${n.damage.toFixed(2)}|${n.owner.toString(16)}|${n.lod}`;
+  return `${n.kind}|${n.level}|${n.culture}|${n.seedBucket}|${constructionStep(n.construction)}|${n.damage.toFixed(2)}|${n.owner.toString(16)}|${n.lod}|${n.gate}|${n.breach}`;
 }
 
 /** Run a recipe and produce the raw builder (before states), for tests and tools. */
@@ -74,22 +86,34 @@ export function runRecipe(n: NormalizedRequest): { b: MeshBuilder; ctx: Ctx; def
   const def = BUILDINGS[n.kind];
   const seed = hashSeed(n.kind, n.culture, n.seedBucket);
   const b = new MeshBuilder(seed);
-  const ctx: Ctx = { b, s: STYLES[n.culture], level: n.level, lod: n.lod, r: prng(seed ^ 0x5bd1e995), seed, owner: n.owner, out: newOut() };
+  const ctx: Ctx = { b, s: STYLES[n.culture], level: n.level, lod: n.lod, r: prng(seed ^ 0x5bd1e995), seed, owner: n.owner, out: newOut(), gate: n.gate };
   const recipe = RECIPES[n.kind];
   recipe(ctx, def);
   return { b, ctx, def };
 }
 
+/** Kinds dug or heaped rather than built up: no scaffold while they are made. */
+const EARTHWORKS: ReadonlySet<BuildingKind> = new Set<BuildingKind>(['quarry', 'clay_pit', 'mine', 'charcoal_mound', 'motte', 'salt_pan']);
+
 export function generateBuilding(n: NormalizedRequest): BuiltBuilding {
   const { b, ctx, def } = runRecipe(n);
   let src = b;
   const seed = ctx.seed;
-  const info = { w: def.w, d: def.d };
+  const info = { w: def.w, d: def.d, earthwork: EARTHWORKS.has(n.kind) };
   // Coarser LODs drop yard clutter (LOD1+) and small details except lit window panes (LOD2).
   if (n.lod >= 1) src = src.filter((t) => src.tLayer[t] !== Layer.Decor && !(n.lod === 2 && src.tLayer[t] === Layer.Detail && src.tMat[t] !== Mat.Window));
+  if (n.construction < 0.95) {
+    // the moving parts stand still while the building goes up: a post mill's buck is framed on its post and a mill
+    // wheel hung with the rest (their own moving parts, the sails, go on at the end)
+    for (const p of ctx.out.anims) {
+      if (p.kind !== 'yawToWind' && p.kind !== 'spinX' && p.kind !== 'spinZ') continue;
+      b.push(); b.translate(p.pivot[0], p.pivot[1], p.pivot[2]); b.append(p.builder); b.pop();
+    }
+  }
   if (n.construction < 1) src = applyConstruction(src, n.construction, info, seed);
   if (n.damage > 0) src = applyDamage(src, n.damage, info, seed);
   else if (n.construction >= 1) src = src.filter((t) => src.tLayer[t] !== Layer.RoofFrame);
+  if (n.breach > 0 && n.construction >= 1) src = applyBreach(src, n.breach, n.kind === 'palisade', info, seed);
   const geos: (THREE.BufferGeometry | null)[] = [];
   let triangles = 0;
   for (let m = 0; m < MAT_COUNT; m++) {

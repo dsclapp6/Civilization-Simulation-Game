@@ -6,8 +6,8 @@ import type { AnimalKind, CropKind } from '../../core/domain';
 import { clamp, hash01, hash3, pointInPolygon, type P2 } from '../../core/math';
 import { DAY_SECONDS, DAYS_PER_SEASON, DAYS_PER_YEAR, isNight, toDate, type Season } from '../../core/time';
 import type {
-  AnimalDrawItem, AnimState, BuildingView, CharacterDrawItem, ClockView, FloatText, FxEvent, LabelTone, MapMarker, PlayerView,
-  ProjectileDrawItem, SimView, StripState, StripTask, StripView, ViewMode, WeatherView, WorldMarker, WorldPropView,
+  AnimalDrawItem, AnimState, BuildingView, CharacterDrawItem, ClockView, FloatText, FortView, FxEvent, LabelTone, MapMarker, PlayerView,
+  ProjectileDrawItem, SiegeWorkDrawItem, SimView, StripState, StripTask, StripView, ViewMode, WeatherView, WorldMarker, WorldPropView,
 } from '../../core/view';
 import { PALETTE } from '../../assets/palette';
 import type { Settlement, WorldModel } from '../../world/types';
@@ -77,6 +77,14 @@ export class MockView implements SimView {
   readonly markerList: WorldMarker[] = [];
   private readonly floatQueue: FloatText[] = [];
   private readonly stripOverrides = new Map<number, { state?: StripState; crop?: CropKind; growth?: number; task?: StripTask; work?: number }>();
+  // ---- civilization pass sources (the military, combat and construction modules fill these in the game) ----
+  readonly siegeList: SiegeWorkDrawItem[] = [];
+  private readonly fortList: FortView[] = [];
+  private fortsVer = 0;
+  /** Swing the rams and engines of `siegeList` (screenshots of a storm). */
+  siegeAnim = false;
+  private siegeT = 0;
+  private nextBuildingId = 9_000_000;
 
   constructor(world: WorldModel, opts: { time?: number; season?: Season; weather?: WeatherPreset } = {}) {
     this.world = world;
@@ -290,6 +298,7 @@ export class MockView implements SimView {
     this.stepAvatar(dt, move);
     this.stepWalkers(dt);
     this.stepBeasts(dt);
+    this.stepSiege(dt);
     this.updateMarkers();
   }
 
@@ -359,6 +368,15 @@ export class MockView implements SimView {
       if (it.anim !== anim) { it.anim = anim; it.animTime = 0; }
       if (it.mount) it.mount.anim = 'walk';
       it.moveSpeed = speed;
+    }
+  }
+
+  private stepSiege(dt: number): void {
+    if (!this.siegeAnim) return;
+    this.siegeT += dt;
+    for (const w of this.siegeList) {
+      if (w.kind === 'ram') w.swing = 0.5 + 0.5 * Math.sin(this.siegeT * 2.6 + w.id);
+      else if (w.kind === 'trebuchet' || w.kind === 'mangonel') w.swing = (this.siegeT * 0.15 + w.id * 0.3) % 1;
     }
   }
 
@@ -508,6 +526,9 @@ export class MockView implements SimView {
       this.markers.push({ id: 3, kind: 'caravan', x: p.x, z: p.z, color: 0xd9a441, size: 12, label: 'Wool caravan' });
     }
     this.markers.push({ id: 4, kind: 'bandits', x: this.village.x - 1800, z: this.village.z + 900, color: 0x3a3a3a, size: 15, label: 'Outlaws' });
+    // an outpost at the iron deposit nearest the village (civilization pass: MapMarker 'outpost')
+    const iron = (this.world.deposits ?? []).filter((d) => d.kind === 'iron').sort((a, b) => Math.hypot(a.x - this.village.x, a.z - this.village.z) - Math.hypot(b.x - this.village.x, b.z - this.village.z))[0];
+    if (iron) this.markers.push({ id: 5, kind: 'outpost', x: iron.x, z: iron.z, color: this.world.kingdoms[this.village.kingdom]?.color ?? 0xa8302a, size: 6, label: 'Iron camp' });
   }
 
   // ---------- SimView ----------
@@ -544,6 +565,43 @@ export class MockView implements SimView {
     this.stepAvatar(0, null);
   }
   bumpBuildings(): void { this.buildingsVer++; }
+
+  // ---------- civilization pass (dev stand-ins for the sim's sources) ----------
+  siegeWorks(): readonly SiegeWorkDrawItem[] { return this.siegeList; }
+  forts(): readonly FortView[] { return this.fortList; }
+  fortsVersion(): number { return this.fortsVer; }
+  /** Set (or clear, with gate 'open' and breach 0) a fortification's state. */
+  setFort(f: FortView): void {
+    const i = this.fortList.findIndex((x) => x.building === f.building);
+    if (i >= 0) this.fortList.splice(i, 1);
+    if (f.gate && f.gate !== 'open' || f.breach > 0) this.fortList.push(f);
+    this.fortsVer++;
+  }
+  clearCiv(): void {
+    this.siegeList.length = 0;
+    this.siegeAnim = false;
+    if (this.fortList.length) { this.fortList.length = 0; this.fortsVer++; }
+    const before = this.buildingList.length;
+    for (let i = this.buildingList.length - 1; i >= 0; i--) if (this.buildingList[i].id >= 9_000_000) this.buildingList.splice(i, 1);
+    if (this.buildingList.length !== before) this.buildingsVer++;
+    for (const a of this.beastItems) a.ledBy = undefined;
+  }
+  /** Raise a building in the mock world (a site under construction, a new work); returns its id. */
+  addBuilding(b: Omit<BuildingView, 'id'>): number {
+    const id = this.nextBuildingId++;
+    this.buildingList.push({ ...b, id });
+    this.buildingsVer++;
+    return id;
+  }
+  /** An animal of the mock herd (tests, presets). */
+  animal(id: number): AnimalDrawItem | undefined { return this.beastItems.find((a) => a.id === id); }
+  animalsOf(kind: string): AnimalDrawItem[] { return this.beastItems.filter((a) => a.kind === kind); }
+  /** Hold an animal at a spot (it stops wandering). */
+  holdAnimal(a: AnimalDrawItem, x: number, z: number, yaw: number, anim: AnimalDrawItem['anim'] = 'idle'): void {
+    a.x = x; a.z = z; a.y = this.world.heightAt(x, z); a.yaw = yaw; a.anim = anim; a.moveSpeed = 0;
+    const b = this.beasts.find((q) => q.item === a);
+    if (b) { b.goal = { x, z }; b.wait = 1e9; b.centre = { x, z }; }
+  }
 }
 
 /** The viewer's home village: a churched village with fields, preferring the home realm. */

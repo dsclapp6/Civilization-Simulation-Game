@@ -9,11 +9,12 @@ import * as THREE from 'three';
 import { BUILDINGS, type BuildingKind } from '../content/types';
 import type { CultureId } from '../core/domain';
 import { hash01 } from '../core/math';
-import type { BuildingView, FxEvent } from '../core/view';
+import type { BuildingView, FortView, FxEvent } from '../core/view';
 import type { AssetLibrary, BuildingAsset, Palette } from '../assets/types';
 import type { WorldModel } from '../world/types';
 import { adoptObject } from './sky/atmospherePatch';
 import { BUILDING_FADE } from '../assets/core/materials';
+import { constructionStep } from '../assets/buildings/states';
 
 /** Seconds a building takes to cross-fade from one detail level (lod) to the next. */
 const LOD_FADE_S = 0.6;
@@ -207,6 +208,10 @@ export class BuildingSystem {
   private now = 0;
   /** Lod swaps may cross-fade (off while settling: nothing moves then). */
   private fadeSwaps = false;
+  /** Gates and breaches (SimView.forts, civilization pass) by building id, and when they last changed. */
+  private readonly forts = new Map<number, FortView>();
+  private fortsVer = -1;
+  private fortsDirty = false;
 
   constructor(private readonly world: WorldModel, private readonly assets: AssetLibrary, private settings: BuildingSettings) {
     this.root.name = 'buildings';
@@ -246,12 +251,28 @@ export class BuildingSystem {
 
   configure(s: BuildingSettings): void { this.settings = s; }
 
+  /** Gates (open, shut, broken) and breaches of walls and palisades: the models follow them (rebuilt when they change). */
+  setForts(list: readonly FortView[], version: number): void {
+    if (version === this.fortsVer) return;
+    this.fortsVer = version;
+    this.forts.clear();
+    for (const f of list) this.forts.set(f.building, f);
+    this.fortsDirty = true;
+  }
+
+  /** The fort state a building's model shows ('' when none). */
+  private fortKey(id: number): string {
+    const f = this.forts.get(id);
+    if (!f) return '';
+    return `${f.gate ?? 'open'}:${Math.round(Math.max(0, Math.min(1, f.breach || 0)) * 4)}`;
+  }
+
   get count(): number { return this.entries.size; }
 
   private requestKey(b: BuildingView): string {
-    const c = Math.round(Math.min(1, b.construction) * 10);
+    const c = constructionStep(b.construction);
     const d = Math.round(b.damage * 4);
-    return `${b.kind}|${b.level}|${b.culture}|${b.seed}|${c}|${d}|${b.ownerColor ?? -1}`;
+    return `${b.kind}|${b.level}|${b.culture}|${b.seed}|${c}|${d}|${b.ownerColor ?? -1}|${this.fortKey(b.id)}`;
   }
 
   /**
@@ -262,9 +283,9 @@ export class BuildingSystem {
   private cacheKey(b: BuildingView, lod: number): string {
     const def = BUILDINGS[b.kind];
     const level = Math.max(1, Math.min(def.maxLevel, Math.round(b.level || 1)));
-    const c = b.construction >= 1 ? 10 : Math.floor(Math.max(0, b.construction) * 10);
+    const c = constructionStep(b.construction);
     const d = Math.round(Math.max(0, Math.min(1, b.damage)) * 4);
-    return `${b.kind}|${level}|${b.culture}|${(((b.seed | 0) % 4) + 4) % 4}|${c}|${d}|${b.ownerColor ?? -1}|${lod}`;
+    return `${b.kind}|${level}|${b.culture}|${(((b.seed | 0) % 4) + 4) % 4}|${c}|${d}|${b.ownerColor ?? -1}|${lod}|${this.fortKey(b.id)}`;
   }
 
   private isWarm(key: string): boolean {
@@ -381,9 +402,10 @@ export class BuildingSystem {
   private setAsset(e: Entry, lod: 0 | 1 | 2): void {
     const b = e.view;
     const key = this.cacheKey(b, lod);
+    const f = this.forts.get(b.id);
     const asset = this.assets.building({
       kind: b.kind, level: b.level, culture: b.culture, seed: b.seed,
-      construction: b.construction, damage: b.damage, ownerColor: b.ownerColor, lod,
+      construction: b.construction, damage: b.damage, ownerColor: b.ownerColor, lod, gate: f?.gate, breach: f?.breach,
     });
     const old = e.asset;
     const wasVisible = old ? old.object.visible : false;
@@ -492,7 +514,7 @@ export class BuildingSystem {
     const s = this.settings;
     const cp = camera.position;
     let changed = false;
-    if (version !== this.version) { this.version = version; this.sync(list); changed = true; }
+    if (version !== this.version || this.fortsDirty) { this.version = version; this.fortsDirty = false; this.sync(list); changed = true; }
     // the full scan (distances, nearest-first selection, LODs) runs when the camera moved or
     // work is outstanding; other frames only animate and feed FX for the detailed buildings
     if (changed || generous || this.pending.length > 0 || cp.distanceToSquared(this.evalPos) > 4 || this.frame - this.evalFrame >= 15) {
@@ -530,9 +552,10 @@ export class BuildingSystem {
         const key = this.cacheKey(e.view, 2);
         if (this.isWarm(key)) continue;
         const b = e.view;
+        const f = this.forts.get(b.id);
         this.assets.building({
           kind: b.kind, level: b.level, culture: b.culture, seed: b.seed,
-          construction: b.construction, damage: b.damage, ownerColor: b.ownerColor, lod: 2,
+          construction: b.construction, damage: b.damage, ownerColor: b.ownerColor, lod: 2, gate: f?.gate, breach: f?.breach,
         }).dispose();
         this.keySeen.set(key, this.frame);
         this.genCooldown = 6;

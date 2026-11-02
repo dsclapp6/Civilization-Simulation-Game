@@ -310,6 +310,7 @@ export function createAssetLibrary(): MillenniaAssetLibrary {
     },
     prop,
     propKits,
+    sharedMaterials: () => ({ opaque: mats.opaque, opaqueDS: mats.opaqueDS, water: mats.water, glow: mats.glow }),
     createCharacterLayer(): CharacterLayer { return createCharacterLayer(palette); },
     createAnimalLayer(): AnimalLayer { return createAnimalLayer(palette); },
     createProjectileLayer(): ProjectileLayer { return createProjectileLayer(mats.opaque); },

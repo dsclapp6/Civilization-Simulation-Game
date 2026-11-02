@@ -34,10 +34,29 @@ function badgeHtml(kind: string, color: string): string {
 
 interface LabelEntry { obj: CSS2DObject; maxAlt: number; minAlt: number; opacity: number }
 
+/** Map icons of the deposits by kind (docs/CIV.md §7): shape, fill and title. */
+export const DEPOSIT_ICONS: Record<string, { fill: string; clip: string; title: string; size: number }> = {
+  iron: { fill: '#a4532f', clip: 'polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%)', title: 'Iron ore', size: 11 },
+  stone: { fill: '#d9d1bd', clip: 'polygon(0 0,100% 0,100% 100%,0 100%)', title: 'Stone', size: 9 },
+  clay: { fill: '#c18a4f', clip: 'circle(50% at 50% 50%)', title: 'Clay', size: 10 },
+  salt: { fill: '#f4f1e8', clip: 'polygon(50% 0,100% 50%,50% 100%,0 50%)', title: 'Salt', size: 11 },
+  silver: { fill: '#aab5c6', clip: 'polygon(50% 0,100% 100%,0 100%)', title: 'Silver', size: 11 },
+  gold: { fill: '#f0c64a', clip: 'polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)', title: 'Gold', size: 14 },
+};
+
+/** HTML of a deposit icon: a dark-rimmed shape in the kind's colour (the rim is the shape drawn larger behind). */
+export function depositIconHtml(kind: string): string {
+  const ic = DEPOSIT_ICONS[kind] ?? DEPOSIT_ICONS.stone;
+  const s = ic.size;
+  return `<span style="position:relative;display:block;width:${s + 4}px;height:${s + 4}px"><span style="position:absolute;inset:0;background:#21160c;clip-path:${ic.clip}"></span>`
+    + `<span style="position:absolute;left:2px;top:2px;width:${s}px;height:${s}px;background:${ic.fill};clip-path:${ic.clip}"></span></span>`;
+}
+
 export class MapLabels {
   readonly scene = new THREE.Scene();
   private readonly settlements: LabelEntry[] = [];
   private readonly kingdomLabels: LabelEntry[] = [];
+  private readonly depositIcons: LabelEntry[] = [];
   private readonly markers = new Map<number, { obj: CSS2DObject; seen: number; key: string }>();
   private frame = 0;
 
@@ -56,6 +75,20 @@ export class MapLabels {
       obj.visible = false;
       this.scene.add(obj);
       this.settlements.push({ obj, maxAlt: st.maxAlt, minAlt: 350, opacity: -1 });
+    }
+    // deposits: small icons by kind (iron, stone, clay, salt, silver, gold), shown over the nearer map zooms
+    for (const d of world.deposits ?? []) {
+      const el = document.createElement('div');
+      el.style.cssText = 'pointer-events: none; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.6)); transition: opacity 0.2s;';
+      el.innerHTML = depositIconHtml(d.kind);
+      el.title = DEPOSIT_ICONS[d.kind]?.title ?? d.kind;
+      el.dataset.deposit = String(d.id);
+      const obj = new CSS2DObject(el);
+      obj.position.set(d.x, 0, d.z);
+      obj.center.set(0.5, 0.5);
+      obj.visible = false;
+      this.scene.add(obj);
+      this.depositIcons.push({ obj, maxAlt: d.kind === 'gold' || d.kind === 'silver' ? 16000 : 9500, minAlt: 300, opacity: -1 });
     }
     for (const kd of world.kingdoms) {
       let sx = 0, sz = 0, n = 0;
@@ -98,6 +131,10 @@ export class MapLabels {
       if (e.obj.position.y === 0) e.obj.position.y = Math.max(0, heightAt(e.obj.position.x, e.obj.position.z)) + 30;
       fade(e, altitude);
     }
+    for (const e of this.depositIcons) {
+      if (e.obj.position.y === 0) e.obj.position.y = Math.max(0, heightAt(e.obj.position.x, e.obj.position.z)) + 6;
+      fade(e, altitude);
+    }
     // markers (pooled by id)
     for (const mk of markers) {
       let ent = this.markers.get(mk.id);
@@ -111,7 +148,13 @@ export class MapLabels {
         const ring = mk.kind === 'player' ? 'border: 3px solid #f2c14e; background: rgba(0,0,0,0.25);' : `border: 2px solid #f6ecd2; background: ${hex(mk.color)};`;
         // icon centred on the position, caption underneath (settlement names sit to the right)
         el.style.cssText = 'pointer-events: none; white-space: nowrap; font: italic 600 11px Georgia, serif; color: #f6ecd2; text-shadow: 0 1px 2px #000, 0 0 5px #000; display: flex; flex-direction: column; align-items: center;';
-        el.innerHTML = `<span style="display:block;width:${sz}px;height:${sz}px;${shape}${ring}box-shadow:0 0 0 1px #1a120a, 0 2px 4px rgba(0,0,0,0.5)"></span>${mk.label ? `<span style="margin-top:3px">${mk.label}</span>` : ''}`;
+        const icon = mk.kind === 'outpost'
+          // an outpost: a pennant on a pole in the holder's colour over a palisade stub
+          ? `<span style="position:relative;display:block;width:18px;height:20px"><span style="position:absolute;left:4px;top:1px;width:2px;height:18px;background:#2a1d10"></span>`
+            + `<span style="position:absolute;left:6px;top:1px;width:12px;height:8px;background:${hex(mk.color)};clip-path:polygon(0 0,100% 50%,0 100%);filter:drop-shadow(0 0 1px #f6ecd2)"></span>`
+            + `<span style="position:absolute;left:0;bottom:0;width:13px;height:6px;background:#6b4f33;border:1px solid #f6ecd2;clip-path:polygon(0 30%,15% 0,30% 30%,45% 0,60% 30%,75% 0,90% 30%,100% 0,100% 100%,0 100%)"></span></span>`
+          : `<span style="display:block;width:${sz}px;height:${sz}px;${shape}${ring}box-shadow:0 0 0 1px #1a120a, 0 2px 4px rgba(0,0,0,0.5)"></span>`;
+        el.innerHTML = `${icon}${mk.label ? `<span style="margin-top:3px">${mk.label}</span>` : ''}`;
         const obj = new CSS2DObject(el);
         obj.center.set(0.5, mk.label ? 0.25 : 0.5);
         this.scene.add(obj);

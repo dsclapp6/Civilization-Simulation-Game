@@ -2,9 +2,11 @@
 // (WebGL2 via SwiftShader — slow but correct) through the world viewer presets and saves
 // docs/render/<preset>.png.
 //
-//   node tools/render-shots.mjs                 # all presets, medium quality
+//   node tools/render-shots.mjs                 # all presets but the civilization pass's, medium quality
 //   node tools/render-shots.mjs village night   # selected presets
-//   node tools/render-shots.mjs --quality=high --size=1600x900 --seed=millennia
+//   node tools/render-shots.mjs civ             # the civilization pass's scenes (civ-*) → docs/render/civ/*.jpg
+//   node tools/render-shots.mjs --civ-art       # its art sheets from the asset gallery → docs/art/civ/*.jpg
+//   node tools/render-shots.mjs --quality=high --size=1600x900 --seed=millennia --port=5176
 //   flags: --ui (viewer with its dev overlay), --bench (fly-through timings),
 //          --breakdown (draw calls / triangles per system; re-renders each shot several times)
 import { spawn } from 'node:child_process';
@@ -18,17 +20,46 @@ const { chromium } = require('playwright');
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = resolve(ROOT, 'docs/render');
-const PORT = 5176;
 const args = process.argv.slice(2);
 const opt = (name, def) => {
   const a = args.find((x) => x.startsWith(`--${name}=`));
   return a ? a.slice(name.length + 3) : def;
 };
+// --port=N: a private port when several checkouts shoot at once (a server on the port is reused only if it serves
+// this viewer, which another checkout's would too)
+const PORT = Number(opt('port', '5176'));
 const quality = opt('quality', 'medium');
 const seed = opt('seed', 'millennia');
 const [W, H] = opt('size', '1280x720').split('x').map(Number);
 const suffix = opt('suffix', '');
 const wanted = args.filter((a) => !a.startsWith('--'));
+const civArt = args.includes('--civ-art');
+
+/** Civilization pass (wave B) art from the asset gallery: [name, query, width, height] → docs/art/civ/<name>.png. */
+const CIV_ART = [
+  ['models-work-anglo', 'cat=sheets&sheet=culture-work&culture=anglo&level=2', 1600, 900],
+  ['slaughterhouse-cultures', 'cat=sheets&sheet=cultures&item=slaughterhouse&level=2', 1600, 700],
+  ['clay-pit-cultures', 'cat=sheets&sheet=cultures&item=clay_pit&level=1', 1600, 700],
+  ['salt-pan-cultures', 'cat=sheets&sheet=cultures&item=salt_pan&level=1', 1600, 700],
+  ['lumber-camp-cultures', 'cat=sheets&sheet=cultures&item=lumber_camp&level=1', 1600, 700],
+  ['gaol-cultures', 'cat=sheets&sheet=cultures&item=gaol&level=1', 1600, 700],
+  ['closeup-slaughterhouse', 'cat=buildings&item=slaughterhouse&level=2&az=30&el=24', 1200, 800],
+  ['closeup-clay-pit', 'cat=buildings&item=clay_pit&level=1&az=24&el=30', 1200, 800],
+  ['closeup-salt-pan', 'cat=buildings&item=salt_pan&level=1&az=-28&el=28', 1200, 800],
+  ['closeup-lumber-camp', 'cat=buildings&item=lumber_camp&level=1&az=20&el=26', 1200, 800],
+  ['closeup-gaol', 'cat=buildings&item=gaol&level=1&az=26&el=18', 1000, 800],
+  ['stages-home', 'cat=sheets&sheet=stages-home', 2000, 1100],
+  ['stages-work', 'cat=sheets&sheet=stages-work', 2000, 1100],
+  ['stages-defence', 'cat=sheets&sheet=stages-defence', 2000, 1100],
+  ['stages-close-homes', 'cat=sheets&sheet=stages&kinds=cottage,townhouse,smithy&k=0.45', 2000, 1100],
+  ['stages-close-mills', 'cat=sheets&sheet=stages&kinds=windmill,watermill,quarry,motte&k=0.42', 2000, 1100],
+  ['stages-close-church', 'cat=sheets&sheet=stages&kinds=chapel,church,keep_stone&k=0.5', 2000, 1100],
+  ['cottage-states', 'cat=sheets&sheet=states&item=cottage&level=2', 1600, 800],
+  ['forts', 'cat=sheets&sheet=forts', 1600, 900],
+  ['siege', 'cat=sheets&sheet=siege', 1600, 900],
+  ['props', 'cat=sheets&sheet=props', 1600, 1000],
+  ['fx', 'cat=sheets&sheet=fx', 1600, 700],
+];
 
 async function serverUp() {
   try {
@@ -86,21 +117,32 @@ try {
   mkdirSync(OUT, { recursive: true });
   browser = await chromium.launch();
   console.log('browser launched');
-  const page = await browser.newPage({ viewport: { width: W, height: H } });
-  page.setDefaultTimeout(0);
-  page.on('console', (m) => console.log(`[browser ${m.type()}] ${m.text()}`));
-  page.on('pageerror', (e) => console.log(`[pageerror] ${e.message}`));
-  const t0 = Date.now();
-  await page.goto(`http://localhost:${PORT}/?mode=world&shots=1&seed=${encodeURIComponent(seed)}&quality=${quality}`, { timeout: 120000 });
-  await page.waitForFunction(() => window.__viewer !== undefined, null, { timeout: 600000, polling: 500 });
-  console.log(`viewer ready in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
-  const presets = await page.evaluate(() => window.__viewer.presets);
-  const list = wanted.length ? wanted : presets;
+  // --civ-art alone (its words filter the art sheets) needs no world
+  const world = !civArt || args.includes('--ui') || args.includes('--bench');
+  const page = world ? await browser.newPage({ viewport: { width: W, height: H } }) : null;
+  let list = [];
+  if (page) {
+    page.setDefaultTimeout(0);
+    page.on('console', (m) => console.log(`[browser ${m.type()}] ${m.text()}`));
+    page.on('pageerror', (e) => console.log(`[pageerror] ${e.message}`));
+    const t0 = Date.now();
+    await page.goto(`http://localhost:${PORT}/?mode=world&shots=1&seed=${encodeURIComponent(seed)}&quality=${quality}`, { timeout: 120000 });
+    await page.waitForFunction(() => window.__viewer !== undefined, null, { timeout: 600000, polling: 500 });
+    console.log(`viewer ready in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+    const presets = await page.evaluate(() => window.__viewer.presets);
+    // `civ` stands for every civilization-pass scene; those go to their own folder and are not in the default set
+    list = civArt ? [] : wanted.length ? wanted.flatMap((w) => (w === 'civ' ? presets.filter((p) => p.startsWith('civ-')) : [w]))
+      : presets.filter((p) => !p.startsWith('civ-'));
+  }
   for (const name of list) {
     const t1 = Date.now();
     const info = await page.evaluate(([n, b]) => window.__viewer.preset(n, b), [name, args.includes('--breakdown')]);
-    const file = resolve(OUT, `${name}${suffix}.png`);
-    await page.screenshot({ path: file });
+    // the civilization pass's scenes go to their own folder as JPEG (quality 90) to keep the folder small
+    const civ = name.startsWith('civ-');
+    const dir = civ ? resolve(OUT, 'civ') : OUT;
+    mkdirSync(dir, { recursive: true });
+    const file = resolve(dir, `${name}${suffix}.${civ ? 'jpg' : 'png'}`);
+    await (civ ? page.screenshot({ path: file, type: 'jpeg', quality: 90 }) : page.screenshot({ path: file }));
     const kb = Math.round(statSync(file).size / 1024);
     console.log(`${name}: ${((Date.now() - t1) / 1000).toFixed(1)} s, ${kb} KB  ${info}`);
   }
@@ -121,7 +163,24 @@ try {
     console.log(`viewer-ui: ${Math.round(statSync(file).size / 1024)} KB`);
     await ui.close();
   }
-  if (args.includes('--bench')) {
+  if (civArt) {
+    const artDir = resolve(ROOT, 'docs/art/civ');
+    mkdirSync(artDir, { recursive: true });
+    for (const [name, q, w, h] of CIV_ART) {
+      if (wanted.length && !wanted.some((x) => name.includes(x))) continue;
+      const t1 = Date.now();
+      const gp = await browser.newPage({ viewport: { width: w, height: h } });
+      gp.setDefaultTimeout(0);
+      gp.on('pageerror', (e) => console.log(`[pageerror] ${e.message}`));
+      await gp.goto(`http://localhost:${PORT}/?mode=gallery&shot=1&${q}`, { waitUntil: 'load', timeout: 120000 });
+      await gp.waitForFunction(() => window.__galleryReady === true, null, { timeout: 1200000, polling: 500 });
+      const file = resolve(artDir, `${name}.jpg`);
+      await gp.screenshot({ path: file, type: 'jpeg', quality: 90 });
+      console.log(`art ${name}: ${((Date.now() - t1) / 1000).toFixed(1)} s, ${Math.round(statSync(file).size / 1024)} KB`);
+      await gp.close();
+    }
+  }
+  if (args.includes('--bench') && page) {
     const b = await page.evaluate(() => window.__viewer.benchmark(240, 22));
     console.log(`benchmark (street-level fly-through, ${quality}): ${JSON.stringify(b)}`);
   }

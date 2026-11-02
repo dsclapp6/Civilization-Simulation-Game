@@ -4,6 +4,10 @@
 import type { PropKind } from '../types';
 import { F, Layer, Mat, MeshBuilder, prng, shade, type V2, type V3 } from '../core/builder';
 import { COL } from '../buildings/style';
+import { CIV_PILE_KINDS, CIV_PROPS } from './civProps';
+
+type CivPropKind = 'carcass_hook' | 'carcass_hanging' | 'carcass_block' | 'hide_frame' | 'meat_joints' | 'tallow_pot'
+  | 'brick_stack' | 'clay_heap' | 'salt_heap' | 'log_pile' | 'timber_stack' | 'straw_bundles';
 
 export const PROP_KINDS: PropKind[] = [
   'cart', 'wagon', 'barrel', 'crate', 'sack_pile', 'haystack', 'woodpile', 'stone_pile', 'plank_pile',
@@ -12,10 +16,12 @@ export const PROP_KINDS: PropKind[] = [
   'pell', 'campfire', 'cauldron', 'plough', 'harrow', 'boat', 'signpost', 'washing_line', 'dung_heap',
   'well_bucket', 'lantern_post',
   'stook', 'sheaf', 'hay_cock', 'stump', 'logs',
+  'carcass_hook', 'carcass_hanging', 'carcass_block', 'hide_frame', 'meat_joints', 'tallow_pot',
+  'brick_stack', 'clay_heap', 'salt_heap', 'log_pile', 'timber_stack', 'straw_bundles',
 ];
 
 /** Kinds whose model grows with a pile size (WorldPropView.count, 1 = small … 8 = full). */
-export const PILE_KINDS: ReadonlySet<PropKind> = new Set<PropKind>(['woodpile', 'sack_pile', 'stone_pile', 'logs', 'plank_pile']);
+export const PILE_KINDS: ReadonlySet<PropKind> = new Set<PropKind>(['woodpile', 'sack_pile', 'stone_pile', 'logs', 'plank_pile', ...CIV_PILE_KINDS as PropKind[]]);
 
 export interface PropMeta {
   /** Local-space emitter points for continuous FX (campfire smoke, etc.). */
@@ -770,6 +776,8 @@ const P: Record<PropKind, PropFn> = {
       }
     }
   },
+  // civilization pass: carcasses, hide frames, joints, the tallow pot; brick, clay, salt, logs, timber and straw piles
+  ...(CIV_PROPS as Record<CivPropKind, PropFn>),
 };
 
 function pick<T>(r: () => number, arr: readonly T[]): T { return arr[Math.floor(r() * arr.length) % arr.length]; }

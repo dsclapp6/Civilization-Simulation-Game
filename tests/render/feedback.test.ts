@@ -217,8 +217,10 @@ describe('nameplates', () => {
       person(2, 6, 30, { labelTone: 'stranger', labelRange: 15 }),
       person(3, -6, 30, { labelTone: 'kin', labelRange: 40, sublabel: 'your father · farmer' }),
       person(4, 12, 60, { labelTone: 'stranger', labelRange: 15, highlight: 1 }),
-      person(5, -30, 60, { labelTone: 'stranger', labelRange: 15, mark: 'quest' }),
+      person(5, -30, 60, { labelTone: 'stranger', labelRange: 15, mark: 'track' }),
       person(6, 0, 3, { highlight: 3 }),
+      // a quest giver beyond the name range: the "!" is drawn in the world (marks.ts), not as a plate
+      person(7, 30, 60, { labelTone: 'stranger', labelRange: 15, mark: 'quest' }),
     ];
     const out = layoutPlates(chars, cam, -1, project, null);
     const ids = out.map((o) => o.it.id).sort();

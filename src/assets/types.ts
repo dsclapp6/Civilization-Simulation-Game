@@ -21,6 +21,10 @@ export interface BuildingRequest {
   ownerColor?: number;
   /** Optional detail level: 0 = full (default), 1 = mid (no small decals/decor), 2 = far silhouette. */
   lod?: 0 | 1 | 2;
+  /** Civilization pass (FortView): a gatehouse's gate — open (default), shut and barred, or battered in. */
+  gate?: 'open' | 'shut' | 'broken';
+  /** Civilization pass (FortView): a wall or palisade breached 0..1 (≥ 0.5 a gap of rubble one can climb through). */
+  breach?: number;
 }
 
 export interface BuildingAsset {
@@ -67,7 +71,10 @@ export type PropKind =
   | 'pell' | 'campfire' | 'cauldron' | 'plough' | 'harrow' | 'boat' | 'signpost' | 'washing_line' | 'dung_heap'
   | 'well_bucket' | 'lantern_post'
   // results of work (clarity pass): a stook of sheaves, a single sheaf, a hay cock, a felled tree's stump and logs
-  | 'stook' | 'sheaf' | 'hay_cock' | 'stump' | 'logs';
+  | 'stook' | 'sheaf' | 'hay_cock' | 'stump' | 'logs'
+  // civilization pass (CIV §5, §7, §8): the new work's results and building sites' materials (assets/props/civProps.ts)
+  | 'carcass_hook' | 'carcass_hanging' | 'carcass_block' | 'hide_frame' | 'meat_joints' | 'tallow_pot'
+  | 'brick_stack' | 'clay_heap' | 'salt_heap' | 'log_pile' | 'timber_stack' | 'straw_bundles';
 
 /** Shared colour palette so terrain, models and UI agree. Values are 0xRRGGBB. */
 export interface Palette {
@@ -141,13 +148,20 @@ export interface AssetLibrary {
   vegetation(kind: ScatterKind, lod: 0 | 1 | 2): InstancedKit;
   /** stage 0 sprout … 3 ripe. One instance = one plant clump (~0.5 m). */
   crop(kind: CropKind, stage: 0 | 1 | 2 | 3): InstancedKit;
-  prop(kind: PropKind, seed?: number): THREE.Object3D;
+  /** `size` (1..8) grows piles (PILE_KINDS); 0/omitted = the ordinary look. */
+  prop(kind: PropKind, seed?: number, size?: number): THREE.Object3D;
   /**
    * Instancing kits for a prop, one per material channel it uses (opaque, cloth, glow…), shared and cached.
    * `size` (1..8) grows piles — woodpile, sack_pile, stone_pile, logs, plank_pile; 0/omitted = the ordinary
    * look. Used by the renderer's world-props layer (SimView.worldProps). Optional (clarity pass).
    */
   propKits?(kind: PropKind, seed?: number, size?: number): readonly InstancedKit[];
+  /**
+   * Civilization pass (optional): the shared opaque and water materials, for geometry the renderer builds itself from the
+   * asset kit (deposits on the ground, siege works) so it takes snow, the night and the fog like every asset. The opaque
+   * material wants the `aSurf` attribute (MeshBuilder.toGeometry({ surf: true })).
+   */
+  sharedMaterials?(): { opaque: THREE.Material; opaqueDS: THREE.Material; water: THREE.Material; glow: THREE.Material };
   createCharacterLayer(): CharacterLayer;
   createAnimalLayer(): AnimalLayer;
   createProjectileLayer(): ProjectileLayer;

@@ -3,8 +3,10 @@
 // rain wetness and the strategic-map overlay. The far variant discards fragments covered by
 // detailed quadtree nodes (coverage mask).
 import * as THREE from 'three';
+import { BUILD_TINT_PARS, createBuildAreaUniforms, type BuildAreaUniforms } from '../feedback/buildArea';
 
-export interface TerrainUniforms {
+/** The terrain's uniforms; the builder's land tint (BuildAreaUniforms) is shared with the strips and roads. */
+export interface TerrainUniforms extends BuildAreaUniforms {
   uGrassTint: { value: THREE.Color };
   uGrassTintStrength: { value: number };
   uSnowCover: { value: number };
@@ -35,6 +37,7 @@ export function createTerrainUniforms(worldSize: number): TerrainUniforms {
     uSnowLine: { value: 900 },
     uCanopy: { value: new THREE.Color(0.06, 0.12, 0.03) },
     uCanopyDist: { value: 1500 },
+    ...createBuildAreaUniforms(),
   };
 }
 
@@ -70,6 +73,7 @@ uniform float uSnowLine;
 uniform vec3 uCanopy;
 uniform float uCanopyDist;
 ${far ? 'uniform sampler2D uMask;' : ''}
+${BUILD_TINT_PARS}
 varying vec4 vTMat;
 varying vec3 vTWorld;
 varying float vTUp;
@@ -81,6 +85,7 @@ float tNoise(vec2 p) {
       .replace('void main() {', `void main() {
 ${far ? `if (texture2D(uMask, vTWorld.xz / uWorldSize).r > 0.5) discard;` : ''}`)
       .replace('#include <color_fragment>', `#include <color_fragment>
+float mlBuildM = mlBuildIn(vTWorld.xz);
 {
   vec3 base = diffuseColor.rgb;
   float grassW = vTMat.x;
@@ -121,8 +126,10 @@ ${far ? `if (texture2D(uMask, vTWorld.xz / uWorldSize).r > 0.5) discard;` : ''}`
     vec4 ov = texture2D(uOverlay, vTWorld.xz / uWorldSize);
     base = mix(base, ov.rgb, ov.a * uOverlayStrength);
   }
-  diffuseColor.rgb = base;
-}`);
+  diffuseColor.rgb = mlBuildTint(base, mlBuildM);
+}`)
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+totalEmissiveRadiance += mlBuildGlow(mlBuildM);`);
   };
   mat.customProgramCacheKey = () => (far ? 'millennia-terrain-far' : 'millennia-terrain');
   return mat;

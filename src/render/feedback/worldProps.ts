@@ -11,9 +11,9 @@ import type { AssetLibrary, InstancedKit, PropKind } from '../../assets/types';
 const GROW_S = 0.5;
 const LEAVE_S = 0.4;
 /** Seed buckets per kind (model variety); others use one. */
-const VARIETY: Partial<Record<string, number>> = { stook: 4, sheaf: 3, hay_cock: 3, stump: 2, logs: 2, stone_pile: 2 };
-/** Kinds whose `count` picks a pile size. */
-const PILES = new Set(['woodpile', 'sack_pile', 'stone_pile', 'logs', 'plank_pile']);
+const VARIETY: Partial<Record<string, number>> = { stook: 4, sheaf: 3, hay_cock: 3, stump: 2, logs: 2, stone_pile: 2, carcass_hook: 2, carcass_hanging: 2, log_pile: 2, meat_joints: 2 };
+/** Kinds whose `count` picks a pile size (civilization pass: bricks, clay, salt, trunks, squared timber, straw). */
+const PILES = new Set(['woodpile', 'sack_pile', 'stone_pile', 'logs', 'plank_pile', 'brick_stack', 'clay_heap', 'salt_heap', 'log_pile', 'timber_stack', 'straw_bundles']);
 
 interface Placed {
   id: number;

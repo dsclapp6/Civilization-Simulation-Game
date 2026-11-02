@@ -471,6 +471,58 @@ const SPECS: Record<string, ClipDef> = {
       { t: 0.38, p: { ip: [-0.05, 0.52, 0.16], ir: [-6, 0, 0] } },
     ],
   },
+  // ------------------------------------------------------------------ civilization pass (docs/CIV.md §4, §9)
+  // a captive: wrists tied together before the belly, shoulders drawn in, head bowed; a slow shift of weight
+  bound: {
+    dur: 4.2, loop: true, stance: { w: 0.0, zL: 0.03, zR: -0.02 }, walkable: true,
+    base: {
+      ...NEUTRAL, spine: [5, 0, 0], chest: [7, 0, 0], neck: [10, 0, 0], head: [17, 0, 0],
+      uaL: [-16, -26, 4], faL: [-78, 0, 0], handL: [6, 0, 26],
+      uaR: [-16, 26, -4], faR: [-78, 0, 0], handR: [6, 0, -26],
+    },
+    keys: [
+      { t: 0, p: { head: [17, 7, 0], chest: [7, 2, 0] } },
+      { t: 2.1, p: { head: [13, -9, 2], chest: [6, -2, 0], spine: [7, 0, 0] } },
+    ],
+  },
+  // led on foot: the same bound arms over the walk, the body pulled a little forward by the rope
+  bound_walk: {
+    dur: 1.2, loop: true, walkable: true, stance: { w: 0.0, zL: 0.04, zR: -0.04 },
+    base: {
+      ...NEUTRAL, spine: [9, 0, 0], chest: [8, 0, 0], neck: [8, 0, 0], head: [12, 0, 0],
+      uaL: [-26, -24, 4], faL: [-70, 0, 0], handL: [4, 0, 26],
+      uaR: [-26, 24, -4], faR: [-70, 0, 0], handR: [4, 0, -26],
+    },
+    keys: [{ t: 0, p: { head: [12, 3, 0] } }, { t: 0.6, p: { head: [14, -3, 0], chest: [9, 1, 0] } }],
+  },
+  // climbing a scaling ladder (facing it, +z): hand over hand to the rungs above, a knee up and a step at a time
+  climb: {
+    dur: 1.1, loop: true,
+    base: { ...NEUTRAL, spine: [14, 0, 0], chest: [6, 0, 0], neck: [-14, 0, 0], head: [-16, 0, 0], r: [0, 0, -0.02] },
+    keys: [
+      { t: 0, p: {
+        uaR: [-158, 6, -8], faR: [-18, 0, 0], handR: [0, 0, 0], uaL: [-96, -6, 12], faL: [-58, 0, 0], handL: [10, 0, 0],
+        thL: [-62, 2, 4], shL: [92, 0, 0], ftL: [-24, 0, 0], thR: [-14, -2, -4], shR: [22, 0, 0], ftR: [-6, 0, 0], r: [0, -0.02, -0.02],
+      } },
+      { t: 0.55, p: {
+        uaL: [-158, -6, 8], faL: [-18, 0, 0], handL: [0, 0, 0], uaR: [-96, 6, -12], faR: [-58, 0, 0], handR: [10, 0, 0],
+        thR: [-62, -2, -4], shR: [92, 0, 0], ftR: [-24, 0, 0], thL: [-14, 2, 4], shL: [22, 0, 0], ftL: [-6, 0, 0], r: [0, 0.02, -0.02],
+      } },
+    ],
+  },
+  // shoulder to a ram's beam or a cart: leaning in, arms forward on the timber, legs braced (walking when it moves)
+  push: {
+    dur: 1.6, loop: true, walkable: true, stance: { w: 0.05, zL: 0.16, zR: -0.2 },
+    base: {
+      ...NEUTRAL, spine: [20, 0, 0], chest: [12, 0, 0], neck: [-16, 0, 0], head: [-18, 0, 0], r: [0, -0.04, 0],
+      uaL: [-72, -12, 10], faL: [-34, 0, 0], handL: [24, 0, 0],
+      uaR: [-72, 12, -10], faR: [-34, 0, 0], handR: [24, 0, 0],
+    },
+    keys: [
+      { t: 0, p: { spine: [20, 0, 0], uaL: [-72, -12, 10], uaR: [-72, 12, -10] } },
+      { t: 0.8, p: { spine: [24, 0, 0], chest: [14, 0, 0], uaL: [-66, -12, 10], faL: [-40, 0, 0], uaR: [-66, 12, -10], faR: [-40, 0, 0] } },
+    ],
+  },
   // ------------------------------------------------------------------ riding (root on the saddle)
   ride_idle: {
     dur: 4, loop: true, riding: true, base: RIDE,

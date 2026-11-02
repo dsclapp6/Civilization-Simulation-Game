@@ -16,6 +16,7 @@ import { makeAssets } from './dev/assetSource';
 import { MockView, type WeatherPreset } from './dev/mockView';
 import { DevInput } from './dev/devInput';
 import { DevOverlay } from './dev/devOverlay';
+import { CIV_PRESETS, resetCiv } from './civPresets';
 
 interface Pose { pos: { x: number; y: number; z: number }; look: { x: number; y: number; z: number } }
 
@@ -712,7 +713,7 @@ const PRESETS: Record<string, PresetDef> = {
   },
 };
 
-Object.assign(PRESETS, CLARITY_PRESETS);
+Object.assign(PRESETS, CLARITY_PRESETS, CIV_PRESETS as unknown as Record<string, PresetDef>);
 
 export function start(root: AppRoot): void {
   const params = root.params;
@@ -746,6 +747,8 @@ export function start(root: AppRoot): void {
     view.holdAnim = null;
     view.avatar.mainHand = 'none';
     renderer.setHover?.(null);
+    resetCiv(renderer);
+    view.clearCiv();
     view.setSeason(p.season);
     view.setWeather(p.weather);
     view.setSnowCover(p.snowCover ?? null);
