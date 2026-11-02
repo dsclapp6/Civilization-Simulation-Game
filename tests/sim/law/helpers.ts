@@ -9,6 +9,7 @@ import { installLaw, lawContext } from '../../../src/sim/law';
 import type { LawRuntime } from '../../../src/sim/law/types';
 import { newProfile } from '../../../src/sim/legacy';
 import type { PlayerApi, Restraint } from '../../../src/player/types';
+import { MemorySaveStore } from '../../../src/sim/save-memory';
 import { Simulation } from '../../../src/sim/sim';
 import { installSocial } from '../../../src/sim/social';
 import type { Person } from '../../../src/sim/state';
@@ -80,7 +81,12 @@ export interface LawRig {
 function fakeRng(values: number[]): Rng {
   let i = 0;
   const next = (): number => values[Math.min(i++, values.length - 1)];
-  return { next, chance: (p: number) => next() < p, pick: <T>(a: readonly T[]) => a[Math.floor(next() * a.length) % a.length], int: (lo: number, hi: number) => lo + Math.floor(next() * (hi - lo + 1)) } as unknown as Rng;
+  return {
+    next, chance: (p: number) => next() < p, pick: <T>(a: readonly T[]) => a[Math.floor(next() * a.length) % a.length],
+    int: (lo: number, hi: number) => lo + Math.floor(next() * (hi - lo + 1)),
+    // a saved game writes every stream's state
+    getState: () => [0, 0, 0, i], setState: () => undefined,
+  } as unknown as Rng;
 }
 
 /** A village with a manor court (the lord's closes, and his lock-up) and, if asked, a gaol: the stand-in world has them by chance only. */
@@ -103,23 +109,45 @@ function ensureLockup(w: WorldModel, gaol: boolean): void {
 
 export interface LawRigOptions {
   seed?: string;
+  /** Save into this store (a new game with a new profile; `reloadLawRig` continues it). */
+  store?: MemorySaveStore;
   /** Add a gaol building to the village with the manor. */
   gaol?: boolean;
+  /** Cover the stand-in world with woodland (the lords' game: poachers have a park to be taken in). */
+  forest?: boolean;
   zone?: boolean;
   combat?: boolean;
   /** Give the zone summon support (patrols are put in it). Default true. */
   summons?: boolean;
 }
 
+/** The generator of the law tests' world (the same one on a reload). */
+export function lawGenerator(gaol: boolean, forest = false): (seed: string) => WorldModel {
+  return (seed) => {
+    const w = createMockWorld({ seed, preset: 'small' });
+    if (forest) w.macro.forest.fill(160);
+    ensureLockup(w, gaol);
+    return w;
+  };
+}
+
 export function lawRig(o: LawRigOptions = {}): LawRig {
   const sim = Simulation.newGame({
-    seed: o.seed ?? 'law', difficulty: 'knight', profile: newProfile(),
-    generateWorld: (seed) => {
-      const w = createMockWorld({ seed, preset: 'small' });
-      ensureLockup(w, !!o.gaol);
-      return w;
-    },
+    seed: o.seed ?? 'law', difficulty: 'knight', profile: newProfile(), store: o.store,
+    autosave: o.store ? { intervalMs: 0 } : undefined,
+    generateWorld: lawGenerator(!!o.gaol, !!o.forest),
   });
+  return bootLaw(sim, o, true);
+}
+
+/** Continues the game saved in a store, with the same modules installed over it. */
+export async function reloadLawRig(store: MemorySaveStore, o: LawRigOptions = {}): Promise<LawRig> {
+  const sim = await Simulation.load(store, lawGenerator(!!o.gaol, !!o.forest), { intervalMs: 0 });
+  if (!sim) throw new Error('nothing saved');
+  return bootLaw(sim, { ...o, store }, false);
+}
+
+function bootLaw(sim: Simulation, o: LawRigOptions, fresh: boolean): LawRig {
   const social = installSocial(sim);
   const economy = installEconomy(sim, { social });
   const terr = installTerritory(sim, { social, economy });
@@ -153,10 +181,17 @@ export function lawRig(o: LawRigOptions = {}): LawRig {
   const owner = terr.ownerOf!(village.id);
   const lord = st.persons.get(owner.lord)!;
   const other = world.settlements.find((s) => s.kind === 'village' && s.id !== village.id)!;
-  const strangerHouse = mkHouse(sim, 'Stranger').id;
-  const stranger = mkPerson(sim, { settlement: other.id, house: strangerHouse, tier: 2, estate: 'free', career: 'merchant' });
-  sim.state.joinHousehold(stranger, mkHousehold(sim, other.id));
-  makePlayer(sim, stranger);
+  let stranger: Person;
+  let strangerHouse: number;
+  if (fresh) {
+    strangerHouse = mkHouse(sim, 'Stranger').id;
+    stranger = mkPerson(sim, { settlement: other.id, house: strangerHouse, tier: 2, estate: 'free', career: 'merchant' });
+    sim.state.joinHousehold(stranger, mkHousehold(sim, other.id));
+    makePlayer(sim, stranger);
+  } else {
+    stranger = st.persons.get(st.run.playerId)!;
+    strangerHouse = stranger.house;
+  }
   const court = { x: manor.x, z: manor.z };
   player.pos.x = court.x; player.pos.z = court.z; player.pos.y = 10;
   zone.attachPlayer(stranger.id, { id: stranger.id } as never);

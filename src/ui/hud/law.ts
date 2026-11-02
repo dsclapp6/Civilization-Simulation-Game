@@ -8,6 +8,7 @@ import { titled } from '../../sim/law/names';
 import type { CaptivityView, PatrolView } from '../../sim/law/types';
 import type { TrespassLevel } from '../../sim/territory/types';
 import { h, isTypingTarget } from '../core/dom';
+import { formatMoney } from '../core/format';
 import { registerHudPart, type HudPart, type HudPartCtx } from '../core/extHud';
 import { icon, type IconName } from '../core/icons';
 import { escortText } from '../panels/law';
@@ -55,7 +56,10 @@ export function plaque(i: PlaqueInput): Plaque | null {
       ? { kind: 'bound', tone: 'vermilion', icon: 'lock', title: i.restraint?.reason ?? i.captive.text, sub: 'Your hands are bound. Keep up, or you are dragged.', action: 'Your options' }
       : {
         kind: 'held', tone: 'vermilion', icon: 'lock', title: `Held in ${i.captive.place ?? 'the lord\'s cell'}`,
-        sub: i.captive.danger ? 'The lord may hang you.' : i.captive.war ? `Ransom asked: ${i.captive.ransom}d` : i.captive.serving ? `Serving: ${days} ${days === 1 ? 'day' : 'days'} left` : `Fine owed: ${i.captive.fine}d`,
+        sub: i.captive.danger ? 'The lord may hang you.'
+          : i.captive.war ? `Ransom asked: ${formatMoney(i.captive.ransom)}`
+            : i.captive.serving ? `Serving: ${days} ${days === 1 ? 'day' : 'days'} left`
+              : i.captive.fine > 0 ? `Fine owed: ${formatMoney(i.captive.fine)}` : 'Waiting on the lord\'s pleasure',
         action: 'Your options',
       };
   }
@@ -70,7 +74,7 @@ export function plaque(i: PlaqueInput): Plaque | null {
   if (p && p.phase === 'attack') return { kind: 'coming', tone: 'vermilion', icon: 'swords', title: 'They are on you', sub: 'Fight, flee or yield.', action: null };
   const t = i.trespass;
   if (t && t.level === 'hostile') return { kind: 'land', tone: 'vermilion', icon: 'swords', title: `Hostile: ${t.hostileHouse ?? lowerFirst(t.reason)}`, sub: 'Armed men will ride at you if you are seen.', action: null };
-  if (t && t.level === 'private') return { kind: 'land', tone: 'gold', icon: 'lock', title: `Lands of ${t.lord} · private`, sub: lowerFirst(t.reason) ? `${t.reason.charAt(0).toUpperCase()}${t.reason.slice(1)}.` : '', action: null };
+  if (t && t.level === 'private') return { kind: 'land', tone: 'gold', icon: 'lock', title: `Lands of ${t.lord} · private`, sub: t.reason ? `${t.reason.charAt(0).toUpperCase()}${t.reason.slice(1)}.` : '', action: null };
   if (i.horse) return { kind: 'horse', tone: 'green', icon: 'horse', title: 'Your horse is coming', sub: i.horse.eta > 1 ? `About ${i.horse.eta} s` : 'It is here', action: null };
   return null;
 }

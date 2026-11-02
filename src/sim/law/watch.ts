@@ -77,9 +77,10 @@ export class Watch {
       c.seenAt = this.clockS;
       c.witness = w.person.id;
       c.armedWitness = w.armed;
-      const [lo, hi] = w.armed || c.attackOnSight ? (c.level === 'hostile' || c.attackOnSight ? LAW.hostileDelay : LAW.reportDelay) : LAW.reportDelay;
-      // the farther the witness from the lord's seat, the longer the report takes; an armed man needs no report
-      const wait = w.armed ? lo + (hi - lo) * 0.3 : lo + (hi - lo) * L.rng().next();
+      // an armed man acts himself (at once on hostile land and against a known offender); anyone else must carry the word to the manor
+      const quick = w.armed || c.attackOnSight;
+      const [lo, hi] = quick ? (c.level === 'hostile' || c.attackOnSight ? LAW.hostileDelay : LAW.armedDelay) : LAW.reportDelay;
+      const wait = quick ? lo + (hi - lo) * 0.3 : lo + (hi - lo) * L.rng().next();
       c.dueAt = this.clockS + wait;
       L.sim.events.emit('trespass', { phase: 'seen', person: me.id, house: L.houseOf(check.settlement), settlement: check.settlement, level: c.level === 'hostile' ? 'hostile' : 'private' });
       L.store.data.stats.seen++;

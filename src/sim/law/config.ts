@@ -13,6 +13,8 @@ export const LAW = {
   armedNear: 55,
   /** Seconds between being seen and a patrol being on its way when nobody armed is near (the report goes to the castle or manor). */
   reportDelay: [7, 16] as const,
+  /** An armed man of the land who sees a trespasser on private land whistles up the others: seconds of delay. */
+  armedDelay: [3, 8] as const,
   /** On hostile land the watch reacts at once to armed men and known enemies: seconds of delay. */
   hostileDelay: [0.5, 3] as const,
 

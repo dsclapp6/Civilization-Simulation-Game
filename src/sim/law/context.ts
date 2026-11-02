@@ -110,14 +110,19 @@ export class Law {
     ['great_hall', 'the guardroom at'], ['barracks', 'the guardroom at'], ['gatehouse', 'the gatehouse cell at'], ['tower', 'the tower cell at'],
   ];
 
-  /** The building that holds prisoners in a settlement and what to call it, or null when it keeps none. */
+  /** The building that holds prisoners in a settlement and what to call it, or null when it keeps none. One pass over the place's buildings. */
   lockup(settlement: number): { building: BuildingState; text: string } | null {
-    for (const [kind, prefix] of Law.LOCKUPS) {
-      const b = this.finished(settlement, [kind]);
-      if (b) return { building: b, text: `${prefix} ${this.placeName(settlement)}` };
+    let best: BuildingState | null = null;
+    let rank = Law.LOCKUPS.length;
+    for (const b of this.state.buildingsAt.get(settlement) ?? []) {
+      if (b.construction < 1 || b.damage >= 0.9) continue;
+      const r = Law.LOCKRANK.get(b.kind);
+      if (r !== undefined && r < rank) { best = b; rank = r; }
     }
-    return null;
+    return best ? { building: best, text: `${Law.LOCKUPS[rank][1]} ${this.placeName(settlement)}` } : null;
   }
+
+  private static readonly LOCKRANK: ReadonlyMap<string, number> = new Map(Law.LOCKUPS.map(([kind], i) => [kind, i]));
 
   /** Where a prisoner taken on the lands of `settlement` (held by `house`) is kept: the place itself, else the nearest of the House's. */
   holdingPlace(settlement: number, house: HouseId): { settlement: number; building: BuildingState | null; text: string } {

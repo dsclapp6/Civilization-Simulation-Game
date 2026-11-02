@@ -43,9 +43,38 @@ function captorOf(L: Law, settlement: number, watch: Person[]): number {
   return lead?.id ?? L.lordOf(settlement);
 }
 
+/** Woodland round a settlement, cached (the lord's game): the share of the cells within the park's reach that are wooded. A handful of reads, once. */
+const WOODS = new WeakMap<Law, Map<number, number>>();
+const WOOD_REACH = 1300;
+const WOOD_GRID = 7;
+export function woodland(L: Law, settlement: number): number {
+  let cache = WOODS.get(L);
+  if (!cache) WOODS.set(L, cache = new Map());
+  const known = cache.get(settlement);
+  if (known !== undefined) return known;
+  const s = L.world.settlements.find((x) => x.id === settlement);
+  const m = L.world.macro;
+  let wooded = 0, land = 0;
+  if (s && m) {
+    const step = (2 * WOOD_REACH) / (WOOD_GRID - 1);
+    for (let j = 0; j < WOOD_GRID; j++) {
+      for (let i = 0; i < WOOD_GRID; i++) {
+        const x = s.x - WOOD_REACH + i * step, z = s.z - WOOD_REACH + j * step;
+        if ((x - s.x) ** 2 + (z - s.z) ** 2 > WOOD_REACH * WOOD_REACH || x < 0 || z < 0) continue;
+        const k = Math.floor(z / m.cell) * m.res + Math.floor(x / m.cell);
+        if (k < 0 || k >= m.forest.length || m.water[k] !== 0) continue;
+        land++;
+        if (m.forest[k] >= 0.3 * 255) wooded++;
+      }
+    }
+  }
+  const f = land > 0 ? wooded / land : 0;
+  cache.set(settlement, f);
+  return f;
+}
+
 function poacher(L: Law, settlement: number, house: HouseId, day: number): boolean {
-  const res = L.territory?.resources(settlement);
-  const forest = res?.forest ?? 0.25;
+  const forest = woodland(L, settlement);
   if (forest < 0.12) return false;
   const rate = LAW.poachRate * (0.55 + forest);
   if (L.rng().next() >= rate) return false;

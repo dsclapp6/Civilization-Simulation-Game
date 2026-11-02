@@ -43,11 +43,18 @@ export function placeOf(L: Law, rec: CaptiveRec): string {
   return l.text;
 }
 
+/** What is asked for his freedom: a prisoner of war's ransom (the military module's figure when it keeps him), else the lord's fine. */
+function owedOf(L: Law, rec: CaptiveRec): number {
+  if (rec.kind !== 'war') return rec.fine;
+  const m = rec.military ? L.military?.captiveOf?.(rec.person) : null;
+  return m && m.ransom > 0 ? m.ransom : rec.ransom;
+}
+
 export function viewOf(L: Law, rec: CaptiveRec): CaptivityView {
-  const war = rec.military || rec.kind === 'war';
+  const war = rec.kind === 'war';
   return {
     person: rec.person, kind: rec.kind, captor: rec.captor, house: rec.house, settlement: rec.settlement, building: rec.led ? -1 : rec.building,
-    since: rec.since, ransom: war ? rec.ransom : 0, fine: war ? 0 : rec.fine, sentenceDays: rec.sentence, text: textOf(L, rec), danger: rec.danger,
+    since: rec.since, ransom: war ? owedOf(L, rec) : 0, fine: war ? 0 : rec.fine, sentenceDays: rec.sentence, text: textOf(L, rec), danger: rec.danger,
     serving: rec.serving, led: rec.led, place: placeOf(L, rec), escapes: rec.escapes, war,
   };
 }
@@ -138,7 +145,8 @@ export function seizePerson(
   // the military module keeps the ransom right (B4); until it does, the law keeps the flag and the price itself
   if (L.military?.takeCaptive) {
     const r = L.military.takeCaptive(p.id, captor, { settlement: place.settlement, reason: cause });
-    if (r.ok) rec.military = true;
+    // only a prisoner the module reports back is its to release (the law frees the others itself)
+    if (r.ok && L.military.captiveOf?.(p.id)) rec.military = true;
   }
   L.sim.events.emit('trespass', { phase: 'captured', person: p.id, house, settlement, level: opts.level ?? (war ? 'hostile' : 'private') });
   if (p.id === L.playerId) {
@@ -276,7 +284,6 @@ function familyMeans(L: Law, p: Person): number {
   return t;
 }
 
-function sumOwed(rec: CaptiveRec): number { return rec.military || rec.kind === 'war' ? rec.ransom : rec.fine; }
 
 function drain(L: Law, p: Person, amount: number, family: boolean): number {
   let left = amount;
@@ -312,14 +319,14 @@ function creditHouse(L: Law, house: HouseId, amount: number): void {
 export function payFor(L: Law, rec: CaptiveRec, family: boolean): Result {
   const p = L.alive(rec.person);
   if (!p) return { ok: false, reason: 'No one to free' };
-  const owed = sumOwed(rec);
+  const owed = owedOf(L, rec);
   if (owed <= 0) {
     releasePerson(L, rec, 'pardoned');
     return { ok: true, message: 'Nothing is asked: you are let go.' };
   }
   const have = family ? familyMeans(L, p) : ownMeans(L, p);
   if (have + 1e-6 < owed) return { ok: false, reason: `${formatMoney(owed)} is asked; only ${formatMoney(Math.floor(have))} can be raised${family ? '' : ' by you and your household'}.` };
-  const warRec = rec.military || rec.kind === 'war';
+  const warRec = rec.kind === 'war';
   if (warRec && L.military?.captiveOf?.(p.id)) {
     const r = L.military.payRansom?.(p.id);
     if (r && !r.ok) return { ok: false, reason: r.reason ?? 'The ransom is refused.' };
@@ -340,7 +347,7 @@ export function payFor(L: Law, rec: CaptiveRec, family: boolean): Result {
 
 /** Serving a sentence: labour on the lord's works for the days the lord sets; freed when they are out. */
 function serve(L: Law, rec: CaptiveRec): Result {
-  if (rec.kind === 'war' || rec.military) return { ok: false, reason: 'A prisoner of war is held for ransom, not sentenced' };
+  if (rec.kind === 'war') return { ok: false, reason: 'A prisoner of war is held for ransom, not sentenced' };
   if (rec.serving) return { ok: false, reason: 'You are serving your sentence already' };
   if (rec.sentence <= 0) rec.sentence = 1;
   rec.serving = true;
@@ -400,8 +407,8 @@ export function captivityChoices(L: Law, person: PersonId): LawChoice[] {
     return out;
   }
   const r = rec as CaptiveRec;
-  const owed = sumOwed(r);
-  const warRec = r.military || r.kind === 'war';
+  const owed = owedOf(L, r);
+  const warRec = r.kind === 'war';
   const family = familyMeans(L, p);
   out.push({
     id: 'wait', label: warRec ? 'Wait for ransom' : 'Wait for your family',
@@ -480,7 +487,9 @@ export function dailyCaptives(L: Law): void {
     // the lord's justice, after the warning
     // (a night must pass after the warning: the days are counted by the calendar)
     if (rec.danger && rec.dangerSince >= 0 && Math.floor(L.day) - Math.floor(rec.dangerSince) >= LAW.hangAfterDays && L.rng().next() < LAW.hangChance) { hang(L, rec); continue; }
-    const warRec = rec.military || rec.kind === 'war';
+    const warRec = rec.kind === 'war';
+    // the military module let him go by its own rules (the family paid the ransom, its patience ran out): so does the law
+    if (rec.military && !L.military?.captiveOf?.(p.id)) { releasePerson(L, rec, 'ransomed'); continue; }
     // serving: a day's labour for the lord's works
     if (rec.serving && !warRec) {
       rec.sentence -= 1;
@@ -492,7 +501,7 @@ export function dailyCaptives(L: Law): void {
       L.store.touch();
       continue;
     }
-    const owed = sumOwed(rec);
+    const owed = owedOf(L, rec);
     // the family pays what is asked when it can and cares (the player decides for himself)
     const mine = p.id === L.playerId || L.state.houses.get(p.house)?.head === L.playerId;
     if (!mine && held >= LAW.payAfterDays && owed > 0 && familyMeans(L, p) >= owed && cares(L, p)) { payFor(L, rec, true); continue; }
