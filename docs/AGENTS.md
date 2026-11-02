@@ -3,7 +3,8 @@
 Entry point: `installAgents(sim, { economy, social }): Zone` (a `ZoneApi`). It registers the `agents.zone`
 per-step system (order 60), feeds the view sources `characters` and `animals`, chains `sim.hostileNear`
 (hostile animal within `FAST_SPEED_HOSTILE_RADIUS`) and sets the social module's `awakeHook`. Dev page:
-`?mode=village` (`src/agents/dev/villageViewer.ts`); screenshots: `node tools/village-shots.mjs` → `docs/agents/`.
+`?mode=village` (`src/agents/dev/villageViewer.ts`); screenshots: `node tools/village-shots.mjs` → `docs/agents/` (the village scenes) and
+`node tools/village-law-shots.mjs` → `docs/agents/law-*.png` (the law, the watch, the riders and the called horse in the whole game; docs/LAW.md).
 
 The zone is a pure observer: it writes nothing to the simulation state and uses no random stream (visual
 variation comes from `hash01`), so saves are unaffected (tested: state hash equal with and without it,
@@ -153,7 +154,7 @@ strip · stubble", "Common pasture", "Oak".
 ## Riders, orders and the patrol (`pace.ts`, `behaviour.ts`, `agent.ts`; docs/CIV.md §3–4; the law's side in docs/LAW.md)
 
 * **Riders**: `summon(person, x, z, yaw, { mounted, coat, main, off, torch })` makes the person an agent drawn on a horse
-  (`CharacterDrawItem.mount` = coat + clip; the body that collides is the horse's, `RIDER_RADIUS` 0.55 m). A horse **walks 1.7, trots 3.5,
+  (`CharacterDrawItem.mount` = coat + clip; the body that collides is the horse's, `RIDER_RADIUS` 0.42 m: under the 0.46 m the path planner keeps clear, or a rider clips the corners of his path). A horse **walks 1.7, trots 3.5,
   canters 6, gallops 10 m/s** (`HORSE_*`; the player's horse uses the same numbers, `src/player/movement.ts`). The ground slows a horse and
   never quickens it (a road does not make a gallop faster than 10 m/s); it gathers itself up at 4.2 m/s² and slows at 7; a shove from a
   neighbour adds at most 5 % and 0.2 m/s to a step. Clips follow the ground speed (`rideClips`): `ride_idle` under 0.15 m/s, `ride_walk` to

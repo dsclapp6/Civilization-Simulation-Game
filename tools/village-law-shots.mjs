@@ -8,7 +8,7 @@
 //   node tools/village-law-shots.mjs --quality=medium --size=1280x720 --seed=millennia --out=/tmp/shots
 //
 // Scenes (each builds on the one before it where it can): plaque, riders, halt (halt-world, halt), escort, led, cell (cell, bound), alert
-// (alert), horse, steps (steps-1 … steps-3).
+// (alert), horse, hold-f (the real key), steps (steps-1 … steps-3).
 // The game is driven through `window.__game` (src/app/game.ts) with the real-time loop frozen; the law, the territory and the zone are the
 // real modules, the alert level of a city is a stand-in for the war module (`military.alertOf`).
 import { spawn } from 'node:child_process';
@@ -481,6 +481,46 @@ try {
     console.log('horse at', JSON.stringify(d));
     await camera(d.yaw, 0.45, 0.2);
     await shot('horse');
+  });
+
+  // the real keys: a tap of F mounts a horse that is by (here: says none is close), holding F for half a second whistles for one
+  await scene('hold-f', async () => {
+    await clean();
+    const stage = await page.evaluate(() => {
+      const { sim, st, w, me, player, zone } = window.__l;
+      const p = st.persons.get(me());
+      const hh = st.households.get(p.household);
+      hh.stores['horse#1'] = 1;
+      st.touchHousehold(hh);
+      const home = st.buildings.get(hh.home) ?? w.settlements.find((x) => x.id === p.settlement);
+      const spec = zone.fauna.livestockOf(hh, hh.settlement).find((q) => q.kind === 'horse');
+      const gx = spec && spec.hasGraze ? spec.grazeX : home.x, gz = spec && spec.hasGraze ? spec.grazeZ : home.z;
+      player.placeAt(gx + 90, gz + 30, 0);
+      zone.resync();
+      for (let i = 0; i < 40; i++) sim.step(1 / 20);
+      return { called: !!player.hud().horseCall, mounted: player.mounted ? player.mounted() : false };
+    });
+    console.log('hold-f before', JSON.stringify(stage));
+    // a tap: no whistle
+    await page.keyboard.down('KeyF');
+    await page.waitForTimeout(120);
+    await page.keyboard.up('KeyF');
+    await tick(0.3);
+    const tap = await page.evaluate(() => ({ called: !!window.__l.player.hud().horseCall }));
+    // a hold: the whistle after about half a second, once
+    await page.keyboard.down('KeyF');
+    await page.waitForTimeout(250);
+    await tick(0.1);
+    const early = await page.evaluate(() => ({ called: !!window.__l.player.hud().horseCall }));
+    await page.waitForTimeout(500);
+    await tick(0.2);
+    const held = await page.evaluate(() => ({ called: !!window.__l.player.hud().horseCall, eta: window.__l.player.hud().horseCall }));
+    await page.keyboard.up('KeyF');
+    console.log('hold-f', JSON.stringify({ tap, early, held }));
+    if (tap.called) throw new Error('a tap of F whistled');
+    if (early.called) throw new Error('F whistled before half a second');
+    if (!held.called) throw new Error('holding F did not whistle for the horse');
+    await shot('hold-f');
   });
 
   // hands-on work you can watch (CIV §8): a smith at his forge; the body plays each step and the work throws up steam and sparks

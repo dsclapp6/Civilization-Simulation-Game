@@ -155,6 +155,7 @@ territory and zone, and writes `docs/agents/law-*.png`:
 | `law-cell`, `law-bound` | the prisoner's card (held by whom since when, the fine, the ways out); the body at the door of the lock-up, *You are a prisoner* on the prompt |
 | `law-alert` | a walled city on alarm: men on the wall-walk and the tower, at the heights of the building recipes |
 | `law-horse` | the household's horse trots in at a call, *Your horse is coming — About 3 s* |
+| `law-hold-f` | the same call by the real key: F held for about half a second (a tap does nothing, a quarter of a second does nothing), *You whistle: your horse is coming (about 29 s)* |
 | `law-steps-1…3` | a smith's bout with steps (heat the bar, draw it out, quench): the body plays each step's clip and holds its items |
 
 The FX of the steps (steam, sparks, chips, dust, smoke, fire) are emitted into the view's FX queue (`tests/player/civ.test.ts`); drawing them
