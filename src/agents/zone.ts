@@ -820,6 +820,7 @@ export class Zone {
   releaseLed(id: number): boolean { return this.fauna.unlead(id); }
   ledBy(person: PersonId): readonly ZoneAnimal[] { return this.fauna.ledBy(person); }
   releaseAnimal(id: number, x: number, z: number, yaw: number): void { this.fauna.release(id, x, z, yaw); }
+  callHorse(person: PersonId): { ok: boolean; reason?: string; eta?: number; animal?: number } { return this.fauna.callHorse(person); }
 
   say(person: PersonId, text: string, seconds = 3): void {
     const a = this.byPerson.get(person);

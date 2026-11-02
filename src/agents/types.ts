@@ -219,6 +219,12 @@ export interface ZoneApi {
   claimAnimal?(id: number): boolean;
   /** The player dismounted: the animal is a household animal again, standing here. */
   releaseAnimal?(id: number, x: number, z: number, yaw: number): void;
+  /**
+   * Civilization pass (hold F): the person's household horse comes to them at a trot — from where it stands in the zone, from the stable
+   * at the edge of sight when it was stabled or left far off. `eta` is the seconds it will take; refused (with a reason) when the
+   * household keeps no horse or it is too far to hear the whistle (about 900 m).
+   */
+  callHorse?(person: PersonId): { ok: boolean; reason?: string; eta?: number; animal?: number };
 
   // ---- civilization pass, wave B (docs/CIV.md §9); optional ----
   /** Where defenders stand on a settlement's fortifications: along the wall-walks, on the towers, over the gate (heights from

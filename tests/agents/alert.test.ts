@@ -187,7 +187,7 @@ describe('the watch and the people on alert', () => {
     let gone = 0;
     for (let i = 0; i < 20 * 80; i++) {
       sim.step(1 / 20);
-      const a = zone.agent(id);
+      const a = zone.agentsArr.find((q) => q.personId === id && !q.dead);
       if (!a) { seen = false; gone++; continue; }
       // while he is in the street he moves like a man (a step is a twentieth of a second); out of sight in the wall he is simply not there
       if (seen) maxStep = Math.max(maxStep, Math.hypot(a.x - px, a.z - pz));

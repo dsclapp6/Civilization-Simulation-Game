@@ -46,6 +46,8 @@ export class FakeZone implements ZoneApi {
   summonedAnimals = new Map<number, { kind: string; hostile: boolean }>();
   dismissedPeople: PersonId[] = [];
   private animalSeq = 7000;
+  /** The zone's horse call (hold F); set by a test to answer it. */
+  callHorse?: ZoneApi['callHorse'];
   summon?: ZoneApi['summon'];
   dismiss?: ZoneApi['dismiss'];
   summonAnimal?: ZoneApi['summonAnimal'];

@@ -13,6 +13,7 @@ import type { AnimalAnim, AnimalDrawItem } from '../core/view';
 import type { Household, Person, PersonId } from '../sim/state';
 import { Biome, CHUNK_SIZE } from '../world/types';
 import { ENTER_RADIUS, LEAVE_RADIUS } from './config';
+import { HORSE_TROT } from './pace';
 import { frontPoint } from './geometry';
 import { polyPoint } from './schedule';
 import { St } from './agent';
@@ -74,7 +75,8 @@ const LIVESTOCK_GOODS: ReadonlySet<string> = new Set(['ox', 'cow', 'sheep', 'pig
 export function animalSignature(hh: Household): number {
   let sig = 0;
   for (const k in hh.stores) {
-    const i = k.indexOf('~');
+    // (a good of a quality tier is kept as "horse#2": the signature must see horses too, or a horse bought or sold shows only next day)
+    const i = k.search(/[#~]/);
     const good = i < 0 ? k : k.slice(0, i);
     if (!LIVESTOCK_GOODS.has(good)) continue;
     const n = hh.stores[k];
@@ -87,6 +89,9 @@ export function animalSignature(hh: Household): number {
 export const LEADABLE: ReadonlySet<AnimalKind> = new Set<AnimalKind>(['horse', 'ox', 'cow', 'sheep', 'goat', 'pig']);
 /** How many animals one person leads at a time. */
 export const MAX_LED = 4;
+/** A called horse: heard up to this far (m), and it appears at the edge of sight this far from the caller. */
+export const CALL_REACH = 900;
+export const CALL_EDGE = 170;
 
 const A = { Idle: 0, Graze: 1, Walk: 2, Trot: 3, Run: 4, Lie: 5, Sleep: 6, Eat: 7, Home: 8 } as const;
 
@@ -141,6 +146,12 @@ export class Animal implements ZoneAnimal {
   /** Seconds its leader has been out of sight / the animal has been too far behind. */
   leadWait = 0;
   leadFar = 0;
+  /** Called (hold F): the person whose whistle it answers (0 = none), seconds it has stood by, the path it follows to them. */
+  callee: PersonId = 0;
+  callT = 0;
+  cpath: Array<{ x: number; z: number }> | null = null;
+  cidx = 0;
+  crepath = 0;
 
   constructor(id: number, kind: AnimalKind, draw: AnimalDrawItem) {
     this.id = id; this.kind = kind; this.draw = draw; this.info = KINDS[kind];
@@ -226,7 +237,7 @@ export class AnimalSystem {
   claim(id: number): boolean {
     const a = this.byId.get(id);
     if (!a || a.dead || a.kind !== 'horse' || a.hostile || a.claimed) return false;
-    a.claimed = true; a.flee = 0; a.leader = 0; a.draw.ledBy = undefined;
+    a.claimed = true; a.flee = 0; a.leader = 0; a.draw.ledBy = undefined; a.callee = 0; a.cpath = null;
     return true;
   }
 
@@ -280,6 +291,7 @@ export class AnimalSystem {
 
   step(dt: number): void {
     const z = this.zone;
+    if (this.arriving.length > 0) this.arrivals();
     if (z.zoneT - this.reconcileT > 1.5) this.reconcile();
     if (z.zoneT - this.gatherT > 2.5) this.gather(false);
     const items = this.items;
@@ -316,6 +328,7 @@ export class AnimalSystem {
     a.counter++;
 
     if (a.leader) this.led(a, dt);
+    else if (a.callee) this.coming(a, dt);
     else if (a.hostile && (a.kind === 'wolf' || a.summoned)) this.wolf(a, dt);
     else {
       // people near? shy animals move off; others carry on
@@ -485,6 +498,109 @@ export class AnimalSystem {
     this.moveBy(a, Math.sin(ang) * v * dt, Math.cos(ang) * v * dt);
     a.st = v > info.walk * 1.3 ? A.Trot : A.Walk;
     a.timer = 1.5;
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // called (hold F, docs/CIV.md §9): the household's horse trots to its owner
+  // ---------------------------------------------------------------------------------------------
+
+  /** Horses on their way in from the edge of sight: when, from which spec, to whom. */
+  private readonly arriving: Array<{ spec: Spec; at: number; person: PersonId }> = [];
+
+  callHorse(person: PersonId): { ok: boolean; reason?: string; eta?: number; animal?: number } {
+    const z = this.zone;
+    const p = z.state.persons.get(person);
+    const hh = p ? z.state.households.get(p.household) : undefined;
+    if (!p || !hh) return { ok: false, reason: 'You keep no horse.' };
+    const pos = z.positionOf(person);
+    if (!pos) return { ok: false, reason: 'Nobody hears you.' };
+    const px = pos.x, pz = pos.z;
+    const specs = this.livestockOf(hh, hh.settlement).filter((s) => s.kind === 'horse' && !this.gone.has(s.id));
+    if (specs.length === 0) return { ok: false, reason: "Your household keeps no horse." };
+    // one already in the zone (and not under a saddle or called): the nearest
+    let best: Animal | null = null, bd = Infinity;
+    for (const s of specs) {
+      const a = this.byId.get(s.id);
+      if (!a || a.dead || a.claimed) continue;
+      const d = Math.hypot(a.x - px, a.z - pz);
+      if (d < bd) { bd = d; best = a; }
+    }
+    if (best) {
+      this.summonTo(best, person);
+      return { ok: true, eta: Math.round(bd / HORSE_TROT), animal: best.id };
+    }
+    // else the stable (or wherever it was left): it comes in from the edge of sight
+    const spec = specs.find((s) => !this.byId.has(s.id));
+    if (!spec) return { ok: false, reason: 'Your horse is not to be found.' };
+    const away = Math.hypot(spec.homeX - px, spec.homeZ - pz);
+    if (away > CALL_REACH) return { ok: false, reason: 'Your horse is too far off to hear you; call it when you are nearer.' };
+    const edge = Math.min(away, CALL_EDGE);
+    // how long it rides before it is in sight, then the way in
+    const at = z.zoneT + Math.max(0, (away - edge) / HORSE_TROT);
+    this.arriving.push({ spec, at, person });
+    return { ok: true, eta: Math.round(Math.max(0, away - edge) / HORSE_TROT + edge / HORSE_TROT), animal: spec.id };
+  }
+
+  /** Sends a horse of the zone to a person. */
+  private summonTo(a: Animal, person: PersonId): void {
+    a.callee = person; a.callT = 0; a.cpath = null; a.crepath = 0; a.leader = 0; a.draw.ledBy = undefined;
+    a.flee = 0; a.timer = 0; a.st = A.Trot;
+  }
+
+  /** Brings in the horses whose ride is over: at the edge of sight, in the direction of their stable. */
+  private arrivals(): void {
+    const z = this.zone;
+    for (let i = this.arriving.length - 1; i >= 0; i--) {
+      const q = this.arriving[i];
+      if (z.zoneT < q.at) continue;
+      this.arriving.splice(i, 1);
+      if (this.byId.has(q.spec.id)) continue;
+      const pos = z.positionOf(q.person);
+      if (!pos) continue;
+      const away = Math.hypot(q.spec.homeX - pos.x, q.spec.homeZ - pos.z) || 1;
+      const edge = Math.min(away, CALL_EDGE);
+      const x = pos.x + ((q.spec.homeX - pos.x) / away) * edge, zz = pos.z + ((q.spec.homeZ - pos.z) / away) * edge;
+      const a = this.spawn(q.spec, x, zz, false) ?? this.spawn(q.spec, pos.x + 40, pos.z, false);
+      if (a) this.summonTo(a, q.person);
+    }
+  }
+
+  /** One step of a called horse: trots to its owner by a path (looked for again now and then), walks the last paces, stands by. */
+  private coming(a: Animal, dt: number): void {
+    const z = this.zone;
+    const who = z.motionOf(a.callee);
+    if (!who) { a.callee = 0; a.cpath = null; a.st = A.Idle; return; }
+    const dx = who.x - a.x, dz = who.z - a.z;
+    const d = Math.sqrt(dx * dx + dz * dz);
+    if (d < 2.4) {
+      // here: stands by its owner, facing him; after a while it goes back to its ways
+      a.st = A.Idle; a.cpath = null;
+      a.yaw = turn(a.yaw, Math.atan2(dx, dz), 3 * dt);
+      a.callT += dt;
+      if (a.callT > 90) a.callee = 0;
+      return;
+    }
+    a.callT = 0;
+    a.crepath -= dt;
+    let tx = who.x, tz = who.z;
+    if (d > 6) {
+      if (a.crepath <= 0 || !a.cpath) {
+        a.crepath = 1.4;
+        a.cpath = z.nav.findPath({ x: a.x, z: a.z }, { x: who.x, z: who.z }, Math.min(600, d * 1.6 + 40));
+        a.cidx = 1;
+      }
+      const path = a.cpath;
+      if (path) {
+        while (a.cidx < path.length - 1 && Math.hypot(path[a.cidx].x - a.x, path[a.cidx].z - a.z) < 1.4) a.cidx++;
+        const w = path[Math.min(a.cidx, path.length - 1)];
+        tx = w.x; tz = w.z;
+      }
+    } else a.cpath = null;
+    const speed = d > 9 ? HORSE_TROT : Math.max(1.0, Math.min(HORSE_TROT, d * 0.45 + 0.6));
+    const ang = Math.atan2(tx - a.x, tz - a.z);
+    a.yaw = turn(a.yaw, ang, 6 * dt);
+    this.moveBy(a, Math.sin(ang) * speed * dt, Math.cos(ang) * speed * dt);
+    a.st = speed > 2.6 ? A.Trot : A.Walk;
   }
 
   // ---- threats ----

@@ -7,16 +7,22 @@ import type { AnimState } from '../core/view';
 export const WALK_SPEED = 1.4;
 export const RUN_SPEED = 3.2;
 export const SPRINT_SPEED = 5.5;
+// A horse walks 1.7, trots 3.5, canters 6 and gallops 10 m/s (docs/CIV.md §3; the same numbers as the riders of the zone, agents/pace.ts).
+// Trot is the default; Shift canters, and held for GALLOP_AFTER seconds the horse breaks into a gallop; X walks. The couched lance of the
+// combat module wants 4.5 m/s or more: a trot cannot couch it, a canter can, a gallop gives it its full weight.
 export const RIDE_WALK = 1.7;
-export const RIDE_TROT = 4;
-export const RIDE_GALLOP = 11;
+export const RIDE_TROT = 3.5;
+export const RIDE_CANTER = 6;
+export const RIDE_GALLOP = 10;
+/** Seconds Shift is held at a canter before the horse gallops. */
+export const GALLOP_AFTER = 1.2;
 
 export type FootGait = 'walk' | 'run' | 'sprint';
-export type RideGait = 'walk' | 'trot' | 'gallop';
+export type RideGait = 'walk' | 'trot' | 'canter' | 'gallop';
 export type Gait = FootGait | RideGait;
 
 export function footSpeed(g: FootGait): number { return g === 'walk' ? WALK_SPEED : g === 'run' ? RUN_SPEED : SPRINT_SPEED; }
-export function rideSpeed(g: RideGait): number { return g === 'walk' ? RIDE_WALK : g === 'trot' ? RIDE_TROT : RIDE_GALLOP; }
+export function rideSpeed(g: RideGait): number { return g === 'walk' ? RIDE_WALK : g === 'trot' ? RIDE_TROT : g === 'canter' ? RIDE_CANTER : RIDE_GALLOP; }
 
 /** Collision radius of a walking person / a horse and rider (m). */
 export const FOOT_RADIUS = 0.35;
@@ -63,6 +69,7 @@ export function maxStamina(endurance: number): number { return Math.round(30 + 7
 
 export const SPRINT_DRAIN = 12;
 export const GALLOP_DRAIN = 4;
+export const CANTER_DRAIN = 1.5;
 export const DODGE_COST = 12;
 /** Out of breath until this share of the pool is back. */
 export const RECOVER_FRACTION = 0.25;
@@ -73,6 +80,8 @@ export interface StaminaInput {
   dt: number;
   sprinting: boolean;
   galloping: boolean;
+  /** Cantering (additive: absent = no). */
+  cantering?: boolean;
   moving: boolean;
   sitting: boolean;
   /** Drain per second from heavy work (0 when idle). */
@@ -87,6 +96,7 @@ export function stepStamina(s: StaminaState, i: StaminaInput): void {
   let delta = 0;
   if (i.sprinting) delta -= SPRINT_DRAIN;
   else if (i.galloping) delta -= GALLOP_DRAIN;
+  else if (i.cantering) delta -= CANTER_DRAIN;
   if (i.effort > 0) delta -= i.effort;
   if (delta === 0) {
     let regen = i.sitting ? 11 : i.moving ? 4.5 : 8;
@@ -101,7 +111,11 @@ export function stepStamina(s: StaminaState, i: StaminaInput): void {
 
 // ---- gait selection ----
 
-export interface GaitInput { sprint: boolean; walkToggle: boolean; exhausted: boolean; stamina: number }
+export interface GaitInput {
+  sprint: boolean; walkToggle: boolean; exhausted: boolean; stamina: number;
+  /** On a horse: seconds the sprint key has been held (a gallop after GALLOP_AFTER). */
+  sprintHeld?: number;
+}
 
 export function pickFootGait(i: GaitInput): FootGait {
   if (i.exhausted || i.walkToggle) return 'walk';
@@ -111,7 +125,7 @@ export function pickFootGait(i: GaitInput): FootGait {
 
 export function pickRideGait(i: GaitInput): RideGait {
   if (i.walkToggle) return 'walk';
-  if (i.sprint && !i.exhausted && i.stamina > 0) return 'gallop';
+  if (i.sprint && !i.exhausted && i.stamina > 0) return (i.sprintHeld ?? 0) >= GALLOP_AFTER ? 'gallop' : 'canter';
   return 'trot';
 }
 
@@ -126,7 +140,8 @@ export function footAnim(speed: number, carrying: boolean): AnimState {
 export function rideAnim(speed: number): { human: AnimState; horse: 'idle' | 'walk' | 'trot' | 'gallop' } {
   if (speed < 0.15) return { human: 'ride_idle', horse: 'idle' };
   if (speed <= 2.6) return { human: 'ride_walk', horse: 'walk' };
-  if (speed <= 6.5) return { human: 'ride_trot', horse: 'trot' };
+  if (speed <= 4.8) return { human: 'ride_trot', horse: 'trot' };
+  // a canter is drawn with the gallop clip at its own (slower) cycle: the clip follows `moveSpeed`
   return { human: 'ride_gallop', horse: 'gallop' };
 }
 

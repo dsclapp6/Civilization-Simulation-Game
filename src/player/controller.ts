@@ -35,8 +35,9 @@ import { planRoute } from './route';
 import { ARRIVED_SECONDS, Journey, journeyPace } from './travel';
 import {
   EMPTY_INPUT, type EncounterKind, type GoOrder, type HoverInfo, type InputState, type PickPort, type PlayerApi, type PlayerDebug, type PlayerHud,
-  type Result, type TravelState,
+  type Restraint, type Result, type TravelState,
 } from './types';
+import { chainStepFx, fxOf, StepFxQueue, stepAt } from './steps';
 
 export interface PlayerDeps {
   zone: ZoneApi;
@@ -204,6 +205,21 @@ export class PlayerController implements PlayerApi {
   private readonly offs: Array<() => void> = [];
   private persisted: PlayerExt | null = null;
 
+  // ---- civilization pass: what binds the body, the horse that was called, the steps of a bout ----
+  private restraintNow: Restraint | null = null;
+  private readonly bindInput: InputState = { ...EMPTY_INPUT };
+  private bindPath: P2[] | null = null;
+  private bindIndex = 0;
+  private bindRepath = 0;
+  private horseCallEta = 0;
+  private horseCallT = 0;
+  private readonly stepFx = new StepFxQueue();
+  private stepOf: ActiveAction | null = null;
+  private stepIndex = -1;
+  private stepT = 0;
+  private readonly hudStep = { index: 0, count: 0, label: '', sfx: undefined as string | undefined };
+  private readonly horseHud = { eta: 0 };
+
   constructor(sim: Simulation, deps: PlayerDeps) {
     this.sim = sim;
     this.zone = deps.zone;
@@ -246,9 +262,11 @@ export class PlayerController implements PlayerApi {
     sim.view.setSource('focus', () => this.viewFocus());
     sim.view.setSource('mode', () => this.viewMode());
     sim.view.setSource('mapMarkers', () => this.viewMarkers());
+    chainStepFx(sim.view, this.stepFx);
 
     const ev = sim.events;
     this.offs.push(
+      ev.on('trade', (e) => this.onTrade(e)),
       ev.on('playerDied', (e) => this.onPlayerDied(e)),
       ev.on('playerSwitched', (e) => this.onPlayerSwitched(e)),
       ev.on('gameOver', () => this.onGameOver()),
@@ -285,6 +303,7 @@ export class PlayerController implements PlayerApi {
     this.hostileEncounter = false;
     this.followId = null;
     this.go = null;
+    this.restraintNow = null; this.bindPath = null; this.horseCallT = 0;
     this.drawnWeapon = false; this.autoDrawn = false; this.sheathedInFight = false; this.fightQuiet = 0;
     this.pointer?.leave();
     if (!p) return;
@@ -408,6 +427,13 @@ export class PlayerController implements PlayerApi {
     if (a && a.option.seconds > 0) {
       const ha = this.hudAction;
       ha.label = a.option.label; ha.progress = a.progress; ha.seconds = a.option.seconds;
+      // a bout with visible steps says which one it is in (the action bar's label and the sound cue follow it)
+      const cur = stepAt(a.option.steps, a.progress);
+      if (cur) {
+        const hs = this.hudStep;
+        hs.index = cur.index; hs.count = a.option.steps!.length; hs.label = cur.step.label; hs.sfx = cur.step.sfx;
+        ha.step = hs;
+      } else ha.step = undefined;
       h.action = ha;
     } else h.action = null;
     h.travel = this.journey ? this.journey.state : null;
@@ -419,6 +445,8 @@ export class PlayerController implements PlayerApi {
     h.combat = this.combat() ? this.hudCombat : undefined;
     h.drawn = this.drawnWeapon;
     h.going = this.go ? this.goHud(this.go) : null;
+    h.restraint = this.restraintNow;
+    if (this.horseCallT > 0) { this.horseHud.eta = Math.max(0, Math.round(this.horseCallEta)); h.horseCall = this.horseHud; } else h.horseCall = null;
     return h;
   }
 
@@ -459,8 +487,63 @@ export class PlayerController implements PlayerApi {
     return this.sim.actions.list(pid, t ? t.target : { kind: 'self' });
   }
 
+  // ---- civilization pass: bound, and the horse that is called ----
+
+  /**
+   * Binds the body (or frees it with null): captivity and the escort. While bound the keys do not move the body; it is led behind a
+   * person at their pace, held at a spot, or walked to a point; it cannot work, fight, ride or travel, only speak. The law module
+   * sets it (src/sim/law) and clears it; the restraint is not saved (the law restores it on load).
+   */
+  restrain(r: Restraint | null): void {
+    this.restraintNow = r;
+    this.bindPath = null; this.bindRepath = 0;
+    if (!r) { this.interaction.invalidate(); return; }
+    const b = this.avatar;
+    this.sim.actions.cancel(this.personId, 'cancelled');
+    this.go = null; this.followId = null; this.faceYaw = null; this.drawnWeapon = false; this.autoDrawn = false; b.sitting = false;
+    this.pointer?.leave();
+    // dragged from the saddle
+    const m = b.mounted;
+    if (m) {
+      if (m.animal >= 0) this.zone.releaseAnimal?.(m.animal, b.x, b.z, b.yaw);
+      b.mounted = null; b.lock = null; b.speed = 0;
+    }
+    if (r.kind === 'held') placeBody(b, r.x, r.z, b.yaw, this.zone.nav);
+    this.interaction.invalidate();
+    this.syncDraw(1);
+  }
+
+  restraint(): Restraint | null { return this.restraintNow; }
+
+  callHorse(): Result {
+    const p = this.person();
+    if (this.dead || !p) return { ok: false, reason: 'You cannot call now.' };
+    if (this.restraintNow) return { ok: false, reason: 'You are bound.' };
+    if (this.avatar.mounted) return { ok: false, reason: 'You are in the saddle already.' };
+    if (this.journey) return { ok: false, reason: 'Not on the road.' };
+    const near = this.nearestOwnedHorse();
+    if (near !== null) return { ok: false, reason: 'Your horse is by you: press F.' };
+    if (!this.zone.callHorse) return { ok: false, reason: 'There is no calling a horse here.' };
+    const r = this.zone.callHorse(this.personId);
+    if (!r.ok) {
+      this.notify('warn', r.reason ?? 'Nothing answers your whistle.');
+      return { ok: false, reason: r.reason };
+    }
+    this.horseCallEta = r.eta ?? 0;
+    this.horseCallT = (r.eta ?? 0) + 6;
+    this.notify('info', r.eta && r.eta > 8 ? `You whistle: your horse is coming (about ${r.eta} s).` : 'You whistle: your horse comes at a trot.');
+    return { ok: true };
+  }
+
+  private onTrade(e: SimEvents['trade']): void {
+    if (e.buyer !== this.personId || !e.item.startsWith('horse')) return;
+    // a horse bought is the household's (the economy keeps animals in its stores): ready to be called
+    this.notify('info', 'The horse is your household\'s now. Hold F to call it to you.');
+  }
+
   perform(option: ActionOption): ActionOutcome {
     if (this.dead) return { ok: false, message: 'You cannot do that now.' };
+    if (this.restraintNow && option.category !== 'talk' && option.category !== 'social' && option.category !== 'rest') return { ok: false, message: 'You are bound.' };
     if (this.encounterChoicesCache.length > 0 && !(option.provider === PROVIDER_ID && option.id.startsWith('encounter.'))) {
       return { ok: false, message: 'Settle things on the road first.' };
     }
@@ -507,7 +590,7 @@ export class PlayerController implements PlayerApi {
   travelTo(settlement: number): Result {
     const p = this.person();
     if (this.dead || !p) return { ok: false, reason: 'You cannot travel now.' };
-    if (p.flags.captive) return { ok: false, reason: 'You are a prisoner; your ransom must be paid first.' };
+    if (p.flags.captive || this.restraintNow) return { ok: false, reason: 'You are a prisoner; your ransom must be paid first.' };
     if (this.avatar.lock) return { ok: false, reason: 'Wait a moment.' };
     // an encounter is open: asking to go on (or elsewhere) settles it the way a traveller would — pressing on
     // runs past the outlaws or pays the patrol, going elsewhere gets away from them
@@ -653,10 +736,14 @@ export class PlayerController implements PlayerApi {
     const conv = this.social.current();
     const talking = conv !== null && !conv.ended && conv.actor === this.personId;
     const input = this.input;
-    const wantsMove = Math.hypot(input.forward, input.right) > 0.2;
+    const rs = this.restraintNow;
+    // bound, the keys do not move the body (the restraint does)
+    const wantsMove = rs ? false : Math.hypot(input.forward, input.right) > 0.2;
+
+    if (this.horseCallT > 0) { this.horseCallT -= dt; this.horseCallEta = Math.max(0, this.horseCallEta - dt); }
 
     // ---- the weapon (G; a fight draws it by itself) and the click-to-act walk, which any key of the player's ends ----
-    this.stepWeapon(eWeapon, dt);
+    this.stepWeapon(rs ? false : eWeapon, dt);
     if (this.go && (wantsMove || eInteract || eCancel || eMount || eDodge || talking || pending || this.drawnWeapon)) this.go = null;
 
     // ---- the action in progress ----
@@ -676,20 +763,22 @@ export class PlayerController implements PlayerApi {
     active = this.sim.actions.active(this.personId);
     const working = active !== null && active.option.seconds > 0;
     if (working && this.go) this.go = null;
+    this.stepWork(active, working, dt);
 
     // ---- the body ----
     const wasLocked = b.lock;
     const combatPose = this.stepCombat(p, working, talking || pending, dt);
-    const frozen = working || talking || pending || (combatPose !== null && combatPose.moveScale <= 0.001);
+    const frozen = working || talking || pending || (combatPose !== null && combatPose.moveScale <= 0.001) || rs?.kind === 'held';
     let driver: InputState = input;
-    if (combatPose !== null && combatPose.noSprint && input.sprint) { driver = this.combatInput; Object.assign(driver, input); driver.sprint = false; }
-    if (this.followId !== null && !frozen) {
+    if (rs) driver = this.restraintDriver(rs, dt);
+    else if (combatPose !== null && combatPose.noSprint && input.sprint) { driver = this.combatInput; Object.assign(driver, input); driver.sprint = false; }
+    if (rs) { /* the restraint moves the body */ } else if (this.followId !== null && !frozen) {
       if (wantsMove) this.followId = null;
       else driver = this.followDriver(dt) ?? input;
     } else if (this.go && !frozen) driver = this.goDriver(dt) ?? input;
     const env: BodyEnv = {
       nav: this.zone.nav, traits: this.traits, frozen, effort: working && active ? workEffort(active.option.anim) : 0,
-      dodge: eDodge && !frozen,
+      dodge: eDodge && !frozen && !rs,
     };
     if (combatPose !== null) {
       env.speedScale = combatPose.moveScale;
@@ -798,19 +887,29 @@ export class PlayerController implements PlayerApi {
       if (r.message) this.notify(r.ok ? 'info' : 'warn', r.message);
       return;
     }
+    if (this.restraintNow) { this.notify('warn', 'You are bound.'); return; }
     const best = this.nearestOwnedHorse();
-    if (best === null) { this.notify('info', 'None of your horses is close by.'); return; }
+    if (best === null) { this.notify('info', 'None of your horses is close by. Hold F to call one.'); return; }
     const r = this.mountAnimal(best);
     if (r.message) this.notify(r.ok ? 'info' : 'warn', r.message);
   }
 
+  /**
+   * May the player ride this horse? Their household's (bought at a market, bred, inherited), or their lord's if they serve him: the horse
+   * of a lord's, a royal, a garrison's or a service household of the House they belong to (a knight of the castle rides the castle's horse).
+   */
   private ownsHorse(animalId: number): { owned: boolean; reason?: string } {
     const a = this.zone.animals().find((x) => x.id === animalId);
     const p = this.person();
     if (!a || a.kind !== 'horse') return { owned: false, reason: 'That is not a horse.' };
     if (a.wild || a.owner === 0) return { owned: false, reason: 'That horse belongs to no one you know.' };
-    if (!p || a.owner !== p.household) return { owned: false, reason: 'That horse is not your household\'s.' };
-    return { owned: true };
+    if (!p) return { owned: false, reason: 'That horse is not your household\'s.' };
+    if (a.owner === p.household) return { owned: true };
+    const hh = this.sim.state.households.get(a.owner);
+    if (hh && hh.kind !== 'family' && p.house !== 0 && p.house === (hh.house ?? this.sim.state.persons.get(hh.head)?.house ?? 0) && this.sim.absDay - p.birthDay >= 16 * 12) {
+      return { owned: true };
+    }
+    return { owned: false, reason: hh && hh.kind !== 'family' ? 'That is the lord\'s horse, and you are not in his service.' : 'That horse is not your household\'s.' };
   }
 
   private nearestOwnedHorse(): number | null {
@@ -826,6 +925,7 @@ export class PlayerController implements PlayerApi {
 
   private mountAnimal(animalId: number): ActionOutcome {
     const b = this.avatar;
+    if (this.restraintNow) return { ok: false, message: 'You are bound.' };
     if (b.mounted) return { ok: false, message: 'You are already mounted.' };
     if (b.lock) return { ok: false, message: 'Wait a moment.' };
     const own = this.ownsHorse(animalId);
@@ -919,6 +1019,60 @@ export class PlayerController implements PlayerApi {
     return { ok: true, message: `You follow ${this.nameOf(id)}.` };
   }
 
+  /**
+   * The input of a bound body: nothing for a prisoner held at a spot; walking behind the person who leads him, at his pace (closing up to
+   * a pace and a half behind, never passing); walking to the point he is escorted to. Paths are looked for as the other drivers do.
+   */
+  private restraintDriver(r: Restraint, dt: number): InputState {
+    const b = this.avatar;
+    const f = this.bindInput;
+    f.forward = 0; f.right = 0; f.sprint = false; f.walk = true; f.cameraYaw = b.yaw; f.interact = false; f.attack = false; f.block = false;
+    if (r.kind === 'held') return f;
+    let tx: number, tz: number, stop: number;
+    if (r.kind === 'led') {
+      const lead = this.zone.agent(r.by);
+      if (!lead) return f;               // the captor is out of sight (gone in at a door): he waits for him
+      tx = lead.x; tz = lead.z; stop = 1.9;
+    } else {
+      tx = r.toX; tz = r.toZ; stop = 1.2;
+    }
+    const d = dist(b.x, b.z, tx, tz);
+    if (d <= stop) return f;
+    this.bindRepath -= dt;
+    let wx = tx, wz = tz;
+    if (d > 4.5) {
+      if (this.bindRepath <= 0 || !this.bindPath) {
+        this.bindRepath = 0.8;
+        this.bindPath = this.zone.nav.findPath({ x: b.x, z: b.z }, { x: tx, z: tz }, Math.min(500, d * 1.8 + 40));
+        this.bindIndex = 1;
+      }
+      const path = this.bindPath;
+      if (path) {
+        while (this.bindIndex < path.length - 1 && dist(b.x, b.z, path[this.bindIndex].x, path[this.bindIndex].z) < 1.2) this.bindIndex++;
+        const w = path[Math.min(this.bindIndex, path.length - 1)];
+        wx = w.x; wz = w.z;
+      }
+    } else this.bindPath = null;
+    f.forward = 1;
+    f.cameraYaw = yawTo(b.x, b.z, wx, wz);
+    return f;
+  }
+
+  /** The visible steps of a bout: which one it is in (for the action bar and the sound), and what it throws up on entering it. */
+  private stepWork(active: ActiveAction | null, working: boolean, dt: number): void {
+    if (!working || !active || !active.option.steps) { this.stepOf = null; this.stepIndex = -1; return; }
+    const cur = stepAt(active.option.steps, active.progress);
+    if (!cur) return;
+    const entering = this.stepOf !== active || this.stepIndex !== cur.index;
+    if (entering) { this.stepOf = active; this.stepIndex = cur.index; this.stepT = 0; } else this.stepT += dt;
+    const b = this.avatar;
+    const fx = fxOf(cur.step);
+    for (const e of fx) {
+      const fire = entering || Math.floor(this.stepT / e.every) !== Math.floor((this.stepT - dt) / e.every);
+      if (fire) this.stepFx.add(e.kind, b.x + Math.sin(b.yaw) * 0.9, b.y + e.height, b.z + Math.cos(b.yaw) * 0.9, e.intensity);
+    }
+  }
+
   /** Walks after the person being followed: a synthetic input for the body. */
   private followDriver(dt: number): InputState | null {
     const id = this.followId;
@@ -961,7 +1115,7 @@ export class PlayerController implements PlayerApi {
     const p = this.person();
     if (this.dead || !p) return { ok: false, reason: 'You cannot do that now.' };
     if (this.journey || this.encounterChoicesCache.length > 0) return { ok: false, reason: 'Settle things on the road first.' };
-    if (p.flags.captive) { this.notify('warn', 'You are a prisoner.'); return { ok: false, reason: 'You are a prisoner.' }; }
+    if (p.flags.captive || this.restraintNow) { this.notify('warn', 'You are a prisoner.'); return { ok: false, reason: 'You are a prisoner.' }; }
     if (this.avatar.lock) return { ok: false, reason: 'Wait a moment.' };
     if (this.drawnWeapon) return { ok: false, reason: 'Put your weapon away first (G).' };
     const t = order.target;
@@ -1117,6 +1271,7 @@ export class PlayerController implements PlayerApi {
 
   setDrawn(on: boolean): void {
     if (this.dead || on === this.drawnWeapon || this.journey?.state.phase === 'travelling') return;
+    if (on && this.restraintNow) { this.notify('warn', 'Your hands are bound.'); return; }
     const fighting = (this.sim.services.combat?.fightOf?.(this.personId) ?? 0) > 0;
     this.drawnWeapon = on;
     this.autoDrawn = false;
@@ -1523,6 +1678,7 @@ export class PlayerController implements PlayerApi {
 
   private markDead(): void {
     this.combatPose = null;
+    this.restraintNow = null;
     this.dead = true;
     this.deadFor = 0;
     this.followId = null;
@@ -1672,11 +1828,14 @@ export class PlayerController implements PlayerApi {
       anim = cp.anim;
       if (mounted && anim === 'ride_charge') horse = 'gallop';
     } else if (working && active) {
-      anim = active.option.anim ?? 'idle';
-      main = active.option.mainHand ?? 'none';
-      off = active.option.offHand ?? 'none';
+      // a bout with steps plays the step it is in (its animation and what is in the hands); the outcome still comes once, at the end
+      const st = stepAt(active.option.steps, active.progress)?.step;
+      anim = st?.anim ?? active.option.anim ?? 'idle';
+      main = st?.mainHand ?? active.option.mainHand ?? 'none';
+      off = st?.offHand ?? active.option.offHand ?? 'none';
       carry = active.option.carry ?? 'none';
-    } else if (b.sitting) anim = 'sit';
+    } else if (this.restraintNow) anim = b.speed > 0.2 ? 'bound_walk' : 'bound';
+    else if (b.sitting) anim = 'sit';
     else if (b.dodgeT > 0) anim = 'dodge';
     else if (mounted) {
       const r = rideAnim(travelling ? b.baseSpeed : b.speed);

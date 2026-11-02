@@ -48,6 +48,8 @@ export interface BodyState {
   blocked: boolean;
   /** Metres moved since created (riding experience, persistence thresholds). */
   odometer: number;
+  /** On a horse: seconds the sprint key has been held while moving (a canter becomes a gallop after a while). */
+  rideHeld: number;
 }
 
 export interface BodyTraits {
@@ -80,7 +82,7 @@ export function createBody(x: number, z: number, yaw: number, y: number, enduran
   return {
     x, y, z, yaw, px: x, py: y, pz: z, pyaw: yaw, vx: 0, vz: 0, speed: 0, baseSpeed: 0, gait: 'idle',
     stamina: { value: max, max, exhausted: false }, sitting: false, mounted: null, lock: null,
-    dodgeT: 0, dodgeCd: 0, dodgeDx: 0, dodgeDz: 0, wading: false, blocked: false, odometer: 0,
+    dodgeT: 0, dodgeCd: 0, dodgeDx: 0, dodgeDz: 0, wading: false, blocked: false, odometer: 0, rideHeld: 0,
   };
 }
 
@@ -108,7 +110,7 @@ export function stepBody(b: BodyState, input: Readonly<InputState>, env: BodyEnv
   if (b.lock) {
     b.lock.t += dt;
     b.speed = 0; b.vx = b.vz = 0; b.gait = 'idle'; b.baseSpeed = 0;
-    stepStamina(b.stamina, { dt, sprinting: false, galloping: false, moving: false, sitting: false, effort: 0, hunger: t.hunger, rest: t.rest });
+    stepStamina(b.stamina, { dt, sprinting: false, galloping: false, cantering: false, moving: false, sitting: false, effort: 0, hunger: t.hunger, rest: t.rest });
     if (b.lock.t >= b.lock.dur) b.lock = null;
     return;
   }
@@ -135,6 +137,7 @@ export function stepBody(b: BodyState, input: Readonly<InputState>, env: BodyEnv
 
   let sprinting = false;
   let galloping = false;
+  let cantering = false;
   let moveX = 0, moveZ = 0;
 
   if (b.dodgeT > 0) {
@@ -154,9 +157,12 @@ export function stepBody(b: BodyState, input: Readonly<InputState>, env: BodyEnv
     const gi = { sprint: input.sprint, walkToggle: input.walk, exhausted: b.stamina.exhausted, stamina: b.stamina.value };
     let base: number;
     if (mounted) {
-      const g = pickRideGait(gi);
+      // Shift canters; held on, the horse breaks into a gallop; let go of it and the horse comes back to a trot
+      b.rideHeld = input.sprint && mag > 0.05 ? b.rideHeld + dt : 0;
+      const g = pickRideGait({ ...gi, sprintHeld: b.rideHeld });
       base = rideSpeed(g) * ridingFactor(t.ridingLevel);
       galloping = g === 'gallop' && mag > 0.05;
+      cantering = g === 'canter' && mag > 0.05;
       b.gait = mag > 0.05 ? g : 'idle';
     } else {
       const g = pickFootGait(gi);
@@ -218,6 +224,6 @@ export function stepBody(b: BodyState, input: Readonly<InputState>, env: BodyEnv
 
   const moving = b.speed > 0.2;
   stepStamina(b.stamina, {
-    dt, sprinting, galloping, moving, sitting: b.sitting, effort: env.effort, hunger: t.hunger, rest: t.rest,
+    dt, sprinting, galloping, cantering, moving, sitting: b.sitting, effort: env.effort, hunger: t.hunger, rest: t.rest,
   });
 }
