@@ -44,8 +44,8 @@ export interface RealmSim {
 export interface RealmSimOptions extends TestSimOptions {
   politics?: boolean;
   military?: boolean;
-  /** Give the realm a `procure`/`sell` (default true). */
-  market?: boolean;
+  /** Give the realm a `procure`/`sell`: the stand-in market (true, default), none (false), or the economy's own ('real'). */
+  market?: boolean | 'real';
   /** Keep the player (default: removed, so a long run cannot end in game over). */
   keepPlayer?: boolean;
   noon?: boolean;
@@ -66,10 +66,12 @@ export function bootRealm(sim: Simulation, opts: RealmSimOptions = {}): RealmSim
   const mil = opts.military ? installMilitary(sim, deps0) : undefined;
   const adv = installAdvancement(sim, deps0);
   const market: MarketStub = { stock: {}, strict: false, days: 1, calls: [], pending: [] };
-  const eco: EconomyApi = opts.market === false ? economy : stubEconomy(sim, economy, market);
+  // `market: false` is a realm with no merchant to deal with: the real economy without its household trade (`procure`/`sell`)
+  const eco: EconomyApi = opts.market === 'real' ? economy
+    : opts.market === false ? { ...economy, procure: undefined, sell: undefined } : stubEconomy(sim, economy, market);
   const deps = { economy: eco, social };
   const realm = installRealm(sim, deps);
-  if (opts.market !== false) {
+  if (opts.market !== false && opts.market !== 'real') {
     sim.registerSystem({
       name: 'stub.deliver', phase: 'hourly', order: 5,
       run: () => {
