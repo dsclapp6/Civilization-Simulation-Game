@@ -13,12 +13,20 @@ import type { SocialApi } from '../social/types';
 import type { Wave3Deps } from '../wave3deps';
 import { TERRITORY } from './config';
 import { Layers } from './layers';
+import { traceOutline } from './outline';
 import { NO_OWNER, resolveOwner, titleOfSettlement, type Owner } from './owners';
 import type {
-  LandInfo, LandKind, LandOwner, ResourceProfile, TerritoryRuntime, TrespassCause, TrespassCheck,
+  LandInfo, LandKind, LandOwner, OutpostLand, ResourceProfile, TerritoryRuntime, TrespassCause, TrespassCheck,
 } from './types';
 
 export const EXT_KEY = 'territory';
+const NO_POLYGON: readonly P2[] = Object.freeze([]);
+
+/** A polygon that callers share: its points cannot be moved. */
+function freeze(poly: P2[]): readonly P2[] {
+  for (const p of poly) Object.freeze(p);
+  return Object.freeze(poly);
+}
 /** Offices that come with a title: when one changes hands the land's lord may have changed (the military module's list). */
 const TITLE_OFFICES: ReadonlySet<string> = new Set(['lord', 'baron', 'earl', 'king', 'abbot', 'bishop']);
 
@@ -135,6 +143,9 @@ export class Territory implements TerritoryRuntime {
   private claims: Claim[] = [];
   private claimSig = '';
   private readonly profiles = new Map<number, ResourceProfile>();
+  /** Outlines of lands by holder (never stale: the settlements do not change) and of the outposts' claims (for `claimSig`). */
+  private readonly outlines = new Map<number, readonly P2[]>();
+  private outpostLands: { sig: string; list: readonly OutpostLand[] } | null = null;
   private riverHolders: Set<number> | null = null;
   private readonly alarms = new Map<number, { hour: number; on: boolean }>();
 
@@ -285,6 +296,55 @@ export class Territory implements TerritoryRuntime {
     this.sync();
     this.locate(x, z, this.scratch);
     return this.scratch.settlement;
+  }
+
+  // ---------------------------------------------------------------- outlines
+
+  /** The outline of a settlement's lands (a castle's are its parent village's). Made once: the lands depend on the settlements alone. */
+  landsPolygon(settlement: number): readonly P2[] {
+    const holder = this.lands.holderOf(settlement);
+    const s = this.sById.get(holder);
+    if (!s) return NO_POLYGON;
+    let poly = this.outlines.get(holder);
+    if (!poly) {
+      const lands = this.lands;
+      const inLands = (x: number, z: number): boolean => x >= 0 && z >= 0 && x < WORLD_SIZE && z < WORLD_SIZE && lands.lookup(x, z) === holder;
+      // everything nearer than the lands' core is certainly the settlement's, unless the edge of the map is nearer still
+      const edge = Math.min(s.x, s.z, WORLD_SIZE - s.x, WORLD_SIZE - s.z);
+      poly = freeze(traceOutline(s.x, s.z, inLands, {
+        reach: lands.extentOf(holder), from: Math.max(0, Math.min(lands.coreOf(holder), edge - 1)),
+        rays: TERRITORY.outlineRays, march: TERRITORY.outlineMarch, tolerance: TERRITORY.outlineTolerance,
+      }));
+      this.outlines.set(holder, poly);
+    }
+    return poly;
+  }
+
+  /** The wild land each outpost claims; rebuilt when an outpost is founded or lost. */
+  outpostPolygons(): ReadonlyArray<OutpostLand> {
+    this.sync();
+    if (!this.outpostLands || this.outpostLands.sig !== this.claimSig) {
+      this.outpostLands = { sig: this.claimSig, list: this.claims.map((c, i) => ({ outpost: c.id, poly: this.claimOutline(c, i) })) };
+    }
+    return this.outpostLands.list;
+  }
+
+  /** The outline of the wild land nearer to this claim than to any other (the rule `claimAt` follows), within the claim radius. */
+  private claimOutline(c: Claim, index: number): readonly P2[] {
+    const lands = this.lands, claims = this.claims;
+    const mine = (x: number, z: number): boolean => {
+      if (!(x >= 0 && z >= 0 && x < WORLD_SIZE && z < WORLD_SIZE) || lands.lookup(x, z) >= 0) return false;
+      const d = (x - c.x) ** 2 + (z - c.z) ** 2;
+      for (let i = 0; i < claims.length; i++) {
+        if (i === index) continue;
+        const e = (x - claims[i].x) ** 2 + (z - claims[i].z) ** 2;
+        if (e < d || (e === d && i < index)) return false;
+      }
+      return true;
+    };
+    return freeze(traceOutline(c.x, c.z, mine, {
+      reach: TERRITORY.outpostClaim, rays: TERRITORY.claimRays, march: TERRITORY.claimMarch, tolerance: TERRITORY.claimTolerance,
+    }));
   }
 
   /** The outpost claim holding a point of wild land, if any. */

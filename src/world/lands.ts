@@ -92,6 +92,41 @@ export class LandsIndex {
     return i === undefined ? -1 : this.holder[i];
   }
 
+  /**
+   * The farthest distance (m) from the holder's own centre that its lands can reach: its radius, or more where a castle that
+   * shares its lands stands off to one side and reaches on beyond it. 0 for an unknown settlement.
+   */
+  extentOf(id: number): number {
+    const i = this.byId.get(id);
+    if (i === undefined) return 0;
+    const h = this.byId.get(this.holder[i]);
+    if (h === undefined) return 0;
+    let far = this.reach[h];
+    for (let j = 0; j < this.count; j++) {
+      if (this.holder[j] !== this.holder[h]) continue;
+      far = Math.max(far, Math.hypot(this.sx[j] - this.sx[h], this.sz[j] - this.sz[h]) + this.reach[j]);
+    }
+    return far;
+  }
+
+  /**
+   * A distance (m) within which every point round the holder's centre is certainly in its lands: half the way to the nearest
+   * settlement of another holder (nearer than that the holder's own settlements are the nearest), and short of where the
+   * high country can start. A start for tracing an outline; 0 for an unknown settlement.
+   */
+  coreOf(id: number): number {
+    const i = this.byId.get(id);
+    if (i === undefined) return 0;
+    const h = this.byId.get(this.holder[i]);
+    if (h === undefined) return 0;
+    let near = Infinity;
+    for (let j = 0; j < this.count; j++) {
+      if (this.holder[j] === this.holder[h]) continue;
+      near = Math.min(near, Math.hypot(this.sx[j] - this.sx[h], this.sz[j] - this.sz[h]));
+    }
+    return Math.max(0, Math.min(near / 2, HIGH_COUNTRY_REACH * this.reach[h]) - 1);
+  }
+
   /** Fills `out`: the settlement whose lands hold the point and the nearest settlement whose built-up area holds it. */
   scan(x: number, z: number, out: LandsScan): LandsScan {
     const cols = this.cols;

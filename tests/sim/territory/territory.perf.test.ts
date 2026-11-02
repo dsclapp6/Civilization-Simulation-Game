@@ -76,4 +76,26 @@ describe('territory performance (real continent)', () => {
     console.log(`territory: all ${world.settlements.length} resource profiles ${profilesMs.toFixed(1)} ms (${(profilesMs / world.settlements.length).toFixed(2)} ms each), slowdown x${slow.toFixed(2)}, acc ${acc}, setup ${(cpuNow() - t0).toFixed(1)} ms`);
     expect(profilesMs / slow).toBeLessThan(400);
   }, 120_000);
+
+  it('traces the outline of every settlement\'s lands once, in a few ms each, and hands out the same one after', () => {
+    const slow = slowdown();
+    const c0 = cpuNow();
+    let verts = 0, worst = 0;
+    for (const s of world.settlements) {
+      const c = cpuNow();
+      verts += terr.landsPolygon(s.id).length;
+      worst = Math.max(worst, cpuNow() - c);
+    }
+    const coldMs = cpuNow() - c0;
+    const c1 = cpuNow();
+    let again = 0;
+    for (let rep = 0; rep < 100; rep++) for (const s of world.settlements) again += terr.landsPolygon(s.id).length;
+    expect(again).toBe(verts * 100);
+    const warmUs = ((cpuNow() - c1) / (100 * world.settlements.length)) * 1000;
+    // eslint-disable-next-line no-console
+    console.log(`territory: all ${world.settlements.length} lands outlines ${coldMs.toFixed(1)} ms (${(coldMs / world.settlements.length).toFixed(2)} ms each, worst ${worst.toFixed(1)} ms), cached ${warmUs.toFixed(2)} us each, slowdown x${slow.toFixed(2)}, ${verts} vertices`);
+    expect(coldMs / slow).toBeLessThan(600);
+    expect(worst / slow).toBeLessThan(40);
+    expect(warmUs / slow).toBeLessThan(5);
+  }, 120_000);
 });

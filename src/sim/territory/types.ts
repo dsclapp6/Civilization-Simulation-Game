@@ -3,7 +3,8 @@
 // from strips, parcels, plots and the world's maps; owners from titles); cheap enough to ask per frame for the player and
 // a few times a second for patrols. Registered as `sim.services.territory`.
 // Builder A1 added, additively: `TrespassCheck.cause` and `.lord`, `TrespassCause`, `LandOwner`, the optional `TerritoryApi.ownerOf`,
-// `grantLeave`, `leaveUntil`, `exitFrom`, and `TerritoryRuntime` (what `installTerritory` returns).
+// `grantLeave`, `leaveUntil`, `exitFrom`, `landsPolygon`, `outpostPolygons` (and `OutpostLand`), and `TerritoryRuntime` (what
+// `installTerritory` returns, with `landsPolygon` and `outpostPolygons` always there).
 import type { P2 } from '../../core/math';
 import type { Deposit, ResourceKind } from '../../world/types';
 import type { HouseId, HouseholdId, PersonId, TitleId } from '../state';
@@ -75,6 +76,14 @@ export interface LandOwner {
   lord: PersonId;
 }
 
+/** Additive: the wild land an outpost claims (within ~600 m of it, short of any settlement's lands), as a polygon. */
+export interface OutpostLand {
+  /** The outpost's id (`OutpostView.id`). */
+  outpost: number;
+  /** Its outline (see `TerritoryApi.landsPolygon` for the form); empty when the outpost stands inside someone's lands and claims nothing. */
+  poly: readonly P2[];
+}
+
 /** What a settlement's lands hold and can make (docs/CIV.md §7). */
 export interface ResourceProfile {
   settlement: number;
@@ -119,10 +128,31 @@ export interface TerritoryApi {
   leaveUntil?(person: PersonId, settlement: number): number;
   /** The nearest point (within ~1.5 km) where this person is no longer a trespasser, for a patrol's escort to the edge; null if none. */
   exitFrom?(person: PersonId, x: number, z: number): P2 | null;
+  /**
+   * Additive (optional so other modules' stand-ins need not implement it; `TerritoryRuntime` always has it): the outline of a
+   * settlement's lands, the part of its Voronoi cell clipped to the lands radius that `settlementOf` gives it (so the high
+   * mountains it does not hold are left out, and the sea within its radius is in). Vertices in metres, in increasing angle round
+   * the settlement (`atan2(z - cz, x - cx)`, from due +x), closed implicitly, 65 to 180 of them (about 70 usually); a line from the
+   * settlement's centre to any vertex lies inside the lands, so the polygon is star-shaped round the centre. A castle that shares
+   * a village's lands gives the village's polygon; an unknown settlement gives []. It is a function of the settlements and never
+   * changes during a run (who holds the lands does: `ownerOf`, `version()`), so it is made once, on first use (about 1 ms), and
+   * shared and frozen: do not modify it. Where another settlement's lands lie inside this one's, or reach round a neighbour's
+   * radius, the outline is the part that can be seen from the centre in a straight line: points inside it are the settlement's
+   * (a wild notch narrower than 20 m can be missed), but not every point of its lands is inside it.
+   */
+  landsPolygon?(settlement: number): readonly P2[];
+  /**
+   * Additive: the land every outpost claims now, one polygon each (the wild land within 600 m of it, short of settlements' lands
+   * and of the land another outpost stands nearer to; empty when the outpost stands inside someone's lands). Same form as
+   * `landsPolygon`. Rebuilt when an outpost is founded or lost; the same array is returned until then.
+   */
+  outpostPolygons?(): ReadonlyArray<OutpostLand>;
 }
 
 /** What `installTerritory` returns: the API plus what tests and tools need. */
 export interface TerritoryRuntime extends TerritoryApi {
+  landsPolygon(settlement: number): readonly P2[];
+  outpostPolygons(): ReadonlyArray<OutpostLand>;
   /** Re-reads titles, wars and outposts at once (the module does it once a game hour and on the events that move them). */
   refresh(): void;
   /** Removes the listeners the module installed (tests, tools). */

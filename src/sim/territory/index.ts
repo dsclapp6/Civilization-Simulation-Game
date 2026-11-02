@@ -8,9 +8,10 @@ import { Territory } from './territory';
 import type { TerritoryRuntime } from './types';
 
 export type {
-  LandInfo, LandKind, LandOwner, ResourceProfile, TerritoryApi, TerritoryRuntime, TrespassCause, TrespassCheck, TrespassLevel,
+  LandInfo, LandKind, LandOwner, OutpostLand, ResourceProfile, TerritoryApi, TerritoryRuntime, TrespassCause, TrespassCheck, TrespassLevel,
 } from './types';
 export { TERRITORY } from './config';
+export { inPolygon, traceOutline, type OutlineOptions } from './outline';
 export { Territory };
 
 export function installTerritory(sim: Simulation, deps: Wave3Deps): TerritoryRuntime {

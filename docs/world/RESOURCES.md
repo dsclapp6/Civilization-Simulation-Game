@@ -213,6 +213,48 @@ settlement as its `settlement`, the House holding that settlement as `house` and
 (`wild`, or `forest` / `road` / `water` / `town` where those apply). Settlements' lands win over a claim. The deposits the claim holds join the
 parent's profile. Founding one bumps `version()`; the claims are re-read on every `construction` event and once an hour.
 
+### Outlines: `landsPolygon(s)` and `outpostPolygons()`
+
+For the builder's tint of buildable land and for the borders on the map (wave B).
+
+![The outlines of every settlement's lands on the continent 'abc'](land-outlines-abc.png)
+
+*`land-outlines-abc.png`: `landsPolygon` of every settlement (white, black, yellow and cyan in turn so neighbours tell apart; the red dots are the
+settlements). The northern range is nobody's; the sea inside a settlement's radius is part of its lands.
+`npx tsx tests/sim/territory/landMap.tool.ts --seed abc --out docs/world --name land-outlines-abc.png --at mountain --x 8000 --z 8000 --size 16000 --ppm 0.075 --kinds 0 --outlines 1`.*
+
+`landsPolygon(settlement): readonly P2[]` is the outline of the settlement's lands as `settlementOf` gives them: its Voronoi cell clipped to
+the lands radius, with the high mountains it does not hold left out. A castle that shares a village's lands gives the **village's** polygon
+(the same array); an abbey gives its own; an unknown settlement gives `[]`.
+
+* **Form**: `{ x, z }` in metres, closed implicitly (the last vertex joins the first), in increasing angle round the settlement (`atan2(z - cz, x - cx)`, starting due +x),
+  **64 to 182 vertices on `abc` (72 usually)**. It is **star-shaped**: a line from the settlement's centre to any vertex lies in the lands. Made by looking out
+  from the centre along 64 rays (marched every 20 m, the edge narrowed to 0.3 m) and adding rays where the chord between two vertices strays more than 8 m
+  from the true edge (the corners of a cell, the shore of a wild notch). Vertices are never rounded, so each is a point the lands were seen to hold.
+* **Exactness** (on `abc`, all 138 settlements, 7174 random points inside the outlines): none is outside the lands; of the points on the lines from the centre to the
+  vertices 9 in 37112 are (a mountain strip narrower than the 20 m march is missed). Of the same points `settlementOf` answers the settlement (or the castle that shares its
+  lands, inside the castle's walls and park) for all but 31 (0.4 %), which are strips and woodlots of the neighbouring settlement that cross the border and keep their own
+  settlement. In the other direction 1.4 % of the points of the lands are outside the outline: the part of the lands a neighbour's islands (a hamlet's lands inside a
+  city's) and the spurs round a neighbour's radius leave out; the outline is what can be **seen from the centre in a straight line**, so it never claims what is another's.
+* **Never changes**: the lands are a function of the settlements, so a polygon is made on first use (about **1 ms**; all 140 in 140 ms; the first of a run up to 9 ms) and then
+  handed out again for ever (0.3 us), **frozen** (do not modify it; copy to transform). What changes is who holds the lands (`ownerOf`, `version()`), not their shape.
+* **Sea and map edge**: the lands run out to sea (1 – 3 km from the shore) and the outline follows; it stops at the edge of the map (x or z at 0 or 16000). Intersect with
+  `landAt(...).kind !== 'water'` per cell where the dry ground is wanted.
+
+`outpostPolygons(): ReadonlyArray<{ outpost: number; poly: readonly P2[] }>` is the land each outpost claims now (`outpost` = `OutpostView.id`): the wild
+land within 600 m of it, short of any settlement's lands and of the land another outpost stands nearer to (the rule `landAt` follows), in the same form.
+`poly` is `[]` when the outpost stands inside someone's lands and claims nothing. The list is rebuilt when an outpost is founded or lost (the claims are re-read
+on every `construction` event and once an hour) and is the same array until then.
+
+![An outpost's claim in the mountains](land-outpost-abc.png)
+
+*`land-outpost-abc.png`: an outpost (orange outline) in the high mountains between Burgsee's and Dornfurt's lands (black): its 600 m disc stops where their
+lands begin. `npx tsx tests/sim/territory/landMap.tool.ts --seed abc --out docs/world --name land-outpost-abc.png --at mountain --x 7000 --z 4200 --size 5000 --ppm 0.2 --kinds 0 --outlines 1 --outpost 7000,3500`.*
+
+Both are **optional on `TerritoryApi`** (so the other builders' stand-ins, which are complete `TerritoryApi` literals, still compile) and always present on
+`TerritoryRuntime`, which is what `installTerritory` returns and `sim.services.territory` holds: `sim.services.territory?.landsPolygon?.(s)`.
+`inPolygon(poly, x, z)` and `traceOutline(cx, cz, inside, opts)` (`src/sim/territory/outline.ts`) are exported for UIs and tools.
+
 ### `version()`
 
 Bumps when ownership changes: on `inheritance`, `office` (of a title: lord, baron, earl, king, abbot, bishop), a holder's `death`,
@@ -227,13 +269,15 @@ a game year. `refresh()` forces the look (tests, tools).
 |---|---|---|
 | `landAt` | ≤ 20 µs | 2.5 µs |
 | `trespass` | ≤ 40 µs | 3 µs |
-| `depositAt` | — | 0.5 µs |
+| `depositAt` | — | 0.3 – 0.5 µs |
+| `landsPolygon` (first use of a settlement) | — | ~1 ms (all 140: ~140 ms; cached: 0.3 µs) |
 | deposit generation (cold CPU) | + ≤ 60 ms | ~30 ms |
 | install | — | 25 – 100 ms once |
 
 (`tests/sim/territory/territory.perf.test.ts`, `tests/world/deposits.perf.test.ts`: `PERF=1 npx vitest run --no-file-parallelism <file>`.)
 `tests/world/deposits.test.ts` (determinism, terrain fit per kind, counts per kingdom, scarcity, clear ground, levelled floors, mines on
-iron), `tests/world/lands.test.ts`, `tests/sim/territory/{land,owners,trespass,outposts,deposits,resources,save}.test.ts` (land
+iron), `tests/world/lands.test.ts`, `tests/sim/territory/{land,owners,trespass,outposts,deposits,resources,save,polygons}.test.ts` (outlines
+of lands and claims, and the tracer; land
 kinds at sample points on a stand-in world and the real one, owners after a title changes hands / is vacant / is a child's, trespass
 levels: war, feud, hostile terms, outlaw, enemy, private land, belonging, offices, leave, market day, castle by night and under
 alarm, outposts' claims, resource profiles, the saved leave, and that installing the module leaves a run's state hash unchanged).
@@ -241,7 +285,7 @@ alarm, outposts' claims, resource profiles, the saved leave, and that installing
 ### Tuning (`src/sim/territory/config.ts`, `src/world/lands.ts`, `src/world/deposits.ts`)
 
 `LAND_RADIUS`, `HIGH_COUNTRY_REACH`, `TERRITORY.{outpostClaim 600, parkRadius 450, forestMin 0.3, roadMargin 1, alarmRadius 1500,
-enemyOpinion -50}`; per kind in `SPECS` (min, max, spacing, threshold, radius, richness, maxSlope), `PAD_HALF`.
+enemyOpinion -50, outlineRays 64, outlineMarch 20, outlineTolerance 8, claimRays 32, claimMarch 20, claimTolerance 4}`; per kind in `SPECS` (min, max, spacing, threshold, radius, richness, maxSlope), `PAD_HALF`.
 
 ### Hand-offs (wave B and the other builders)
 
@@ -254,7 +298,9 @@ enemyOpinion -50}`; per kind in `SPECS` (min, max, spacing, threshold, radius, r
 * **Patrols and captivity**: `trespass` for who and why (`level`, `cause`, `lord`, `reason`); `exitFrom` for the escort's goal;
   `grantLeave` when the stranger's business is accepted or the fine paid; `events.trespass` (contract) is yours to emit.
 * **Drawing deposits and lands**: `world.deposits` has position, radius and richness; draw the extent with `radius`, the floor with the
-  deposit's centre; `landAt` per cell is cheap enough to colour a tinted overlay (the builder's "your land" shading).
+  deposit's centre; `landAt` per cell is cheap enough to colour a tinted overlay (the builder's "your land" shading). For borders and for
+  the tint of a whole settlement's lands use `landsPolygon(s)` (and `outpostPolygons()` for the outposts' claims): one polygon each, made once;
+  colour it by `ownerOf(s).house` and redraw when `version()` changes (the shape never does).
 * **Known limits**: parks are an approximation (woodland within 450 m of a castle), and the generator places no initial mines or quarries
   (the AI and the player raise them); `trespass` has no notion of "employed" beyond household, House and offices; a feud between Houses
   without armies in the field is noticed only through its events.

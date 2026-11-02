@@ -23,4 +23,12 @@ export const TERRITORY = {
   enemyOpinion: -50,
   /** Age (years) under which a title's holder is a child and the regent acts. */
   adultAge: 16,
+  /** Outline of a settlement's lands (`landsPolygon`): rays of the first pass, march (m) along a ray, tolerance (m) of the chords. */
+  outlineRays: 64,
+  outlineMarch: 20,
+  outlineTolerance: 8,
+  /** Outline of an outpost's claim (`outpostPolygons`), the same three for a disc of 600 m. */
+  claimRays: 32,
+  claimMarch: 20,
+  claimTolerance: 4,
 } as const;
