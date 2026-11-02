@@ -257,30 +257,39 @@ export function startResearch(R: Rlm, personId: PersonId, tech: string, research
   if (lacking && !wantsBuy) return fail(describeShort(R, pool, res.goods, short));
   if (lacking && !R.economy.procure) return fail(`${describeShort(R, pool, res.goods, short)}, and there is no merchant to buy it from`);
 
-  // pay
+  // the goods that must be bought: the price of the work and of the goods are both to be found in the treasury, and the market must have some
+  const carts: Array<[number, string, number]> = [];
+  let waitDays = 0;
+  if (lacking) {
+    const quote = buyPrice(R, building.settlement, short);
+    if (treasury.purse + 1e-9 < res.pence + quote) return fail(`Needs ${formatMoney(res.pence)} and about ${formatMoney(quote)} for the goods; the treasury holds ${formatMoney(treasury.purse)}`);
+    let any = false;
+    for (const g of Object.keys(short).sort()) {
+      const order = orderGoods(R, treasury, g, short[g], building.settlement);
+      if (order && order.got > 0) { any = true; carts.push([R.day + order.days, g, order.got]); waitDays = Math.max(waitDays, order.days); }
+    }
+    if (!any) return fail(`The market has none of the ${Object.keys(short).sort().map((g) => R.economy.good(g)?.name.toLowerCase() ?? g).join(', ')} to sell`);
+  }
+
+  // pay: the coin, and the goods the stores hold
+  if (treasury.purse + 1e-9 < res.pence) return fail(`Needs ${formatMoney(res.pence)}; the treasury holds ${formatMoney(treasury.purse)} after buying the goods`);
   treasury.purse = round2(treasury.purse - res.pence);
   R.state.touchHousehold(treasury);
   bookOut(R, treasury.id, res.pence, 'Research');
-  const paidGoods: Record<string, number> = {};
   for (const g of Object.keys(res.goods).sort()) {
     const have = Math.min(pool.count(g), res.goods[g]);
-    if (have > 0) { pool.take(g, have); paidGoods[g] = round2(have); }
+    if (have > 0) pool.take(g, have);
   }
   const rec: ProjectRec = {
     id: R.data.seq.project++, tech: def.id, house: sc.house, household: treasury.id, ruler: personId,
     researcher: researcher.id, building: building.id, settlement: building.settlement,
     progress: 0, rate: 0, pace, state: 'active', note: '', started: Math.floor(R.day), ended: -1,
-    pence: res.pence, goods: { ...res.goods }, needs: {}, due: 0, buy: wantsBuy, still: -1,
+    pence: res.pence, goods: { ...res.goods }, needs: {}, cart: carts, due: 0, buy: wantsBuy, still: -1, chk: Math.floor(R.day),
   };
   if (lacking) {
-    // order what the stores lack; the work begins when it has come
-    let due = 0;
-    for (const g of Object.keys(short).sort()) {
-      const order = orderGoods(R, treasury, g, short[g], building.settlement);
-      rec.needs[g] = short[g];
-      if (order) due = Math.max(due, order.days);
-    }
-    rec.due = Math.floor(R.day) + due + 1;
+    // the work begins when the carts have come
+    for (const g of Object.keys(short).sort()) rec.needs[g] = short[g];
+    rec.due = Math.floor(R.day) + Math.max(RESEARCH.reorderDays, Math.ceil(waitDays));
     rec.state = 'stalled';
     rec.still = Math.floor(R.day);
     rec.note = waitingNote(R, rec);
@@ -293,7 +302,7 @@ export function startResearch(R: Rlm, personId: PersonId, tech: string, research
   return { ok: true, project: rec.id };
 }
 
-/** Orders goods at the market of a settlement for a household; the result says how long the carting takes. */
+/** Orders goods at the market of a settlement for a household; the answer says how much came, what it cost and how long the carting takes. */
 function orderGoods(R: Rlm, hh: Household, good: string, qty: number, settlement: number): { got: number; days: number } | null {
   const procure = R.economy.procure;
   if (!procure) return null;
@@ -304,8 +313,13 @@ function orderGoods(R: Rlm, hh: Household, good: string, qty: number, settlement
   return { got: r.got, days: r.days };
 }
 
+/** What the project waits for: the goods still to come, and which are already on the road. */
 function waitingNote(R: Rlm, rec: ProjectRec): string {
-  const parts = Object.keys(rec.needs).sort().map((g) => `${Math.ceil(rec.needs[g])} ${R.economy.good(g)?.name.toLowerCase() ?? g}`);
+  const parts = Object.keys(rec.needs).sort().map((g) => {
+    const road = rec.cart.reduce((s, c) => s + (c[1] === g ? c[2] : 0), 0);
+    const name = R.economy.good(g)?.name.toLowerCase() ?? g;
+    return road > 0.004 ? `${Math.ceil(rec.needs[g])} ${name} (${Math.ceil(Math.min(road, rec.needs[g]))} on the road)` : `${Math.ceil(rec.needs[g])} ${name}`;
+  });
   return parts.length ? `Waiting for ${parts.join(', ')}` : '';
 }
 
@@ -389,7 +403,7 @@ function replacement(R: Rlm, A: Adv, rec: ProjectRec, def: TechDef): Person | un
 }
 
 /** Once a day: goods come in, the work moves on, finished works are handed over, stalled ones given up. */
-export function researchDaily(R: Rlm): void {
+export function researchDaily(R: Rlm, shard = 0, shards = 1): void {
   const rt = R.tech;
   if (!rt || R.data.projects.length === 0) return;
   const A = rt.adv;
@@ -397,32 +411,37 @@ export function researchDaily(R: Rlm): void {
   let changed = false;
   for (const rec of R.data.projects.slice()) {
     if (rec.state !== 'active' && rec.state !== 'stalled') continue;
+    if (rec.id % shards !== shard) continue;
     const def = rt.tech(rec.tech);
     const building = R.state.buildings.get(rec.building);
     const treasury = R.state.households.get(rec.household);
     if (!def || !def.research) { abandon(R, rec, 'the technique is unknown'); changed = true; continue; }
     const wasStalled = rec.state === 'stalled';
     let why = '';
-    // the place must stand, and still be the House's
-    const lord = titleAtSettlement(R, rec.settlement);
-    const holderHouse = lord ? R.person(lord.holder)?.house ?? 0 : 0;
-    if (!building || building.construction < 1 || building.damage >= 0.9) why = 'The place is ruined';
-    else if (holderHouse !== rec.house) why = 'The place is lost to the House';
-    else if (!treasury) why = 'The treasury is gone';
-
-    // the researcher must live and be free
     let researcher = R.person(rec.researcher);
-    if (!why && (!researcher || paceOf(R, A, researcher, def) <= 0)) {
-      const next = replacement(R, A, rec, def);
-      if (next) {
-        const old = R.name(rec.researcher);
-        rec.researcher = next.id; rec.pace = paceOf(R, A, next, def); researcher = next; changed = true;
-        if (R.isPlayersHouse(rec.house)) R.notify(`${R.name(next.id)} takes over the work on ${def.name.toLowerCase()} from ${old}.`, 'info');
-      } else why = 'No one is left to do the work';
+    // every day: is the place standing, the treasury there, the researcher alive and free? Every eight days (and whenever the
+    // work stands still) the fuller check: is the place still the House's, is the man still fit to do it
+    const free = !!researcher && !researcher.death && !researcher.flags.captive && !researcher.flags.outlaw && !researcher.flags.exile;
+    if (!building || building.construction < 1 || building.damage >= 0.9) why = 'The place is ruined';
+    else if (!treasury) why = 'The treasury is gone';
+    if (!why && (wasStalled || !free || today - rec.chk >= 8)) {
+      rec.chk = today;
+      const lord = titleAtSettlement(R, rec.settlement);
+      const holderHouse = lord ? R.person(lord.holder)?.house ?? 0 : 0;
+      if (holderHouse !== rec.house) why = 'The place is lost to the House';
+      else if (!researcher || paceOf(R, A, researcher, def) <= 0) {
+        const next = replacement(R, A, rec, def);
+        if (next) {
+          const old = R.name(rec.researcher);
+          rec.researcher = next.id; rec.pace = paceOf(R, A, next, def); researcher = next; changed = true;
+          if (R.isPlayersHouse(rec.house)) R.notify(`${R.name(next.id)} takes over the work on ${def.name.toLowerCase()} from ${old}.`, 'info');
+        } else why = 'No one is left to do the work';
+      }
     }
 
     // goods that were ordered come in, or are ordered again
     if (!why && treasury && Object.keys(rec.needs).length > 0) {
+      rec.cart = rec.cart.filter((c) => c[0] > R.day);
       const pool = new Pool(R.state, realmHouseholds(R, rec.house, treasury, [rec.settlement, treasury.settlement]));
       for (const g of Object.keys(rec.needs).sort()) {
         const took = pool.take(g, rec.needs[g]).reduce((s, [, q]) => s + q, 0);
@@ -431,12 +450,17 @@ export function researchDaily(R: Rlm): void {
       }
       if (Object.keys(rec.needs).length > 0) {
         if (rec.buy && today >= rec.due && R.economy.procure) {
-          let due = 0;
+          // order what is not already on the road
+          let days = 0;
           for (const g of Object.keys(rec.needs).sort()) {
-            const o = orderGoods(R, treasury, g, rec.needs[g], rec.settlement);
-            if (o) due = Math.max(due, o.days);
+            const road = rec.cart.reduce((s, c) => s + (c[1] === g ? c[2] : 0), 0);
+            const want = rec.needs[g] - road;
+            if (want < 0.5) continue;
+            const o = orderGoods(R, treasury, g, want, rec.settlement);
+            if (o && o.got > 0) { rec.cart.push([R.day + o.days, g, o.got]); days = Math.max(days, o.days); }
           }
-          rec.due = today + Math.max(due, RESEARCH.reorderDays) + 1;
+          rec.due = today + Math.max(Math.ceil(days), RESEARCH.reorderDays);
+          changed = true;
         }
         why = waitingNote(R, rec);
       }

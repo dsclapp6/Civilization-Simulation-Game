@@ -6,8 +6,7 @@ import { LEDGER_DAYS, RULING_TITLES } from './config';
 import type { BookRec, Rlm } from './store';
 import type { AccountLine } from './types';
 
-function fresh(R: Rlm, hhId: number, purseNow: number): BookRec {
-  void R;
+function fresh(purseNow: number): BookRec {
   return { last: purseNow, day: -1, inn: 0, out: 0, cats: {}, b: [] };
 }
 
@@ -17,7 +16,7 @@ function bookFor(R: Rlm, hhId: number, shift: number): BookRec | null {
   const key = String(hhId);
   let b = R.data.books[key];
   // a book opened by an entry starts from the purse as it was before the entry (the caller has changed the purse already)
-  if (!b) { b = fresh(R, hhId, round(hh.purse + shift)); R.data.books[key] = b; }
+  if (!b) { b = fresh(round(hh.purse + shift)); R.data.books[key] = b; }
   return b;
 }
 

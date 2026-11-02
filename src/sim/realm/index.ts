@@ -47,14 +47,12 @@ export function installRealm(sim: Simulation, deps: Wave3Deps): RealmRuntime {
   offs.push(sim.registerSystem({
     name: 'realm.hour', phase: 'hourly', order: 80,
     run: (_ctx, info) => {
-      switch (info.hour) {
-        case HOURS.research: researchDaily(R); break;
-        case HOURS.troops: troopsDaily(R); break;
-        case HOURS.trade: tradeDaily(R); break;
-        case HOURS.news: newsDaily(R); break;
-        case HOURS.books: closeBooks(R); break;
-        default: break;
-      }
+      const h = info.hour;
+      if (h >= HOURS.research.from && h < HOURS.research.from + HOURS.research.shards) researchDaily(R, h - HOURS.research.from, HOURS.research.shards);
+      else if (h === HOURS.troops) troopsDaily(R);
+      else if (h >= HOURS.trade.from && h < HOURS.trade.from + HOURS.trade.shards) tradeDaily(R, h - HOURS.trade.from, HOURS.trade.shards);
+      else if (h === HOURS.news) newsDaily(R);
+      else if (h === HOURS.books) closeBooks(R);
     },
   }));
   offs.push(sim.registerSystem({ name: 'realm.year', phase: 'yearly', order: 80, run: () => newsYearly(R) }));

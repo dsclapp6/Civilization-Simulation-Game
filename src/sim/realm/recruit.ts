@@ -10,7 +10,7 @@ import { dissolveIfEmpty, pickHome, setRank } from '../succession';
 import { ageYears, type Household, type HouseId, type Person, type PersonId } from '../state';
 import type { MilitaryRuntime, UnitKind } from '../military/types';
 import { bagAdd, round2 } from './bags';
-import { bookIn, bookOut } from './books';
+import { bookOut } from './books';
 import { RECRUIT, RECRUIT_KINDS, TROOPS, type RecruitKind, type RecruitSpec } from './config';
 import { addNews, bump } from './news';
 import { Pool } from './pool';

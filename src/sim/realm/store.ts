@@ -49,12 +49,16 @@ export interface ProjectRec {
   goods: Record<string, number>;
   /** Goods still to come from the stores or the market (good → amount); the work waits for them. */
   needs: Record<string, number>;
-  /** Day by which goods ordered should have come (0 = none ordered). */
+  /** Goods ordered at a market and on the road: [day they should arrive, good, amount]. */
+  cart: Array<[number, string, number]>;
+  /** Day the goods still lacking may be ordered again (0 = none ordered). */
   due: number;
   /** May the project order what it lacks from the market. */
   buy: boolean;
   /** Day the project began to stand still (−1 = working). */
   still: number;
+  /** Day of the last full check of the place, the House's hold on it and the researcher's fitness. */
+  chk: number;
 }
 
 export interface OrderRec {

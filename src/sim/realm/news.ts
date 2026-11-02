@@ -60,8 +60,9 @@ function myPlaces(R: Rlm): Array<{ x: number; z: number }> {
   return out;
 }
 
+/** A House's weight in the field, vassals included: politics keeps it for the hour; the military's own count (a scan of the House's men, kept for two days) when there is no politics. */
 function strengthOf(R: Rlm, house: HouseId): number {
-  return R.military?.strength?.(house) ?? R.politics?.strength(house) ?? 0;
+  return R.politics?.strength(house) ?? R.military?.strength?.(house) ?? 0;
 }
 
 /**

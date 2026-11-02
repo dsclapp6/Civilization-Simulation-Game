@@ -141,29 +141,42 @@ describe('starting and finishing', () => {
     expect(hh.stores.timber ?? 0).toBeLessThan(1);
   });
 
-  it('cannot buy when the market has none', () => {
-    const r = ploughScene();
-    const { realm, lord, market, settlement } = r;
-    market.strict = true;
-    market.stock[settlement] = { timber: 100, planks: 100 };
-    const ok = realm.startResearch(lord.id, 'heavy_plough', 0, -1, { buy: true });
-    expect(ok.ok, ok.reason).toBe(true);
-  });
-
-  it('gives a stalled work up after a season and refunds half the unspent price', () => {
+  it('refuses to start when the market has none of what is lacking, and gives a work up after a season when the rest never comes', () => {
     const r = ploughScene();
     const { realm, lord, hh, sim, market } = r;
-    market.strict = true; // the market never has it
+    market.strict = true;
     market.stock[r.settlement] = {};
     const purse0 = hh.purse;
+    const none = realm.startResearch(lord.id, 'heavy_plough', 0, -1, { buy: true });
+    expect(none.ok).toBe(false);
+    expect(none.reason).toMatch(/market has none/);
+    expect(hh.purse).toBe(purse0); // nothing was spent
+    // a little is to be had, and the rest never comes
+    market.stock[r.settlement] = { timber: 10, planks: 5 };
     const res = realm.startResearch(lord.id, 'heavy_plough', 0, -1, { buy: true });
     expect(res.ok, res.reason).toBe(true);
-    expect(hh.purse).toBe(purse0 - 220);
+    expect(realm.projects().find((x) => x.id === res.project)!.state).toBe('stalled');
     sim.advanceDays(52);
     const p = realm.projects().find((x) => x.id === res.project)!;
     expect(p.state).toBe('abandoned');
     // half of the unspent price came back, and the books say so
     expect(realm.accounts!(lord.id).find((l) => l.label === 'Research refunded')?.pence).toBe(110);
+  });
+
+  it('does not order the same goods twice while they are on the road', () => {
+    const r = ploughScene();
+    const { realm, lord, sim, market } = r;
+    market.days = 6; // the carts are slow
+    const res = realm.startResearch(lord.id, 'heavy_plough', 0, -1, { buy: true });
+    expect(res.ok, res.reason).toBe(true);
+    const orders = market.calls.filter((c) => c.fn === 'procure').length;
+    expect(orders).toBe(2);
+    sim.advanceDays(5);
+    expect(market.calls.filter((c) => c.fn === 'procure').length).toBe(2);
+    expect(realm.projects().find((x) => x.id === res.project)!.note).toMatch(/on the road/);
+    sim.advanceDays(4);
+    expect(realm.projects().find((x) => x.id === res.project)!.state).toBe('active');
+    expect(market.calls.filter((c) => c.fn === 'procure').length).toBe(2);
   });
 
   it('can be stopped by the lord, who gets part of the price back; others cannot stop it', () => {

@@ -105,8 +105,6 @@ export const TRADE = {
   maxOrders: 24,
   /** Most units moved by one order in one day. */
   dayLimit: 400,
-  /** Hour of the day orders are carried out (the markets are open). */
-  hour: 10,
 } as const;
 
 export const NEWS = {
@@ -116,5 +114,14 @@ export const NEWS = {
   buyShare: 0.25,
 } as const;
 
-/** Hours of the day the realm's daily jobs run at (spread so that no frame carries them all). */
-export const HOURS = { research: 6, troops: 8, trade: TRADE.hour, news: 12, books: 23 } as const;
+/**
+ * The hours of the day the realm's daily jobs run in. Research and trade orders are dealt out over several hours by the number of
+ * the project or order (each runs once a day, in the hour its number gives), so that no hour's call carries a whole kingdom's work.
+ */
+export const HOURS = {
+  research: { from: 5, shards: 4 },
+  troops: 9,
+  trade: { from: 10, shards: 6 },
+  news: 16,
+  books: 23,
+} as const;

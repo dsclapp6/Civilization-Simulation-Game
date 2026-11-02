@@ -1,7 +1,7 @@
 // The steward's trade orders (docs/CIV.md §6.6): "sell surplus grain at Dromore when the price is above X", "buy 200 bricks at the
 // best market", "keep 300 bushels in store". Orders belong to a treasury (the ruling household) and are carried out once a day when
 // the markets are open, through the economy's `sell` and `procure` (both optional: without them the orders only wait).
-import { HOURS, NEWS, TRADE } from './config';
+import { NEWS, TRADE } from './config';
 import { bookIn, bookOut } from './books';
 import { bagCount, round2 } from './bags';
 import { Pool, realmHouseholds } from './pool';
@@ -11,7 +11,6 @@ import type { PersonId } from '../state';
 import type { Result, TradeOrder } from './types';
 
 const fail = (reason: string): Result => ({ ok: false, reason });
-void HOURS;
 
 function view(o: OrderRec): TradeOrder {
   let transit = 0;
@@ -68,19 +67,28 @@ export function removeTradeOrder(R: Rlm, personId: PersonId, id: number): Result
 }
 
 /** Carries out the day's orders. */
-export function tradeDaily(R: Rlm): void {
+export function tradeDaily(R: Rlm, shard = 0, shards = 1): void {
   if (R.data.orders.length === 0) return;
   const eco = R.economy;
   const today = Math.floor(R.day);
+  // the stores the orders of one treasury draw on are listed once
+  const pools = new Map<number, Pool>();
+  let ran = false;
   for (const o of R.data.orders.slice().sort((a, b) => a.id - b.id)) {
+    if (o.id % shards !== shard) continue;
+    ran = true;
     const hh = R.state.households.get(o.household);
     if (!hh) { R.data.orders.splice(R.data.orders.indexOf(o), 1); R.touch(); continue; }
     o.transit = o.transit.filter(([day]) => day > today);
     o.last = today;
     const settlement = o.settlement >= 0 ? o.settlement : hh.settlement;
     const opts = o.settlement >= 0 ? { settlement: o.settlement } : {};
-    const house = R.state.persons.get(hh.head)?.house ?? 0;
-    const pool = new Pool(R.state, realmHouseholds(R, house, hh, [hh.settlement]));
+    let pool = pools.get(hh.id);
+    if (!pool) {
+      const house = R.state.persons.get(hh.head)?.house ?? 0;
+      pool = new Pool(R.state, realmHouseholds(R, house, hh, [hh.settlement]));
+      pools.set(hh.id, pool);
+    }
     const have = pool.count(o.good);
     if (o.side === 'sell') {
       if (!eco.sell) { o.note = 'There is no merchant to sell to'; continue; }
@@ -122,5 +130,5 @@ export function tradeDaily(R: Rlm): void {
       } else o.note = 'The market has none to sell';
     }
   }
-  R.touch();
+  if (ran) R.touch();
 }
