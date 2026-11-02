@@ -5,6 +5,7 @@
 //   node tools/village-shots.mjs dawn market     # selected scenes
 //   node tools/village-shots.mjs --quality=low --size=1280x720 --seed=millennia --suffix=-b
 //   node tools/village-shots.mjs --list          # scene ids
+//   node tools/village-shots.mjs commute site lead --out=/tmp/shots   # the civilization pass scenes, saved elsewhere
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { mkdirSync, statSync } from 'node:fs';
@@ -15,12 +16,12 @@ const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = resolve(ROOT, 'docs/agents');
 const args = process.argv.slice(2);
 const opt = (name, def) => {
   const a = args.find((x) => x.startsWith(`--${name}=`));
   return a ? a.slice(name.length + 3) : def;
 };
+const OUT = resolve(ROOT, opt('out', 'docs/agents'));
 const PORT = Number(opt('port', '5191'));
 const quality = opt('quality', 'medium');
 const seed = opt('seed', 'millennia');
