@@ -24,9 +24,9 @@ uniform float uScale;
 varying float vI;
 void main() {
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
-  // a glint flashes when the sun catches the grain: short sharp peaks at random moments
+  // a glint flashes when the sun catches the grain: short sharp peaks at random moments over a faint steady glitter
   float t = fract(uTime * (0.35 + fract(aPhase * 7.13) * 0.4) + aPhase);
-  vI = pow(max(0.0, 1.0 - abs(t - 0.5) * 9.0), 2.0) * uSun;
+  vI = (0.3 + pow(max(0.0, 1.0 - abs(t - 0.5) * 9.0), 2.0)) * uSun;
   gl_PointSize = clamp(uScale * (0.6 + vI) / max(1.0, -mv.z), 1.5, 22.0);
   gl_Position = projectionMatrix * mv;
 }`;
@@ -161,9 +161,11 @@ export class DepositSystem {
     const b = new MeshBuilder(d.id + 11);
     const R = d.radius;
     const sparks: number[] = [], phases: number[] = [];
-    const place = (x: number, z: number, s: number, seed: number, sink: number) => {
-      // sit the piece on the lowest of its footprint so it never floats on a slope
-      const y = Math.min(this.heightAt(x, z), this.heightAt(x + s * 0.4, z), this.heightAt(x - s * 0.4, z), this.heightAt(x, z + s * 0.4), this.heightAt(x, z - s * 0.4)) - sink;
+    const place = (x: number, z: number, s: number, seed: number, sink: number, loose = false) => {
+      // sit a rock on the lowest of its footprint so it never floats on a slope; loose gravel lies where it falls
+      // (the lowest point would bury a patch of pebbles on a bank)
+      const y = loose ? this.heightAt(x, z) - sink
+        : Math.min(this.heightAt(x, z), this.heightAt(x + s * 0.4, z), this.heightAt(x - s * 0.4, z), this.heightAt(x, z + s * 0.4), this.heightAt(x, z - s * 0.4)) - sink;
       b.push(); b.translate(x, y, z); b.rotY(h01(seed, 3) * Math.PI * 2);
       depositPieceInto(b, kind, s, seed, lod);
       b.pop();
@@ -215,12 +217,12 @@ export class DepositSystem {
     } else if (kind === 'gold') {
       // a gravel bar along the bank: patches strung along the stream, glints among them
       const wd = this.waterDir(d, R * 1.4) ?? { x: 1, z: 0 };
-      const n = lod === 0 ? 22 : 8;
+      const n = lod === 0 ? 34 : 10;
       for (let i = 0; i < n; i++) {
-        const along = (i / Math.max(1, n - 1) - 0.5) * R * 1.6 + (h01(d.id, 400 + i) - 0.5) * 3, toward = R * (0.3 + h01(d.id, 410 + i) * 0.45);
+        const along = (i / Math.max(1, n - 1) - 0.5) * R * 1.6 + (h01(d.id, 400 + i) - 0.5) * 3, toward = R * (0.2 + h01(d.id, 410 + i) * 0.55);
         const x = d.x + wd.x * toward - wd.z * along, z = d.z + wd.z * toward + wd.x * along;
         if (!this.free(x, z, 1)) continue;
-        place(x, z, 3.2, d.id * 5 + i, 0.02);
+        place(x, z, 2.2, d.id * 5 + i, 0, true);
         for (let k = 0; k < (lod === 0 ? 4 : 1); k++) {
           const gx = x + (h01(i, k, 1) - 0.5) * 2, gz = z + (h01(i, k, 2) - 0.5) * 2;
           sparks.push(gx, this.heightAt(gx, gz) + 0.08, gz);

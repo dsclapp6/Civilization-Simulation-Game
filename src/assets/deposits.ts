@@ -1,7 +1,8 @@
 // Deposits in the world (docs/CIV.md §7): the pieces the renderer scatters over a deposit's extent, each written at
 // the builder's current transform (origin on the ground). Iron: rust-stained outcrops; stone: pale outcrops with a
 // worked face and squared blocks; clay: ochre wet banks; salt: white crust plates; silver: blue-grey rock with pale
-// veins; gold: stream gravel (the glints are the renderer's sparkles). Plus the colour of each kind's ground stain.
+// veins; gold: stream gravel with gold-flecked quartz (the glints are the renderer's sparkles). Plus the colour of
+// each kind's ground stain.
 import { F, Layer, Mat, MeshBuilder, posHash, shade, type V3 } from './core/builder';
 
 export type DepositKindId = 'iron' | 'stone' | 'clay' | 'salt' | 'silver' | 'gold';
@@ -26,6 +27,8 @@ const CLAY = [0xb7834c, 0xc08c52, 0xa87644];
 const CLAY_WET = 0x7e5c3e;
 const SALT = [0xf0ece2, 0xe8e3d6, 0xf6f3ea];
 const PEBBLES = [0x8a7f70, 0x9c8f7c, 0x6f675c, 0xa89a84, 0x7c7468];
+const QUARTZ = [0xece7da, 0xdcd5c4, 0xf3efe6];
+const GOLD_FLECK = 0xdcaa2c;
 
 /** One outcrop (iron, stone, silver) of size `s` (≈ metres across), or one bank / plate / gravel patch. */
 export function depositPieceInto(b: MeshBuilder, kind: DepositKindId, s: number, seed: number, lod: 0 | 1): void {
@@ -99,13 +102,18 @@ export function depositPieceInto(b: MeshBuilder, kind: DepositKindId, s: number,
         return;
       }
       case 'gold': {
-        // a patch of stream gravel: pebbles of the bed's colours
+        // a patch of stream gravel: pebbles of the bed's colours, and a cobble of white quartz flecked with gold
         const n = lod === 0 ? 12 : 5;
         for (let i = 0; i < n; i++) {
           const a = h(i) * Math.PI * 2, r = s * 0.5 * Math.sqrt(h(i + 40));
           const ps = 0.1 + h(i + 80) * 0.16;
           b.blob(Math.cos(a) * r, ps * 0.2, Math.sin(a) * r, ps, ps * 0.55, ps * 0.8, PEBBLES[i % PEBBLES.length], 0.25, 0, seed + i);
         }
+        const qs = 0.28 + h(90) * 0.26;
+        b.blob(s * 0.12, qs * 0.3, -s * 0.08, qs, qs * 0.62, qs * 0.85, (nx, ny, nz) => {
+          const k = posHash(Math.round(nx * 6), Math.round(ny * 6), Math.round(nz * 6), seed + 5);
+          return k < 0.2 ? GOLD_FLECK : QUARTZ[Math.floor(k * 11) % QUARTZ.length];
+        }, 0.3, lod === 0 ? 1 : 0, seed + 99);
         return;
       }
     }

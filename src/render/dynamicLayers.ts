@@ -8,6 +8,8 @@ import { adoptObject } from './sky/atmospherePatch';
 const MAX_RINGS = 64;
 /** Halter ropes (led animals) and wrist bindings (captives) drawn at once, and points along each. */
 const MAX_ROPES = 40, ROPE_PTS = 10;
+/** A rope is never drawn thinner than about a pixel (m per m of distance at 720p, 55° fov), so a lead reads from afar. */
+const ROPE_MIN_PX = 0.0017;
 
 type HandLayer = CharacterLayer & { handPos?: (id: number, side: 'L' | 'R', out: THREE.Vector3) => boolean };
 type HeadLayer = AnimalLayer & { headPos?: (id: number, out: THREE.Vector3) => boolean };
@@ -63,7 +65,8 @@ export class DynamicLayers {
     this.ropeGeo.setAttribute('position', new THREE.BufferAttribute(this.ropePos, 3).setUsage(THREE.DynamicDrawUsage));
     this.ropeGeo.setAttribute('normal', new THREE.BufferAttribute(this.ropeNrm, 3).setUsage(THREE.DynamicDrawUsage));
     this.ropeGeo.setDrawRange(0, 0);
-    this.ropeMat = new THREE.MeshLambertMaterial({ color: 0x8c7452, side: THREE.DoubleSide });
+    // pale hemp: it has to show against both bare earth and grass
+    this.ropeMat = new THREE.MeshLambertMaterial({ color: 0xb89d6c, side: THREE.DoubleSide });
     this.ropes = new THREE.Mesh(this.ropeGeo, this.ropeMat);
     this.ropes.frustumCulled = false;
     this.ropes.name = 'halter-ropes';
@@ -95,7 +98,7 @@ export class DynamicLayers {
           const d = hand.distanceTo(this.vb);
           const lead = 2.4;
           const sag = d < lead ? 0.5 * Math.sqrt(lead * lead - d * d) * 0.55 : 0.03;
-          this.rope(n++, hand, this.vb, sag, 0.022, camera);
+          this.rope(n++, hand, this.vb, sag, 0.03, camera);
         }
       }
       for (const c of chars) {
@@ -127,10 +130,11 @@ export class DynamicLayers {
       const x = a.x + tx * t, y = a.y + ty * t - 4 * sag * t * (1 - t), z = a.z + tz * t;
       // the side vector: across the rope and the view
       const vx = cp.x - x, vy = cp.y - y, vz = cp.z - z;
+      const vl = Math.hypot(vx, vy, vz) || 1;
+      const half = Math.max(width, vl * ROPE_MIN_PX) / 2;
       let sx = ty * vz - tz * vy, sy = tz * vx - tx * vz, sz = tx * vy - ty * vx;
       const sl = Math.hypot(sx, sy, sz) || 1;
-      sx *= (width / 2) / sl; sy *= (width / 2) / sl; sz *= (width / 2) / sl;
-      const vl = Math.hypot(vx, vy, vz) || 1;
+      sx *= half / sl; sy *= half / sl; sz *= half / sl;
       const o = ((slot * ROPE_PTS + i) * 2) * 3;
       this.ropePos[o] = x - sx; this.ropePos[o + 1] = y - sy; this.ropePos[o + 2] = z - sz;
       this.ropePos[o + 3] = x + sx; this.ropePos[o + 4] = y + sy; this.ropePos[o + 5] = z + sz;

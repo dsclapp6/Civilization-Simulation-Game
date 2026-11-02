@@ -10,7 +10,8 @@ import type { AssetLibrary, BuildingAsset } from '../../assets/types';
 import type { WorldModel } from '../../world/types';
 import type { BuildGhost } from '../types';
 
-const OK_COLOR = new THREE.Color(0x7be58f);
+// a cool mint rather than grass green, so a ghost that fits stands out on a meadow
+const OK_COLOR = new THREE.Color(0x5cefc0);
 const BAD_COLOR = new THREE.Color(0xff5a48);
 
 const SHELL_VERT = /* glsl */`
@@ -47,7 +48,7 @@ void main() {
   float tone = 0.45 + 1.6 * sqrt(clamp(vLum, 0.0, 1.0));
   float scan = smoothstep(0.06, 0.0, abs(fract(vY / max(uHeight, 1.0) - uTime * 0.35) - 0.5) - 0.44);
   vec3 col = uColor * lit * tone + uColor * rim * 0.8 + vec3(1.0) * scan * 0.12;
-  float a = 0.42 + rim * 0.4 + scan * 0.1;
+  float a = 0.46 + rim * 0.4 + scan * 0.1;
   gl_FragColor = vec4(col, a);
 }`;
 

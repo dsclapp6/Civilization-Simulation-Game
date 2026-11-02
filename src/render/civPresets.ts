@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { BUILDINGS, type BuildingKind } from '../content/types';
 import { clamp } from '../core/math';
 import type { AnimState, CharacterDrawItem } from '../core/view';
-import type { Plot, Settlement, WorldModel } from '../world/types';
+import { Ground, type Plot, type Settlement, type WorldModel } from '../world/types';
 import type { MockView } from './dev/mockView';
 import type { GameRenderer } from './types';
 
@@ -41,8 +41,9 @@ function frontOf(p: Plot, d: number): { x: number; z: number; yaw: number } {
   return { x: p.x + fx * (def.d / 2 + d), z: p.z + fz * (def.d / 2 + d), yaw: p.rot + Math.PI };
 }
 
-/** Open ground near the village (no plot, strip or water within `clear` m), searched on a spiral from `from`. */
-export function openGround(c: CivCtx, from: { x: number; z: number }, clear: number, minD = 0): { x: number; z: number } {
+/** Open ground near the village (no plot, strip or water within `clear` m; no tree within `trees` m when given; grass
+ *  underfoot when `grass`), searched on a spiral from `from`. */
+export function openGround(c: CivCtx, from: { x: number; z: number }, clear: number, minD = 0, trees = 0, grass = false): { x: number; z: number } {
   const { w, v } = c;
   for (let i = 0; i < 600; i++) {
     const a = i * 2.39996, r = minD + 6 + i * 1.6;
@@ -55,6 +56,8 @@ export function openGround(c: CivCtx, from: { x: number; z: number }, clear: num
       if (Math.hypot(p.x - x, p.z - z) < clear + Math.max(BUILDINGS[p.kind].w, BUILDINGS[p.kind].d) / 2) { ok = false; break; }
     }
     if (!ok || v.inStrip(x, z)) continue;
+    if (grass) { const gr = w.groundAt(x, z); if (gr !== Ground.Grass && gr !== Ground.Meadow) continue; }
+    if (trees > 0 && !clearOfTrees(w, x, z, trees)) continue;
     const h0 = g(w, x, z);
     if (Math.abs(g(w, x + clear, z) - h0) > clear * 0.18 || Math.abs(g(w, x, z + clear) - h0) > clear * 0.18) continue;
     return { x, z };
@@ -62,7 +65,7 @@ export function openGround(c: CivCtx, from: { x: number; z: number }, clear: num
   return { x: from.x + 120, z: from.z };
 }
 
-const TREES = new Set(['oak', 'beech', 'birch', 'ash', 'willow', 'pine', 'spruce', 'apple', 'deadtree', 'bush']);
+const TREES = new Set(['oak', 'beech', 'birch', 'ash', 'willow', 'pine', 'spruce', 'apple', 'deadtree', 'bush', 'bramble']);
 /** No tree or bush within r of (x, z). */
 export function clearOfTrees(w: WorldModel, x: number, z: number, r: number): boolean {
   const C = 64;
@@ -79,7 +82,7 @@ export function clearView(w: WorldModel, at: { x: number; z: number }, yaw: numb
   for (const sw of [0, 0.35, -0.35, 0.7, -0.7, 1.0, -1.0]) {
     for (const k of [1, 1.4, 0.7]) {
       const x = at.x - Math.sin(yaw + sw) * back * k, z = at.z - Math.cos(yaw + sw) * back * k;
-      let ok = clearOfTrees(w, x, z, 3);
+      let ok = clearOfTrees(w, x, z, 5);
       for (let i = 1; i < 6 && ok; i++) {
         const t = i / 6;
         ok = clearOfTrees(w, x + (look.x - x) * t * 0.8, z + (look.z - z) * t * 0.8, 1.5);
@@ -224,14 +227,29 @@ export const CIV_PRESETS: Record<string, CivPreset> = {
   },
 };
 
-/** The deposit of a kind nearest the home village. */
+/** Trees and bushes within r of (x, z). */
+function treesNear(w: WorldModel, x: number, z: number, r: number): number {
+  const C = 64;
+  let n = 0;
+  for (let cz = Math.floor((z - r) / C); cz <= Math.floor((z + r) / C); cz++) {
+    for (let cx = Math.floor((x - r) / C); cx <= Math.floor((x + r) / C); cx++) {
+      if (cx < 0 || cz < 0 || cx * C >= w.size || cz * C >= w.size) continue;
+      for (const it of w.scatterInChunk(cx, cz)) if (TREES.has(it.kind) && Math.hypot(it.x - x, it.z - z) < r) n++;
+    }
+  }
+  return n;
+}
+
+/** Of the six deposits of a kind nearest the home village, the most open one (fewest trees over it). */
 function depositNear(c: CivCtx, kind: string): { x: number; z: number; radius: number } | null {
   const v = c.v.village;
-  let best: { x: number; z: number; radius: number } | null = null, bd = Infinity;
-  for (const d of c.w.deposits ?? []) {
-    if (d.kind !== kind) continue;
-    const dd = Math.hypot(d.x - v.x, d.z - v.z);
-    if (dd < bd) { bd = dd; best = d; }
+  const near = (c.w.deposits ?? []).filter((d) => d.kind === kind)
+    .map((d) => ({ d, dist: Math.hypot(d.x - v.x, d.z - v.z) }))
+    .sort((a, b) => a.dist - b.dist).slice(0, 6);
+  let best: { x: number; z: number; radius: number } | null = null, bs = Infinity;
+  for (const { d, dist } of near) {
+    const score = treesNear(c.w, d.x, d.z, d.radius * 0.9) / Math.max(1, d.radius * d.radius * 0.003) + dist / 4000;
+    if (score < bs) { bs = score; best = d; }
   }
   return best;
 }
@@ -257,7 +275,7 @@ function depositView(c: CivCtx, kind: string, dist: number, up: number): Pose {
   return { pos: { x, y: Math.max(g(c.w, x, z), g(c.w, d.x, d.z)) + up, z }, look: { x: d.x, y: g(c.w, d.x, d.z) + 1, z: d.z } };
 }
 
-for (const [kind, dist, up] of [['iron', 58, 26], ['stone', 64, 28], ['clay', 52, 20], ['salt', 70, 26], ['silver', 48, 22], ['gold', 30, 12]] as [string, number, number][]) {
+for (const [kind, dist, up] of [['iron', 58, 26], ['stone', 44, 18], ['clay', 46, 18], ['salt', 70, 26], ['silver', 48, 22], ['gold', 26, 10]] as [string, number, number][]) {
   CIV_PRESETS[`civ-deposit-${kind}`] = { season: 1, day: 2, time: 0.45, weather: 'clear', camera: (c) => depositView(c, kind, dist, up) };
 }
 /** The map at a regional zoom: deposit icons by kind, an outpost marker. */
@@ -271,7 +289,8 @@ CIV_PRESETS['civ-map-deposits'] = {
 /** A level spot for a building of `kind` near the village, facing the sun's side. */
 function siteFor(c: CivCtx, kind: BuildingKind, from: { x: number; z: number }, minD: number): { x: number; z: number; rot: number } {
   const def = BUILDINGS[kind];
-  const p = openGround(c, from, Math.max(def.w, def.d) / 2 + 4, minD);
+  const r = Math.max(def.w, def.d) / 2 + 4;
+  const p = openGround(c, from, r, minD, r + 4);
   return { x: p.x, z: p.z, rot: Math.atan2(c.sunX, c.sunZ) + Math.PI + 0.5 };
 }
 
@@ -312,7 +331,7 @@ CIV_PRESETS['civ-site'] = {
     worker(c, 113, local(chb, -1.5, 4.0), yaw + Math.PI, 'work_hammer', 'chisel');
     worker(c, 114, local(chb, 2.5, 4.2), yaw + Math.PI, 'carry_walk', 'none', 'stone');
     const mid = local(a, 8, 2);
-    return clearView(c.w, mid, yaw + Math.PI, 26, 11, { x: mid.x, z: mid.z, y: g(c.w, mid.x, mid.z) + 2 });
+    return clearView(c.w, mid, yaw + Math.PI + 0.25, 16, 6.5, { x: mid.x, z: mid.z, y: g(c.w, mid.x, mid.z) + 2 });
   },
 };
 
@@ -361,7 +380,7 @@ CIV_PRESETS['civ-kiln-clay'] = {
     worker(c, 117, local(p, -1.2, 0.5), p.rot + 0.4, 'work_dig', 'spade');
     worker(c, 118, local(p, 1.6, 2.6), p.rot + Math.PI, 'carry_walk', 'none', 'basket');
     const mid = local(p, 5, 1);
-    return clearView(c.w, mid, p.rot + Math.PI + 0.5, 24, 10, { x: mid.x, z: mid.z, y: g(c.w, mid.x, mid.z) + 1 });
+    return clearView(c.w, mid, p.rot + Math.PI + 0.5, 18, 7.5, { x: mid.x, z: mid.z, y: g(c.w, mid.x, mid.z) + 1 });
   },
 };
 
@@ -381,7 +400,7 @@ CIV_PRESETS['civ-salt-lumber'] = {
     worker(c, 119, local(p, 4.2, 4.6), p.rot + Math.PI, 'work_stir', 'ladle');
     worker(c, 120, local(lb, 0.6, 3.0), p.rot + Math.PI, 'work_saw', 'saw');
     const mid = local(p, -6, 1);
-    return clearView(c.w, mid, p.rot + Math.PI + 0.4, 26, 11, { x: mid.x, z: mid.z, y: g(c.w, mid.x, mid.z) + 1 });
+    return clearView(c.w, mid, p.rot + Math.PI + 0.4, 21, 9, { x: mid.x, z: mid.z, y: g(c.w, mid.x, mid.z) + 1 });
   },
   after: () => 2.0,
 };
@@ -390,7 +409,7 @@ CIV_PRESETS['civ-led'] = {
   season: 1, day: 2, time: 0.6, weather: 'clear',
   camera: (c) => {
     const v = c.v.village;
-    const o = openGround(c, { x: v.x + 30, z: v.z - 30 }, 8, 20);
+    const o = openGround(c, { x: v.x + 30, z: v.z - 30 }, 10, 20, 16, true);
     const yaw = Math.atan2(c.sunX, c.sunZ) + Math.PI + 0.9;
     const fx = Math.sin(yaw), fz = Math.cos(yaw), rx = Math.cos(yaw), rz = -Math.sin(yaw);
     // a villager leading a cow and a sheep on halters
@@ -438,8 +457,9 @@ function siegeScene(c: CivCtx, gate: 'shut' | 'broken'): Pose {
   const yawIn = gp.rot + Math.PI;
   c.v.siegeList.push({ id: 1, kind: 'ram', x: ramAt.x, y: g(c.w, ramAt.x, ramAt.z), z: ramAt.z, yaw: yawIn, swing: gate === 'broken' ? 1 : 0.6, state: 'ok' });
   const rx = Math.cos(yawIn), rz = -Math.sin(yawIn);
-  [-1.6, 1.6].forEach((sd, i) => {
-    const p = { x: ramAt.x + rx * sd - out.x * 2.2, z: ramAt.z + rz * sd - out.z * 2.2 };
+  // (at the shed's open back, shoving on its rear cross-beam)
+  [-0.62, 0.62].forEach((sd, i) => {
+    const p = { x: ramAt.x + rx * sd + out.x * 3.45, z: ramAt.z + rz * sd + out.z * 3.45 };
     worker(c, 125 + i, p, yawIn, 'push');
   });
   // ladders against the two nearest wall segments, a man climbing one; a third segment breached

@@ -346,8 +346,15 @@ export function saltPan(ctx: Ctx, def: BuildingDef): void {
     b.pop();
   });
   chimney(ctx, { x: fx, z: br.z0 + 0.3, baseY: res.eaveY - 0.5, topY: res.roof.topY + 0.5, w: 0.55, d: 0.55, color: COL.stoneGrey });
-  ctx.out.emitters.push({ kind: 'steam', pos: [fx, 1.0, fz], rate: 2.2 });
-  ctx.out.emitters.push({ kind: 'steam', pos: [fx + 0.4, 0.95, fz + 0.2], rate: 1.2 });
+  // the steam off the pan: through a louvre on the ridge, and billowing out under the open front's eaves
+  const ly = res.roof.topY, lz = (br.z0 + br.z1) / 2;
+  const [lx0, lx1, lz0, lz1] = res.roof.axis === 'x' ? [fx + 0.45, fx + 1.15, lz - 0.3, lz + 0.3] : [fx - 0.3, fx + 0.3, lz + 0.2, lz + 0.9];
+  b.state({ layer: Layer.Roof, flags: F.Snow | F.Burn }, () => {
+    b.box(lx0, ly - 0.2, lz0, lx1, ly + 0.22, lz1, { side: shade(s.timber, 0.8), top: s.timber });
+    b.box(lx0 - 0.12, ly + 0.22, lz0 - 0.14, lx1 + 0.12, ly + 0.3, lz1 + 0.14, s.timber);
+  });
+  ctx.out.emitters.push({ kind: 'steam', pos: [(lx0 + lx1) / 2, ly + 0.3, (lz0 + lz1) / 2], rate: 2.6 });
+  ctx.out.emitters.push({ kind: 'steam', pos: [fx + 0.3, res.eaveY - 0.35, br.z1 + ov + 0.15], rate: 1.4 });
   // Salt heaps on a boarded floor beside the cote, and wicker baskets of salt draining on a rack.
   const hx = -hw + 2.2, hz = hd - 2.0;
   b.state({ layer: Layer.Ground, flags: F.Snow | F.NoAO }, () => b.box(hx - 1.8, -0.1, hz - 1.3, hx + 2.6, 0.06, hz + 1.3, { top: 0x9a8566, side: 0x7a6650 }, 'b'));
