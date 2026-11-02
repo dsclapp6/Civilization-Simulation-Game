@@ -36,6 +36,21 @@ describe('the player at the ram', () => {
     expect(scene.pushers.has(pf(t))).toBe(false);
   });
 
+  it('is offered too when a man is in front of him (in a storm there always is one): the verb acts on the player, not on the man', () => {
+    const t = storm('wa-person', { archers: 0, foot: 14 }, { archers: 0, foot: 3 }, { ladders: 0 }, 'wall', 'attacker');
+    const scene = sceneOf(t);
+    const ram = scene.works.find((w) => w.kind === 'ram')!;
+    walkTo(t, ram.x + 2.4, ram.z);
+    const man = t.attackers[0];
+    const underMan = t.r.sim.actions.list(t.r.sim.state.run.playerId, { kind: 'person', id: man }).filter((o) => o.provider === 'war');
+    expect(underMan.map((o) => o.id)).toContain('push');
+    const push = underMan.find((o) => o.id === 'push')!;
+    expect(push.target).toEqual({ kind: 'self' });
+    expect(t.r.player!.perform(push).ok).toBe(true);
+    t.r.sim.step(SIM_DT);
+    expect(scene.pushers.has(pf(t))).toBe(true);
+  });
+
   it('the ram goes faster with the player at its beam than without', () => {
     const timeToGate = (push: boolean): number => {
       const t = storm('wa-ram-speed', { archers: 0, foot: 8 }, { archers: 0, foot: 2 }, { ladders: 0 }, 'wall', 'attacker');

@@ -42,7 +42,9 @@ export function createWarProvider(sv: Services): ActionProvider {
     id: WAR_PROVIDER_ID,
 
     list(_ctx: SimContext, actor: PersonId, target: TargetRef, out: ActionOption[]): void {
-      if (target.kind !== 'self') return;
+      // "E with nothing in front" is the player himself; in a storm there is always a man in front (a comrade, an enemy), so the
+      // verbs are offered under a person too — they act on the player, whoever he is looking at
+      if (target.kind !== 'self' && target.kind !== 'person') return;
       const s = stormOf(actor);
       if (!s) return;
       const { pf, scene } = s;

@@ -356,7 +356,7 @@ try {
       const gx = info.gate.x, gz = info.gate.z, [ox, oz] = info.out;
       if (role === 'assault') {
         // the host and the wall from the camp's side
-        if (k === 0) { await place([gx + ox * 62 + oz * 14, 5, gz + oz * 62 - ox * 14], [gx + ox * 8, 4, gz + oz * 8]); await shot(`${role}-1-approach`, { settle: true }); }
+        if (k === 0) { await place([gx + ox * 98 + oz * 9, 7, gz + oz * 98 - ox * 9], [gx + ox * 4, 6, gz + oz * 4]); await shot(`${role}-1-approach`, { settle: true }); }
         // the player lends his shoulder: E at the beam is "Push the ram" (the verb is offered by the war actions provider)
         if (ram && k === 2) {
           const yaw = ram[4]; const fx = Math.sin(yaw), fz = Math.cos(yaw);
@@ -364,10 +364,12 @@ try {
             const p = window.__m.s.services.player;
             p.placeAt(x, z, yaw);
             window.__game.advance(0.4);
-            return p.options().map((o) => `${o.provider}/${o.id}:${o.label}:${o.enabled}`);
+            const opts = p.options();
+            const push = opts.find((o) => o.provider === 'war' && o.id === 'push');
+            if (push) p.perform(push);
+            return opts.map((o) => `${o.provider}/${o.id}:${o.label}:${o.enabled}`);
           }, [ram[1] - fx * 3, ram[3] - fz * 3, yaw]);
           console.log('war: options at the ram', JSON.stringify(offered));
-          await advance(0.2, { interact: true });
           await advance(2.5);
           await place([ram[1] - fx * 9 + fz * 5, 3.2, ram[3] - fz * 9 - fx * 5], [ram[1] - fx * 1, 1.5, ram[3] - fz * 1]);
           await shot(`${role}-6-push`, { settle: false });
