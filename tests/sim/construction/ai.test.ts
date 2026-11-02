@@ -106,6 +106,31 @@ describe('AI rulers use the same API', () => {
     expect(a.finished).toBe(b.finished);
   });
 
+  it('put the household\'s members to the real economy\'s build task', () => {
+    const { sim, cons } = realWorld('ai-4');
+    const eco = sim.services.construction ? (cons.core.economy as unknown as { setTask: (h: number, m: number, t: string) => { ok: boolean }; householdPlan: (h: number) => Array<{ person: number; task: string }> }) : null;
+    const t = [...sim.state.titles.values()].find((x) => x.kind === 'manor')!;
+    const lord = sim.state.persons.get(t.holder)!;
+    const hh = sim.state.households.get(lord.household)!;
+    hh.purse = 0; lord.money = 0;
+    for (const g of ['planks', 'straw']) hh.stores[g] = 200;
+    const kin = hh.members.map((id) => sim.state.persons.get(id)!).filter((m) => m.id !== lord.id && !m.death && (sim.absDay - m.birthDay) / 16 >= 15);
+    expect(kin.length).toBeGreaterThan(0);
+    for (const m of kin) expect(eco!.setTask(lord.id, m.id, 'build').ok).toBe(true);
+    expect(eco!.householdPlan(hh.id).filter((l) => l.task === 'build').length).toBe(kin.length);
+    const spot = cons.suggestSpot(lord.id, 'cottage', t.place)!;
+    const res = cons.place(lord.id, 'cottage', spot.x, spot.z, spot.rot);
+    expect(res.ok, res.reason).toBe(true);
+    setTime(sim, 5 / 24, Math.floor(sim.absDay) + 1);
+    sim.advanceHours(3);
+    const s = cons.site(res.site as number)!;
+    expect(s.status).toBe('working');
+    const crew = cons.workersAt(s.id);
+    expect(crew.length).toBeGreaterThan(0);
+    for (const id of crew) expect(kin.some((k) => k.id === id)).toBe(true);
+    expect(cons.onSite?.(crew[0])).toBe(s.id);
+  });
+
   it('can be asked what a place needs by id alone (no player involved)', () => {
     const { sim, cons } = realWorld('ai-3');
     const t = [...sim.state.titles.values()].find((x) => x.kind === 'manor')!;

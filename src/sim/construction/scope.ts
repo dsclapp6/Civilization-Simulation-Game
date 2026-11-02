@@ -181,10 +181,13 @@ export function noScopeReason(C: Construction, personId: PersonId): string {
 
 export function rankName(rank: number): string { return RANK_NAMES[Math.max(0, Math.min(8, rank))].toLowerCase(); }
 
+const FOLK = ['anyone', 'anyone', 'a free commoner or better', 'a yeoman, master or merchant (or better)', 'a gentleman or better', 'a knight or better', 'a baron or better', 'an earl or better', 'a king'];
+/** Who is meant by a rank tier, in plain words ("a knight or better"). */
+export function rankFolk(rank: number): string { return FOLK[Math.max(0, Math.min(8, Math.round(rank)))]; }
+
 /** "Only the lord of Dromore may raise a wall" / "Only a knight or better may raise a wall". */
 export function rankReason(kind: BuildingKind, who: string | null, rank: number): string {
-  const name = kindWord(kind);
-  return who ? `Only ${who} may raise ${name}` : `Only a ${rankName(rank)} or better may raise ${name}`;
+  return `Only ${who ?? rankFolk(rank)} may raise ${kindWord(kind)}`;
 }
 
 function kindWord(kind: BuildingKind): string {

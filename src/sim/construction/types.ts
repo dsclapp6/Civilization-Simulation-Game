@@ -187,4 +187,6 @@ export interface ConstructionApi {
   setHired?(person: PersonId, site: number, hired: number | 'auto'): Result;
   /** May this person cancel, reprioritise or hire for the site? */
   canManage?(person: PersonId, site: number): boolean;
+  /** What improving, mending or pulling down a building would cost (and whether this person may order it), without ordering it. */
+  quote?(person: PersonId, work: 'upgrade' | 'repair' | 'demolish', building: number): Result & { cost?: BuildCost; level?: number };
 }

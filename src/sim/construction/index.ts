@@ -16,7 +16,7 @@ import { levelCost } from './data';
 import { PLAN_SHARDS, hourly, planNow } from './progress';
 import { noScopeReason, scopeInfo } from './scope';
 import {
-  applyRazed, canManageSite, cancelSite, demolishSite, repairSite, setHired, setPriority, placeSite, upgradeSite, viewOf,
+  applyRazed, canManageSite, cancelSite, demolishSite, quoteWork, repairSite, setHired, setPriority, placeSite, upgradeSite, viewOf,
 } from './sites';
 import type {
   BuildScope, ConstructionApi, OutpostView, PlacementCheck, SiteView,
@@ -133,6 +133,7 @@ export function installConstruction(sim: Simulation, deps: Wave3Deps): Construct
       return C.crewOf.get(person) ?? 0;
     },
     setHired: (person, site, hired) => setHired(C, person, site, hired),
+    quote: (person, work, building) => quoteWork(C, person, work, building),
     canManage: (person, site) => { const rec = C.sitesById.get(site); return !!rec && canManageSite(C, person, rec); },
   };
 

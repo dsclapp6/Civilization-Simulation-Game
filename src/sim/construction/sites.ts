@@ -12,7 +12,7 @@ import {
   CANCEL_REFUND, DEMOLISH_LABOUR, REPAIR, SALVAGE, costValue, goodsValue, levelCost, maxCrew, maxLevelOf, priceOf, rulesOf, totalCost,
 } from './data';
 import type { OutpostRec, SiteRec, WorkKind } from './save';
-import { noScopeReason, scopeInfo, type Auth } from './scope';
+import { noScopeReason, rankFolk, scopeInfo, type Auth } from './scope';
 import type { BuildCost, PlaceOptions, Result, SiteView } from './types';
 
 const MAX_OPEN_PER_PAYER = 16;
@@ -215,49 +215,85 @@ export function manageStanding(C: Construction, personId: PersonId, b: BuildingS
   const ownBuilding = !!si.own && (b.household === si.own.id || si.own.home === b.id);
   if (a) {
     if (a.cats && !a.cats.has(rules.cat)) return { ok: false, reason: `A ${a.office ?? 'steward'} may not order work on the ${b.kind.replace(/_/g, ' ')}` };
-    if (a.rank < rules.rank && !(ownBuilding && si.rank >= rules.own && rules.own > 0)) return { ok: false, reason: `Only a ${rankOf(rules.rank)} or better may order work on the ${b.kind.replace(/_/g, ' ')}` };
+    if (a.rank < rules.rank && !(ownBuilding && si.rank >= rules.own && rules.own > 0)) return { ok: false, reason: `Only ${rankFolk(rules.rank)} may order work on the ${b.kind.replace(/_/g, ' ')}` };
     // another House's property in use is not the lord's to pull down or rebuild
     if (action !== 'repair' && b.owner !== 0 && b.owner !== a.house && b.household !== 0 && !ownBuilding) return { ok: false, reason: 'It belongs to another House' };
     return { ok: true, payer: a.payer, house: a.house, auth: a };
   }
   if (ownBuilding && si.own) {
     if (rules.own === 0 && action !== 'repair') return { ok: false, reason: `Only the lord may order work on the ${b.kind.replace(/_/g, ' ')}` };
-    if (si.rank < rules.own && action !== 'repair') return { ok: false, reason: `Only a ${rankOf(rules.own)} or better may order work on the ${b.kind.replace(/_/g, ' ')}` };
+    if (si.rank < rules.own && action !== 'repair') return { ok: false, reason: `Only ${rankFolk(rules.own)} may order work on the ${b.kind.replace(/_/g, ' ')}` };
     return { ok: true, payer: si.own, house: si.house, own: true };
   }
   return { ok: false, reason: 'It is not yours' };
 }
 
-function rankOf(rank: number): string {
-  return ['', 'serf', 'commoner', 'yeoman', 'gentleman', 'knight', 'baron', 'earl', 'king'][Math.max(0, Math.min(8, rank))];
-}
-
 function openFor(C: Construction, b: BuildingState): SiteRec | undefined { return C.openByBuilding.get(b.id); }
 
-export function upgradeSite(C: Construction, personId: PersonId, buildingId: number): Result & { site?: number } {
+/** What a piece of work on a standing building would be, if it may be ordered (no side effects). */
+export interface WorkPlan { ok: boolean; reason?: string; b?: BuildingState; payer?: Household; house?: number; cost?: BuildCost; level?: number; damage0?: number }
+
+export function planWork(C: Construction, personId: PersonId, buildingId: number, work: 'upgrade' | 'repair' | 'demolish'): WorkPlan {
   const b = C.state.buildings.get(buildingId);
   if (!b) return { ok: false, reason: 'No such building' };
-  if (b.construction < 1) return { ok: false, reason: 'It is not finished yet' };
-  if (openFor(C, b)) return { ok: false, reason: 'Work is already under way on it' };
-  if (b.level >= maxLevelOf(b.kind)) return { ok: false, reason: `The ${b.kind.replace(/_/g, ' ')} cannot be improved further` };
-  if (b.damage > 0.4 || b.onFire) return { ok: false, reason: 'Mend the damage first' };
-  const m = manageStanding(C, personId, b, 'upgrade');
+  const open = openFor(C, b);
+  if (open) return { ok: false, reason: open.work === 'build' && work === 'demolish' ? 'It is still being built: cancel the site instead' : 'Work is already under way on it' };
+  if (work !== 'demolish' && b.construction < 1) return { ok: false, reason: 'It is not finished yet' };
+  const named = b.kind.replace(/_/g, ' ');
+  if (work === 'upgrade') {
+    if (b.level >= maxLevelOf(b.kind)) return { ok: false, reason: `The ${named} cannot be improved further` };
+    if (b.damage > 0.4 || b.onFire) return { ok: false, reason: 'Mend the damage first' };
+  } else if (work === 'repair') {
+    if (b.damage < 0.02) return { ok: false, reason: 'It needs no mending' };
+    if (b.onFire) return { ok: false, reason: 'It is on fire' };
+  }
+  const m = manageStanding(C, personId, b, work);
   if (!m.ok || !m.payer) return { ok: false, reason: m.reason };
   const rules = rulesOf(b.kind);
-  if (rules.tech) {
-    const has = C.advancement ? C.advancement.houseHas(m.house ?? 0, rules.tech) : true;
-    if (!has) return { ok: false, reason: `Needs the ${rules.tech.replace(/_/g, ' ')} technique` };
+  if (work === 'upgrade') {
+    if (rules.tech && C.advancement && !C.advancement.houseHas(m.house ?? 0, rules.tech)) return { ok: false, reason: `Needs the ${rules.tech.replace(/_/g, ' ')} technique` };
+    const level = b.level + 1;
+    return { ok: true, b, payer: m.payer, house: m.house, cost: levelCost(b.kind, level), level };
   }
-  const level = b.level + 1;
-  const cost = levelCost(b.kind, level);
-  const poor = affordReason(C, m.payer, b.kind, cost, b.settlement);
+  if (work === 'repair') return { ok: true, b, payer: m.payer, house: m.house, cost: repairCost(b.kind, b.level, b.damage), level: b.level, damage0: b.damage };
+  // nobody's roof comes down over their head
+  for (const hh of C.state.householdsIn(b.settlement)) if (hh.home === b.id) return { ok: false, reason: 'Someone lives there' };
+  if (b.household !== 0 && b.household !== m.payer.id && C.household(b.household)) return { ok: false, reason: 'Another household uses it' };
+  const base = totalCost(b.kind, b.level);
+  const cost: BuildCost = { goods: {}, labour: Math.max(0.5, Math.round(base.labour * DEMOLISH_LABOUR * 2) / 2), pence: 0 };
+  return { ok: true, b, payer: m.payer, house: m.house, cost, level: b.level, damage0: b.damage };
+}
+
+/** What improving, mending or pulling down would cost and whether this person may order it (the builder's panel shows it before they do). */
+export function quoteWork(C: Construction, personId: PersonId, work: 'upgrade' | 'repair' | 'demolish', buildingId: number): Result & { cost?: BuildCost; level?: number } {
+  const w = planWork(C, personId, buildingId, work);
+  return w.ok ? { ok: true, cost: w.cost, level: w.level } : { ok: false, reason: w.reason };
+}
+
+const WORK_TEXT: Record<'upgrade' | 'repair' | 'demolish', (name: string) => string> = {
+  upgrade: (n) => `Work begins to improve the ${n}.`,
+  repair: (n) => `Repairs begin on the ${n}.`,
+  demolish: (n) => `Work begins to pull down the ${n}.`,
+};
+
+function startWork(C: Construction, personId: PersonId, buildingId: number, work: 'upgrade' | 'repair' | 'demolish'): Result & { site?: number } {
+  const w = planWork(C, personId, buildingId, work);
+  if (!w.ok || !w.b || !w.payer || !w.cost) return { ok: false, reason: w.reason };
+  const poor = work === 'demolish' ? null : affordReason(C, w.payer, w.b.kind, w.cost, w.b.settlement);
   if (poor) return { ok: false, reason: poor };
-  const rec = newRec(C, { building: b, work: 'upgrade', level, payer: m.payer, house: m.house ?? 0, builder: personId, cost, outpost: outpostIdOf(C, b), occupant: 'builder' });
+  const rec = newRec(C, {
+    building: w.b, work, level: w.level ?? w.b.level, payer: w.payer, house: w.house ?? 0, builder: personId, cost: w.cost,
+    outpost: outpostIdOf(C, w.b), occupant: 'builder', damage0: w.damage0,
+  });
   emitSite(C, 'placed', rec);
-  tellPlayer(C, rec, 'info', `Work begins to improve the ${BUILDINGS[b.kind].name.toLowerCase()}.`);
+  tellPlayer(C, rec, 'info', WORK_TEXT[work](BUILDINGS[w.b.kind].name.toLowerCase()));
   C.planNow?.(rec);
   return { ok: true, site: rec.id };
 }
+
+export function upgradeSite(C: Construction, personId: PersonId, buildingId: number): Result & { site?: number } { return startWork(C, personId, buildingId, 'upgrade'); }
+export function repairSite(C: Construction, personId: PersonId, buildingId: number): Result & { site?: number } { return startWork(C, personId, buildingId, 'repair'); }
+export function demolishSite(C: Construction, personId: PersonId, buildingId: number): Result & { site?: number } { return startWork(C, personId, buildingId, 'demolish'); }
 
 /** What mending a damaged building takes: a share of what it cost, by how badly it is hurt. */
 export function repairCost(kind: BuildingKind, level: number, damage: number): BuildCost {
@@ -269,44 +305,6 @@ export function repairCost(kind: BuildingKind, level: number, damage: number): B
     if (v >= 1) goods[g] = v;
   }
   return { goods, labour: Math.max(0.5, Math.round(base.labour * REPAIR.labour * d * 2) / 2), pence: Math.round(base.pence * REPAIR.pence * d) };
-}
-
-export function repairSite(C: Construction, personId: PersonId, buildingId: number): Result & { site?: number } {
-  const b = C.state.buildings.get(buildingId);
-  if (!b) return { ok: false, reason: 'No such building' };
-  if (b.construction < 1) return { ok: false, reason: 'It is not finished yet' };
-  if (openFor(C, b)) return { ok: false, reason: 'Work is already under way on it' };
-  if (b.damage < 0.02) return { ok: false, reason: 'It needs no mending' };
-  if (b.onFire) return { ok: false, reason: 'It is on fire' };
-  const m = manageStanding(C, personId, b, 'repair');
-  if (!m.ok || !m.payer) return { ok: false, reason: m.reason };
-  const cost = repairCost(b.kind, b.level, b.damage);
-  const poor = affordReason(C, m.payer, b.kind, cost, b.settlement);
-  if (poor) return { ok: false, reason: poor };
-  const rec = newRec(C, { building: b, work: 'repair', level: b.level, payer: m.payer, house: m.house ?? 0, builder: personId, cost, outpost: outpostIdOf(C, b), occupant: 'builder', damage0: b.damage });
-  emitSite(C, 'placed', rec);
-  tellPlayer(C, rec, 'info', `Repairs begin on the ${BUILDINGS[b.kind].name.toLowerCase()}.`);
-  C.planNow?.(rec);
-  return { ok: true, site: rec.id };
-}
-
-export function demolishSite(C: Construction, personId: PersonId, buildingId: number): Result & { site?: number } {
-  const b = C.state.buildings.get(buildingId);
-  if (!b) return { ok: false, reason: 'No such building' };
-  const open = openFor(C, b);
-  if (open) return { ok: false, reason: open.work === 'build' ? 'It is still being built: cancel the site instead' : 'Work is already under way on it' };
-  const m = manageStanding(C, personId, b, 'demolish');
-  if (!m.ok || !m.payer) return { ok: false, reason: m.reason };
-  // nobody's roof comes down over their head
-  for (const hh of C.state.householdsIn(b.settlement)) if (hh.home === b.id) return { ok: false, reason: 'Someone lives there' };
-  if (b.household !== 0 && b.household !== m.payer.id && C.household(b.household)) return { ok: false, reason: 'Another household uses it' };
-  const base = totalCost(b.kind, b.level);
-  const cost: BuildCost = { goods: {}, labour: Math.max(0.5, Math.round(base.labour * DEMOLISH_LABOUR * 2) / 2), pence: 0 };
-  const rec = newRec(C, { building: b, work: 'demolish', level: b.level, payer: m.payer, house: m.house ?? 0, builder: personId, cost, outpost: outpostIdOf(C, b), occupant: 'builder', damage0: b.damage });
-  emitSite(C, 'placed', rec);
-  tellPlayer(C, rec, 'info', `Work begins to pull down the ${BUILDINGS[b.kind].name.toLowerCase()}.`);
-  C.planNow?.(rec);
-  return { ok: true, site: rec.id };
 }
 
 function outpostIdOf(C: Construction, b: BuildingState): number {

@@ -258,6 +258,32 @@ describe('upgrade, repair, demolish, cancel', () => {
     expect(r.cons.upgrade(lord.id, cottage.id).ok).toBe(true);
   });
 
+  it('quotes the price of work before it is ordered, for the lord and for nobody else', () => {
+    const r = rig('cycle-quote');
+    const v = village(r.sim);
+    const lord = manorLord(r.sim, v.id);
+    const cottage = r.sim.state.buildingsAt.get(v.id)!.find((b) => b.kind === 'cottage' && b.level === 1)!;
+    const up = r.cons.quote?.(lord.id, 'upgrade', cottage.id);
+    expect(up?.ok, up?.reason).toBe(true);
+    expect(up?.level).toBe(2);
+    expect(up?.cost).toEqual(r.cons.cost('cottage', 2));
+    cottage.damage = 0.5;
+    expect(r.cons.quote?.(lord.id, 'upgrade', cottage.id)?.reason).toMatch(/Mend/);
+    const fix = r.cons.quote?.(lord.id, 'repair', cottage.id);
+    expect(fix?.ok).toBe(true);
+    expect(fix?.cost?.labour).toBeGreaterThan(0);
+    expect(fix?.cost?.labour).toBeLessThan(r.cons.cost('cottage', 1).labour);
+    const barn = r.sim.state.buildingsAt.get(v.id)!.find((b) => b.kind === 'barn' && b.household === 0)!;
+    const down = r.cons.quote?.(lord.id, 'demolish', barn.id);
+    expect(down?.ok, down?.reason).toBe(true);
+    expect(down?.cost?.goods).toEqual({});
+    expect(down?.cost?.labour).toBeGreaterThan(0);
+    // nothing was ordered
+    expect(r.cons.sites()).toHaveLength(0);
+    const stranger = [...r.sim.state.persons.values()].find((p) => !p.death && p.settlement !== v.id && p.household !== lord.household)!;
+    expect(r.cons.quote?.(stranger.id, 'repair', cottage.id)?.ok).toBe(false);
+  });
+
   it('refuses to improve past the last level', () => {
     const r = rig('cycle-12');
     const v = village(r.sim);
