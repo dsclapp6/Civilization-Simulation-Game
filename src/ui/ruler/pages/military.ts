@@ -4,10 +4,9 @@ import type { MilitaryRuntime, ArmyDetail } from '../../../sim/military/types';
 import type { RealmTroop, RecruitOption } from '../../../sim/realm/types';
 import { button, chip, empty, heading } from '../../components/widgets';
 import { h } from '../../core/dom';
-import { icon } from '../../core/icons';
 import { goodLine } from '../../builder/landsUi';
 import { dubbable, kindName, recruitMax, recruitPreview, RESERVE_DAYS, troopCounts } from '../rulerModel';
-import { line, money, section, statCard, type RulerEnv } from '../rulerUi';
+import { line, money, statCard, type RulerEnv } from '../rulerUi';
 
 interface Bag { settlement: number; counts: Record<string, number> }
 
@@ -121,6 +120,5 @@ function armiesCard(env: RulerEnv, mil: MilitaryRuntime | undefined, levyPool: n
     h('div.mu-row.mu-gap-6.mu-wrap', { style: { marginTop: '8px' } },
       button('Orders…', { size: 'small', icon: 'flag', onClick: () => ctx.open({ panel: 'ext', name: 'army' }) }),
       button('Take the field', { size: 'small', icon: 'swords', tip: 'Join this army and fight in it yourself', onClick: () => env.done(mil.joinArmy(a.id), 'You take your place in the ranks.') }))))) : line('No army of yours is in the field. Call the levy to muster one, then give it orders in the command panel — or ride with it yourself.'));
-  void icon; void section;
   return wrap;
 }

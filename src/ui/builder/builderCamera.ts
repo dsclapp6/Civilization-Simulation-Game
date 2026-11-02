@@ -96,6 +96,8 @@ export class BuilderCamera {
     const r = this.ports.renderer();
     if (!r || this.left) return;
     if (this.kind === 'pending') this.probe(r);
+    // our own camera was handed back to the follow camera by someone else (a page that closed): lay it again
+    if (this.kind === 'pose' && !this.dirty && r.cameraMode?.() === 'follow') this.applyPose(r, 0.5);
     if (this.goal) this.glide(r);
     if (this.kind === 'pose' && this.dirty) {
       this.dirty = false;

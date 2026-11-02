@@ -12,7 +12,7 @@ import { CATEGORY_ICON, CATEGORY_LABEL, CATEGORY_ORDER, etaWords, priorityFor, q
 import { goodIcon } from '../../builder/landsUi';
 import { ruleOffer } from '../ruleTown';
 import { amountText, YIELD_NAME } from '../rulerModel';
-import { line, money, section, type RulerEnv } from '../rulerUi';
+import { line, type RulerEnv } from '../rulerUi';
 
 type Cat = (typeof CATEGORY_ORDER)[number];
 
@@ -47,7 +47,11 @@ export function buildLands(env: RulerEnv): HTMLElement {
     const stores = new Map<string, number>();
     for (const hh of sim.state.householdsIn(id)) {
       if (hh.kind === 'family' || (hh.house !== v.house && hh.id !== v.household)) continue;
-      for (const [g, q] of Object.entries(hh.stores)) if (q > 0 && !ctx.eco.good(g)?.category.startsWith('livestock')) stores.set(g, (stores.get(g) ?? 0) + q);
+      for (const [key, q] of Object.entries(hh.stores)) {
+        // (a good with quality tiers is kept as "horse#2": the tiers are one good here)
+        const g = key.split('#')[0];
+        if (q > 0 && ctx.eco.good(g)?.category !== 'livestock') stores.set(g, (stores.get(g) ?? 0) + q);
+      }
     }
     const topStores = [...stores.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
     const sites = (cons?.sites(id) ?? []).length;
@@ -120,7 +124,5 @@ export function buildLands(env: RulerEnv): HTMLElement {
       })));
     }
   } else wrap.append(empty('No one raises buildings in this run.'));
-  void money;
-  void section;
   return wrap;
 }

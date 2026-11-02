@@ -90,14 +90,14 @@ export function buildOverview(env: RulerEnv): HTMLElement {
   const rivals = sortRivals(realm.rivals(me)).slice(0, 3);
   const threatsCard = section('Threats', 'warning', rivals.length ? h('div.mu-col.mu-gap-6', null, rivals.map((r) => {
     const t = threatWords(r.threat);
-    return h('div', null, h('div.mu-row.mu-between.mu-gap-6.mu-small', null, h('b', null, `House ${r.name}`), chip(t.word, t.tone === 'ink' ? 'ink' : t.tone)), bar(t.tone === 'vermilion' ? 'vermilion' : t.tone === 'gold' ? 'gold' : 'green', r.threat, { thin: true }).el);
+    return h('div', null, h('div.mu-row.mu-between.mu-gap-6.mu-small', null, h('b', null, `House ${r.name}`), chip(t.word, t.tone)), bar(t.tone === 'vermilion' ? 'vermilion' : t.tone === 'gold' ? 'gold' : 'green', r.threat, { thin: true }).el);
   })) : line('No other House is near enough to threaten you.'),
     h('div.mu-row.mu-gap-6', { style: { marginTop: '8px' } }, button('Rivals', { size: 'small', icon: 'shield', onClick: () => env.go('rivals') })));
 
   const news = newsFor(realm.news(40), null, 7);
   const newsCard = section('News of the neighbours', 'scroll', news.length ? h('div.mu-col.mu-gap-4', null, news.map((n) => h('div.mu-rul-news', { class: n.threat >= 0.5 ? 'hot' : '' },
     icon(NEWS_ICON[n.kind] ?? 'scroll', 15), h('div.mu-grow', null, h('div.mu-small', null, n.text), h('div.mu-tiny.mu-dim', null, `${dateText(n.day)} · ${ctx.placeName(n.settlement)}`)),
-    n.threat >= 0.3 ? chip(threatWords(n.threat).word, threatWords(n.threat).tone === 'ink' ? 'ink' : threatWords(n.threat).tone) : null))) : line('No news yet: neighbours’ buildings, techniques, troops and wars are reported here as they happen.'));
+    n.threat >= 0.3 ? chip(threatWords(n.threat).word, threatWords(n.threat).tone) : null))) : line('No news yet: neighbours’ buildings, techniques, troops and wars are reported here as they happen.'));
 
   if (!all.length) return empty('You rule no place now.');
   return h('div.mu-rul-page.mu-rul-overview', null, stats,

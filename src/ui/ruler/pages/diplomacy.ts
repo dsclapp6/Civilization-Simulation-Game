@@ -3,7 +3,6 @@
 import type { PoliticsRuntime } from '../../../sim/politics/types';
 import { button, chip, empty } from '../../components/widgets';
 import { h } from '../../core/dom';
-import { icon } from '../../core/icons';
 import { politicsRuntime } from '../../panels/politics';
 import { STANCE_WORDS, stanceTone, threatWords, sortRivals } from '../rulerModel';
 import { line, section, statCard, type RulerEnv } from '../rulerUi';
@@ -41,9 +40,8 @@ export function buildDiplomacy(env: RulerEnv): HTMLElement {
   wrap.append(section('The Houses near you', 'shield', neighbours.length ? h('div.mu-list', null, neighbours.map((r) => {
     const t = threatWords(r.threat);
     return h('div.mu-li', null, h('div.mu-grow', null, h('b', null, `House ${r.name}`), h('div.mu-small.mu-dim', null, `${r.head ? ctx.nameOf(r.head) : ''}${r.seat !== undefined ? ` · ${ctx.placeName(r.seat)}` : ''}`)),
-      chip(STANCE_WORDS[r.stance] ?? r.stance, stanceTone(r.stance)), chip(t.word, t.tone === 'ink' ? 'ink' : t.tone),
+      chip(STANCE_WORDS[r.stance] ?? r.stance, stanceTone(r.stance)), chip(t.word, t.tone),
       button('Treat with them', { size: 'small', icon: 'hand', onClick: () => ctx.open({ panel: 'ext', name: 'politics', data: { tab: 'houses' } }) }));
   })) : line('No other House lies within reach.')));
-  void icon;
   return wrap;
 }

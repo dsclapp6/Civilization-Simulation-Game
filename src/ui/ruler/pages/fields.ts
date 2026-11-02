@@ -4,7 +4,6 @@
 import type { CropKind } from '../../../core/domain';
 import { button, chip, empty, heading, slider } from '../../components/widgets';
 import { h } from '../../core/dom';
-import { icon } from '../../core/icons';
 import { settlementCard } from '../../../sim/api';
 import type { ManorPolicy } from '../../../sim/politics/types';
 import { politicsRuntime } from '../../panels/politics';
@@ -73,6 +72,5 @@ export function buildFields(env: RulerEnv): HTMLElement {
     h('div.mu-row.mu-gap-8.mu-wrap', null,
       button('Household tasks', { icon: 'home', tip: 'Who in your household does what: the family page', onClick: () => ctx.open({ panel: 'family', tab: 'household' }) }),
       pol ? button('The full Command page', { icon: 'ledger', tip: 'Vassals, laws and the rest, in the realm and politics panel', onClick: () => ctx.open({ panel: 'ext', name: 'politics', data: { tab: 'manage' } }) }) : null));
-  void icon;
   return wrap;
 }

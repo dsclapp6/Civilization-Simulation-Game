@@ -5,7 +5,7 @@ import techsJson from '../../../content/techs.json';
 import { BUILDINGS } from '../../../content/types';
 import type { ResearchOption, ResearchProject } from '../../../sim/realm/types';
 import { bar, button, chip, empty, heading, seg } from '../../components/widgets';
-import { h, replace } from '../../core/dom';
+import { h } from '../../core/dom';
 import { icon } from '../../core/icons';
 import { dateText } from '../../core/format';
 import { goodIcon } from '../../builder/landsUi';
@@ -56,7 +56,6 @@ export function buildResearch(env: RulerEnv): HTMLElement {
   wrap.append(h('div.mu-row.mu-gap-12.mu-wrap', { style: { margin: '2px 0 10px' } }, branchSeg, meta ? h('span.mu-small.mu-dim', null, `Paid in ${meta.currencies}.`) : null));
   const list = groups.get(bag.branch) ?? [];
   wrap.append(list.length ? h('div.mu-grid.c2', null, list.map((o) => optionCard(env, o, bag))) : empty('Nothing more can be taken up in this branch yet: the techniques you do not command need others first.', { icon: 'book', title: 'All taken up, or none within reach' }));
-  void line; void money;
   return wrap;
 }
 
@@ -116,6 +115,5 @@ function optionCard(env: RulerEnv, o: ResearchOption, bag: Bag): HTMLElement {
     choice.reason && choice.mode !== 'start' ? h('div.mu-small.mu-bad', { style: { marginTop: '4px' } }, choice.reason) : null,
     picker,
     h('div.mu-row.mu-gap-6.mu-wrap', { style: { marginTop: '10px' } }, ...buttons));
-  void replace;
   return card;
 }

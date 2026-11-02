@@ -1,9 +1,8 @@
 // Trade: what your lands yield and what they lack, and the steward's standing orders — sell the surplus when the price is right, buy
 // what the works need, keep so much in store (CIV §6.6). The profit is the realm's gold.
 import type { TradeOrder } from '../../../sim/realm/types';
-import { button, chip, empty, heading, seg } from '../../components/widgets';
+import { button, chip, heading, seg } from '../../components/widgets';
 import { h } from '../../core/dom';
-import { icon } from '../../core/icons';
 import { goodIcon } from '../../builder/landsUi';
 import { formatMoney } from '../../../sim/money';
 import { dateText } from '../../core/format';
@@ -93,7 +92,6 @@ export function buildTrade(env: RulerEnv): HTMLElement {
       h('div.mu-row.mu-gap-8', { style: { marginTop: '8px' } }, button('Give the order', { variant: 'primary', icon: 'check', onClick: add }), chip(`${orders.length} of 24 orders`, '')),
       h('p.mu-tiny.mu-dim', { style: { marginTop: '6px' } }, 'A sale moves at most 400 a day, and only what the treasury’s own stores hold; a purchase spends at most a quarter of the purse a day.')));
   } else wrap.append(line('Only the holder or his steward gives trade orders.'));
-  void empty; void icon;
   return wrap;
 }
 

@@ -113,6 +113,7 @@ class BuilderMode {
   private readonly nameCard = h('div.mu-bld-name.mu-hide');
   private readonly toastEl = h('div.mu-bld-toast.mu-hide');
   private readonly inspector = h('div.mu-bld-inspector.mu-hide');
+  private readonly toolbar = h('div.mu-bld-tool.mu-hide');
 
   private scope: BuildScope;
   private tab: Tab = 'build';
@@ -174,7 +175,7 @@ class BuilderMode {
     this.win.body.classList.add('flush');
     this.win.body.append(this.tabsEl.el, h('div.mu-tabbar-rule'), this.body);
     this.win.setTitle('Builder', this.scope.label);
-    this.root.append(this.win.el, this.inspector, this.cursor, this.hint, this.confirmBar, this.nameCard, this.toastEl);
+    this.root.append(this.win.el, this.inspector, this.toolbar, this.cursor, this.hint, this.confirmBar, this.nameCard, this.toastEl);
     this.hint.append(...hintKeys());
     this.refreshOptions(true);
     this.render();
@@ -310,11 +311,20 @@ class BuilderMode {
     this.setCursor(cursorTip(sel.name, check, costSummary(sel.cost, (g2, q) => describeGood(this.eco, g2, q), 3)));
   }
 
+  private cursorKey = '';
+
+  /** The label by the cursor: rebuilt only when what it says changes, moved every frame. */
   private setCursor(tip: CursorTip | null, kind: 'ghost' | 'hover' = 'ghost'): void {
-    if (!tip || !this.ptr.seen) { this.cursor.classList.add('mu-hide'); return; }
-    this.cursor.classList.remove('mu-hide');
-    this.cursor.className = `mu-bld-cursor ${tip.tone} ${kind}`;
-    replace(this.cursor, h('div', { class: 'mu-bld-cursor-main' }, tip.text), tip.sub ? h('div.mu-bld-cursor-sub', null, tip.sub) : null);
+    if (!tip || !this.ptr.seen) {
+      if (this.cursorKey !== '') { this.cursorKey = ''; this.cursor.classList.add('mu-hide'); }
+      return;
+    }
+    const key = `${tip.tone}|${kind}|${tip.text}|${tip.sub ?? ''}`;
+    if (key !== this.cursorKey) {
+      this.cursorKey = key;
+      this.cursor.className = `mu-bld-cursor ${tip.tone} ${kind}`;
+      replace(this.cursor, h('div', { class: 'mu-bld-cursor-main' }, tip.text), tip.sub ? h('div.mu-bld-cursor-sub', null, tip.sub) : null);
+    }
     const l = this.ctx.toLocal({ x: this.ptr.x, y: this.ptr.y });
     this.cursor.style.transform = `translate(${Math.round(l.x + 18)}px, ${Math.round(l.y + 20)}px)`;
   }
@@ -608,6 +618,7 @@ class BuilderMode {
     this.renderTabsBadge();
     if (this.tab === 'sites') this.renderSites();
     if (this.picked) this.renderInspector();
+    else if (this.selected) this.renderToolbar();
   }
 
   // -------------------------------------------------------------------------------- rendering
@@ -745,17 +756,25 @@ class BuilderMode {
     scroll.scrollTop = keep;
   }
 
-  // ---- the inspector: the kind chosen in the catalogue, or the building or site that was clicked
+  // ---- the inspector: the building or site that was clicked; the tool in hand has its bar along the bottom of the view
   private renderInspector(): void {
     const el = this.inspector;
-    let content: HTMLElement | null = null;
-    if (this.picked) content = this.pickedCard(this.picked);
-    if (!this.picked && this.selected) content = this.kindCard(this.selected);
-    if (!content) { el.classList.add('mu-hide'); clear(el); return; }
-    const keep = el.scrollTop;
+    const content = this.picked ? this.pickedCard(this.picked) : null;
+    if (!content) { el.classList.add('mu-hide'); clear(el); } else {
+      const keep = el.scrollTop;
+      el.classList.remove('mu-hide');
+      replace(el, iconButton('cross', 'Close (Esc)', () => this.onEscape(), { small: true }), content);
+      el.scrollTop = keep;
+    }
+    this.renderToolbar();
+  }
+
+  private renderToolbar(): void {
+    const el = this.toolbar;
+    const o = !this.picked ? this.selected : null;
+    if (!o) { el.classList.add('mu-hide'); clear(el); return; }
     el.classList.remove('mu-hide');
-    replace(el, iconButton('cross', 'Put it down (Esc)', () => this.onEscape(), { small: true }), content);
-    el.scrollTop = keep;
+    replace(el, this.kindBar(o));
   }
 
   private pickedCard(p: { type: 'building' | 'site'; id: number }): HTMLElement | null {
@@ -769,29 +788,30 @@ class BuilderMode {
     return this.buildingCard(p.id);
   }
 
-  private kindCard(o: BuildOption): HTMLElement {
+  /** The tool in hand: what it is, what it costs against your stores, what it needs, and the ways to put it down. */
+  private kindBar(o: BuildOption): HTMLElement {
     const stores = this.payerStores();
     const lack = shortfall(o.cost, (g) => holdOf(stores, g));
     const goods = costLines(o.cost, (g, q) => describeGood(this.eco, g, q));
     const req = requirementLines(o.requires, techName, (t) => this.sim.services.advancement?.houseHas(this.scope.house, t) ?? false);
     const home = o.category === 'home';
-    const wrap = h('div.mu-bld-card');
-    append(wrap,
-      h('div.mu-row.mu-between.mu-top', { style: { paddingRight: '26px' } }, h('h4', null, o.name), h('span.mu-chip', null, icon(CATEGORY_ICON[o.category], 13), CATEGORY_LABEL[o.category])),
+    const info = h('div.mu-bld-tool-info');
+    append(info,
+      h('div.mu-row.mu-gap-8', null, h('h4', null, o.name), h('span.mu-chip', null, icon(CATEGORY_ICON[o.category], 13), CATEGORY_LABEL[o.category])),
       h('div.mu-small.mu-ink2', null, o.does),
       reasonLine(o.ok ? null : o.reason),
-      h('div.mu-bld-cost', null,
-        caption('Costs'),
-        h('div.mu-row.mu-wrap.mu-gap-6', null,
-          goods.map((l) => l.kind === 'good' && l.good ? goodLine(this.eco, l.good, l.qty, holdOf(stores, l.good)) : h('span.mu-good-line', null, icon(l.kind === 'labour' ? 'hammer' : 'coin', 15), h('span', null, l.text)))),
-        Object.keys(lack).length ? h('div.mu-tiny.mu-dim', { style: { marginTop: '4px' } }, `Short in your stores: ${Object.entries(lack).map(([g, q]) => describeGood(this.eco, g, q)).join(', ')} — bought at the nearest market and carted in.`) : h('div.mu-tiny.mu-good', { style: { marginTop: '4px' } }, 'Your stores hold all the materials.')),
-      req.length ? h('div.mu-bld-req', null, req.map((r) => h('span.mu-bld-reqline', { class: r.tone ?? '' }, icon(r.icon, 14), r.text))) : null,
-      home && o.ok ? h('div.mu-col.mu-gap-4', { style: { marginTop: '8px', alignItems: 'flex-start' } }, h('span.mu-small', null, 'When it is built:'),
-        seg([{ id: 'builder' as const, label: 'Our household moves in' }, { id: 'vacant' as const, label: 'Let to a family' }], this.occupant, (v) => { this.occupant = v; })) : null,
-      o.ok ? h('div.mu-row.mu-gap-6.mu-wrap', { style: { marginTop: '10px' } },
-        button('Place for me', { variant: 'primary', icon: 'pin', tip: 'The builders find a fitting spot near where you are looking; you confirm it', onClick: () => this.placeForMe() }),
-        h('span.mu-tiny.mu-dim', null, `or click the land; Q and E turn it (${Math.round((ROTATE_STEP * 180) / Math.PI)}°)`)) : null);
-    return wrap;
+      h('div.mu-row.mu-wrap.mu-gap-6', { style: { marginTop: '6px' } },
+        goods.map((l) => l.kind === 'good' && l.good ? goodLine(this.eco, l.good, l.qty, holdOf(stores, l.good)) : h('span.mu-good-line', null, icon(l.kind === 'labour' ? 'hammer' : 'coin', 15), h('span', null, l.text)))),
+      Object.keys(lack).length ? h('div.mu-tiny.mu-dim', { style: { marginTop: '3px' } }, `Short in your stores: ${Object.entries(lack).map(([g, q]) => describeGood(this.eco, g, q)).join(', ')} — bought at the nearest market and carted in.`) : h('div.mu-tiny.mu-good', { style: { marginTop: '3px' } }, 'Your stores hold all the materials.'),
+      req.length ? h('div.mu-bld-req.row', null, req.map((r) => h('span.mu-bld-reqline', { class: r.tone ?? '' }, icon(r.icon, 14), r.text))) : null);
+    const act = h('div.mu-bld-tool-act');
+    append(act,
+      iconButton('cross', 'Put it down (Esc)', () => this.cancelTool(), { small: true }),
+      home && o.ok ? h('div.mu-col.mu-gap-4', { style: { alignItems: 'flex-end' } }, h('span.mu-tiny.mu-dim', null, 'When it is built'),
+        seg([{ id: 'builder' as const, label: 'We move in' }, { id: 'vacant' as const, label: 'Let to a family' }], this.occupant, (v) => { this.occupant = v; })) : null,
+      o.ok ? button('Place for me', { variant: 'primary', icon: 'pin', tip: 'The builders find a fitting spot near where you are looking; you confirm it', onClick: () => this.placeForMe() }) : null,
+      o.ok ? h('span.mu-tiny.mu-dim', null, `or click the land · Q and E turn it (${Math.round((ROTATE_STEP * 180) / Math.PI)}°)`) : null);
+    return h('div.mu-bld-tool-row', null, info, act);
   }
 
   private siteCardEl(site: SiteView): HTMLElement {

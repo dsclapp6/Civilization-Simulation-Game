@@ -25,7 +25,7 @@ export function buildRivals(env: RulerEnv): HTMLElement {
   const list = h('div.mu-rul-rlist', null, rivals.map((r) => {
     const t = threatWords(r.threat);
     const row = h('div.mu-rul-rrow2', { class: r.house === bag.selected ? 'sel' : '' },
-      h('div.mu-row.mu-between.mu-gap-8', null, h('b', null, `House ${r.name}`), chip(t.word, t.tone === 'ink' ? 'ink' : t.tone)),
+      h('div.mu-row.mu-between.mu-gap-8', null, h('b', null, `House ${r.name}`), chip(t.word, t.tone)),
       h('div.mu-tiny.mu-dim', null, `${r.head ? ctx.nameOf(r.head) : ''}${r.seat !== undefined ? ` · seat ${ctx.placeName(r.seat)}` : ''} · ${kmText(r.distance)} away`),
       h('div.mu-row.mu-gap-8', { style: { marginTop: '4px' } }, h('div.mu-grow', null, bar('vermilion', r.strength / maxStrength, { thin: true }).el), h('span.mu-tiny.mu-num', null, `strength ${Math.round(r.strength)}`)),
       h('div.mu-row.mu-between.mu-gap-8', { style: { marginTop: '3px' } }, h('span.mu-tiny.mu-ink2', null, growthWords(r)), chip(STANCE_WORDS[r.stance] ?? r.stance, stanceTone(r.stance))));
@@ -40,7 +40,7 @@ export function buildRivals(env: RulerEnv): HTMLElement {
   const offer = r.seat !== undefined ? ruleOffer(ctx.game, r.seat) : null;
   const detail = h('div.mu-card.mu-rul-rdetail', null,
     h('div.mu-row.mu-between.mu-top', null, h('div', null, h('h4', null, `House ${r.name}`), h('div.mu-small.mu-dim', null, house ? `${house.kind} · rooted at ${ctx.placeName(house.seat)}` : '')),
-      h('div.mu-row.mu-gap-6', null, chip(t.word, t.tone === 'ink' ? 'ink' : t.tone, 'warning'), chip(STANCE_WORDS[r.stance] ?? r.stance, stanceTone(r.stance)))),
+      h('div.mu-row.mu-gap-6', null, chip(t.word, t.tone, 'warning'), chip(STANCE_WORDS[r.stance] ?? r.stance, stanceTone(r.stance)))),
     h('div.mu-grid.c3', { style: { margin: '10px 0' } },
       stat('Strength', Math.round(r.strength).toLocaleString('en-GB'), r.share !== undefined ? `${Math.round(r.share * 100)}% of the continent’s` : ''),
       stat('Places held', r.settlements ?? '?', r.seat !== undefined ? `seat ${ctx.placeName(r.seat)}` : ''),
