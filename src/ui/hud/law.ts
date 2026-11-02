@@ -9,7 +9,7 @@ import type { CaptivityView, PatrolView } from '../../sim/law/types';
 import type { TrespassLevel } from '../../sim/territory/types';
 import { h } from '../core/dom';
 import { formatMoney } from '../core/format';
-import { registerHotkey, registerHudPart, type HudPart, type HudPartCtx } from '../core/extHud';
+import { registerHudPart, type HudPart, type HudPartCtx } from '../core/extHud';
 import { icon, type IconName } from '../core/icons';
 import { escortText } from '../panels/law';
 
@@ -107,28 +107,13 @@ function ensureStyle(): void {
   document.head.appendChild(el);
 }
 
-/** How long F is held before the whistle (s). */
-export const WHISTLE_SECONDS = 0.55;
-
-/**
- * Hold F to call the horse. The UI asks the hotkey when F goes down (only when the game screen is up, nothing is typed into and no
- * screen or conversation holds the keyboard) and never again while it is held; the key is not consumed, so the press still reaches the
- * player (a tap mounts a horse that is by). The HUD part watches the clock and the key coming up.
- */
-const hold = { since: -1, fired: false };
-registerHotkey('KeyF', () => { hold.since = performance.now(); hold.fired = false; return false; });
+// Hold F to call the horse is the input layer's (src/app/inputLogic.ts → PlayerApi.callHorse); the plaque shows the horse coming.
 
 function build(ctx: HudPartCtx): HudPart {
   ensureStyle();
   const el = h('div.mu-plate.mu-law-plaque.mu-hide', { role: 'status', 'aria-live': 'polite' });
   let last = '';
   let nextAt = 0;
-  const onUp = (e: KeyboardEvent): void => { if (e.code === 'KeyF') hold.since = -1; };
-  const onBlur = (): void => { hold.since = -1; };
-  if (typeof window !== 'undefined') {
-    window.addEventListener('keyup', onUp);
-    window.addEventListener('blur', onBlur);
-  }
 
   const read = (): PlaqueInput | null => {
     const g = ctx.game();
@@ -161,11 +146,6 @@ function build(ctx: HudPartCtx): HudPart {
   return {
     el,
     update(now: number) {
-      // the whistle: F held long enough, with no horse at hand (the controller says so quietly when there is one)
-      if (hold.since >= 0 && !hold.fired && performance.now() - hold.since >= WHISTLE_SECONDS * 1000) {
-        hold.fired = true;
-        ctx.game()?.player.callHorse?.();
-      }
       if (now < nextAt) return;
       nextAt = now + 0.2;
       const model = read();
@@ -180,12 +160,6 @@ function build(ctx: HudPartCtx): HudPart {
         h('div', null, h('div.mu-law-title', null, p.title), p.sub ? h('div.mu-law-sub', null, p.sub) : null),
         ...(p.action ? [h<HTMLButtonElement>('button.mu-btn.small', { type: 'button', onclick: openLaw }, p.action)] : []),
       );
-    },
-    dispose() {
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('keyup', onUp);
-        window.removeEventListener('blur', onBlur);
-      }
     },
   };
 }
