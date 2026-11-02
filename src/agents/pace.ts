@@ -41,7 +41,8 @@ export function runSpeed(p: Person, age: number): number {
   v *= 0.94 + 0.12 * hash01(p.id, 62);
   if (age < 12) v *= 0.9; else if (age > 45) v *= Math.max(0.78, 1 - 0.008 * (age - 45));
   if (p.health.hp < 0.6) v *= 0.85;
-  return clamp(v, 2.4, RUN_MAX);
+  // the able run at 2.8-3.6 m/s; the old, the young and the hurt run (when they must, to get away) a little slower
+  return clamp(v, age >= 12 && age <= 45 && p.health.hp >= 0.7 ? RUN_MIN : 2.4, RUN_MAX);
 }
 
 const RUNNING_CAREERS: ReadonlySet<string> = new Set(['soldier', 'archer', 'man_at_arms', 'sergeant', 'page', 'squire', 'peddler', 'servant']);
