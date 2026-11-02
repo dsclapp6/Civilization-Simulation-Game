@@ -14,10 +14,11 @@ import { kinshipLabel } from '../sim/api';
 import { AnimalSystem } from './animals';
 import { Agent, St } from './agent';
 import { endOrder, replan, updateAgent } from './behaviour';
-import { ADULT_RADIUS, CHILD_RADIUS, ENTER_RADIUS, LEAVE_RADIUS, NAV_BUILD_BUDGET_MS, PATH_BUDGET_MS, SPAWN_BUDGET_MS, WALK_SPEED } from './config';
+import { ADULT_RADIUS, CHILD_RADIUS, ENTER_RADIUS, LEAVE_RADIUS, NAV_BUILD_BUDGET_MS, PATH_BUDGET_MS, SPAWN_BUDGET_MS } from './config';
 import { SpatialHash } from './hash';
 import { findInteractables } from './interact';
 import { Nav } from './nav';
+import { canJog, runSpeed, walkSpeed } from './pace';
 import { makePlate, type PlateContext } from './plates';
 import { Places } from './places';
 import { newIntent, Schedule, type Intent } from './schedule';
@@ -353,7 +354,7 @@ export class Zone {
     a.age = ageYears(p, this.now);
     a.tier = p.rankTier;
     a.radius = a.age < 12 ? CHILD_RADIUS : ADULT_RADIUS;
-    a.baseSpeed = baseSpeed(p, a.age);
+    this.setPace(a);
     a.distFocus = dist;
     a.spawnedAt = this.zoneT;
     a.counter = (p.id * 13) | 0;
@@ -372,7 +373,15 @@ export class Zone {
     if (c.version !== a.draw.lookVersion) { a.draw.look = c.look; a.draw.lookVersion = c.version; }
     a.age = ageYears(a.person, this.now);
     a.tier = a.person.rankTier;
+    this.setPace(a);
     this.refreshPlate(a);
+  }
+
+  /** The person's own walking and running pace and whether they may jog when late (age, build, health: pace.ts). */
+  private setPace(a: Agent): void {
+    a.baseSpeed = walkSpeed(a.person, a.age);
+    a.runSpeed = runSpeed(a.person, a.age);
+    a.canRun = canJog(a.person, a.age);
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -684,11 +693,7 @@ export class Zone {
   targetOfAgent(a: Agent): TargetRef { return { kind: 'person', id: a.personId }; }
 }
 
-/** Walking speed (m/s) by age, agility and health. */
+/** Walking speed (m/s) by age, agility and health (kept for callers of the old name; see pace.ts). */
 export function baseSpeed(p: Person, age: number): number {
-  let v = WALK_SPEED * (1 + 0.012 * (p.trained.agi - 10));
-  if (age < 12) v *= 0.8 + 0.035 * Math.max(0, age - 4);
-  else if (age > 55) v *= Math.max(0.6, 1 - 0.014 * (age - 55));
-  if (p.health.hp < 0.6) v *= 0.8;
-  return v;
+  return walkSpeed(p, age);
 }

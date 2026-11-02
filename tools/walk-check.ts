@@ -104,6 +104,7 @@ function scenes(): Scene[] {
 // ---------------------------------------------------------------------------------------------------------------
 
 type Clip = 'walk' | 'carry_walk' | 'run' | 'other';
+const CLIPS: Clip[] = ['walk', 'carry_walk', 'run', 'other'];
 const clipOf = (anim: string): Clip => (anim === 'walk' ? 'walk' : anim === 'carry_walk' ? 'carry_walk' : anim === 'run' || anim === 'sprint' ? 'run' : 'other');
 
 class Hist {
@@ -115,7 +116,7 @@ class Hist {
   share(pred: (s: number) => boolean): number { return this.v.length ? this.v.filter(pred).length / this.v.length : 0; }
 }
 
-interface Track { x: number; z: number; step: number; hist: Float32Array; ok: Uint8Array; n: number; late: number }
+interface Track { x: number; z: number; step: number; hist: Float32Array; ok: Uint8Array; clips: Uint8Array; n: number; late: number; body: object }
 
 interface Result {
   id: string; title: string; settlement: string; steps: number; people: number; spawned: number;
@@ -124,10 +125,12 @@ interface Result {
   walkShareUnder2: number; walkShareUnder2ByDistance: number;
   fastOffRun: number; walkMax: number; runMin: number; runMax: number;
   jumps: number; jumpList: string[]; maxStep: number; bigSteps: number; bigList: string[];
-  runnersByMode: Record<string, number>; runShareOfMoving: number;
-  arrivals: number; lateOver8s: number; lateP50: number; lateP90: number; lateMax: number;
-  popsIn: number; popsOut: number;
+  runnersByMode: Record<string, number>; runShareOfMoving: number; runners: string[];
+  lateList: string[]; arrivals: number; lateOver8s: number; lateP50: number; lateP90: number; lateMax: number;
+  popsIn: number; popsOut: number; popsRespawn: number; respawnList: string[];
   zoneMs: number;
+  /** By fortieth of the day: average number of people in sight walking / at work (a work clip) / otherwise standing about. */
+  rhythm: Array<{ walking: number; working: number; other: number }>;
 }
 
 function runScene(sc: Scene): Result {
@@ -144,15 +147,20 @@ function runScene(sc: Scene): Result {
   const instantMax: Record<Clip, number> = { walk: 0, carry_walk: 0, run: 0, other: 0 };
   const tracks = new Map<number, Track>();
   const seenNow = new Set<number>();
+  let popsRespawn = 0;
+  const respawnList: string[] = [];
   let jumps = 0, bigSteps = 0, maxStep = 0, fastOffRun = 0, walkMax = 0, runMin = 99, runMax = 0, spawned = 0, popsIn = 0, popsOut = 0;
   const jumpList: string[] = [];
   const bigList: string[] = [];
   const runnersByMode: Record<string, number> = {};
+  const runnerList = new Map<string, number>();
   let movingSamples = 0, runSamples = 0;
   const people = new Set<number>();
   const I = newIntent();
   const lates: number[] = [];
+  const lateList: Array<{ late: number; text: string }> = [];
   let zoneMs = 0;
+  const rhythm = Array.from({ length: 24 }, () => ({ walking: 0, working: 0, other: 0, steps: 0 }));
   const modeName = ['stay', 'wander', 'errand', 'patrol', 'play', 'shoot', 'furrow'];
 
   for (let i = 0; i < steps; i++) {
@@ -160,6 +168,17 @@ function runScene(sc: Scene): Result {
     sim.step(DT);
     zoneMs += performance.now() - w0;
     seenNow.clear();
+    {
+      const hour = Math.min(23, Math.floor((sim.absDay % 1) * 24));
+      const r = rhythm[hour];
+      r.steps++;
+      for (const a of zone.agentsArr) {
+        if (a.dead || Math.hypot(a.x - focus.x, a.z - focus.z) > SEEN) continue;
+        if (a.st === 1 || a.draw.moveSpeed > 0.3) r.walking++;
+        else if (a.draw.anim.startsWith('work_')) r.working++;
+        else r.other++;
+      }
+    }
     for (const a of zone.agentsArr) {
       if (a.dead) continue;
       seenNow.add(a.personId);
@@ -167,11 +186,17 @@ function runScene(sc: Scene): Result {
       const d = Math.hypot(a.x - focus.x, a.z - focus.z);
       let t = tracks.get(a.personId);
       if (!t) {
-        t = { x: a.x, z: a.z, step: i, hist: new Float32Array((WINDOW + 1) * 2), ok: new Uint8Array(WINDOW + 1), n: 0, late: 0 };
+        t = { x: a.x, z: a.z, step: i, hist: new Float32Array((WINDOW + 1) * 2), ok: new Uint8Array(WINDOW + 1), clips: new Uint8Array(WINDOW + 1), n: 0, late: 0, body: a };
         tracks.set(a.personId, t);
         spawned++;
         if (d < SEEN - 40 && i > 5) popsIn++;
         t.hist[0] = a.x; t.hist[1] = a.z; t.ok[0] = 0; t.n = 1;
+        continue;
+      }
+      if (t.body !== a) {
+        // the person was taken out of the zone and put back (a new body): not a move, but a pop if it happened in sight
+        if (Math.hypot(t.x - focus.x, t.z - focus.z) < SEEN - 40 && Math.hypot(a.x - t.x, a.z - t.z) > 1) { popsRespawn++; if (respawnList.length < 8) respawnList.push(`${a.person.first} (${a.activity}) put back ${Math.hypot(a.x - t.x, a.z - t.z).toFixed(1)} m from where the body was, ${d.toFixed(0)} m from the player`); }
+        t.body = a; t.x = a.x; t.z = a.z; t.n = 0; t.step = i;
         continue;
       }
       const dx = a.x - t.x, dz = a.z - t.z;
@@ -191,9 +216,10 @@ function runScene(sc: Scene): Result {
       }
       // the last WINDOW steps, as a ring
       const k = t.n % (WINDOW + 1);
-      t.hist[k * 2] = a.x; t.hist[k * 2 + 1] = a.z; t.ok[k] = inSight && stepLen <= 1 ? 1 : 0; t.n++;
+      t.hist[k * 2] = a.x; t.hist[k * 2 + 1] = a.z; t.ok[k] = inSight && stepLen <= 1 ? 1 : 0; t.clips[k] = CLIPS.indexOf(clipOf(a.draw.anim)); t.n++;
+      // a window counts when every step of it was seen, whole and drawn with the same clip (a change of gait in the middle is no walk or run)
       let clean = t.n > WINDOW;
-      for (let q = 0; clean && q <= WINDOW; q++) if (!t.ok[q]) clean = false;
+      for (let q = 0; clean && q <= WINDOW; q++) if (!t.ok[q] || t.clips[q] !== t.clips[k]) clean = false;
       if (clean && inSight) {
         const o = (t.n - 1 - WINDOW) % (WINDOW + 1);
         const wx = a.x - t.hist[o * 2], wz = a.z - t.hist[o * 2 + 1];
@@ -204,7 +230,7 @@ function runScene(sc: Scene): Result {
         if (v >= 0.25) {
           hist[clip].add(v, DT);
           movingSamples++;
-          if (clip === 'run') { runSamples++; const m = modeName[a.mode]; runnersByMode[m] = (runnersByMode[m] ?? 0) + 1; if (v < runMin) runMin = v; if (v > runMax) runMax = v; }
+          if (clip === 'run') { runSamples++; const m = modeName[a.mode]; runnersByMode[m] = (runnersByMode[m] ?? 0) + 1; if (a.mode !== 4) { const k = `${a.person.first} (${a.person.career}, ${a.age.toFixed(0)} y, ${a.intentLabel})`; runnerList.set(k, (runnerList.get(k) ?? 0) + 1); } if (v < runMin) runMin = v; if (v > runMax) runMax = v; }
           if ((clip === 'walk' || clip === 'carry_walk')) { if (v > walkMax) walkMax = v; if (v > WALK_CAP) fastOffRun++; }
           else if (clip === 'other' && v > WALK_CAP) fastOffRun++;
         }
@@ -227,9 +253,13 @@ function runScene(sc: Scene): Result {
         if (!t) continue;
         zone.sched.intent(a.person, sim.absDay, I);
         const travelling = I.travel < 1;
-        if (t.late === 1 && !travelling && !I.away && !I.indoors) {
+        if (t.late === 1 && !travelling && !I.away && !I.indoors && a.mode !== 2 && a.mode !== 3 && a.mode !== 1) {
           const rem = Math.hypot(a.x - I.x, a.z - I.z);
-          if (Math.hypot(a.x - focus.x, a.z - focus.z) < SEEN) lates.push(rem / Math.max(0.6, a.baseSpeed));
+          if (Math.hypot(a.x - focus.x, a.z - focus.z) < SEEN) {
+            const late = rem / Math.max(0.6, a.baseSpeed);
+            lates.push(late);
+            if (late > 20) lateList.push({ late, text: `${a.person.first} ${a.person.byname} (${a.person.career}, ${I.label}) ${rem.toFixed(0)} m short of ${I.activity}; walk st ${a.st}, jog ${a.jog}/${a.canRun}, base ${a.baseSpeed.toFixed(2)}, ${a.age.toFixed(0)} y` });
+          }
         }
         t.late = travelling ? 1 : 0;
       }
@@ -255,9 +285,11 @@ function runScene(sc: Scene): Result {
     fastOffRun, walkMax, runMin: runMin === 99 ? 0 : runMin, runMax,
     jumps, jumpList, maxStep, bigSteps, bigList,
     runnersByMode, runShareOfMoving: movingSamples ? runSamples / movingSamples : 0,
-    arrivals: lates.length, lateOver8s: lates.filter((s) => s > 8).length,
+    runners: [...runnerList.entries()].sort((x, y) => y[1] - x[1]).slice(0, 8).map(([k, n]) => `${(n * DT).toFixed(0)} s: ${k}`),
+    lateList: lateList.sort((x, y) => y.late - x.late).slice(0, 8).map((x) => `${x.late.toFixed(0)} s: ${x.text}`), arrivals: lates.length, lateOver8s: lates.filter((s) => s > 8).length,
     lateP50: lates[Math.floor(lates.length * 0.5)] ?? 0, lateP90: lates[Math.floor(lates.length * 0.9)] ?? 0, lateMax: lates[lates.length - 1] ?? 0,
-    popsIn, popsOut, zoneMs: zoneMs / steps,
+    popsIn, popsOut, popsRespawn, respawnList, zoneMs: zoneMs / steps,
+    rhythm: rhythm.map((r) => ({ walking: r.steps ? r.walking / r.steps : 0, working: r.steps ? r.working / r.steps : 0, other: r.steps ? r.other / r.steps : 0 })),
   };
 }
 
@@ -279,9 +311,17 @@ function report(r: Result): void {
     console.log(`   ${c.padEnd(12)} ${x.seconds.toFixed(0).padStart(8)} ${x.metres.toFixed(0).padStart(8)} ${f1(x.p50).padStart(6)} ${f1(x.p90).padStart(6)} ${f1(x.p98).padStart(6)} ${f1(x.max).padStart(6)} ${pc(x.over2).padStart(6)} ${pc(x.over24).padStart(6)}`);
   }
   console.log(`   per-step (instantaneous) maxima: walk ${f1(r.instantMax.walk)}, carry ${f1(r.instantMax.carry_walk)}, run ${f1(r.instantMax.run)}, other clips ${f1(r.instantMax.other)}`);
+  for (const l of r.runners) console.log(`      runs (not at play): ${l}`);
   console.log(`   running: ${pc(r.runShareOfMoving)} of the movement${r.runMin ? ` (speeds ${f1(r.runMin)}–${f1(r.runMax)})` : ''}; by mode ${JSON.stringify(r.runnersByMode)}`);
+  for (const l of r.lateList) console.log(`      late: ${l}`);
   console.log(`   keeping the schedule: ${r.arrivals} arrivals in sight; ${r.lateOver8s} more than 8 s from their place when the schedule said arrived; seconds late p50 ${r.lateP50.toFixed(1)} p90 ${r.lateP90.toFixed(1)} max ${r.lateMax.toFixed(0)}`);
-  console.log(`   pop-ins/outs in sight (info): ${r.popsIn} appeared, ${r.popsOut} vanished`);
+  const hrs = r.rhythm.map((x, h) => ({ h, ...x })).filter((x) => x.walking + x.working + x.other > 0.01);
+  if (hrs.length) {
+    console.log('   people in sight by hour of the day (average walking / working / standing about):');
+    console.log('   ' + hrs.map((x) => `${String(x.h).padStart(2, '0')}h ${x.walking.toFixed(0).padStart(3)}/${x.working.toFixed(0).padStart(2)}/${x.other.toFixed(0).padStart(3)}`).join(' | '));
+  }
+  console.log(`   pop-ins/outs in sight (info): ${r.popsIn} appeared, ${r.popsOut} vanished, ${r.popsRespawn} taken out and put back elsewhere`);
+  for (const j of r.respawnList) console.log(`      respawn: ${j}`);
   console.log(`   ACCEPT walking ≤ 2.0 m/s: ${pc(r.walkShareUnder2)} of walk-clip movement by time (${pc(r.walkShareUnder2ByDistance)} by distance), need ≥ 98%  ${r.walkShareUnder2 >= 0.98 ? 'ok' : 'FAIL'}`);
   console.log(`   ACCEPT fast movement off the run clip: ${r.fastOffRun} samples (max walk-clip speed ${f1(r.walkMax)}), need 0  ${r.fastOffRun === 0 ? 'ok' : 'FAIL'}`);
   console.log(`   ACCEPT jumps > 1 m in sight: ${r.jumps} (largest step ${r.maxStep.toFixed(2)} m), need 0  ${r.jumps === 0 ? 'ok' : 'FAIL'}`);

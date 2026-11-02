@@ -53,7 +53,10 @@ export class Agent implements ZoneAgent {
   radius = 0.28;
   age = 30;
   tier = 2;
-  baseSpeed = 1.38;
+  /** Unhurried walking pace (m/s, pace.ts `walkSpeed`) and the pace of a run; may this person break into a jog when badly late. */
+  baseSpeed = 1.3;
+  runSpeed = 3.2;
+  canRun = true;
   // last step displacement (the view extrapolates by it between steps)
   dx = 0; dz = 0; dy = 0;
   prevYawRate = 0;
@@ -89,11 +92,26 @@ export class Agent implements ZoneAgent {
   readonly route = new Float32Array(MAX_WAYPOINTS * 2);
   routeN = 0;
   pathFails = 0;
+  /** The path in hand ends short of the goal (it lies beyond the map the navigation knows, or beyond a search): go on from its end. */
+  cont = false;
+  contN = 0;
   stuck = 0;
   progX = 0; progZ = 0; progT = 0;
   ghostX = 0; ghostZ = 0;
+  /** When (zone time) the door they stand at was last checked against the schedule. */
+  doorCheck = 0;
   runPace = false;
+  /** The pace asked for, as a multiple of the person's unhurried walk (1 = their own walk, up to MAX_HURRY hurrying; more = a run). */
   paceScale = 1;
+  /** Speed along the way now (m/s): a walker eases into a stride and out of it. */
+  vel = 0;
+  /** The current walk has a time the schedule wants it over by (`arriveBy`): the pace is looked at again about once a second. */
+  scheduled = false;
+  paceT = 0;
+  /** Jogging because badly late. */
+  jog = false;
+  /** Ground speed smoothed over a fraction of a second: what the renderer's stride follows. */
+  msm = 0;
   /** Terrain speed factor under the feet (refreshed a few times a second). */
   tf = 1;
   wading = false;

@@ -53,11 +53,14 @@ describe('whereabouts', () => {
     const farmers = adults().filter((p) => (p.career === 'farmer' || p.career === 'cottar' || p.career === 'labourer') && p.sex === 'm');
     expect(farmers.length).toBeGreaterThan(2);
     let atStrip = 0;
+    const I = newIntent();
     for (const f of farmers) {
-      const w = where(f, SUMMER, 2, 0.4);
-      expect(w.indoors).toBe(false);
-      expect(w.activity).toBe('work');
-      if (sp.strips.some((s) => pointInPolygon(w.x, w.z, s.poly) || Math.hypot(w.x - s.poly[0].x, w.z - s.poly[0].z) < 40)) atStrip++;
+      // on a ten-minute day the way to the strips is a long walk: at this hour many are still on it, and the intent is the place they walk to
+      setClock(rig.sim, SUMMER, 2, 0);
+      rig.zone.sched.intent(f, rig.sim.absDay + 0.4, I);
+      expect(I.indoors).toBe(false);
+      expect(I.activity).toBe('work');
+      if (sp.strips.some((s) => pointInPolygon(I.x, I.z, s.poly) || Math.hypot(I.x - s.poly[0].x, I.z - s.poly[0].z) < 40)) atStrip++;
     }
     expect(atStrip / farmers.length).toBeGreaterThan(0.8);
   });
@@ -132,17 +135,24 @@ describe('whereabouts', () => {
   });
 
   it('moves people between places over a few hours (travel is part of the day)', () => {
-    const p = adults().find((q) => q.career === 'farmer')!;
     const o = newIntent();
-    let walking = 0, total = 0;
+    let walking = 0, total = 0, most = 0;
     setClock(rig.sim, SUMMER, 2, 0);
-    for (let i = 0; i < 96; i++) {
-      rig.zone.sched.intent(p, rig.sim.absDay + i / 96, o);
-      total++;
-      if (o.travel < 1) walking++;
+    const farmers = adults().filter((q) => q.career === 'farmer');
+    expect(farmers.length).toBeGreaterThan(3);
+    for (const p of farmers) {
+      let mine = 0;
+      for (let i = 0; i < 96; i++) {
+        rig.zone.sched.intent(p, rig.sim.absDay + i / 96, o);
+        total++;
+        if (o.travel < 1) { walking++; mine++; }
+      }
+      most = Math.max(most, mine / 96);
     }
     expect(walking).toBeGreaterThan(0);
-    expect(walking).toBeLessThan(total * 0.55); // the fields are a long walk on a ten-minute day: half the day at the worst
+    // people walk at the speed of people (a ten-minute day): the fields are a long way for some, a short one for most
+    expect(walking).toBeLessThan(total * 0.62);
+    expect(most).toBeLessThan(0.8);
   });
 });
 

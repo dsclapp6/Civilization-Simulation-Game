@@ -7,7 +7,8 @@ import type { AnimState } from '../core/view';
 import { ageYears, hasFlag } from '../sim/state';
 import { Agent, Ph, St } from './agent';
 import { DAY_SECONDS } from '../core/time';
-import { MAX_HURRY, RUN_SPEED, SEEN_RADIUS, WARP_FAR, WARP_MAX, WARP_NEAR } from './config';
+import { ACCEL, DECEL, ENTER_RADIUS, JOG_END, JOG_START, SEEN_RADIUS, WARP_FAR, WARP_MAX, WARP_NEAR } from './config';
+import { DETOUR, GROUND_MAX, MAX_HURRY, RUN_CLIP_OFF, RUN_CLIP_ON, WALK_TOP, gaitSpeed, loadFactor } from './pace';
 import { Mode, type Intent } from './schedule';
 import type { Zone } from './zone';
 
@@ -64,7 +65,9 @@ export function replan(z: Zone, a: Agent, spawning: boolean): void {
   // look again when the person is due to set out for their next place, and now and then in between
   const next = I.travel < 1 ? I.until : Math.max(I.leave, z.now + 0.002);
   a.replanAt = Math.min(next, z.now + 0.012 + 0.004 * ((a.personId * 7) % 5));
-  a.arriveBy = I.travel < 1 ? I.from : z.now;
+  // a walk the schedule has under way is due to end at `arrive` (they set out early enough for their own pace); otherwise no deadline
+  a.arriveBy = I.travel < 1 ? I.arrive : z.now;
+  const due = I.travel < 1;
   const sig = signature(I);
   if (sig === a.sig && !spawning) return;
   const hadSpot = a.sig !== 0;
@@ -101,16 +104,46 @@ export function replan(z: Zone, a: Agent, spawning: boolean): void {
   a.stuck = 0;
   const dist = Math.hypot(a.tx - a.x, a.tz - a.z);
   if (!hadSpot && !spawning) return;
-  if (dist > (a.wantIn || a.wantAway ? 0.9 : 1.3)) goTo(z, a, a.tx, a.tz, arrivalPace(z, a));
+  a.jog = false; a.contN = 0;
+  if (dist > (a.wantIn || a.wantAway ? 0.9 : 1.3)) goTo(z, a, a.tx, a.tz, arrivalPace(z, a, due), due);
   else if (a.wantIn) { a.st = St.Door; } else { a.st = St.Idle; a.timer = 1 + 5 * rnd(a, 4); }
 }
 
-/** How fast to walk to arrive when the schedule wants the person there: an easy walk when there is time, up to MAX_HURRY when behind. */
-function arrivalPace(z: Zone, a: Agent): number {
+/** The way left to walk along the path in hand (metres). */
+function remaining(a: Agent): number {
+  let x = a.x, zz = a.z, len = 0;
+  for (let i = a.pathI; i < a.pathN; i++) {
+    const px = a.path[i * 2], pz = a.path[i * 2 + 1];
+    len += Math.hypot(px - x, pz - zz);
+    x = px; zz = pz;
+  }
+  // a path that stops short of the goal (it lies beyond the map the navigation knows) goes on in a straight line
+  if (a.cont) len += Math.hypot(a.tx - x, a.tz - zz) * DETOUR;
+  return len;
+}
+
+/**
+ * The pace (a multiple of the person's own unhurried walk) that gets them to a place by the time the schedule wants them there, with
+ * `rem` metres to go: their own walk when there is time, hurrying (at most MAX_HURRY) when behind, and a jog — only if they are able —
+ * when they would be badly late even hurrying. Looked at again about once a second while the walk lasts.
+ */
+function paceFor(z: Zone, a: Agent, rem: number): number {
+  // (rough ground slows a walker, but the schedule has allowed for most of that)
+  const cruise = Math.max(0.5, a.baseSpeed * loadFactor(a.draw.carry) * Math.min(1, Math.max(0.75, a.tf)));
   const left = (a.arriveBy - z.now) * DAY_SECONDS;
-  if (left <= 4) return a.arriveBy > z.now ? MAX_HURRY : 1;
-  const need = (Math.hypot(a.tx - a.x, a.tz - a.z) * 1.15) / left / a.baseSpeed;
-  return Math.max(1, Math.min(MAX_HURRY, need));
+  // how late they would be if they hurried all the way
+  const late = rem / (cruise * MAX_HURRY) - Math.max(0, left);
+  if (a.jog) { if (late < JOG_END) a.jog = false; }
+  else if (late > JOG_START && a.canRun) a.jog = true;
+  if (a.jog) return Math.max(1, a.runSpeed / cruise);
+  if (left <= 1) return rem > 6 ? MAX_HURRY : 1;
+  return Math.max(1, Math.min(MAX_HURRY, rem / left / cruise));
+}
+
+/** First pace for a walk about to begin: the way is not known yet, so the straight line and a little more. */
+function arrivalPace(z: Zone, a: Agent, due: boolean): number {
+  if (!due) return 1;
+  return paceFor(z, a, Math.hypot(a.tx - a.x, a.tz - a.z) * DETOUR);
 }
 
 /**
@@ -119,10 +152,12 @@ function arrivalPace(z: Zone, a: Agent): number {
  */
 function teleport(z: Zone, a: Agent, tx: number, tz: number): void {
   if (a.wantIn || a.wantAway) { a.dead = true; z.hide(a.personId, a.arriveBy + 0.001); return; }
+  // a place beyond the reach of the zone: the person is simply there, not here
+  if (!a.summoned && Math.hypot(tx - z.focusX, tz - z.focusZ) > ENTER_RADIUS + 12) { a.dead = true; z.hide(a.personId, a.arriveBy + 0.001); return; }
   const out = z.tmpP;
   if (z.nav.nearestWalkable(tx, tz, 2.5, out)) { tx = out.x; tz = out.z; }
   a.x = tx; a.z = tz; a.y = z.nav.groundY(tx, tz);
-  a.pathN = a.pathI = 0; a.st = St.Idle; a.stuck = 0;
+  a.pathN = a.pathI = 0; a.st = St.Idle; a.stuck = 0; a.cont = false; a.contN = 0;
   legDone(z, a);
 }
 
@@ -154,11 +189,16 @@ function enterSeen(z: Zone, a: Agent): void {
 }
 
 /** Heads for (tx, tz): straight when close and clear, else through the path finder. */
-export function goTo(z: Zone, a: Agent, tx: number, tz: number, pace: number): void {
+export function goTo(z: Zone, a: Agent, tx: number, tz: number, pace: number, scheduled = false): void {
   a.paceScale = pace;
+  a.scheduled = scheduled;
+  a.paceT = 1;
+  a.cont = false;
   const dx = tx - a.x, dz = tz - a.z;
   const d = Math.sqrt(dx * dx + dz * dz);
   if (d < 0.45) { a.st = St.Idle; a.pathN = a.pathI = 0; return; }
+  // where the path is searched to: the goal, or as far towards it as the navigation map goes
+  let px = tx, pz = tz;
   if (a.control === 'ai' && d > 6) {
     // out of sight and not coming into it: no need to walk
     const fx = z.focusX, fz = z.focusZ;
@@ -166,17 +206,27 @@ export function goTo(z: Zone, a: Agent, tx: number, tz: number, pace: number): v
       teleport(z, a, tx, tz);
       return;
     }
-    if (!z.nav.grid.inWindow(Math.floor(tx / 2), Math.floor(tz / 2))) { a.setDirect(tx, tz); a.st = St.Walk; return; }
+    if (!z.nav.grid.inWindow(Math.floor(tx / 2), Math.floor(tz / 2))) {
+      if (!z.nav.grid.inWindow(Math.floor(a.x / 2), Math.floor(a.z / 2))) { a.setDirect(tx, tz); a.st = St.Walk; return; }
+      // the goal is beyond the map the navigation knows: walk a path towards it as far as the map goes, then carry on
+      // (walkers out of sight finish the trip off-screen; see walk())
+      let s = Math.min(1, 200 / d);
+      while (s > 0.15 && !z.nav.grid.inWindow(Math.floor((a.x + dx * s) / 2), Math.floor((a.z + dz * s) / 2))) s -= 0.1;
+      px = a.x + dx * s; pz = a.z + dz * s;
+      a.cont = true;
+    }
   }
   if (d < 9 && z.nav.finder.lineClear(a.x, a.z, tx, tz)) { a.setDirect(tx, tz); a.st = St.Walk; return; }
   a.st = St.Wait;
   a.pathAsked = z.zoneT;
   z.nav.queue.request({
-    owner: a.personId, fx: a.x, fz: a.z, tx, tz, maxLength: 0, priority: a.distFocus,
+    owner: a.personId, fx: a.x, fz: a.z, tx: px, tz: pz, maxLength: 0, priority: a.distFocus,
     done: (ok, buf) => {
       if (a.dead || a.st !== St.Wait) return;
       if (ok && buf.n > 0) {
         a.setPath(buf.x, buf.z, buf.n); a.st = St.Walk; a.pathFails = 0;
+        // a partial path (the goal is beyond the search box, or sealed in) ends short of it: on from there when it ends
+        if (!buf.complete) a.cont = true;
         if (a.leg === 1 && (a.mode === Mode.Errand || a.mode === Mode.Patrol)) { a.route.set(a.path.subarray(0, a.pathN * 2)); a.routeN = a.pathN; }
         if (a.control === 'ai' && a.distFocus > SEEN_RADIUS) enterSeen(z, a);
         return;
@@ -236,6 +286,8 @@ export function updateAgent(z: Zone, a: Agent, dt: number): void {
     }
     reactions(z, a, dt);
   }
+  // not walking (or waiting for a way): no speed to carry over, no deadline to keep
+  if (a.st !== St.Walk && a.st !== St.Wait) { a.vel = 0; a.scheduled = false; }
   // overlay animations (a kneel, a wave) win over the routine
   if (a.overlay !== '' && z.zoneT < a.overlayUntil) setAnim(a, a.overlay);
   else if (a.overlay !== '') a.overlay = '';
@@ -245,7 +297,9 @@ export function updateAgent(z: Zone, a: Agent, dt: number): void {
   a.dy = a.y - y0;
   const v = Math.sqrt(a.dx * a.dx + a.dz * a.dz) / dt;
   a.speed = v;
-  d.moveSpeed = v * z.clockSpeed;
+  // the stride the renderer draws follows the ground speed, smoothed over a fraction of a second (no stutter from a nudge by a neighbour)
+  a.msm = v < 0.02 ? 0 : a.msm + (v - a.msm) * Math.min(1, dt * 12);
+  d.moveSpeed = a.msm * z.clockSpeed;
   // speech bubble: a spoken line replaces the nameplate while it lasts
   if (a.speech !== null) {
     if (z.zoneT >= a.speechUntil) { a.speech = null; z.showPlate(a); } else d.label = a.speech;
@@ -282,55 +336,84 @@ function walk(z: Zone, a: Agent, dt: number): void {
   }
   if (dist < 1e-4) return;
   const lastLeg = a.pathI === a.pathN - 1;
-  let v = a.baseSpeed * a.paceScale * warp(a.distFocus);
-  if (lastLeg && dist < 1.8) v *= 0.5 + 0.5 * (dist / 1.8);
-  // terrain: roads quick, mud slow
-  if (a.counter % 6 === 0) a.tf = z.nav.speedFactor(a.x, a.z) || 0.6;
+  // a walk with a time to be there by: the pace is looked at again about once a second
+  if (a.scheduled) {
+    a.paceT -= dt;
+    if (a.paceT <= 0) { a.paceT = 1; a.paceScale = paceFor(z, a, remaining(a)); }
+  }
+  // the ground under the feet: roads a little quicker, mud and shallows slower
+  if (a.counter % 6 === 0) a.tf = Math.min(GROUND_MAX, z.nav.speedFactor(a.x, a.z) || 0.6);
   a.counter++;
-  v *= a.tf;
+  // how fast: the person's own walk (or run) at the pace asked for, slowed by what they carry and the ground, easing into the stride
+  // and into the stop. Only far from the player (beyond SEEN_RADIUS) is a walker hurried along a little.
+  const wp = warp(a.distFocus);
+  let want = gaitSpeed(a.baseSpeed * a.paceScale * loadFactor(a.draw.carry) * a.tf) * wp;
+  if (lastLeg && dist < 1.8) want *= 0.5 + 0.5 * (dist / 1.8);
+  a.vel += clamp(want - a.vel, -DECEL * dt, ACCEL * dt);
+  const v = a.vel;
   // step away from others (ranks, the player) while keeping the way
   if (a.distFocus > SEEN_RADIUS + 20) { z.sepX = 0; z.sepZ = 0; } else z.separation(a);
   let vx = (dx / dist) * v + z.sepX, vz = (dz / dist) * v + z.sepZ;
   const sp = Math.sqrt(vx * vx + vz * vz);
-  const cap = v * 1.35 + 0.2;
-  if (sp > cap) { vx *= cap / sp; vz *= cap / sp; }
+  // a walker pushed aside by a crowd never goes faster than a walk
+  const running = a.draw.anim === 'run' ? v / wp > RUN_CLIP_OFF : v / wp > RUN_CLIP_ON;
+  const cap = running ? v * 1.12 + 0.12 : Math.min(WALK_TOP + 0.02, v * 1.12 + 0.1);
+  let sp2 = sp;
+  if (sp > cap) { vx *= cap / sp; vz *= cap / sp; sp2 = cap; }
   const mr = z.mr;
   z.nav.move(a.x, a.z, vx * dt, vz * dt, a.radius, mr);
   a.x = mr.x; a.z = mr.z;
   // walkers who have left the area people can see finish their trip out of sight
   if (a.control === 'ai' && a.distFocus > SEEN_RADIUS + 10 && a.pathN > 0) {
-    const ex = a.path[(a.pathN - 1) * 2], ez = a.path[(a.pathN - 1) * 2 + 1];
+    // (a path that ends short of the goal leads on to the goal itself)
+    const ex = a.cont ? a.tx : a.path[(a.pathN - 1) * 2], ez = a.cont ? a.tz : a.path[(a.pathN - 1) * 2 + 1];
     if (Math.hypot(ex - z.focusX, ez - z.focusZ) > SEEN_RADIUS + 10 && Math.hypot(ex - a.x, ez - a.z) > 10) { teleport(z, a, ex, ez); return; }
   }
   if (mr.wading) a.wading = true; else a.wading = false;
   // face the way of travel
-  const want = Math.atan2(vx, vz);
-  a.yaw = turnToward(a.yaw, want, TURN_RATE * dt);
-  // animation
-  const sp2 = Math.sqrt(vx * vx + vz * vz);
+  a.yaw = turnToward(a.yaw, Math.atan2(vx, vz), TURN_RATE * dt);
+  // animation: the clip follows the ground speed (the run clip only when really running; the far-off speed-up is not shown)
   if (a.overlay === '') {
-    // 'run' only when the person is really running; people hurrying far from the focus (time warp) just walk
-    const loaded = a.draw.carry !== 'none';
-    const pace = sp2 / Math.max(0.3, warp(a.distFocus));
-    setAnim(a, loaded && pace < 2.4 ? 'carry_walk' : pace > 2.35 ? 'run' : 'walk');
+    const real = sp2 / wp;
+    const run = a.draw.anim === 'run' ? real > RUN_CLIP_OFF : real > RUN_CLIP_ON;
+    setAnim(a, run ? 'run' : a.draw.carry !== 'none' ? 'carry_walk' : 'walk');
   }
   // stuck? (walking into something that will not give)
   a.progT += dt;
   if (a.progT >= 0.9) {
     const moved2 = Math.hypot(a.x - a.progX, a.z - a.progZ);
     a.progT = 0; a.progX = a.x; a.progZ = a.z;
-    if (moved2 < 0.1 * Math.max(0.5, v)) {
-      a.stuck += 0.9;
-      if (a.stuck >= 1.8 && a.stuck < 2.7 || a.stuck >= 5) { goTo(z, a, a.tx, a.tz, a.paceScale); }
-      if (a.stuck >= 3.6) { a.pathI = Math.min(a.pathN - 1, a.pathI + 1); }
-      if (a.stuck >= 9 && a.distFocus > 25) { a.x = a.tx; a.z = a.tz; a.y = z.nav.groundY(a.x, a.z); arrive(z, a); }
-      else if (a.stuck >= 14) a.dead = true;
-    } else a.stuck = 0;
+    if (moved2 < 0.1 * Math.max(0.5, v)) { a.stuck += 0.9; unstick(z, a); } else a.stuck = 0;
+  }
+}
+
+/**
+ * Held up by a crowd, a gap that is too narrow, a door that is busy: look for another way, step past a waypoint, and in the end be
+ * satisfied with being near enough — nobody is carried across the street in sight (only unseen walkers are put at their goal).
+ */
+function unstick(z: Zone, a: Agent): void {
+  const toGoal = Math.hypot(a.tx - a.x, a.tz - a.z);
+  const seen = a.distFocus <= SEEN_RADIUS + 10;
+  if ((a.stuck >= 1.8 && a.stuck < 2.7) || (a.stuck >= 5 && a.stuck < 5.9)) { goTo(z, a, a.tx, a.tz, a.paceScale, a.scheduled); return; }
+  if (a.stuck >= 3.6 && a.stuck < 4.5) a.pathI = Math.min(a.pathN - 1, a.pathI + 1);
+  if (a.stuck < 7) return;
+  if (toGoal < 4.5) { arrive(z, a); return; }
+  if (!seen) { a.x = a.tx; a.z = a.tz; a.y = z.nav.groundY(a.x, a.z); arrive(z, a); return; }
+  if (a.stuck >= 14) {
+    // no way through for now: stand where they are and look again a little later
+    a.pathN = 0; a.pathI = 0; a.st = St.Idle; a.stuck = 0; a.replanAt = z.now + 0.03; a.timer = 2 + 4 * rnd(a, 29);
   }
 }
 
 function arrive(z: Zone, a: Agent): void {
   a.pathN = 0; a.pathI = 0; a.stuck = 0;
+  // a path that ended short of the goal (beyond the map, or a long way round): go on from where it ended
+  if (a.cont && a.contN < 12 && Math.hypot(a.tx - a.x, a.tz - a.z) > 4) {
+    a.contN++;
+    goTo(z, a, a.tx, a.tz, a.paceScale, a.scheduled);
+    return;
+  }
+  a.contN = 0; a.cont = false;
   a.st = St.Idle;
   if (a.wantAway) {
     // left the settlement (a gate, the edge of the village): fold back into the macro tier
@@ -473,7 +556,8 @@ function play(z: Zone, a: Agent, dt: number): void {
   }
   if (!z.nav.walkable(tx, tz)) { a.timer = 0.8; return; }
   a.runPace = true;
-  a.paceScale = pace * (RUN_SPEED / a.baseSpeed) * 0.75;
+  // children at play run in bursts (2.8–3.4 m/s), then stop to catch their breath
+  a.paceScale = (a.runSpeed * (0.86 + 0.2 * (pace - 0.9) / 0.5)) / a.baseSpeed;
   if (z.nav.finder.lineClear(a.x, a.z, tx, tz)) { a.setDirect(tx, tz); a.st = St.Walk; } else { a.timer = 0.8; }
 }
 
@@ -539,6 +623,12 @@ function atDoor(z: Zone, a: Agent, dt: number): void {
   a.draw.carry = a.carry === 'child' ? 'child' : a.draw.carry;
   if (a.building < 0) { a.dead = true; z.hide(a.personId, a.arriveBy + 0.001); return; }
   a.yaw = turnToward(a.yaw, a.tyaw + Math.PI, TURN_RATE * 0.5 * dt);
+  // still bound for this door? The schedule may have them set off again before they could go in: then they do not step in and out
+  if (z.zoneT >= a.doorCheck) {
+    a.doorCheck = z.zoneT + 0.6;
+    z.sched.intent(a.person, z.now, z.I);
+    if (!z.I.indoors || z.I.away || z.I.building !== a.building) { a.st = St.Idle; a.replanAt = 0; return; }
+  }
   const free = z.doorNext.get(a.building) ?? 0;
   if (z.zoneT < free) return;
   z.doorNext.set(a.building, z.zoneT + 0.7);
@@ -619,7 +709,7 @@ function script(z: Zone, a: Agent, dt: number): void {
     case 'flee': {
       const dx = a.x - o.from.x, dz = a.z - o.from.z;
       const d = Math.hypot(dx, dz) || 1;
-      const sp = a.baseSpeed * 2.3;
+      const sp = a.runSpeed;
       z.nav.move(a.x, a.z, (dx / d) * sp * dt, (dz / d) * sp * dt, a.radius, z.mr);
       a.x = z.mr.x; a.z = z.mr.z;
       a.yaw = turnToward(a.yaw, Math.atan2(dx, dz), TURN_RATE * dt);

@@ -1,7 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { installAgents } from '../../src/agents';
 import { St } from '../../src/agents/agent';
-import { ENTER_RADIUS, LEAVE_RADIUS } from '../../src/agents/config';
+import { ENTER_RADIUS, LEAVE_RADIUS, SEEN_RADIUS } from '../../src/agents/config';
 import { MAX_AGENTS, MAX_ANIMALS } from '../../src/agents/types';
 import { daylight } from '../../src/core/time';
 import type { CharacterDrawItem } from '../../src/core/view';
@@ -37,8 +37,8 @@ describe('the zone', () => {
     for (const a of zone.agentsArr) {
       const w = zone.sched.whereabouts(a.person, sim.absDay);
       expect(w.indoors).toBe(false);
-      // the spawn is the schedule's position (nudged onto walkable ground)
-      expect(Math.hypot(a.x - w.x, a.z - w.z)).toBeLessThan(10);
+      // the spawn is the schedule's position (nudged onto walkable ground); only a walk that nobody can see is finished at once
+      if (a.distFocus <= SEEN_RADIUS) expect(Math.hypot(a.x - w.x, a.z - w.z)).toBeLessThan(10);
       expect(a.y).toBeCloseTo(zone.nav.groundY(a.x, a.z), 2);
     }
   });
@@ -46,7 +46,7 @@ describe('the zone', () => {
   it('draws every agent with a CharacterDrawItem built from the sim\'s appearance cache', () => {
     const { zone, sim } = rig;
     const items = sim.view.characters();
-    expect(items.length).toBe(zone.agentsArr.filter((a) => a.visible).length);
+    expect(items.length).toBe(zone.agentsArr.filter((a) => a.visible && !a.dead).length);
     for (const a of zone.agentsArr) {
       const cached = sim.view.appearance.get(sim.state, a.person, sim.absDay);
       expect(a.draw.look).toBe(cached.look);

@@ -16,16 +16,21 @@ beforeAll(() => {
 }, 180000);
 
 describe('trip lengths', () => {
-  it('give an easy walk over the first hundred metres and a brisker one for the long ways, within bounds', () => {
-    expect(tripDays(1)).toBeCloseTo(0.012, 6);
-    expect(tripDays(50) * 600).toBeGreaterThan(25);
-    expect(100 / (tripDays(100) * 600)).toBeGreaterThan(1.4); // not slower than a stroll
-    expect(100 / (tripDays(100) * 600)).toBeLessThan(2.2);
+  it('give a walk at the speed of people, each at their own pace, within bounds', () => {
+    // a tenth of a minute at least, a day's half at most
+    expect(tripDays(1)).toBeCloseTo(0.01, 6);
+    // 100 m at an unhurried 1.3 m/s along a path a little longer than the line: about 86 s of play
+    expect(tripDays(100) * 600).toBeGreaterThan(80);
+    expect(tripDays(100) * 600).toBeLessThan(95);
+    expect(100 / (tripDays(100) * 600)).toBeLessThan(1.3);
+    // a slow walker is given longer, a quick one less
+    expect(tripDays(200, 1.0)).toBeGreaterThan(tripDays(200, 1.3));
+    expect(tripDays(200, 1.5)).toBeLessThan(tripDays(200, 1.3));
     let prev = 0;
-    for (let d = 5; d < 800; d += 25) { const t = tripDays(d); expect(t).toBeGreaterThanOrEqual(prev); expect(t).toBeLessThanOrEqual(0.3); prev = t; }
-    expect(tripDays(2000)).toBe(0.3);
-    // a long walk to the fields is a brisk pace, not a run
-    expect(400 / (tripDays(400) * 600)).toBeLessThan(3.4);
+    for (let d = 5; d < 1200; d += 25) { const t = tripDays(d); expect(t).toBeGreaterThanOrEqual(prev); expect(t).toBeLessThanOrEqual(0.26); prev = t; }
+    expect(tripDays(3000)).toBe(0.26);
+    // a long walk to the fields is a brisk walk (at most MAX_HURRY times the unhurried one), never a run
+    expect(250 / (tripDays(250) * 600)).toBeLessThan(1.3 * 1.3 * 1.01);
   });
 });
 
@@ -121,8 +126,8 @@ describe('agents on a ten-minute day', () => {
     expect(atDoor / near).toBeGreaterThan(0.85);
   }, 120000);
 
-  it('hurry only so much when behind, and keep their pace slow when there is time', () => {
+  it('hurry only so much when behind, and keep their own pace when there is time', () => {
     expect(MAX_HURRY).toBeGreaterThan(1.2);
-    expect(MAX_HURRY).toBeLessThan(2.2);
+    expect(MAX_HURRY).toBeLessThanOrEqual(1.3);
   });
 });
