@@ -290,3 +290,36 @@
 .mu-hud-clock.folded .mu-hud-speeds, .mu-hud-clock.folded .mu-hud-place, .mu-hud-clock.folded .mu-hud-daytype { display: none; }
 .mu-minimap.folded .mu-minimap-frame, .mu-minimap.folded .mu-minimap-caption, .mu-minimap.folded .mu-minimap-btn { display: none; }
 .mu-toasts.folded .mu-toast:not(.urgent) { display: none; }
+
+/* ---- minimal HUD: flat, soft, narrow cards; only what matters now is shown ---- */
+.mu-hud > .mu-hud-left.mu-hud-left, .mu-hud > .mu-hud-right.mu-hud-right { width: 236px; gap: 6px; }
+.mu-hud .mu-plate, .mu-hud .mu-compass {
+  background: rgba(250, 244, 226, 0.84); border-radius: 8px; opacity: 1;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22); backdrop-filter: blur(3px);
+}
+.mu-hud .mu-plate::before { display: none; }
+.mu-hud .mu-hud-player { padding: 7px 11px 8px; }
+.mu-hud .mu-hud-name { font-size: 14.5px; }
+.mu-hud .mu-hud-money { font-size: 12px; padding: 1px 6px; min-height: 0; }
+.mu-hud .mu-hud-meta, .mu-hud .mu-hud-num { display: none; }
+.mu-hud .mu-hud-bar { margin-top: 4px; gap: 5px; }
+.mu-hud .mu-hud-bar .mu-bar { height: 5px; border-radius: 3px; }
+.mu-hud .mu-hud-bar svg { width: 12px; height: 12px; }
+.mu-hud .mu-hud-lower { margin-top: 3px; min-height: 0; }
+.mu-hud .mu-need.ok { display: none; }
+.mu-hud .mu-need { width: 22px; height: 22px; }
+.mu-hud .mu-hud-perk { font-size: 11.5px; padding: 1px 7px; min-height: 0; }
+.mu-hud .mu-hud-player.critical { box-shadow: 0 0 0 2px rgba(190, 40, 24, 0.9), 0 2px 14px rgba(220, 40, 20, 0.5); }
+.mu-hud .mu-tracker { padding: 6px 11px 7px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22); }
+.mu-hud .mu-tracker-title { font-size: 14px; }
+.mu-hud .mu-hud-clock { padding: 6px 10px 7px; }
+.mu-hud .mu-dock { width: 236px; padding: 3px 5px; gap: 1px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22); }
+.mu-hud > .mu-compass.mu-compass { height: 46px; width: min(440px, calc(100% - 560px)); }
+.mu-hud .mu-dock .mu-dock-break, .mu-hud .mu-dock .mu-dock-sep { display: none; }
+.mu-hud .mu-dock.mu-dock { width: auto; max-width: calc(100% - 560px); flex-wrap: nowrap; }
+.mu-hud .mu-dock .mu-dockbtn { width: 30px; height: 30px; min-width: 0; padding: 0; }
+.mu-hud .mu-dock .mu-dockbtn svg { width: 17px; height: 17px; }
+/* the slim bar runs along the bottom right: the prompt, the work bar and the gains sit above it */
+.mu-hud .mu-hud-prompt { bottom: 62px; }
+.mu-hud .mu-hud-action { bottom: 118px; }
+.mu-hud .mu-hud-gains { bottom: 168px; }

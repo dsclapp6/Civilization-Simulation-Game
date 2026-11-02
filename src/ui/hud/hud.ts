@@ -815,6 +815,9 @@ function dockIcon(d: DockEntry): IconName {
     case 'techs': return 'book';
     case 'politics': return 'crown';
     case 'army': return 'swords';
+    case 'people': return 'users';
+    case 'build': return 'hammer';
+    case 'ruler': return 'castle';
     default: return 'dot';
   }
 }
