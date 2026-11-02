@@ -406,10 +406,10 @@ export function mapPanel(ctx: PanelCtx): UiPanel {
     }
   };
 
-  /** The HUD plates the markers would be drawn over (the panel layer is above the HUD): the clock and the dock. */
+  /** The HUD plates the markers would be drawn over (the panel layer is above the HUD): the clock, the dock and the prompt of what is at hand. */
   const hudRects = (): DOMRect[] => {
     const out: DOMRect[] = [];
-    for (const el of document.querySelectorAll('.mu-hud-right, .mu-dock')) { const b = el.getBoundingClientRect(); if (b.width > 0) out.push(b); }
+    for (const el of document.querySelectorAll('.mu-hud-right, .mu-dock, .mu-hud-prompt')) { const b = el.getBoundingClientRect(); if (b.width > 0) out.push(b); }
     return out;
   };
   const covered = (s: { x: number; y: number } | null, rects: readonly DOMRect[]): boolean => !!s && rects.some((b) => s.x >= b.left - 6 && s.x <= b.right + 6 && s.y >= b.top - 6 && s.y <= b.bottom + 6);

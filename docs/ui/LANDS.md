@@ -15,7 +15,11 @@ their calls, as the AI rulers do; nothing in it changes the simulation by any ot
 
 To try them in the running game: `B`, `U`, `M`; *Rule this town* needs the live-as panel of wave B6 (until it is merged the ext
 panel says "Not yet written"; from the console `__game.session.sim.switchTo(__game.session.sim.services.realm.rulerOf(settlementId))`
-does the same by hand). `node tools/lands-flow.mjs` checks all of it in a browser; `node tools/lands-shots.mjs` makes the pictures below.
+does the same by hand). `node tools/lands-flow.mjs` checks all of it in a browser (about a hundred and twenty checks; `--until=king` runs the first
+half, `--from=king` the second); `node tools/lands-shots.mjs` makes the pictures below (`docs/ui/lands-<name>-1280x720.jpg`, and
+`-1920x1080` beside them). In the pictures the ground is seen from the builder's own camera and there is no ghost and no tint: those
+are drawn by the renderer (wave B2), the interface only tells it what to draw (`setGhost`, `setBuildArea`), and the label by the
+cursor, the red reason and everything else on the screen are the interface's own.
 
 ## 1. Builder mode (`B`)
 
@@ -52,7 +56,7 @@ Curtain walls", "There is a church already: one is all the place can keep"). A s
 a *where* selector when you may build in more than one place (your settlements; *The wild* for a baron), an eye button to hide what you
 cannot raise. The **tool bar** along the bottom of the view shows the chosen kind: what it does, its cost as goods with their icons
 (red where your stores fall short, with how much would be bought and carted), the requirements (technique, terrain, deposit, rank, how
-many a place may hold) and, for homes, whether *our household moves in* or it is *let to a family*.
+many a place may hold) and, for homes, whether *our household moves in* or it is *let to a family*. The keys (**W A S D**, **wheel**, **right drag**, **Q E**, **Esc** and **B**) are listed in the foot of the window.
 
 ![the tool in hand](lands-builder-tool-1280x720.jpg)
 
@@ -176,6 +180,18 @@ without, and the models against the real construction module), `tests/ui/ruler/`
 builder mode (camera, pan, zoom, turn, catalogue, search, ghost, `Q`/`E`/Shift+wheel, the red reason, place for me, the site and the
 building cards, hired hands, priority, cancel, an outpost named by a baron, leaving), every page of the seat with an order on each of
 the main ones (a crop plan, research started and stopped, archers raised, a trade order given and withdrawn) and the news toast.
+
+## Measurements
+
+Taken by the flow on a shared machine at a load of 20 to 40, so for a feel and not a budget (nothing here is asserted): a whole
+frame of the game (simulation, agents and interface, no drawing) with nothing open 1.5 ms, and with builder mode open and a ghost
+following the cursor 1.1 ms; `catalogue(me, where)` for the 63 kinds 0.21 ms (asked every two seconds while the Build tab is up;
+`check` for the ghost is memoised by the module); the pages of the seat are built when they are opened or when something they show
+changes, never every frame: Overview 237 ms, Lands & works 34 ms, Fields & labour 52 ms, Research 245 ms, Military 90 ms, Trade 72 ms,
+Diplomacy 35 ms, Rivals 152 ms (Overview and Research are the dearest because the realm works out `researchOptions`, `accounts` and
+`rivals` for them); the footer's `realm.view(me)` is read twice a second; the map, with the camera moving and the borders and the
+icons redrawn, 34 ms for a step, standing still 0.3 ms (the borders are redrawn only when the camera, a layer, the selection or the
+territory changes; the icons are placed only then too); *People here* walks the residents of one place once, when it is opened.
 
 ## Contract use and changes
 
