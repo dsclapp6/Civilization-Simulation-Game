@@ -95,6 +95,8 @@ export interface UiHost {
   releaseMouseLook?(): boolean;
   /** Is the mouse looking (pointer locked) right now? The HUD tells a drawn weapon with a free cursor from one with the mouse taken. */
   mouseLooking?(): boolean;
+  /** The knight-duel simulation: a fresh run, straight into a fight on foot with a knight (to try the combat). */
+  startDuel?(): Promise<void>;
 }
 
 export type UiScreen = 'menu' | 'loading' | 'game';
