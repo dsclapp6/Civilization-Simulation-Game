@@ -7,16 +7,14 @@ import { skillLevel } from '../../../src/sim/people';
 import { BEASTS, GOODS } from '../../../src/sim/economy/data';
 import { bagGet } from '../../../src/sim/economy/items';
 import { carcassesHeld } from '../../../src/sim/economy/butchery';
+import { mkHousehold, mkPerson } from '../builders';
 import { econSim, find, optionsFor, perform, raise, stockPlayer } from './helpers';
 import type { ActionOption } from '../../../src/sim/actions';
 
 /** Wait until a working day that is not the holy day. */
 function workday(sim: ReturnType<typeof econSim>['sim']): void {
   for (let i = 0; i < 400; i++) {
-    const o = sim.actions.list(sim.state.run.playerId, { kind: 'self' }).find((x) => x.id === 'manage.career');
-    void o;
-    const day = Math.floor(sim.absDay);
-    if (day % 4 !== 3) { if (sim.absDay % 1 > 0.25 && sim.absDay % 1 < 0.7) return; }
+    if (Math.floor(sim.absDay) % 4 !== 3 && sim.absDay % 1 > 0.25 && sim.absDay % 1 < 0.7) return;
     sim.advanceHours(2);
   }
 }
@@ -201,18 +199,60 @@ describe('slaughter and butchery', () => {
   it('the butcher buys meat, hides, tallow, salt meat, carcasses and live beasts', () => {
     const { sim, eco } = econSim({ seed: 'butch-sell' });
     const { player, hh } = stockPlayer(sim, { pig: 2 });
-    const butcher = [...sim.state.persons.values()].find((p) => !p.death && p.career === 'butcher' && p.careerStage >= 1);
-    if (!butcher) return; // the small world has none: the trade table is checked in the content test
-    sim.state.households.get(butcher.household)!.purse = 600;
-    butcher.settlement = player.settlement;
-    player.inventory.meat = 10; player.inventory.hide = 1; player.inventory.tallow = 4; player.inventory.salt_meat = 5;
+    const hh2 = mkHousehold(sim, hh.settlement);
+    hh2.purse = 600;
+    const butcher = mkPerson(sim, { household: hh2.id, career: 'butcher', age: 40, settlement: hh.settlement });
+    sim.state.setHead(hh2, butcher);
+    player.inventory.meat = 10; player.inventory.hide = 1; player.inventory.tallow = 4; player.inventory.salt_meat = 5; player.inventory['pig_carcass#2'] = 1;
     sim.state.touch(player);
+    workday(sim);
     const partner = { kind: 'person', id: butcher.id } as const;
-    const lines = [{ key: 'meat', qty: -10 }, { key: 'hide', qty: -1 }, { key: 'tallow', qty: -4 }, { key: 'salt_meat', qty: -5 }, { key: 'pig', qty: -1 }];
+    const lines = [{ key: 'meat', qty: -10 }, { key: 'hide', qty: -1 }, { key: 'tallow', qty: -4 }, { key: 'salt_meat', qty: -5 }, { key: 'pig_carcass#2', qty: -1 }, { key: 'pig', qty: -1 }];
     const quote = eco.quote(player.id, partner, lines);
     expect(quote.ok, quote.reason).toBe(true);
     expect(quote.money).toBeLessThan(0);
-    void hh;
+    const money0 = player.money + hh.purse;
+    const done = eco.trade(player.id, partner, lines);
+    expect(done.ok, done.reason).toBe(true);
+    expect(player.money + hh.purse).toBeGreaterThan(money0 + 30);
+    expect(hh.stores.pig).toBe(1);
+    expect(bagGet(hh2.stores, 'pig')).toBe(1);
+    expect(bagGet(player.inventory, 'meat')).toBe(0);
+  });
+
+  it('a carcass hung in the larder rots in a couple of days, and a joint of meat is salted before it does', () => {
+    const { sim, eco } = econSim({ seed: 'butch-rot' });
+    const { player, hh } = stockPlayer(sim, { pig: 2 });
+    const sty = raise(sim, 'pigsty', { settlement: hh.settlement, household: hh.id });
+    workday(sim);
+    const target = { kind: 'building', id: sty.id } as const;
+    expect(perform(sim, find(optionsFor(sim, target), 'stock.slaughter.pig')!).ok).toBe(true);
+    const key = carcassesHeld(eco.econ, player, 'pig_carcass')[0].key;
+    expect(bagGet(hh.stores, key) + bagGet(player.inventory, key)).toBe(1);
+    // fresh the next day, gone after a week
+    sim.advanceDays(1);
+    expect(bagGet(hh.stores, key) + bagGet(player.inventory, key)).toBeGreaterThan(0.99);
+    sim.advanceDays(8);
+    if (bagGet(hh.stores, key) > 0) expect.fail('the carcass should have rotted in the larder');
+  });
+
+  it('floats what the work brings: the meat, the tallow, the hide and the experience', () => {
+    const { sim, eco } = econSim({ seed: 'butch-float' });
+    const { player, hh } = stockPlayer(sim, { sheep: 3 });
+    const fold = raise(sim, 'sheepfold', { settlement: hh.settlement, household: hh.id });
+    let t = 0;
+    eco.floaters.clock = () => t;
+    const home = sim.state.buildings.get(hh.home)!;
+    sim.view.setSource('player', () => ({ personId: player.id, x: home.x, y: 30, z: home.z, yaw: 0, mounted: false, alive: true }));
+    workday(sim);
+    const target = { kind: 'building', id: fold.id } as const;
+    perform(sim, find(optionsFor(sim, target), 'stock.slaughter.sheep')!);
+    perform(sim, find(optionsFor(sim, target), 'stock.butcher.sheep')!);
+    const texts: string[] = [];
+    for (let i = 0; i < 60; i++) { t += 400; texts.push(...[...sim.view.drainFloaters!()].map((f) => f.text)); }
+    expect(texts.some((x) => /meat/i.test(x)), texts.join(' | ')).toBe(true);
+    expect(texts.some((x) => /tallow/i.test(x)), texts.join(' | ')).toBe(true);
+    expect(texts.some((x) => /^Husbandry \+\d+/.test(x)), texts.join(' | ')).toBe(true);
   });
 
   it('the data are consistent: every beast and carcass is a good, the plans add up, the butcher works at the slaughterhouse', () => {
