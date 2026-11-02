@@ -24,7 +24,7 @@ burgesses, torch in hand) and a few revellers. Bad weather sends outdoor workers
 stretch has a `from` and an `until`; the schedule gives the walk to the next place a window by distance, pace and ground (`tripDays`:
 the path is 12 % longer than the straight line, each person walks at their own pace — `pace.ts` `walkSpeed` — over the ground they
 cross — marsh, woodland floor and slopes take longer, `groundTime` — and a long way is walked briskly, up to `MAX_HURRY` times that;
-6 s at least, 204 s (`TRAVEL_MAX` 0.34 of a day, 260 m at a brisk pace) at most) and sets the person off that long before the next
+6 s at least, 204 s (`TRAVEL_MAX` 0.34 of a day, about 290 m for an average adult at a brisk pace) at most) and sets the person off that long before the next
 stretch begins, so they are there when it does (`Intent.leave`, `travel` < 1, `prevX/prevZ` the origin, `arrive` the time the walk
 is due to end). A walk is over before the stretch it leads to is; someone who goes indoors stays at least a few seconds (they are
 not seen going in and coming out at once). A long way after a short stretch spills into the next one — and a walk that began two
@@ -176,4 +176,6 @@ hostile). `interactables` scores by distance and facing; strips/parcels via poin
 A village of ~110 agents through a whole ten-minute day: 0.36 ms per sub-step on average, 2.7 ms at the 99th percentile, ~4800 path
 searches (walking everything in sight needs more of them than the old instant trips did; they stay well inside the 1 ms/frame
 budget).
-Tests: `tests/agents/` (schedule, nav, zone, perf).
+Civilization pass (walking at the speed of people, sites, led animals), four runs each, the old and the new code side by side on the same
+machine: 300 agents + 150 animals 1.0–1.4 ms per sub-step at 1× (before: 1.1–1.8) and 2.7–3.8 ms/frame at 8× (before: 2.6–3.2).
+Tests: `tests/agents/` (schedule, nav, zone, pace, walking, walkcheck, sites, lead, plates, perf).
