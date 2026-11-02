@@ -5,6 +5,7 @@
 // politics, construction, territory) lazily on `sim.services`, any of which may be absent. See docs/REALM.md.
 import type { Simulation } from '../sim';
 import type { Wave3Deps } from '../wave3deps';
+import { installAi, type Ai, type RealmAi } from './ai';
 import { closeBooks, yearOf } from './books';
 import { HOURS } from './config';
 import { installNews, newsDaily, newsList, newsYearly, outpostsDaily, rivalsOf } from './news';
@@ -17,10 +18,13 @@ import { addTradeOrder, removeTradeOrder, tradeDaily, tradeOrders } from './trad
 import type { RealmApi } from './types';
 
 export type * from './types';
+export type { RealmAi, YearStats } from './ai';
 
 /** The realm API plus the module's internals (tests, tools and the dev pages). */
 export interface RealmRuntime extends RealmApi {
   readonly ctx: Rlm;
+  /** The AI rulers (docs/REALM.md "The AI rulers"); absent when the realm was installed with `{ ai: false }`. */
+  readonly ai?: RealmAi;
   /** Removes the systems and listeners this install registered. */
   dispose(): void;
 }
@@ -37,7 +41,12 @@ export function realmContext(sim: Simulation): Rlm {
   return r.ctx;
 }
 
-export function installRealm(sim: Simulation, deps: Wave3Deps): RealmRuntime {
+export interface RealmOptions {
+  /** Install the AI rulers (default true): every House but the player's runs the player's loop. */
+  ai?: boolean;
+}
+
+export function installRealm(sim: Simulation, deps: Wave3Deps, opts: RealmOptions = {}): RealmRuntime {
   const existing = installed.get(sim);
   if (existing) return existing;
   const R = new Rlm(sim, { economy: deps.economy, social: deps.social });
@@ -61,8 +70,13 @@ export function installRealm(sim: Simulation, deps: Wave3Deps): RealmRuntime {
   offs.push(installNews(R));
   for (const ev of ['inheritance', 'death', 'office', 'playerSwitched', 'captured'] as const) offs.push(sim.events.on(ev, () => { R.version++; }));
 
+  // ---- the rulers of the other Houses (src/sim/realm/ai*.ts) ----
+  let rulers: Ai | undefined;
+  if (opts.ai !== false) { rulers = installAi(R); offs.push(() => rulers?.dispose()); }
+
   const api: RealmRuntime = {
     ctx: R,
+    ai: rulers,
     dispose() {
       for (const off of offs.splice(0)) off();
       if (sim.services.realm === api) delete sim.services.realm;

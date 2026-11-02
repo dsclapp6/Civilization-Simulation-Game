@@ -1,7 +1,9 @@
 // Headless run of the whole simulation with every gameplay module installed (no zone/player):
 // population, food, conflict and happenings per year, plus per-system cost. From 20 years on it also prints a summary
 // per decade (population min/max, prosperity, famine, revolts, wars, battles, sieges, raids) and the drift per year.
-//   npx tsx tools/fullsim.ts --years 10 [--seed millennia] [--difficulty knight] [--preset tiny|small|large] [--quiet] [--keep-player] [--cpu] [--sections]
+//   npx tsx tools/fullsim.ts --years 10 [--seed millennia] [--difficulty knight] [--preset tiny|small|large] [--quiet] [--keep-player] [--cpu] [--sections] [--no-ai]
+// The AI rulers (src/sim/realm/ai*.ts) run by default: every House but the player's plans works, researches, recruits and trades with the
+// player's own calls. The run prints a yearly table of what they did (`--no-ai` leaves them out, to compare with the same continent without them).
 import { performance } from 'node:perf_hooks';
 import type { Difficulty } from '../src/core/domain';
 import { DAY_SECONDS } from '../src/core/time';
@@ -46,7 +48,7 @@ installAdvancement(sim, deps);
 // civilization pass: land, building and ruling (each finds the others through sim.services)
 installTerritory(sim, deps);
 installConstruction(sim, deps);
-installRealm(sim, deps);
+const realm = installRealm(sim, deps, { ai: !process.argv.includes('--no-ai') });
 installLaw(sim, deps);
 console.log(`ready in ${((performance.now() - t0) / 1000).toFixed(1)} s: ${sim.world.settlements.length} settlements, services: ${Object.keys(sim.services).join(', ')}`);
 
@@ -92,6 +94,28 @@ const prosperity = (): number => {
 if (!quiet) console.log('year   pop  prosp  low  famine  wars  battles  sieges  raids  happenings  ms/yr');
 interface YearRow { year: number; pop: number; pros: number; prosMin: number; famine: number; revolts: number; wars: number; battles: number; sieges: number; raids: number; ms: number }
 const rows: YearRow[] = [];
+// what the AI rulers' realms look like at the end of each year (for the AI table below)
+interface AiState { buildings: number; fortPieces: number; troops: number; rulers: number; belowComfort: number; open: number; outposts: number; warsNow: number }
+const aiStates: AiState[] = [];
+const FORTS = new Set(['palisade', 'wall', 'tower', 'gatehouse', 'motte', 'keep_stone']);
+const aiSnapshot = (): AiState => {
+  let buildings = 0, fortPieces = 0;
+  for (const b of sim.state.buildings.values()) { if (b.construction < 1) continue; buildings++; if (FORTS.has(b.kind)) fortPieces++; }
+  let rulers = 0, below = 0;
+  if (realm.ai) {
+    for (const u of realm.ai.units()) {
+      const S = realm.ai.sense(u.ruler);
+      if (!S) continue;
+      rulers++;
+      if (S.funds < S.comfort) below++;
+    }
+  }
+  return {
+    buildings, fortPieces, troops: realm.ctx.data.troops.length, rulers, belowComfort: below,
+    open: sim.services.construction?.sites().length ?? 0, outposts: sim.services.construction?.outposts().length ?? 0,
+    warsNow: sim.services.politics?.wars().length ?? 0,
+  };
+};
 const count = (...keys: string[]): number => keys.reduce((a, k) => a + (tally[k] ?? 0), 0);
 const prev = { famine: 0, revolts: 0, wars: 0, battles: 0, sieges: 0, raids: 0 };
 const minProsperity = (): number => { let m = 9; for (const st of sim.state.settlements.values()) m = Math.min(m, st.prosperity); return m === 9 ? 1 : m; };
@@ -108,6 +132,7 @@ for (let y = 1; y <= years; y++) {
   const now = { famine: count('happening.famine'), revolts: count('happening.peasant_revolt', 'happening.revolt'), wars: count('war.declared'), battles: count('battle'), sieges: count('siege.start'), raids: count('raid') };
   rows.push({ year: y, pop: living(), pros: prosperity(), prosMin: minProsperity(), famine: now.famine - prev.famine, revolts: now.revolts - prev.revolts, wars: now.wars - prev.wars, battles: now.battles - prev.battles, sieges: now.sieges - prev.sieges, raids: now.raids - prev.raids, ms });
   Object.assign(prev, now);
+  aiStates.push(aiSnapshot());
   if (!quiet) console.log(`${String(y).padStart(4)} ${String(living()).padStart(6)}  ${prosperity().toFixed(2)}  ${minProsperity().toFixed(2)}  ${String(now.famine - prevFam).padStart(6)}  ${String(tally['war.declared'] ?? 0).padStart(4)}  ${String(tally.battle ?? 0).padStart(7)}  ${String(tally['siege.start'] ?? 0).padStart(6)}  ${String(tally.raid ?? 0).padStart(5)}  ${String(happenings).padStart(10)}  ${ms.toFixed(0).padStart(5)}`);
   // headless: when the player dies, carry on as the first eligible successor
   const ps = sim.state.run.pendingSuccession;
@@ -115,6 +140,23 @@ for (let y = 1; y <= years; y++) {
   if (sim.state.run.phase === 'over') { console.log('run over: no heir left'); break; }
 }
 console.log('\ntotals:', Object.entries(tally).sort().map(([k, v]) => `${k}=${v}`).join('  '));
+if (realm.ai) {
+  console.log('\nthe AI rulers, by game year (works = staked out by the rulers; done = of theirs finished; walls = palisade/wall/tower/gate/motte/keep pieces staked out; techs = worked out by their research; wars = declared in the year):');
+  console.log('year  works  built homes walls upgr repair  done cancel outp  res techs recruit knights  orders crops | bldgs  forts  men open outposts below-comfort');
+  const table = realm.ai.table();
+  for (let i = 0; i < rows.length; i++) {
+    const t = table.find((x) => x.year === rows[i].year);
+    const a = aiStates[i];
+    const wars = rows[i].wars;
+    if (!t || !a) continue;
+    console.log(`${String(rows[i].year).padStart(4)} ${String(t.placed).padStart(6)} ${String(t.built).padStart(6)} ${String(t.homes).padStart(5)} ${String(t.defence).padStart(5)} ${String(t.upgrades).padStart(4)} ${String(t.repairs).padStart(6)} ${String(t.done).padStart(5)} ${String(t.cancelled).padStart(6)} ${String(t.outposts).padStart(4)} ${String(t.research).padStart(4)} ${String(t.techs).padStart(5)} ${String(t.recruits).padStart(7)} ${String(t.knights).padStart(7)} ${String(t.orders).padStart(7)} ${String(t.crops).padStart(5)} | ${String(a.buildings).padStart(5)} ${String(a.fortPieces).padStart(6)} ${String(a.troops).padStart(4)} ${String(a.open).padStart(4)} ${String(a.outposts).padStart(8)} ${String(a.belowComfort).padStart(5)}/${a.rulers}  wars ${wars}`);
+  }
+  const ap = sim.scheduler.profile.get('realm.ai');
+  if (ap) {
+    const hours = years * 16 * 24;
+    console.log(`realm.ai: ${(ap.totalMs / hours).toFixed(3)} ms per game hour (calls ${ap.calls}, avg ${(ap.totalMs / Math.max(1, ap.calls)).toFixed(3)}, max ${ap.maxMs.toFixed(1)}, over ${SLOW_MS} ms: ${ap.slow})`);
+  }
+}
 const prof = [...sim.scheduler.profile.entries()].sort((a, b) => b[1].maxMs - a[1].maxMs).slice(0, 14);
 console.log(`\nslowest systems (ms per call; "slow" = calls over ${SLOW_MS} ms):`);
 for (const [name, p] of prof) console.log(`  ${name.padEnd(28)} max ${p.maxMs.toFixed(1).padStart(6)}  avg ${(p.totalMs / Math.max(1, p.calls)).toFixed(3)}  slow ${String(p.slow).padStart(4)}  calls ${p.calls}`);
