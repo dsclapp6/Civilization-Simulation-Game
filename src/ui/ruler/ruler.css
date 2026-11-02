@@ -1,0 +1,96 @@
+/* Ruler mode: the seat of government (civilization pass, wave B). Pages are grids of parchment cards. */
+
+.mu-modal .mu-win.mu-rul-win { max-width: min(1500px, 100%); }
+.mu-rul-content { flex: 1 1 0; min-height: 0; padding: 14px 30px 20px; position: relative; z-index: 2; }
+.mu-rul-page { display: flex; flex-direction: column; gap: 14px; }
+.mu-rul-page > .mu-h3 { margin-bottom: 0; }
+
+/* the notice strip: the last order's outcome, a refusal's reason in red */
+.mu-rul-note { position: relative; z-index: 3; margin: 8px 30px 0; padding: 7px 12px; border-radius: 3px; display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; border: 1px solid var(--rule); background: rgba(255, 249, 228, 0.7); }
+.mu-rul-note.bad { border-color: var(--vermilion); background: rgba(172, 40, 24, 0.1); color: var(--vermilion); }
+.mu-rul-note.ok { border-color: var(--green); background: rgba(56, 106, 55, 0.12); color: var(--green); }
+
+/* the footer: the figures that move */
+.mu-rul-status { display: flex; flex-wrap: wrap; gap: 6px 22px; align-items: center; font-size: 14px; }
+.mu-rul-status-item { display: inline-flex; align-items: center; gap: 6px; }
+.mu-rul-status-item svg { color: var(--gold); }
+.mu-rul-status-item b { font-variant-numeric: tabular-nums; }
+
+/* stat cards */
+.mu-rul-stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.mu-rul-stat { padding: 9px 12px 10px; }
+.mu-rul-stat-v { font-size: 21px; font-weight: 700; line-height: 1.15; margin: 2px 0 1px; }
+.mu-rul-stat.good .mu-rul-stat-v { color: var(--green); }
+.mu-rul-stat.bad .mu-rul-stat-v { color: var(--vermilion); }
+.mu-rul-stat.gold .mu-rul-stat-v { color: var(--gold); }
+
+.mu-rul-sec h4 { font-size: 16px; margin-bottom: 8px; color: var(--ink-2); }
+.mu-rul-sec h4 svg { color: var(--gold); }
+.mu-rul-cols { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.mu-rul-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.mu-rul-grid2 { grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 12px; }
+
+/* the map of your lands */
+.mu-rul-mapwrap { border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: #e6dcb4; }
+.mu-rul-map { display: block; width: 100%; height: auto; font-family: var(--font); }
+.mu-swatch { display: inline-block; width: 12px; height: 9px; border-radius: 2px; vertical-align: -1px; border: 1px solid rgba(0, 0, 0, 0.45); }
+.mu-swatch.gold { background: rgba(214, 170, 70, 0.7); }
+.mu-swatch.lapis { background: rgba(29, 65, 143, 0.4); }
+.mu-swatch.orange { background: rgba(227, 154, 69, 0.8); }
+
+.mu-rul-stores { max-height: 232px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 20px; padding-right: 6px; }
+.mu-rul-store { display: flex; align-items: center; gap: 7px; font-size: 13.5px; padding: 2px 0; border-bottom: 1px solid var(--rule-soft); }
+.mu-rul-store svg { color: var(--gold); flex: none; }
+.mu-rul-news { display: flex; align-items: flex-start; gap: 9px; padding: 3px 4px; border-radius: 2px; }
+.mu-rul-news > svg { color: var(--gold); margin-top: 3px; flex: none; }
+.mu-rul-news.hot { background: rgba(172, 40, 24, 0.08); box-shadow: inset 3px 0 0 var(--vermilion); }
+.mu-rul-news.hot > svg { color: var(--vermilion); }
+
+/* lands, the queue */
+.mu-rul-place h4 { font-size: 17px; margin-bottom: 2px; }
+.mu-rul-qrow { padding: 8px 10px; }
+.mu-rul-qrow .mu-bar { margin-top: 4px; }
+
+/* fields */
+.mu-rul-fields3 { gap: 10px; margin: 8px 0; }
+.mu-rul-field { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--rule-soft); border-radius: 3px; background: rgba(255, 249, 228, 0.4); }
+.mu-rul-share { margin: 10px 0 4px; }
+.mu-rul-share .mu-range { max-width: 340px; }
+.mu-rul-policy { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--rule-soft); display: grid; gap: 6px; }
+.mu-rul-pol { display: grid; grid-template-columns: 150px minmax(0, 220px); gap: 10px; align-items: center; }
+
+/* research */
+.mu-rul-opt h4 { font-size: 17px; margin: 0; }
+.mu-rul-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.mu-rul-pick label { display: flex; flex-direction: column; gap: 2px; }
+
+/* military */
+.mu-rul-recruit { display: flex; flex-direction: column; gap: 8px; }
+.mu-rul-rrow h4 { font-size: 16px; margin: 0 0 4px; }
+.mu-rul-count { width: 72px; text-align: right; }
+.mu-rul-troops { max-height: 300px; }
+
+/* trade */
+.mu-rul-order { gap: 12px; }
+.mu-rul-num { width: 120px; }
+.mu-rul-form { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-end; margin: 8px 0 6px; }
+.mu-rul-form label { display: flex; flex-direction: column; gap: 2px; }
+.mu-rul-lacks { display: flex; flex-direction: column; gap: 5px; margin: 0; font-size: 13.5px; }
+.mu-rul-lacks li { display: flex; gap: 8px; align-items: flex-start; }
+.mu-rul-lacks svg { color: var(--vermilion); margin-top: 3px; flex: none; }
+.mu-right { text-align: right; }
+
+/* rivals */
+.mu-rul-rcols { display: grid; grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.4fr); gap: 14px; align-items: start; }
+.mu-rul-rlist { display: flex; flex-direction: column; gap: 6px; }
+.mu-rul-rrow2 { padding: 9px 12px; border: 1px solid var(--rule-soft); border-radius: 3px; background: rgba(255, 249, 228, 0.4); cursor: pointer; }
+.mu-rul-rrow2:hover { background: rgba(255, 244, 205, 0.7); }
+.mu-rul-rrow2.sel { background: var(--lapis-wash); border-color: var(--lapis); box-shadow: inset 3px 0 0 var(--lapis); }
+.mu-rul-rdetail h4 { font-size: 20px; margin: 0; }
+
+@container win (max-width: 1000px) {
+  .mu-rul-cols, .mu-rul-rcols { grid-template-columns: minmax(0, 1fr); }
+  .mu-rul-grid2 { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* the banner's "Rule this town" (hud/banner.ts) and the map's lands layers and people lists share lands.css */

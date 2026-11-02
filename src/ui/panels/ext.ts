@@ -7,4 +7,5 @@ import './advancement';
 import './military';
 // civilization pass, wave B: builder mode (B) and the ruler's seat of government (U)
 import '../builder/builder';
+import '../ruler/ruler';
 export {};
