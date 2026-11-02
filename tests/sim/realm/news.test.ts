@@ -1,7 +1,7 @@
 // News and rivals (docs/CIV.md §6.8, §10): what neighbours do, with a threat reading; the yearly counts.
 import { describe, expect, it } from 'vitest';
 import { NEWS } from '../../../src/sim/realm/config';
-import { bump, newsDaily, threatOf, yearCounts } from '../../../src/sim/realm/news';
+import { bump, newsDaily, outpostsDaily, threatOf, yearCounts } from '../../../src/sim/realm/news';
 import type { Simulation } from '../../../src/sim/sim';
 import { makePlayer } from '../builders';
 import { aManor, holderOf, realmSim, setDay, titlesOfKind } from './helpers';
@@ -101,6 +101,21 @@ describe('news from events', () => {
     expect(first[0].text).toMatch(/has raised \d+ men/);
     newsDaily(R);
     expect(realm.news(5).filter((n) => n.kind === 'army')).toHaveLength(1);
+  });
+
+  it('tells of an outpost founded in the wild, once', () => {
+    const { sim, realm, R, lord } = scene();
+    const outposts = [{ id: 1, name: 'Ironhold', settlement: lord.settlement, x: 10, z: 10, deposit: 3, founded: 0 }];
+    (sim.services as { construction?: unknown }).construction = { outposts: () => outposts };
+    outpostsDaily(R);
+    const n = realm.news(3).filter((x) => x.kind === 'founded');
+    expect(n).toHaveLength(1);
+    expect(n[0].text).toMatch(/founded the outpost of Ironhold/);
+    outpostsDaily(R);
+    expect(realm.news(5).filter((x) => x.kind === 'founded')).toHaveLength(1);
+    outposts.push({ id: 2, name: 'Saltmere', settlement: lord.settlement, x: 20, z: 20, deposit: 4, founded: 1 });
+    outpostsDaily(R);
+    expect(realm.news(5).filter((x) => x.kind === 'founded')).toHaveLength(2);
   });
 
   it('keeps the newest first and no more than the ring holds', () => {

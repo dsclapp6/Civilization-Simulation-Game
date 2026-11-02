@@ -7,7 +7,7 @@ import type { Simulation } from '../sim';
 import type { Wave3Deps } from '../wave3deps';
 import { closeBooks, yearOf } from './books';
 import { HOURS } from './config';
-import { installNews, newsDaily, newsList, newsYearly, rivalsOf } from './news';
+import { installNews, newsDaily, newsList, newsYearly, outpostsDaily, rivalsOf } from './news';
 import { cropPlan, cropPlanView, setCropPlan, setWorksShare, worksShare } from './plans';
 import { discharge, dub, recruit, recruitOptions, troopsDaily, troopsOf } from './recruit';
 import { projectsOf, researchDaily, researchOptions, startResearch, stopResearch } from './research';
@@ -51,7 +51,7 @@ export function installRealm(sim: Simulation, deps: Wave3Deps): RealmRuntime {
       if (h >= HOURS.research.from && h < HOURS.research.from + HOURS.research.shards) researchDaily(R, h - HOURS.research.from, HOURS.research.shards);
       else if (h === HOURS.troops) troopsDaily(R);
       else if (h >= HOURS.trade.from && h < HOURS.trade.from + HOURS.trade.shards) tradeDaily(R, h - HOURS.trade.from, HOURS.trade.shards);
-      else if (h === HOURS.news) newsDaily(R);
+      else if (h === HOURS.news) { newsDaily(R); outpostsDaily(R); }
       else if (h === HOURS.books) closeBooks(R);
     },
   }));

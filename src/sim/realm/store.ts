@@ -129,8 +129,9 @@ export interface RealmSave {
   /** "house:settlement" → the garrison household the realm raised its men into. */
   gar: Record<string, number>;
   news: NewsItem[];
-  /** Armies already reported. */
+  /** Armies already reported, and outposts. */
   seen: number[];
+  outs: number[];
   /** House → this year's [built, techs, recruited] and last year's. */
   ctr: Record<string, number[]>;
   books: Record<string, BookRec>;
@@ -141,7 +142,7 @@ export interface RealmSave {
 export function emptySave(): RealmSave {
   return {
     v: VERSION, seq: { project: 1, order: 1, news: 1 }, projects: [], orders: [], plans: {}, troops: [], arrears: {}, behind: {},
-    gar: {}, news: [], seen: [], ctr: {}, books: {}, pop: {},
+    gar: {}, news: [], seen: [], outs: [], ctr: {}, books: {}, pop: {},
   };
 }
 

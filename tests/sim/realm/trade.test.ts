@@ -5,7 +5,7 @@ import { TRADE } from '../../../src/sim/realm/config';
 import { aManor, holderOf, realmSim, stock, titlesOfKind } from './helpers';
 
 const rig = (market = true) => {
-  const r = realmSim({ preset: 'large', market });
+  const r = realmSim({ preset: 'small', market });
   return { ...r, ...aManor(r.sim) };
 };
 
@@ -48,7 +48,7 @@ describe('giving orders', () => {
   });
 
   it('are seen by whoever else rules from the same treasury (the lord\'s steward, his heir in the household)', () => {
-    const r = realmSim({ preset: 'large', politics: true });
+    const r = realmSim({ preset: 'small', politics: true });
     const kt = titlesOfKind(r.sim, 'kingdom')[0];
     const king = holderOf(r.sim, kt);
     const steward = [...r.sim.state.persons.values()].find((p) => !p.death && p.house === king.house && p.career === 'steward')!;

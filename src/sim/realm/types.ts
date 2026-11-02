@@ -80,6 +80,8 @@ export interface ResearchOption {
   /** Goods the stores lack (good → amount) and what buying them at the nearest market would cost now (pence); `startResearch(..., { buy: true })` does so. */
   short?: Readonly<Record<string, number>>;
   buyCost?: number;
+  /** Everything else is in order and the treasury can pay both the work and the goods: `startResearch(..., { buy: true })` will do it. */
+  buyable?: boolean;
   /** Days the work should take with the best researcher at the best place. */
   days?: number;
 }
@@ -205,7 +207,12 @@ export interface RealmApi {
   /** Knight one of your men (or yourself by your liege's leave): the accolade. */
   dub(person: PersonId, candidate: PersonId): Result;
 
+  /**
+   * The crop named for each field's NEXT sowing (winter corn in autumn, a spring crop in spring), or 'fallow' where none is named
+   * and the usual rotation decides. The economy reads it when it sows.
+   */
   cropPlan(settlement: number): Readonly<Record<0 | 1 | 2, CropKind | 'fallow'>>;
+  /** Names a crop for a field: a winter crop is sown in autumn, a spring crop in spring (the field's own turn); 'fallow' clears the plan. */
   setCropPlan(person: PersonId, settlement: number, field: 0 | 1 | 2, crop: CropKind): Result;
   /** Share 0..1 of the manor's week-work sent to the lord's works (construction sites) instead of the demesne. */
   worksShare(settlement: number): number;
@@ -238,7 +245,7 @@ export interface RealmTroop {
   person: PersonId;
   kind: UnitKind;
   settlement: number;
-  /** The garrison household he belongs to. */
+  /** The household his wage is paid into (the garrison household; a knight's own). */
   household: HouseholdId;
   since: number;
   /** Pence a day from the treasury. */

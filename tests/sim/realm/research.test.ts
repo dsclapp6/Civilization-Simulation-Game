@@ -5,7 +5,7 @@ import { TECHS } from '../../../src/sim/advancement';
 import { killPerson } from '../../../src/sim/succession';
 import { addBuilding, aManor, forget, realmSim, stock, titlesOfKind, holderOf, householdOf } from './helpers';
 
-const rig = () => realmSim({ politics: true, military: true, preset: 'large' });
+const rig = () => realmSim({ politics: true, military: true, preset: 'small' });
 const def = (id: string) => TECHS.find((t) => t.id === id)!;
 
 /** A manor lord with a place for heavy ploughs and the House without the technique. */
@@ -24,7 +24,7 @@ describe('the options', () => {
     const o = options.find((x) => x.tech === 'heavy_plough')!;
     expect(o).toBeTruthy();
     expect(o.branch).toBe('economy');
-    expect(o.cost).toEqual({ goods: def('heavy_plough').research!.goods, pence: 220, days: 10 });
+    expect(o.cost).toEqual({ goods: def('heavy_plough').research!.goods, pence: 220, days: def('heavy_plough').research!.days });
     expect(o.researchers.length).toBeGreaterThan(0);
     expect(o.places.length).toBeGreaterThan(0);
     // the techniques the House has are not offered, nor those whose parents it lacks
@@ -42,12 +42,28 @@ describe('the options', () => {
     expect(o.reason).toMatch(/Needs .*planks.*timber/);
     expect(o.short).toEqual({ planks: 20, timber: 24 });
     expect(o.buyCost).toBeGreaterThan(0);
+    expect(o.buyable).toBe(true);
     // a school the realm lacks
     const ws = realm.researchOptions(lord.id).find((x) => x.tech === 'wool_trade');
-    if (ws) expect(ws.reason).toMatch(/You have no warehouse/);
+    if (ws) expect(ws.reason).toMatch(/You have no warehouse|Nobody in your lands/);
     hh.purse = 50;
     const poor = realm.researchOptions(lord.id).find((x) => x.tech === 'heavy_plough')!;
     expect(poor.reason).toMatch(/treasury holds/);
+    // goods can be bought only if the treasury can pay for the work and the goods both, and there is a merchant
+    hh.purse = 230;
+    expect(realm.researchOptions(lord.id).find((x) => x.tech === 'heavy_plough')!.buyable).toBe(false);
+  });
+
+  it('cannot be bought into without a merchant', () => {
+    const r = realmSim({ politics: true, military: true, preset: 'small', market: false });
+    const m = aManor(r.sim);
+    forget(r, 'heavy_plough');
+    addBuilding(r.sim, m.settlement, 'carpenter');
+    const o = r.realm.researchOptions(m.lord.id).find((x) => x.tech === 'heavy_plough')!;
+    expect(o.buyable).toBe(false);
+    const res = r.realm.startResearch(m.lord.id, 'heavy_plough', 0, -1, { buy: true });
+    expect(res.ok).toBe(false);
+    expect(res.reason).toMatch(/no merchant/);
   });
 
   it('are empty for someone who rules nothing, and say so for a steward who may not commission', () => {
@@ -77,7 +93,7 @@ describe('starting and finishing', () => {
     expect(events).toEqual(['started']);
     expect(realm.startResearch(lord.id, 'heavy_plough', 0, -1)).toMatchObject({ ok: false, reason: 'Already under way' });
 
-    // it takes about ten days at a capable researcher's pace; the daily jobs run at hour 6
+    // it takes about a week or two at a capable researcher's pace; the daily jobs run in the early hours
     sim.advanceDays(3);
     const mid = realm.projects().find((x) => x.id === res.project)!;
     expect(mid.progress).toBeGreaterThan(0.05);

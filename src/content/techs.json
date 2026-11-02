@@ -14,7 +14,7 @@
       "learn": { "careers": ["farmer", "yeoman", "wheelwright"], "skill": "farming", "minSkill": 3, "rate": 0.02, "player": { "actions": ["farm.plough"], "need": 14 } },
       "teach": { "skill": "farming", "min": 4, "fee": 48 },
       "effects": { "farm.yield": 0.1, "prosperity": 0.03 },
-      "research": { "goods": { "timber": 24, "planks": 20 }, "pence": 220, "days": 10, "place": ["carpenter", "sawpit", "smithy"] }
+      "research": { "goods": { "timber": 24, "planks": 20 }, "pence": 220, "days": 8, "place": ["carpenter", "sawpit", "smithy"] }
     },
     {
       "id": "improved_rotation", "branch": "economy", "name": "Improved rotation", "points": 25,
@@ -23,7 +23,7 @@
       "learn": { "careers": ["farmer", "yeoman", "steward", "bailiff"], "skill": "farming", "minSkill": 5, "rate": 0.01, "player": { "actions": ["farm.sow", "farm.harrow", "farm.manure"], "need": 30 } },
       "teach": { "skill": "farming", "min": 6, "fee": 96 },
       "effects": { "farm.yield": 0.08, "prosperity": 0.04, "famine.resist": 0.15 },
-      "research": { "goods": { "timber": 16, "straw": 30 }, "pence": 360, "days": 14, "place": ["barn", "tithe_barn", "granary", "manor_house"] }
+      "research": { "goods": { "timber": 16, "straw": 30 }, "pence": 360, "days": 10, "place": ["barn", "tithe_barn", "granary", "manor_house"] }
     },
     {
       "id": "watermill", "branch": "economy", "name": "Watermill", "points": 20,
@@ -32,7 +32,7 @@
       "learn": { "careers": ["miller", "carpenter", "mason"], "building": ["watermill"], "rate": 0.03, "player": { "actions": ["farm.mill"], "need": 10 } },
       "teach": { "skill": "carpentry", "min": 0, "fee": 72 },
       "effects": { "mill.speed": 0.2 },
-      "research": { "goods": { "timber": 60, "planks": 40, "stone": 40 }, "pence": 520, "days": 18, "place": ["carpenter", "sawpit", "smithy"] }
+      "research": { "goods": { "timber": 60, "planks": 40, "stone": 40 }, "pence": 520, "days": 14, "place": ["carpenter", "sawpit", "smithy"] }
     },
     {
       "id": "windmill", "branch": "economy", "name": "Windmill", "points": 25,
@@ -41,7 +41,7 @@
       "learn": { "careers": ["miller", "carpenter"], "building": ["windmill"], "rate": 0.02, "player": { "actions": ["farm.mill"], "need": 16 } },
       "teach": { "skill": "carpentry", "min": 3, "fee": 96 },
       "effects": { "mill.speed": 0.15 },
-      "research": { "goods": { "timber": 80, "planks": 60, "stone": 20 }, "pence": 640, "days": 22, "place": ["carpenter", "sawpit", "watermill"] }
+      "research": { "goods": { "timber": 80, "planks": 60, "stone": 20 }, "pence": 640, "days": 18, "place": ["carpenter", "sawpit", "watermill"] }
     },
     {
       "id": "fulling_mill", "branch": "economy", "name": "Fulling mill", "points": 20,
@@ -50,7 +50,7 @@
       "learn": { "careers": ["fuller", "weaver"], "skill": "tailoring", "minSkill": 3, "rate": 0.02, "player": { "actions": ["craft.weave_cloth", "craft.weave_linen"], "need": 16 } },
       "teach": { "skill": "tailoring", "min": 4, "fee": 72 },
       "effects": { "cloth.value": 0.1 },
-      "research": { "goods": { "timber": 40, "planks": 30, "stone": 30 }, "pence": 480, "days": 16, "place": ["weaver", "watermill", "fulling_mill"] }
+      "research": { "goods": { "timber": 40, "planks": 30, "stone": 30 }, "pence": 480, "days": 12, "place": ["weaver", "watermill", "fulling_mill"] }
     },
     {
       "id": "market_charter", "branch": "economy", "name": "Market charter", "points": 30,
@@ -59,7 +59,7 @@
       "learn": { "titles": ["town", "manor"], "market": true, "rate": 0.05 },
       "teach": { "fee": 240 },
       "effects": { "market.depth": 0.15 },
-      "research": { "goods": { "timber": 30, "planks": 20 }, "pence": 600, "days": 10, "place": ["market_cross", "market_hall", "manor_house", "great_hall"] }
+      "research": { "goods": { "timber": 30, "planks": 20 }, "pence": 600, "days": 8, "place": ["market_cross", "market_hall", "manor_house", "great_hall"] }
     },
     {
       "id": "fair_charter", "branch": "economy", "name": "Fair charter", "points": 40,
@@ -68,7 +68,7 @@
       "learn": { "titles": ["town"], "market": true, "rate": 0.06 },
       "teach": { "fee": 480 },
       "effects": { "fair": 1 },
-      "research": { "goods": { "timber": 60, "brick": 100 }, "pence": 1200, "days": 14, "place": ["market_hall", "guildhall", "market_cross"] }
+      "research": { "goods": { "timber": 60, "brick": 100 }, "pence": 1200, "days": 10, "place": ["market_hall", "guildhall", "market_cross"] }
     },
     {
       "id": "guild_charter", "branch": "economy", "name": "Guild charter", "points": 30,
@@ -77,7 +77,7 @@
       "learn": { "fields": ["craft"], "minStage": 2, "building": ["guildhall"], "rate": 0.03 },
       "teach": { "fee": 360 },
       "effects": { "fire.spread": -0.2, "craft.quality": 0.05 },
-      "research": { "goods": { "timber": 40, "brick": 60 }, "pence": 900, "days": 16, "place": ["guildhall", "market_hall"] }
+      "research": { "goods": { "timber": 40, "brick": 60 }, "pence": 900, "days": 12, "place": ["guildhall", "market_hall"] }
     },
     {
       "id": "wool_trade", "branch": "economy", "name": "Wool trade", "points": 25,
@@ -86,7 +86,7 @@
       "learn": { "careers": ["merchant", "peddler", "shopkeeper"], "skill": "trade", "minSkill": 4, "rate": 0.015, "player": { "actions": ["trade.market"], "need": 20 } },
       "teach": { "skill": "trade", "min": 5, "fee": 96 },
       "effects": { "wool.price": 0.1, "trade.margin": 0.03 },
-      "research": { "goods": { "timber": 30, "planks": 20 }, "pence": 480, "days": 12, "place": ["warehouse", "market_hall", "dock", "guildhall"] }
+      "research": { "goods": { "timber": 30, "planks": 20 }, "pence": 480, "days": 10, "place": ["warehouse", "market_hall", "dock", "guildhall"] }
     },
     {
       "id": "letters_of_credit", "branch": "economy", "name": "Letters of credit", "points": 35,
@@ -95,7 +95,7 @@
       "learn": { "careers": ["merchant"], "skill": "trade", "minSkill": 6, "rate": 0.01, "player": { "actions": ["trade.market", "trade.person"], "need": 28 } },
       "teach": { "skill": "trade", "min": 7, "fee": 240 },
       "effects": { "trade.margin": 0.05, "road.risk": -0.1 },
-      "research": { "goods": { "planks": 10, "brick": 40 }, "pence": 1200, "days": 16, "place": ["guildhall", "warehouse", "market_hall"] }
+      "research": { "goods": { "planks": 10, "brick": 40 }, "pence": 1200, "days": 12, "place": ["guildhall", "warehouse", "market_hall"] }
     },
 
     {
@@ -105,7 +105,7 @@
       "learn": { "careers": ["archer", "yeoman", "soldier", "man_at_arms"], "skill": "archery", "minSkill": 4, "rate": 0.02, "player": { "actions": ["arms.practise"], "need": 24 } },
       "teach": { "skill": "archery", "min": 6, "fee": 72 },
       "effects": { "arms.longbow": 1, "levy.archers": 0.1 },
-      "research": { "goods": { "iron": 6, "arrow": 120 }, "pence": 240, "days": 12, "place": ["archery_butts", "training_yard", "barracks"] }
+      "research": { "goods": { "iron": 6, "arrow": 120 }, "pence": 240, "days": 10, "place": ["archery_butts", "training_yard", "barracks"] }
     },
     {
       "id": "crossbows", "branch": "military", "name": "Crossbows", "points": 20,
@@ -114,7 +114,7 @@
       "learn": { "careers": ["man_at_arms", "soldier", "archer", "sergeant", "smith"], "skill": "archery", "minSkill": 3, "rate": 0.02, "player": { "actions": ["craft.forge_crossbow", "arms.practise"], "need": 12 } },
       "teach": { "skill": "archery", "min": 5, "fee": 72 },
       "effects": { "arms.crossbow": 1 },
-      "research": { "goods": { "iron": 20, "timber": 20 }, "pence": 320, "days": 14, "place": ["smithy", "barracks", "training_yard"] }
+      "research": { "goods": { "iron": 20, "timber": 20 }, "pence": 320, "days": 12, "place": ["smithy", "barracks", "training_yard"] }
     },
     {
       "id": "coat_of_plates", "branch": "military", "name": "Coat of plates", "points": 25,
@@ -123,7 +123,7 @@
       "learn": { "careers": ["smith"], "skill": "smithing", "minSkill": 6, "rate": 0.015, "player": { "actions": ["craft.forge_plates"], "need": 4 } },
       "teach": { "skill": "smithing", "min": 7, "fee": 192 },
       "effects": { "armour.plates": 1 },
-      "research": { "goods": { "iron": 40 }, "pence": 480, "days": 16, "place": ["smithy"] }
+      "research": { "goods": { "iron": 40 }, "pence": 480, "days": 12, "place": ["smithy"] }
     },
     {
       "id": "plate_armour", "branch": "military", "name": "Plate armour", "points": 40, "year": 6,
@@ -132,7 +132,7 @@
       "learn": { "careers": ["smith"], "skill": "smithing", "minSkill": 10, "rate": 0.01, "player": { "actions": ["craft.forge_plates"], "need": 10 } },
       "teach": { "skill": "smithing", "min": 11, "fee": 480 },
       "effects": { "armour.plate": 1 },
-      "research": { "goods": { "iron": 120 }, "pence": 1800, "days": 36, "place": ["smithy"] }
+      "research": { "goods": { "iron": 120 }, "pence": 1800, "days": 28, "place": ["smithy"] }
     },
     {
       "id": "destriers", "branch": "military", "name": "Destriers", "points": 25,
@@ -141,7 +141,7 @@
       "learn": { "careers": ["knight", "squire", "man_at_arms", "sergeant"], "skill": "riding", "minSkill": 6, "building": ["stable"], "rate": 0.02 },
       "teach": { "skill": "riding", "min": 7, "fee": 240 },
       "effects": { "arms.destrier": 1 },
-      "research": { "goods": { "horse": 4 }, "pence": 600, "days": 24, "place": ["stable", "training_yard"] }
+      "research": { "goods": { "horse": 4 }, "pence": 600, "days": 18, "place": ["stable", "training_yard"] }
     },
     {
       "id": "stone_keep", "branch": "military", "name": "Stone keep", "points": 30,
@@ -150,7 +150,7 @@
       "learn": { "titles": ["manor", "barony", "county", "kingdom"], "building": ["keep_stone"], "rate": 0.03, "careers": ["mason"], "skill": "masonry", "minSkill": 6 },
       "teach": { "skill": "masonry", "min": 7, "fee": 480 },
       "effects": { "defence.keep": 1 },
-      "research": { "goods": { "stone": 400, "timber": 80, "iron": 20 }, "pence": 1500, "days": 40, "place": ["motte", "manor_house", "great_hall", "tower"] }
+      "research": { "goods": { "stone": 400, "timber": 80, "iron": 20 }, "pence": 1500, "days": 32, "place": ["motte", "manor_house", "great_hall", "tower"] }
     },
     {
       "id": "curtain_walls", "branch": "military", "name": "Curtain walls", "points": 40,
@@ -159,7 +159,7 @@
       "learn": { "titles": ["barony", "county", "kingdom"], "building": ["wall", "tower", "gatehouse"], "rate": 0.02, "careers": ["mason"], "skill": "masonry", "minSkill": 8 },
       "teach": { "skill": "masonry", "min": 9, "fee": 720 },
       "effects": { "defence.walls": 1 },
-      "research": { "goods": { "stone": 900, "iron": 40 }, "pence": 4000, "days": 56, "place": ["keep_stone", "tower", "gatehouse", "motte", "wall"] }
+      "research": { "goods": { "stone": 900, "iron": 40 }, "pence": 4000, "days": 44, "place": ["keep_stone", "tower", "gatehouse", "motte", "wall"] }
     },
     {
       "id": "concentric_castle", "branch": "military", "name": "Concentric castle", "points": 60, "year": 4,
@@ -168,7 +168,7 @@
       "learn": { "titles": ["county", "kingdom"], "careers": ["mason"], "skill": "masonry", "minSkill": 12, "rate": 0.01 },
       "teach": { "skill": "masonry", "min": 12, "fee": 1440 },
       "effects": { "defence.concentric": 1 },
-      "research": { "goods": { "stone": 2000, "iron": 120 }, "pence": 12000, "days": 96, "place": ["keep_stone", "wall", "gatehouse"] }
+      "research": { "goods": { "stone": 2000, "iron": 120 }, "pence": 12000, "days": 72, "place": ["keep_stone", "wall", "gatehouse"] }
     },
     {
       "id": "trebuchet", "branch": "military", "name": "Trebuchet", "points": 30,
@@ -177,7 +177,7 @@
       "learn": { "careers": ["carpenter", "mason", "sergeant", "knight"], "skill": "carpentry", "minSkill": 7, "rate": 0.012 },
       "teach": { "skill": "carpentry", "min": 8, "fee": 480 },
       "effects": { "siege.trebuchet": 1 },
-      "research": { "goods": { "timber": 120, "iron": 30 }, "pence": 900, "days": 28, "place": ["carpenter", "sawpit", "barracks", "training_yard"] }
+      "research": { "goods": { "timber": 120, "iron": 30 }, "pence": 900, "days": 22, "place": ["carpenter", "sawpit", "barracks", "training_yard"] }
     },
     {
       "id": "paid_retinues", "branch": "military", "name": "Paid retinues", "points": 25,
@@ -186,7 +186,7 @@
       "learn": { "titles": ["manor", "barony", "county", "kingdom"], "skill": "stewardship", "minSkill": 4, "rate": 0.03 },
       "teach": { "skill": "stewardship", "min": 5, "fee": 480 },
       "effects": { "levy.retinue": 0.2 },
-      "research": { "goods": { "iron": 10 }, "pence": 1200, "days": 14, "place": ["barracks", "great_hall", "manor_house"] }
+      "research": { "goods": { "iron": 10 }, "pence": 1200, "days": 10, "place": ["barracks", "great_hall", "manor_house"] }
     },
     {
       "id": "bombards", "branch": "military", "name": "Bombards", "points": 50, "year": 10,
@@ -195,7 +195,7 @@
       "learn": { "careers": ["smith"], "skill": "smithing", "minSkill": 10, "rate": 0.008 },
       "teach": { "skill": "smithing", "min": 11, "fee": 960 },
       "effects": { "siege.bombard": 1 },
-      "research": { "goods": { "iron": 200 }, "pence": 4000, "days": 64, "place": ["smithy", "bloomery"] }
+      "research": { "goods": { "iron": 200 }, "pence": 4000, "days": 48, "place": ["smithy", "bloomery"] }
     },
 
     {
@@ -205,7 +205,7 @@
       "learn": { "estates": ["noble"], "minTier": 4, "rate": 0.05 },
       "teach": { "fee": 240 },
       "effects": { "marriage.dowry": 0.1 },
-      "research": { "goods": { "cloth": 10, "ale": 40 }, "pence": 300, "days": 10, "place": ["manor_house", "great_hall", "church"] }
+      "research": { "goods": { "cloth": 10, "ale": 40 }, "pence": 300, "days": 8, "place": ["manor_house", "great_hall", "church"] }
     },
     {
       "id": "wardship", "branch": "kinship", "name": "Wardship", "points": 20,
@@ -214,7 +214,7 @@
       "learn": { "titles": ["manor", "barony", "county", "kingdom", "abbey"], "rate": 0.04 },
       "teach": { "fee": 240 },
       "effects": { "ward.income": 0.2 },
-      "research": { "goods": { "cloth": 8, "ale": 30 }, "pence": 300, "days": 10, "place": ["great_hall", "manor_house"] }
+      "research": { "goods": { "cloth": 8, "ale": 30 }, "pence": 300, "days": 8, "place": ["great_hall", "manor_house"] }
     },
     {
       "id": "oaths", "branch": "kinship", "name": "Oaths of fealty", "points": 20,
@@ -223,7 +223,7 @@
       "learn": { "estates": ["noble"], "minTier": 5, "rate": 0.05 },
       "teach": { "fee": 120 },
       "effects": { "vassal.levy": 0.1 },
-      "research": { "goods": { "cloth": 6, "ale": 30 }, "pence": 200, "days": 8, "place": ["church", "chapel", "great_hall"] }
+      "research": { "goods": { "cloth": 6, "ale": 30 }, "pence": 200, "days": 6, "place": ["church", "chapel", "great_hall"] }
     },
     {
       "id": "truces", "branch": "kinship", "name": "Truces", "points": 25,
@@ -232,7 +232,7 @@
       "learn": { "estates": ["noble", "clergy"], "minTier": 5, "skill": "persuasion", "minSkill": 3, "rate": 0.03 },
       "teach": { "skill": "persuasion", "min": 4, "fee": 360 },
       "effects": { "diplomacy.truce": 1 },
-      "research": { "goods": { "cloth": 12, "ale": 60 }, "pence": 400, "days": 12, "place": ["church", "abbey_church", "great_hall"] }
+      "research": { "goods": { "cloth": 12, "ale": 60 }, "pence": 400, "days": 10, "place": ["church", "abbey_church", "great_hall"] }
     },
     {
       "id": "heralds", "branch": "kinship", "name": "Heralds", "points": 25,
@@ -241,7 +241,7 @@
       "learn": { "careers": ["knight", "squire", "lord", "noble"], "skill": "persuasion", "minSkill": 3, "rate": 0.025 },
       "teach": { "skill": "persuasion", "min": 4, "fee": 240 },
       "effects": { "diplomacy.contact": 1 },
-      "research": { "goods": { "cloth": 24, "ale": 40 }, "pence": 500, "days": 14, "place": ["great_hall", "manor_house"] }
+      "research": { "goods": { "cloth": 24, "ale": 40 }, "pence": 500, "days": 10, "place": ["great_hall", "manor_house"] }
     },
     {
       "id": "tournaments", "branch": "kinship", "name": "Tournaments", "points": 30,
@@ -250,7 +250,7 @@
       "learn": { "careers": ["knight", "squire", "lord"], "skill": "melee", "minSkill": 6, "rate": 0.02 },
       "teach": { "skill": "melee", "min": 7, "fee": 480 },
       "effects": { "tournament": 1 },
-      "research": { "goods": { "cloth": 30, "ale": 150 }, "pence": 900, "days": 18, "place": ["training_yard", "archery_butts", "great_hall"] }
+      "research": { "goods": { "cloth": 30, "ale": 150 }, "pence": 900, "days": 14, "place": ["training_yard", "archery_butts", "great_hall"] }
     },
     {
       "id": "alliance_treaties", "branch": "kinship", "name": "Alliance treaties", "points": 35,
@@ -259,7 +259,7 @@
       "learn": { "titles": ["barony", "county", "kingdom"], "skill": "persuasion", "minSkill": 5, "rate": 0.02 },
       "teach": { "skill": "persuasion", "min": 6, "fee": 720 },
       "effects": { "diplomacy.alliance": 1 },
-      "research": { "goods": { "cloth": 30, "ale": 100 }, "pence": 1200, "days": 20, "place": ["great_hall", "keep_stone", "church"] }
+      "research": { "goods": { "cloth": 30, "ale": 100 }, "pence": 1200, "days": 16, "place": ["great_hall", "keep_stone", "church"] }
     },
     {
       "id": "council_of_the_realm", "branch": "kinship", "name": "Council of the realm", "points": 50,
@@ -268,7 +268,7 @@
       "learn": { "titles": ["county", "kingdom"], "skill": "stewardship", "minSkill": 6, "rate": 0.015 },
       "teach": { "skill": "stewardship", "min": 7, "fee": 1440 },
       "effects": { "realm.council": 1 },
-      "research": { "goods": { "cloth": 60, "ale": 300 }, "pence": 3000, "days": 36, "place": ["great_hall", "cathedral", "keep_stone"] }
+      "research": { "goods": { "cloth": 60, "ale": 300 }, "pence": 3000, "days": 28, "place": ["great_hall", "cathedral", "keep_stone"] }
     },
 
     {
@@ -278,7 +278,7 @@
       "learn": { "careers": ["priest", "clerk", "monk", "nun"], "skill": "letters", "minSkill": 3, "rate": 0.04, "player": { "study": ["school", "church"], "need": 6 } },
       "teach": { "skill": "letters", "min": 4, "fee": 48 },
       "effects": { "literacy": 0.05 },
-      "research": { "goods": { "vellum": 6, "candle": 40 }, "pence": 120, "days": 8, "place": ["church", "chapel", "school", "cloister"] }
+      "research": { "goods": { "vellum": 6, "candle": 40 }, "pence": 120, "days": 6, "place": ["church", "chapel", "school", "cloister"] }
     },
     {
       "id": "scriptorium", "branch": "knowledge", "name": "Scriptorium", "points": 30,
@@ -287,7 +287,7 @@
       "learn": { "careers": ["monk", "nun", "prior", "abbot", "clerk"], "skill": "letters", "minSkill": 5, "building": ["cloister", "abbey_church"], "rate": 0.04, "player": { "study": ["cloister", "abbey_church"], "need": 10 } },
       "teach": { "skill": "letters", "min": 6, "fee": 144 },
       "effects": { "records": 0.3 },
-      "research": { "goods": { "vellum": 30, "candle": 120 }, "pence": 300, "days": 14, "place": ["cloister", "abbey_church", "church"] }
+      "research": { "goods": { "vellum": 30, "candle": 120 }, "pence": 300, "days": 10, "place": ["cloister", "abbey_church", "church"] }
     },
     {
       "id": "cathedral_school", "branch": "knowledge", "name": "Cathedral school", "points": 35,
@@ -296,7 +296,7 @@
       "learn": { "careers": ["bishop", "abbot", "prior", "clerk", "priest"], "skill": "letters", "minSkill": 7, "building": ["cathedral"], "rate": 0.03, "player": { "study": ["cathedral"], "need": 14 } },
       "teach": { "skill": "letters", "min": 8, "fee": 360 },
       "effects": { "literacy": 0.08, "records": 0.2 },
-      "research": { "goods": { "vellum": 60, "candle": 240 }, "pence": 600, "days": 24, "place": ["cathedral", "abbey_church", "cloister"] }
+      "research": { "goods": { "vellum": 60, "candle": 240 }, "pence": 600, "days": 18, "place": ["cathedral", "abbey_church", "cloister"] }
     },
     {
       "id": "university", "branch": "knowledge", "name": "University", "points": 60, "year": 3,
@@ -305,7 +305,7 @@
       "learn": { "careers": ["bishop", "abbot", "clerk"], "skill": "letters", "minSkill": 10, "building": ["cathedral", "school"], "rate": 0.015, "player": { "study": ["cathedral"], "need": 24 } },
       "teach": { "skill": "letters", "min": 10, "fee": 960 },
       "effects": { "literacy": 0.1, "records": 0.2 },
-      "research": { "goods": { "vellum": 200, "candle": 600 }, "pence": 2400, "days": 56, "place": ["cathedral", "school"] }
+      "research": { "goods": { "vellum": 200, "candle": 600 }, "pence": 2400, "days": 42, "place": ["cathedral", "school"] }
     },
     {
       "id": "herbal_medicine", "branch": "knowledge", "name": "Herbal medicine", "points": 25,
@@ -314,7 +314,7 @@
       "learn": { "careers": ["healer", "midwife", "monk", "nun", "shepherd"], "skill": "medicine", "minSkill": 3, "rate": 0.03, "player": { "study": ["infirmary", "cloister"], "need": 8 } },
       "teach": { "skill": "medicine", "min": 4, "fee": 72 },
       "effects": { "plague.fatality": -0.08, "healing": 0.1 },
-      "research": { "goods": { "vellum": 8, "candle": 40 }, "pence": 160, "days": 10, "place": ["infirmary", "cloister", "church"] }
+      "research": { "goods": { "vellum": 8, "candle": 40 }, "pence": 160, "days": 8, "place": ["infirmary", "cloister", "church"] }
     },
     {
       "id": "infirmary_care", "branch": "knowledge", "name": "Infirmary and hospital", "points": 35,
@@ -323,7 +323,7 @@
       "learn": { "careers": ["healer", "monk", "nun", "prior"], "skill": "medicine", "minSkill": 6, "building": ["infirmary"], "rate": 0.02, "player": { "study": ["infirmary"], "need": 14 } },
       "teach": { "skill": "medicine", "min": 7, "fee": 240 },
       "effects": { "plague.fatality": -0.1, "epidemic.decay": 0.15, "healing": 0.1 },
-      "research": { "goods": { "vellum": 20, "candle": 100 }, "pence": 480, "days": 18, "place": ["infirmary", "cloister"] }
+      "research": { "goods": { "vellum": 20, "candle": 100 }, "pence": 480, "days": 14, "place": ["infirmary", "cloister"] }
     },
     {
       "id": "written_charters", "branch": "knowledge", "name": "Charters and records", "points": 25,
@@ -332,7 +332,7 @@
       "learn": { "careers": ["clerk", "steward", "bailiff", "priest", "monk", "prior", "abbot"], "skill": "letters", "minSkill": 4, "rate": 0.03, "player": { "study": ["school", "cloister", "abbey_church", "guildhall"], "need": 8 } },
       "teach": { "skill": "letters", "min": 5, "fee": 120 },
       "effects": { "records": 0.2, "tax.efficiency": 0.05 },
-      "research": { "goods": { "vellum": 20, "candle": 60 }, "pence": 240, "days": 12, "place": ["school", "cloister", "church", "guildhall", "manor_house"] }
+      "research": { "goods": { "vellum": 20, "candle": 60 }, "pence": 240, "days": 10, "place": ["school", "cloister", "church", "guildhall", "manor_house"] }
     },
     {
       "id": "accounting", "branch": "knowledge", "name": "Accounting", "points": 35,
@@ -341,7 +341,7 @@
       "learn": { "careers": ["merchant", "steward", "clerk", "bailiff", "shopkeeper"], "skill": "stewardship", "minSkill": 4, "rate": 0.02, "player": { "actions": ["trade.market", "trade.person", "manage.household"], "study": ["guildhall", "school"], "need": 20 } },
       "teach": { "skill": "stewardship", "min": 5, "fee": 240 },
       "effects": { "tax.efficiency": 0.1, "trade.margin": 0.03 },
-      "research": { "goods": { "vellum": 30, "candle": 80 }, "pence": 420, "days": 16, "place": ["guildhall", "school", "market_hall", "manor_house"] }
+      "research": { "goods": { "vellum": 30, "candle": 80 }, "pence": 420, "days": 12, "place": ["guildhall", "school", "market_hall", "manor_house"] }
     },
     {
       "id": "printing", "branch": "knowledge", "name": "Printing", "points": 80, "year": 12,
@@ -350,7 +350,7 @@
       "learn": { "careers": ["clerk", "merchant", "monk"], "skill": "letters", "minSkill": 8, "rate": 0.008 },
       "teach": { "skill": "letters", "min": 9, "fee": 1440 },
       "effects": { "records": 1, "literacy": 0.15 },
-      "research": { "goods": { "vellum": 100, "candle": 300, "iron": 40 }, "pence": 3000, "days": 72, "place": ["school", "guildhall", "cathedral"] }
+      "research": { "goods": { "vellum": 100, "candle": 300, "iron": 40 }, "pence": 3000, "days": 56, "place": ["school", "guildhall", "cathedral"] }
     }
   ]
 }

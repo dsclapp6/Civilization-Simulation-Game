@@ -165,6 +165,7 @@ export function researchOptions(R: Rlm, personId: PersonId): ResearchOption[] {
     const settlement = places.length ? R.state.buildings.get(places[0])?.settlement ?? sc.direct[0] : sc.direct[0];
     const buyCost = hasShort && settlement !== undefined ? buyPrice(R, settlement, short) : 0;
     let reason: string | undefined;
+    let buyable = false;
     if (!allowed) reason = 'Only the lord, or his steward when he cannot act, commissions research';
     else if (def.year !== undefined && R.sim.absDay / 16 < def.year) reason = `Nobody can work this out before year ${def.year}`;
     else if (running.some((pr) => pr.tech === def.id)) reason = 'Already under way';
@@ -172,7 +173,7 @@ export function researchOptions(R: Rlm, personId: PersonId): ResearchOption[] {
     else if (fit.length + slow.length === 0) reason = 'Nobody in your lands could work it out';
     else if (places.length === 0) reason = `You have no ${placeWords(def.research.place)} to work in`;
     else if (purse + 1e-9 < res.pence) reason = `Needs ${formatMoney(res.pence)}; the treasury holds ${formatMoney(purse)}`;
-    else if (hasShort) reason = describeShort(R, pool, res.goods, short);
+    else if (hasShort) { reason = describeShort(R, pool, res.goods, short); buyable = !!R.economy.procure && purse + 1e-9 >= res.pence + buyCost; }
     let days: number | undefined;
     const best = fit[0] ?? slow[0];
     const bplace = places.length ? R.state.buildings.get(places[0]) : undefined;
@@ -185,7 +186,7 @@ export function researchOptions(R: Rlm, personId: PersonId): ResearchOption[] {
     };
     if (reason) o.reason = reason;
     if (slow.length) o.slow = slow.map((c) => c.p.id);
-    if (hasShort) { o.short = short; o.buyCost = buyCost; }
+    if (hasShort) { o.short = short; o.buyCost = buyCost; o.buyable = buyable; }
     if (days !== undefined) o.days = days;
     out.push(o);
   }

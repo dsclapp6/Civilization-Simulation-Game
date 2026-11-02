@@ -6,7 +6,7 @@ import { troopsDaily } from '../../../src/sim/realm/recruit';
 import { militaryContext } from '../../../src/sim/military';
 import { aManor, aMan, forget, realmSim, stock, titlesOfKind, holderOf, householdOf, youths } from './helpers';
 
-const rig = () => realmSim({ politics: true, military: true, preset: 'large' });
+const rig = () => realmSim({ politics: true, military: true, preset: 'small' });
 
 function scene() {
   const r = rig();
@@ -17,7 +17,8 @@ function scene() {
 
 describe('the options', () => {
   it('list the six kinds with gear, fee, wage, the men fit for it and the price of what the stores lack', () => {
-    const { realm, lord, settlement } = scene();
+    const { sim, realm, lord, settlement } = scene();
+    youths(sim, settlement, 6);
     const opts = realm.recruitOptions(lord.id, settlement);
     expect(opts.map((o) => o.kind)).toEqual(['archer', 'crossbow', 'man_at_arms', 'sergeant', 'knight', 'mercenary']);
     const archer = opts.find((o) => o.kind === 'archer')!;

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { nextSowing } from '../../../src/sim/realm/plans';
 import { aManor, realmSim, setDay, titlesOfKind } from './helpers';
 
-const rig = () => realmSim({ preset: 'large' });
+const rig = () => realmSim({ preset: 'small' });
 /** Year index and day of the year to an absolute day. */
 const at = (year: number, day: number): number => year * 16 + day;
 

@@ -245,6 +245,21 @@ export function newsDaily(R: Rlm): void {
   if (changed || keep.length !== R.data.seen.length) { R.data.seen = keep; R.touch(); }
 }
 
+/** Outposts founded since yesterday (the construction module, when it is there, keeps the list). */
+export function outpostsDaily(R: Rlm): void {
+  const list = R.construction?.outposts?.();
+  if (!list || list.length === R.data.outs.length) return;
+  const known = new Set(R.data.outs);
+  for (const o of list) {
+    if (known.has(o.id)) continue;
+    known.add(o.id);
+    const house = houseOfSettlement(R, o.settlement);
+    addNews(R, { kind: 'founded', house, settlement: o.settlement, weight: 0.35, text: `${house ? R.houseName(house) : 'Someone'} has founded the outpost of ${o.name}` });
+  }
+  R.data.outs = [...known].sort((a, b) => a - b);
+  R.touch();
+}
+
 /** The turn of the year: this year's counts become last year's, and towns that grew are news. */
 export function newsYearly(R: Rlm): void {
   for (const key of Object.keys(R.data.ctr)) {
