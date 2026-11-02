@@ -373,7 +373,8 @@ function walk(z: Zone, a: Agent, dt: number): void {
   let want: number;
   if (a.mounted) {
     // a rider goes at the horse's gait asked of him (pace.ts HORSE_*), eased in and out more quickly than a man afoot
-    want = a.rideTo * Math.min(1.08, a.tf) * wp;
+    // (a horse is slowed by bad ground but not quickened by a road: a gallop is 10 m/s)
+    want = a.rideTo * Math.min(1, a.tf) * wp;
     if (lastLeg && dist < 2.4) want *= 0.35 + 0.65 * (dist / 2.4);
     a.vel += clamp(want - a.vel, -HORSE_DECEL * dt, HORSE_ACCEL * dt);
   } else {
@@ -388,7 +389,7 @@ function walk(z: Zone, a: Agent, dt: number): void {
   const sp = Math.sqrt(vx * vx + vz * vz);
   // a walker pushed aside by a crowd never goes faster than a walk
   const running = a.draw.anim === 'run' ? v / wp > RUN_CLIP_OFF : v / wp > RUN_CLIP_ON;
-  const cap = a.mounted ? v * 1.12 + 0.3 : running ? v * 1.12 + 0.12 : Math.min(WALK_TOP + 0.02, v * 1.12 + 0.1);
+  const cap = a.mounted ? v * 1.05 + 0.2 : running ? v * 1.12 + 0.12 : Math.min(WALK_TOP + 0.02, v * 1.12 + 0.1);
   let sp2 = sp;
   if (sp > cap) { vx *= cap / sp; vz *= cap / sp; sp2 = cap; }
   const mr = z.mr;

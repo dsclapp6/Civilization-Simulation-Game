@@ -30,11 +30,14 @@ export const LAW = {
   patience: 70,
   /** How far behind the escorted trespasser the patrol follows (m). */
   escortGap: 6,
-  /** The escort's time to be off the land: `exit distance / pace + base`, clamped (s). */
-  escortPace: 2.0,
-  escortBase: 18,
+  /**
+   * The escort's time to be off the land: `exit distance / pace + base`, clamped (s). The pace is a little under a walker's (1.4–1.7 m/s),
+   * so a man who sets off at once and keeps on makes it; one who dawdles does not.
+   */
+  escortPace: 1.45,
+  escortBase: 12,
   escortMin: 45,
-  escortMax: 150,
+  escortMax: 300,
   /** A trespasser who comes back onto the land within this many seconds of being escorted off it is attacked. */
   comeBack: 240,
   /** The patrol leaves when nothing has happened for this long (s), and the men have to be this far away to be dismissed (m). */

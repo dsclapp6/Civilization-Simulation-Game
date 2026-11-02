@@ -96,7 +96,7 @@ describe('leaving', () => {
     let p = r.law.patrolFor(r.stranger.id)!;
     expect(p.phase).toBe('escort');
     expect(p.deadline).toBeGreaterThanOrEqual(45);
-    expect(p.deadline).toBeLessThanOrEqual(150);
+    expect(p.deadline).toBeLessThanOrEqual(300);
     expect(Number.isFinite(p.deadline)).toBe(true);
     expect(p.exit).not.toBeNull();
     expect(r.sim.state.clock.actionTime).toBe(false);
@@ -125,7 +125,7 @@ describe('leaving', () => {
     rideUp(r);
     r.run(0.2);
     r.law.answerPatrol(r.stranger.id, 'leave');
-    r.run(160);
+    r.run(r.law.patrolFor(r.stranger.id)!.deadline + 2);
     const p = r.law.patrolFor(r.stranger.id)!;
     expect(p.phase).toBe('attack');
     expect(r.combat.engaged.length).toBe(1);

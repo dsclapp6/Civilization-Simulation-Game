@@ -235,9 +235,23 @@ export class Nav implements NavApi {
     return this.finder.nearestWalkable(x, z, maxDist, out);
   }
 
-  /** Is the straight line clear of walls, buildings and trunks (what can be seen from one point to the other)? */
+  /**
+   * Can one point see the other: is the straight line clear of buildings, walls and tree trunks? (Not the planning grid's `finder.lineClear`,
+   * which keeps a margin for bodies and says no from a cell beside a wall.) A metre and a half at each end is the standing place — a man
+   * leaning on a wall, at a door, under a tree sees and is seen — and two people within a few metres always see one another.
+   */
   lineClear(x0: number, z0: number, x1: number, z1: number): boolean {
-    return this.finder.lineClear(x0, z0, x1, z1);
+    const dx = x1 - x0, dz = z1 - z0;
+    const len = Math.sqrt(dx * dx + dz * dz);
+    if (len < 3.5) return true;
+    const n = Math.ceil(len / 0.6);
+    const edge = 1.5 / len;
+    for (let k = 1; k < n; k++) {
+      const t = k / n;
+      if (t < edge || t > 1 - edge) continue;
+      if (this.obstacles.blocked(x0 + dx * t, z0 + dz * t, 0.25)) return false;
+    }
+    return true;
   }
 
   doorOf(buildingId: number): { x: number; z: number; yaw: number } | null {

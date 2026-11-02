@@ -20,6 +20,9 @@ export interface Rig {
   zone: Zone;
   focus: { x: number; z: number };
   world: WorldModel;
+  /** The modules the rig installed (a test may add others over the same simulation). */
+  social: ReturnType<typeof installSocial>;
+  economy: ReturnType<typeof installEconomy>;
 }
 
 export function makeRig(opts: { real?: boolean; seed?: string } = {}): Rig {
@@ -33,7 +36,7 @@ export function makeRig(opts: { real?: boolean; seed?: string } = {}): Rig {
   const focus = { x: 0, z: 0 };
   sim.view.setSource('focus', () => focus);
   zone.sched.forceWeather({ rain: 0, snow: 0, temperature: 14 });
-  return { sim, zone, focus, world };
+  return { sim, zone, focus, world, social, economy };
 }
 
 /** Sets the calendar to `dayOfWeek` (1..4) of `season` in year 1 at day fraction `frac`, without running hooks. */
