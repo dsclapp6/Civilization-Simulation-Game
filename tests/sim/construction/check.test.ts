@@ -5,6 +5,7 @@ import { dist2 } from '../../../src/core/math';
 import type { Deposit, River } from '../../../src/world/types';
 import { footprintCorners } from '../../../src/sim/construction/geometry';
 import { installTerritory } from '../../../src/sim/territory';
+import type { LandInfo, TerritoryApi } from '../../../src/sim/territory/types';
 import type { SocialApi } from '../../../src/sim/social/types';
 import { mkHouse, mkPerson } from '../builders';
 import { manorLord, openGround, peasantWithGarden, probeVillage, probeWild, rig, village, type Rig, type Shape } from './helpers';
@@ -250,7 +251,20 @@ describe('placement: whose land, whose right', () => {
 
   it('works while the territory service is only the placeholder (all wild): the built-up area still counts as the village', () => {
     const { r, lord, v } = lordRig();
-    installTerritory(r.sim, { economy: r.eco.api, social: {} as SocialApi });
+    // the wave A placeholder territory: everything wild, nothing forbidden, no deposits (the real one is installed elsewhere)
+    const wild = (): LandInfo => ({ kind: 'wild', settlement: -1, house: 0, title: 0, household: 0, strip: -1, parcel: -1, building: -1 });
+    const placeholder: TerritoryApi = {
+      landAt: () => wild(),
+      trespass: () => ({ level: 'none', land: wild(), reason: '' }),
+      settlementOf: (x, z) => r.sim.world.settlementAt(x, z)?.id ?? -1,
+      landsRadius: () => 2500,
+      resources: (settlement) => ({ settlement, deposits: [], forest: 0, fertility: 0, coast: false, river: false, yields: [] }),
+      deposits: () => [],
+      depositsNear: () => [],
+      depositAt: () => null,
+      version: () => 0,
+    };
+    r.sim.services.territory = placeholder;
     expect(r.sim.services.territory!.landAt(V.x, V.z).kind).toBe('wild');
     const spot = r.cons.suggestSpot(lord.id, 'hovel', v.id);
     expect(spot, 'a place inside the village').not.toBeNull();
@@ -323,7 +337,8 @@ describe('suggesting a spot', () => {
   });
 
   it('answers null where there is no place', () => {
-    const { r, lord } = lordRig();
+    // no deposits anywhere (the mock world has some since the deposits came in): a mine has nowhere to go
+    const { r, lord } = lordRig({ deposits: [] });
     const other = r.sim.world.settlements.find((s) => s.kind === 'village' && s.id !== village(r.sim).id)!;
     expect(r.cons.suggestSpot(lord.id, 'cottage', other.id)).toBeNull();
     expect(r.cons.suggestSpot(lord.id, 'mine', village(r.sim).id)).toBeNull();

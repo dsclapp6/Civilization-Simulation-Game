@@ -191,4 +191,23 @@ export interface ZoneApi {
   claimAnimal?(id: number): boolean;
   /** The player dismounted: the animal is a household animal again, standing here. */
   releaseAnimal?(id: number, x: number, z: number, yaw: number): void;
+
+  // ---- civilization pass, wave B (docs/CIV.md §9); optional ----
+  /** Where defenders stand on a settlement's fortifications: along the wall-walks, on the towers, over the gate (heights from
+   *  the building models). The watch stands there on alert; the combat module puts archers and the gate's defenders there in a
+   *  storm. Empty for an unwalled place. Stable for a settlement until its fortifications change. */
+  wallStations?(settlement: number): readonly WallStation[];
+}
+
+/** One place on a fortification for a defender (CIV §9). */
+export interface WallStation {
+  /** The wall, palisade, tower or gatehouse it stands on. */
+  building: number;
+  kind: 'wall' | 'palisade' | 'tower' | 'gate';
+  x: number;
+  /** Height of the walk the defender stands on (world m, absolute). */
+  y: number;
+  z: number;
+  /** Facing outwards (radians, 0 faces +z): where the defender looks and shoots. */
+  yaw: number;
 }

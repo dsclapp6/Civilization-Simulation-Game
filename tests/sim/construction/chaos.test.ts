@@ -23,7 +23,7 @@ function world(seed: string) {
   return { sim, cons };
 }
 
-function run(seed: string, days: number): { hash: string; ops: number; failures: string[]; open: number; phases: Record<string, number> } {
+function run(seed: string, days: number): { hash: string; ops: number; failures: string[]; open: number; phases: Record<string, number>; cancels: number } {
   const { sim, cons } = world(seed);
   const phases: Record<string, number> = {};
   sim.events.on('construction', (e) => { phases[`${e.work}.${e.phase}`] = (phases[`${e.work}.${e.phase}`] ?? 0) + 1; });
@@ -43,6 +43,7 @@ function run(seed: string, days: number): { hash: string; ops: number; failures:
   }
   const failures: string[] = [];
   let ops = 0;
+  let cancels = 0;
   for (let day = 0; day < days; day++) {
     for (let k = 0; k < 6; k++) {
       const p = people[rng.int(0, people.length - 1)];
@@ -65,8 +66,11 @@ function run(seed: string, days: number): { hash: string; ops: number; failures:
             if (op === 0) cons.upgrade(p.id, b.id); else if (op === 1) cons.repair(p.id, b.id); else cons.demolish(p.id, b.id);
           }
         } else if (what === 6) {
-          const s = cons.sites()[rng.int(0, Math.max(0, cons.sites().length - 1))];
-          if (s) cons.cancel(p.id, s.id);
+          // mostly a site the person may call off (their own or their lord's works), sometimes anyone's (refused)
+          const all = cons.sites();
+          const theirs = rng.chance(0.8) ? all.filter((x) => cons.canManage?.(p.id, x.id) ?? true) : all;
+          const s = theirs[rng.int(0, Math.max(0, theirs.length - 1))];
+          if (s && cons.cancel(p.id, s.id).ok) cancels++;
         } else if (what === 7) {
           const s = cons.sites()[rng.int(0, Math.max(0, cons.sites().length - 1))];
           if (s) { cons.setPriority(p.id, s.id, rng.int(-5, 50)); cons.setHired?.(p.id, s.id, rng.chance(0.5) ? 'auto' : rng.int(0, 4)); }
@@ -82,7 +86,7 @@ function run(seed: string, days: number): { hash: string; ops: number; failures:
     sim.advanceHours(rng.int(10, 30));
     for (const bad of invariants(sim, cons)) failures.push(`day ${day}: ${bad}`);
   }
-  return { hash: sim.stateHash(), ops, failures, open: cons.sites().length, phases };
+  return { hash: sim.stateHash(), ops, failures, open: cons.sites().length, phases, cancels };
 }
 
 describe('chaos', () => {
@@ -93,7 +97,9 @@ describe('chaos', () => {
     // the orders did things: sites were staked out, some were finished and some called off, of every kind of work
     expect(out.phases['build.placed']).toBeGreaterThan(6);
     expect(out.phases['build.done']).toBeGreaterThan(1);
-    expect(out.phases['build.cancelled'] ?? 0).toBeGreaterThan(0);
+    // every work called off says so (with the economy's procurement most works now run to the end, so few are)
+    const cancelled = Object.entries(out.phases).filter(([k]) => k.endsWith('.cancelled')).reduce((n, [, v]) => n + v, 0);
+    expect(cancelled, JSON.stringify(out.phases)).toBe(out.cancels);
     expect(Object.keys(out.phases).some((k) => !k.startsWith('build.'))).toBe(true);
   }, 120000);
 

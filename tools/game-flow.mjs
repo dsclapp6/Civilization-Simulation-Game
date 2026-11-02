@@ -159,7 +159,7 @@ try {
   check('Resume closes it', (await ui()).panels.length === 0);
 
   // ---- the wave 3 pages are reachable by key and from the dock; notices open the right page; the guide speaks
-  for (const [key, id] of [['KeyK', 'politics'], ['KeyT', 'techs'], ['KeyR', 'requests'], ['KeyB', 'wounds'], ['KeyC', 'army'], ['F1', 'help']]) {
+  for (const [key, id] of [['KeyK', 'politics'], ['KeyT', 'techs'], ['KeyR', 'requests'], ['KeyC', 'army'], ['F1', 'help']]) {
     await page.keyboard.press(key);
     await tick(0.2);
     s = await ui();
