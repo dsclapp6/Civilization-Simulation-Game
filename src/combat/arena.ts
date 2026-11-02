@@ -369,8 +369,54 @@ export class Arena {
     return { x: 0, z: 0 };
   }
 
+  /**
+   * A battle's two armies face each other across open ground (70 m apart): the player's side round the player, the foot in ranks in
+   * front, the archers behind them, the horse on the wings. Returns false when this is not that kind of fight.
+   */
+  private placeBattle(fight: Fight, created: readonly Fighter[]): boolean {
+    if ((fight.reason !== 'battle' && fight.reason !== 'storm') || fight.sides.length !== 2) return false;
+    const zone = this.env.zone;
+    const at = fight.at;
+    const pi = fight.sides.findIndex((sd) => sd.members.some((m) => m.isPlayer));
+    const pf = pi >= 0 ? fight.sides[pi].members.find((m) => m.isPlayer)! : null;
+    const bearing = pf ? pf.yaw : (hash3(fight.id, 17) % 628) / 100;
+    const dx = Math.sin(bearing), dz = Math.cos(bearing);
+    const centreOf = (si: number): P2 => (pi >= 0 ? (si === pi ? { x: at.x, z: at.z } : { x: at.x + dx * 70, z: at.z + dz * 70 })
+      : { x: at.x + dx * (si === 0 ? -35 : 35), z: at.z + dz * (si === 0 ? -35 : 35) });
+    const C = [centreOf(0), centreOf(1)];
+    fight.sides.forEach((side, si) => {
+      const me = C[si], foe = C[1 - si];
+      const yaw = yawTo(me.x, me.z, foe.x, foe.z);
+      const fx = Math.sin(yaw), fz = Math.cos(yaw);
+      const rx = Math.cos(yaw), rz = -Math.sin(yaw);
+      const foot: Fighter[] = [], bows: Fighter[] = [], horse: Fighter[] = [];
+      for (const f of side.members) {
+        if (f.isPlayer) continue;
+        (f.mounted ? horse : f.gear.ranged !== null && f.preferRanged ? bows : foot).push(f);
+      }
+      const files = Math.max(1, Math.min(12, foot.length));
+      const rows = Math.ceil(foot.length / files);
+      const put = (f: Fighter, lat: number, back: number): void => {
+        let x = me.x + rx * lat - fx * back, z = me.z + rz * lat - fz * back;
+        if (this.nav && !this.nav.walkable(x, z) && this.nav.nearestWalkable(x, z, 12, this.tmpP)) { x = this.tmpP.x; z = this.tmpP.z; }
+        const y = this.groundY(x, z);
+        if (f.person && zone?.summon && (created.includes(f) || !zone.agent(f.personId))) { zone.summon(f.personId, x, z, yaw); f.summonedByUs = f.summonedByUs || created.includes(f); }
+        else { const ag = f.person ? zone?.agent(f.personId) : null; if (ag) { ag.x = x; ag.z = z; ag.y = y; ag.yaw = yaw; } }
+        f.x = f.px = x; f.z = f.pz = z; f.y = y; f.yaw = yaw;
+        this.tame(f);
+      };
+      foot.forEach((f, i) => { const r = Math.floor(i / files), k = i % files; put(f, (k - (Math.min(files, foot.length - r * files) - 1) / 2) * 1.9, r * 1.9); });
+      const bf = Math.max(1, Math.min(14, bows.length));
+      bows.forEach((f, i) => { const r = Math.floor(i / bf), k = i % bf; put(f, (k - (Math.min(bf, bows.length - r * bf) - 1) / 2) * 2.2, rows * 1.9 + 4 + r * 2.2); });
+      const wing = files * 1.9 / 2 + 5;
+      horse.forEach((f, i) => { const sgn = i % 2 === 0 ? -1 : 1; put(f, sgn * (wing + Math.floor(i / 2) * 2.9), 3); });
+    });
+    return true;
+  }
+
   /** Puts each side where it can be seen: kept where the zone already has them, else a loose line facing the others. */
   private place(fight: Fight, created: readonly Fighter[]): void {
+    if (this.placeBattle(fight, created)) return;
     const zone = this.env.zone;
     const at = fight.at;
     const n = fight.sides.length;
@@ -570,10 +616,15 @@ export class Arena {
     // the others notice
     const fight = this.fights.get(f.fight);
     if (fight) {
+      // a death shakes the men beside him more than the ranks far off, and a big army less than a handful of men
+      let allies = 0;
+      for (const m of fight.sides[f.side]?.members ?? []) if (m !== f && m.active) allies++;
+      const scale = clamp(8 / Math.max(8, allies), 0.12, 1);
       for (const side of fight.sides) for (const m of side.members) {
         if (m === f || !m.active) continue;
         const ally = m.side === f.side;
-        m.morale -= ally ? 9 : -3;
+        if (ally) m.morale -= 9 * scale * (Math.hypot(m.x - f.x, m.z - f.z) < 16 ? 1 : 0.35);
+        else m.morale += 3 * scale;
         if (!ally && killer === m) m.morale += 6;
       }
     }
@@ -1058,8 +1109,10 @@ export class Arena {
       for (const f of side.members) {
         if (!f.active) continue;
         const hp = f.person ? f.person.health.hp : f.beastMax > 0 ? f.beastHp / f.beastMax : 1;
-        const odds = mine - theirs;
-        const target = f.moraleBase - 48 * Math.pow(1 - clamp(hp, 0, 1), 1.4) - (odds < 0 ? 5 * -odds : -1.5 * odds)
+        // the odds, as a ratio: a handful against a crowd breaks, an army that has lost a few does not
+        const ratio = mine / Math.max(1, theirs);
+        const oddsTerm = ratio < 1 ? 36 * Math.pow(1 - ratio, 1.2) : -6 * Math.min(1, ratio - 1);
+        const target = f.moraleBase - 48 * Math.pow(1 - clamp(hp, 0, 1), 1.4) - oddsTerm
           - (f.person ? 14 * this.env.book.limbPenalty(f.personId, 'legs') : 0);
         // morale drifts to the level the situation deserves; blows and deaths push it down at once (see strike/markDead)
         f.morale += clamp(target - f.morale, -1.5, 1.2);

@@ -440,6 +440,13 @@ function slotStep(a: Arena, f: Fighter, fight: Fight): boolean {
     f.target = e; f.retarget = 0.5;
     return false;
   }
+  // a shield wall under the bow keeps its shields up as it comes on (half pace, arrows turned aside)
+  if (f.dGuard && f.gear.shield && e && ge < 70 && ge > 8 && f.st === S.Idle && f.stamina > 16 && fight.cmd?.shotAt(f.side)) {
+    f.set(S.Block, 'block');
+    f.guardT = 1;
+    f.guardFor = 0.9;
+    return true;
+  }
   if (sd > 0.55) {
     const speed = f.dHurry ? CATCH_UP : Math.min(f.dSpeed * clamp(sd / 1.8, 0.45, 1.5), CATCH_UP);
     f.wantX = sdx / sd; f.wantZ = sdz / sd;

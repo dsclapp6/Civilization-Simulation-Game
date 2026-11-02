@@ -396,7 +396,7 @@ export class SiegeScene {
     for (const w of this.works) {
       w.crew = w.crew.filter((m) => m.active && m.work === w);
       w.queue = w.queue.filter((m) => m.active);
-      const want = w.kind === 'ram' ? 6 : w.kind === 'ladder' ? 5 : 0;
+      const want = w.kind === 'ram' ? (this.gateOpen() ? 0 : 6) : w.kind === 'ladder' ? 5 : 0;
       if (w.state === 'broken' || want === 0) continue;
       if (w.crew.length < want) {
         for (const f of att) {
@@ -427,6 +427,37 @@ export class SiegeScene {
     }
     // a dead man's station is free for the next
     for (const st of this.stations) if (st.holder && !st.holder.active) st.holder = null;
+    // the way is open: attackers inside the walls go up the stairs after the men still shooting from the wall-walk
+    if (this.gateOpen() || this.breached()) this.sendUpTheStairs(att);
+  }
+
+  /** Radius of the ring of walls about the settlement's centre, for "inside the walls". */
+  private ringR = -1;
+  private inside(f: Fighter): boolean {
+    if (this.ringR < 0) { this.ringR = 0; for (const w of this.walls) this.ringR = Math.max(this.ringR, dist(w.x, w.z, this.cx, this.cz)); }
+    return dist(f.x, f.z, this.cx, this.cz) < this.ringR * 0.97;
+  }
+
+  private sendUpTheStairs(att: readonly Fighter[]): void {
+    for (const st of this.stations) {
+      const h = st.holder;
+      if (!h || !h.active) continue;
+      let assailants = 0, onTop = false;
+      for (const f of att) {
+        if (!f.active) continue;
+        if (f.role === R.Stairs && f.station === st) assailants++;
+        else if (f.onWall && dist(f.x, f.z, st.x, st.z) < 6) onTop = true;
+      }
+      if (onTop || assailants >= 2) continue;
+      let best: Fighter | null = null, bd = 60;
+      for (const f of att) {
+        if (!f.active || f.isPlayer || f.role !== R.None || f.onWall || f.mounted || (f.gear.ranged && f.preferRanged)) continue;
+        if (!this.inside(f)) continue;
+        const d = dist(f.x, f.z, st.inx, st.inz);
+        if (d < bd) { bd = d; best = f; }
+      }
+      if (best) { best.role = R.Stairs; best.station = st; best.dMode = 0; }
+    }
   }
 
   // ---- the ram ----
@@ -673,9 +704,34 @@ export class SiegeScene {
       case R.Ladder: return this.bearerStep(a, f, fight);
       case R.Climb: f.wantSpeed = 0; return true;
       case R.Wall: return this.wallmanStep(a, f, fight);
+      case R.Stairs: return this.stairsStep(a, f, fight);
       default: return false;
     }
   }
+
+  /** Up the stairs of the wall after the man who still holds a station: he runs to its foot, and climbs. */
+  private stairsStep(a: Arena, f: Fighter, fight: Fight): boolean {
+    const st = f.station;
+    if (!st || !st.holder || !st.holder.active) { f.role = R.None; f.station = null; return false; }
+    const e = a.nearestEnemy(f, fight);
+    if (e && !e.onWall && gap(f, e) < 1.9) { f.target = e; return false; }
+    const dx = st.inx - f.x, dz = st.inz - f.z, d = Math.hypot(dx, dz);
+    if (d > 1.3) {
+      f.wantX = dx / d; f.wantZ = dz / d; f.wantSpeed = 3.1; f.wantYaw = Math.atan2(dx, dz); f.anim = 'run';
+      return true;
+    }
+    // up the stairs: a moment's climb, then beside the man he came for
+    const w = this.stairsWork;
+    w.landed++;
+    this.land(f, st, w);
+    return true;
+  }
+
+  /** Stand-in "ladder" for men coming up the stairs: they land beside the station's holder in turn. */
+  private readonly stairsWork: Work = {
+    id: 0, kind: 'ladder', x: 0, y: 0, z: 0, yaw: 0, length: 0, swing: 0, state: 'ok', phase: 'idle', crew: [], goalX: 0, goalZ: 0,
+    station: null, queue: [], climber: null, climbT: 0, cool: 0, landed: 0, footX: 0, footZ: 0,
+  };
 
   private crewStep(a: Arena, f: Fighter, fight: Fight): boolean {
     const w = f.work;

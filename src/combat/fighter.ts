@@ -20,7 +20,7 @@ export const D = { Free: 0, Slot: 1, Charge: 2, Retreat: 3 } as const;
 export type DirMode = (typeof D)[keyof typeof D];
 
 /** What a man is doing in a storm (scene.ts): nothing special, pushing a ram, carrying a ladder, climbing one, or holding a place on the wall. */
-export const R = { None: 0, Ram: 1, Ladder: 2, Climb: 3, Wall: 4 } as const;
+export const R = { None: 0, Ram: 1, Ladder: 2, Climb: 3, Wall: 4, Stairs: 5 } as const;
 
 export const BEAST_KEY_BASE = 1_000_000_000;
 

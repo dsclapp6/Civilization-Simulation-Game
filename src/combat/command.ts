@@ -22,7 +22,7 @@ export const GROUP_KEYS: readonly GroupKey[] = ['foot', 'archers', 'horse'];
 const KEY_OF: readonly GroupKey[] = GROUP_KEYS;
 
 /** Pace of the formation anchor, by kind (m/s): a line advances at a walk, horse at a walk-trot. */
-const ANCHOR_SPEED = [1.55, 1.55, 2.5] as const;
+const ANCHOR_SPEED = [1.85, 1.85, 2.7] as const;
 /** Walking pace of a man closing up on his slot (m/s) and the pace of one who has fallen far behind. */
 const FOLLOW_SPEED = [1.9, 1.9, 3.4] as const;
 const CATCH_UP = 3.7;
@@ -197,6 +197,12 @@ export class FightCommand {
     return best < Infinity ? yawTo(g.cx, g.cz, bx, bz) : g.yaw;
   }
 
+  /** Are there archers on the other side with arrows to loose (a shield wall keeps its shields up)? */
+  shotAt(side: number): boolean {
+    for (const g of this.groups) if (g.side !== side && g.gk === 1 && g.count > 0) return true;
+    return false;
+  }
+
   /** Centre of all the standing men of the other sides. */
   enemyCentre(side: number, out: P2): boolean {
     let sx = 0, sz = 0, n = 0;
@@ -238,7 +244,7 @@ export class FightCommand {
   }
 
   private moveAnchor(g: Group, dt: number): void {
-    const speed = ANCHOR_SPEED[g.gk] * clamp(0.3 + g.cohesion, 0.3, 1);
+    const speed = ANCHOR_SPEED[g.gk] * clamp(0.5 + g.cohesion, 0.45, 1);
     switch (g.order) {
       case 'follow': {
         const L = this.leaderOf(g);
