@@ -5,4 +5,7 @@ import './politics';
 import './combat';
 import './advancement';
 import './military';
+// civilization pass, wave B: the battle's command HUD (group bar, banners, order wheel; registered through src/ui/core/extHud.ts)
+// and the tactical view (the ext panel 'battle'), which imports it
+import './battle';
 export {};
