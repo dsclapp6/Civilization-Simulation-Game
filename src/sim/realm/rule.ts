@@ -186,24 +186,26 @@ export interface RealmScope {
   titles: Title[];
 }
 
-/** What the person rules and with whose purse (null = nothing). */
+/**
+ * What the person rules and with whose purse (null = nothing). A person who rules for more than one principal (his own lands, and a
+ * lord's as his steward) is shown the realm of the highest title; a regent or steward keeps the holder's House and purse; the reeve
+ * keeps no purse at all.
+ */
 export function scopeOf(R: Rlm, personId: PersonId): RealmScope | null {
   const p = R.alive(personId);
   if (!p) return null;
-  const rules = rulesOf(R, personId);
-  if (rules.length === 0) return null;
-  const main = rules[0];
-  const mainTitle = R.state.titles.get(main.title);
-  // a regent or steward keeps the holder's house, and his purse; the reeve keeps no purse at all
-  const principal = main.role === 'holder' ? p : (R.alive(main.holder) ?? p);
+  const all = rulesOf(R, personId);
+  if (all.length === 0) return null;
+  const principalId = (r: RealmRule): PersonId => (r.role === 'holder' ? p.id : r.holder);
+  const main = all[0];
+  const rules = all.filter((r) => principalId(r) === principalId(main));
+  const principal = R.alive(principalId(main)) ?? p;
   const titles = rules.map((r) => R.state.titles.get(r.title)).filter((t): t is Title => !!t);
   const direct = new Set<number>();
   for (const t of titles) { const pl = titlePlace(R, t); if (pl >= 0) direct.add(pl); }
-  // a barony or manor holds more than its seat when its holder has several titles at once: each title is a place already
   const vt = vassalTitles(R, new Set(titles.map((t) => t.id)));
   const vassal = new Set<number>();
   if (main.role !== 'reeve') for (const t of vt) { const pl = titlePlace(R, t); if (pl >= 0 && !direct.has(pl)) vassal.add(pl); }
-  void mainTitle;
   return {
     rules, principal, role: main.role, house: principal.house,
     treasury: main.role === 'reeve' ? undefined : R.state.households.get(principal.household),

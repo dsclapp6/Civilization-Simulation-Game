@@ -20,6 +20,13 @@ import type { RealmTroop, RecruitOption, Result } from './types';
 
 const fail = (reason: string): Result => ({ ok: false, reason });
 
+/** Why a person may not raise troops at a place: it is not theirs, or it is theirs only to plan the fields. */
+function noRule(R: Rlm, personId: PersonId, settlement: number): string {
+  return mayCommand(R, personId, 'plan', settlement)
+    ? 'Only the lord, or his steward when he cannot act, raises troops'
+    : `You do not rule ${R.placeName(settlement)}`;
+}
+
 const FREE_CAREERS: ReadonlySet<string> = new Set(['labourer', 'soldier', 'cottar', 'none', 'outlaw', 'archer', 'man_at_arms']);
 const PROMOTABLE_TO_SERGEANT: ReadonlySet<string> = new Set(['archer', 'man_at_arms', 'soldier']);
 const PROMOTABLE_TO_KNIGHT: ReadonlySet<string> = new Set(['squire', 'sergeant', 'man_at_arms', 'archer', 'soldier']);
@@ -179,7 +186,7 @@ export function recruitOptions(R: Rlm, personId: PersonId, settlement: number): 
       }
     }
     let reason: string | undefined;
-    if (!rule) reason = `You do not rule ${R.placeName(settlement)}`;
+    if (!rule) reason = noRule(R, personId, settlement);
     else if (spec.tech && !adv?.houseHas(sc.house, spec.tech)) reason = `Needs the technique ${R.tech?.tech(spec.tech)?.name.toLowerCase() ?? spec.tech}`;
     else if (available < 1) reason = mercenary ? 'No free swords within reach' : 'No man here is fit for it';
     else if (!treasury) reason = 'There is no treasury to pay from';
@@ -207,6 +214,11 @@ function garrisonFor(R: Rlm, house: HouseId, sid: number): Household {
   const hh = R.state.addHousehold({ id: R.state.households.alloc(), kind: 'garrison', head: 0, members: [], home: -1, settlement: sid, purse: 0, stores: {}, house });
   for (const b of R.state.buildingsAt.get(sid) ?? []) {
     if (b.kind === 'barracks' && b.construction >= 1 && !b.household) { R.state.setHome(hh, b.id); break; }
+  }
+  if (hh.home < 0) {
+    // no free barracks: the men lodge in an empty hovel or cottage, else share a home
+    const lodging = pickHome(R.state, R.rng('garrison'), sid, ['hovel', 'cottage']);
+    if (lodging && lodging.construction >= 1) R.state.setHome(hh, lodging.id);
   }
   R.data.gar[key] = hh.id;
   R.touch();
@@ -322,7 +334,7 @@ export function recruit(R: Rlm, personId: PersonId, settlement: number, kind: Un
   const sc = scopeOf(R, personId);
   if (!sc) return fail('You rule nothing');
   const rule = mayCommand(R, personId, 'realm', settlement);
-  if (!rule) return fail(`You do not rule ${R.placeName(settlement)}`);
+  if (!rule) return fail(noRule(R, personId, settlement));
   const treasury = sc.treasury;
   if (!treasury) return fail('There is no treasury to pay from');
   if (spec.tech && !R.advancement?.houseHas(sc.house, spec.tech)) return fail(`Needs the technique ${R.tech?.tech(spec.tech)?.name.toLowerCase() ?? spec.tech}`);

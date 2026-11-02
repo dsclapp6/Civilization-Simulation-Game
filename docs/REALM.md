@@ -230,11 +230,12 @@ continent's fighting weight; greatest threat first.
 ## Calendar and budgets
 
 One hourly system `realm.hour` (order 80) and one yearly: research 05:00-08:00 (4 shards by project id), wages 09:00, trade orders
-10:00-15:00 (6 shards by order id), news and outposts 16:00, books 23:00; the turn of the year rotates the counters. Every call is
-a few hundred microseconds. Measured on the 11 000-person continent with an **extreme** load (72 projects, 239 orders, 480 men on pay,
-every great House busy): a day costs about 3-5 ms spread over 18 hourly calls, the largest about 0.5-1 ms; with a ruler or two at work
-a few tenths of a ms. `rulerOf` ≈ 3 µs, `worksShare` / `cropPlan` < 1 µs, `view(king)` ≈ 0.3 ms, `researchOptions(king)` ≈ 3 ms,
-`recruitOptions` ≈ 1 ms, `rivals` ≈ 1 ms.
+10:00-15:00 (6 shards by order id), news and outposts 16:00, books 23:00; the turn of the year rotates the counters. With nothing
+in hand a call costs a few microseconds (the books, once a day, about 0.1 ms). Measured on the 11 000-person continent with an
+**extreme** load (72 projects, 239 orders, 480 men on pay, every great House busy, a machine at load 15): a day costs about 3-5 ms
+spread over 18 hourly calls, none above about 2 ms; with a ruler or two at work a few tenths of a ms. The calls a UI or an AI makes,
+on the real continent (medians): `rulerOf` 0.1 µs, `canRule` 1 µs, `worksShare` / `cropPlan` < 0.2 µs, `view` 10-25 µs, `news` 0.2 µs,
+`rivals` 0.15 ms, `recruitOptions` 0.3-0.9 ms, `researchOptions` 0.9-1.1 ms. (`tests/sim/realm/realm.perf.test.ts`; `PERF=1`.)
 
 ## Saved state — `state.ext['realm']`
 
@@ -272,7 +273,7 @@ A plausible weekly round for a House: `view` for treasury and stores; `rivals` /
 for the seat and `recruit` archers / men-at-arms, then `researchOptions` for the military branch and `startResearch(…, { buy: true })`
 the best `ok || buyable` one the personality likes; if rich → economy or knowledge techs; `addTradeOrder` to sell surplus grain and
 buy the materials its plans need; `setCropPlan` for the demesne (rye after a bad harvest); `dub` a deserving squire. The calls are
-cheap, but `researchOptions` scans the realm's people (about 3 ms for a kingdom): do it once or twice a year per House, not daily.
+cheap, but `researchOptions` scans the realm's people (about 1 ms for a kingdom): do it a few times a year per House, not every day.
 
 ## Known gaps
 

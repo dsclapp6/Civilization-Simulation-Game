@@ -143,8 +143,9 @@ export function researchOptions(R: Rlm, personId: PersonId): ResearchOption[] {
   const rt = R.tech;
   const sc = scopeOf(R, personId);
   if (!rt || !sc) return [];
+  if (sc.role === 'reeve') return [];
   const A = rt.adv;
-  const allowed = mayCommand(R, personId, 'realm') !== null && sc.role !== 'reeve';
+  const allowed = mayCommand(R, personId, 'realm') !== null;
   const people = realmPeople(R, sc);
   const candsOf = new Map<number, readonly TechDef[]>();
   for (const p of people) candsOf.set(p.id, A.candidates(p));
