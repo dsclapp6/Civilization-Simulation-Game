@@ -77,6 +77,17 @@ describe.each(WORLDS)('deposits of %s', (_label, seed, sparse) => {
     for (const d of w.deposits) expect(lands.nearBuiltUp(d.x, d.z, 20), `${d.kind} #${d.id} is in a settlement`).toBe(false);
   });
 
+  it('levels the ground under a mine or quarry deposit\'s centre, so something can be built there', () => {
+    for (const d of w.deposits.filter((q) => q.kind === 'iron' || q.kind === 'stone' || q.kind === 'silver' || q.kind === 'gold')) {
+      let lo = Infinity, hi = -Infinity;
+      for (const [dx, dz] of [[0, 0], [-4, -4], [4, -4], [4, 4], [-4, 4], [0, 5], [5, 0], [0, -5], [-5, 0]]) {
+        const h = w.heightAt(d.x + dx, d.z + dz);
+        lo = Math.min(lo, h); hi = Math.max(hi, h);
+      }
+      expect(hi - lo, `${d.kind} #${d.id} floor`).toBeLessThan(0.5);
+    }
+  });
+
   it('keeps room round every deposit: extents do not overlap, and a kind is spread out', () => {
     for (let i = 0; i < w.deposits.length; i++) for (let j = i + 1; j < w.deposits.length; j++) {
       const a = w.deposits[i], b = w.deposits[j];

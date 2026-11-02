@@ -53,6 +53,12 @@ const SPECS: Readonly<Record<'iron' | 'stone' | 'clay' | 'salt' | 'silver', Kind
   salt: { kind: 'salt', min: 0, max: 3, spacing: 1100, threshold: 0.5, radius: 72, richness: [0.25, 0.68], maxSlope: 0.07 },
   silver: { kind: 'silver', min: 0, max: 5, spacing: 1250, threshold: 0.18, radius: 38, richness: [0.4, 0.92], maxSlope: 0.55 },
 };
+/**
+ * Half the side (m) of the level working floor cut into the hillside under a deposit's centre, where the ground there is not already
+ * level: something can be built on a mountain deposit (a mine is 6 m square, a quarry 16 m), and the clearing shows where it lies.
+ */
+const PAD_HALF: Readonly<Partial<Record<ResourceKind, number>>> = { iron: 9, stone: 11, silver: 9, gold: 6 };
+const PAD_BLEND = 6;
 const GOLD = { kind: 'gold' as const, radius: 30, richness: [0.3, 0.8] as const, spacing: 3200, max: 3, perKingdom: 2 };
 
 /** Biome weights: how well each ground suits a kind (0 = never). */
@@ -224,6 +230,16 @@ export function generateDeposits(s: GenState, tm: TerrainModel, ctx: LayoutCtx, 
     return best;
   };
 
+  /** Height range (m) over the 10 m square round a point: a mine's footprint wants it small (the detail noise bumps ground the slope calls flat). */
+  const unevenness = (x: number, z: number): number => {
+    let lo = Infinity, hi = -Infinity;
+    for (let q = 0; q < 9; q++) {
+      const h = tm.baseHeight(x + (q % 3 - 1) * 5, z + (Math.floor(q / 3) - 1) * 5);
+      if (h < lo) lo = h; if (h > hi) hi = h;
+    }
+    return hi - lo;
+  };
+
   /** Adds a deposit (richer ground, richer and wider), or null when its extent would touch another's. */
   const add = (kind: ResourceKind, x: number, z: number, score: number, scoreRef: number, spec: Spec): Deposit | null => {
     // richness follows how good the ground is (relative to the best cell of the kind), with scatter
@@ -235,6 +251,8 @@ export function generateDeposits(s: GenState, tm: TerrainModel, ctx: LayoutCtx, 
     const d: Deposit = { id: out.length, kind, x: Math.round(x * 10) / 10, z: Math.round(z * 10) / 10, radius, richness, settlement: lands.lookup(x, z) };
     out.push(d);
     placed(kind).push(d);
+    const half = PAD_HALF[kind];
+    if (half && unevenness(d.x, d.z) > 0.25) ctx.platforms.push({ x: d.x, z: d.z, hw: half, hd: half, rot: 0, blend: PAD_BLEND, yard: 0 });
     return d;
   };
 

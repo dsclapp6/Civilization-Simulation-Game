@@ -2,7 +2,7 @@
 // is vacant, or is held by a child; and when `version()` moves.
 import { describe, expect, it } from 'vitest';
 import { mkHouse, mkPerson } from '../builders';
-import { mockRig, scriptedConstruction } from './helpers';
+import { mockRig, scriptedConstruction, scriptedMilitary, scriptedPolitics } from './helpers';
 
 describe('who holds the land', () => {
   const rig = mockRig({ preset: 'small', seed: 'owners' });
@@ -106,6 +106,32 @@ describe('who holds the land', () => {
     const v3 = terr.version();
     sim.events.emit('siege', { phase: 'start', settlement: 1, besieger: 2 });
     expect(terr.version()).toBeGreaterThan(v3);
+  });
+
+  it('moves `version` when a feud between Houses with armies in the field starts and when it runs out', () => {
+    const mil = scriptedMilitary(sim);
+    const pol = scriptedPolitics(sim);
+    const a = mkHouse(sim, 'Left').id, b = mkHouse(sim, 'Right').id;
+    mil.armyList.push({ id: 1, house: a, commander: 0, x: 100, z: 100, troops: {}, task: 'march' }, { id: 2, house: b, commander: 0, x: 900, z: 900, troops: {}, task: 'march' });
+    terr.refresh();
+    const v = terr.version();
+    mil.feud(a, b);
+    terr.refresh();
+    const v1 = terr.version();
+    expect(v1).toBeGreaterThan(v);
+    terr.refresh();
+    expect(terr.version()).toBe(v1);
+    mil.endFeud(a, b);
+    terr.refresh();
+    expect(terr.version()).toBeGreaterThan(v1);
+    // a war between politics' sides counts the same
+    const v2 = terr.version();
+    const w = pol.war([a], [b]);
+    terr.refresh();
+    expect(terr.version()).toBeGreaterThan(v2);
+    pol.endWar(w.id);
+    mil.armyList.length = 0;
+    terr.refresh();
   });
 
   it('moves `version` when an outpost is founded (and not for sites that only progress)', () => {

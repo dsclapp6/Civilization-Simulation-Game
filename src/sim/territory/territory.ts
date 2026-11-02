@@ -128,6 +128,9 @@ export class Territory implements TerritoryRuntime {
   private hourSeen = Number.NaN;
   private titleSig = 0;
   private warSig = 0;
+  private feudSig = 0;
+  /** A bump left the signatures describing an older state than the caches will be rebuilt from: take them anew before the next look. */
+  private sigStale = false;
   private readonly owners: Array<Owner | undefined> = [];
   private claims: Claim[] = [];
   private claimSig = '';
@@ -153,11 +156,12 @@ export class Territory implements TerritoryRuntime {
     this.offs.push(on('inheritance', () => this.bump()));
     this.offs.push(on('office', (e) => { if (TITLE_OFFICES.has(e.office)) this.bump(); }));
     this.offs.push(on('death', (e) => { if (e.wasHead || sim.state.titlesHeldBy(e.person).size > 0) this.bump(); }));
-    for (const ev of ['war', 'stance', 'siege', 'raid'] as const) this.offs.push(on(ev, () => this.bump()));
+    for (const ev of ['war', 'stance', 'siege', 'raid', 'battle'] as const) this.offs.push(on(ev, () => this.bump()));
     this.offs.push(on('construction', () => { this.raisedDirty = true; this.watchOutposts(); }));
     this.offs.push(on('dayStarted', () => this.expireLeave()));
     this.titleSig = this.titleSignature();
     this.warSig = this.warSignature();
+    this.feudSig = this.feudSignature();
     this.watchOutposts(false);
   }
 
@@ -174,6 +178,12 @@ export class Territory implements TerritoryRuntime {
 
   /** Once a game hour: compare titles, wars and outposts with what the caches were built from. */
   private sync(): void {
+    if (this.sigStale) {
+      this.sigStale = false;
+      this.titleSig = this.titleSignature();
+      this.warSig = this.warSignature();
+      this.feudSig = this.feudSignature();
+    }
     const hour = Math.floor(this.sim.absDay * 24);
     if (hour === this.hourSeen) return;
     this.hourSeen = hour;
@@ -182,6 +192,8 @@ export class Territory implements TerritoryRuntime {
     if (t !== this.titleSig) { this.titleSig = t; changed = true; }
     const w = this.warSignature();
     if (w !== this.warSig) { this.warSig = w; changed = true; }
+    const f = this.feudSignature();
+    if (f !== this.feudSig) { this.feudSig = f; changed = true; }
     if (this.watchOutposts(false)) changed = true;
     if (changed) this.bump();
   }
@@ -191,9 +203,9 @@ export class Territory implements TerritoryRuntime {
     this.owners.length = 0;
     this.alarms.clear();
     for (const c of this.claims) c.owner = NO_OWNER;
-    // what the caches will be rebuilt from: a later quiet change away from it (a title going back to its old holder) is seen
-    this.titleSig = this.titleSignature();
-    this.warSig = this.warSignature();
+    // the signatures are retaken lazily, from what the caches are rebuilt from: a later quiet change away from that state
+    // (a title going back to its old holder) is then seen at the next hourly look
+    this.sigStale = true;
   }
 
   /** A sum over every title's holder and regent (order-independent, so a loaded game agrees with the live one). */
@@ -211,6 +223,17 @@ export class Territory implements TerritoryRuntime {
     if (!pol) return 0;
     let sum = 0;
     for (const w of pol.wars()) sum = (sum + Math.imul(w.id * 17 + w.attackers.length * 5 + w.defenders.length * 3 + 1, 0x85ebca6b)) | 0;
+    return sum;
+  }
+
+  /** Who is at odds with whom among the Houses that have armies in the field (feuds start and run out without an event). */
+  private feudSignature(): number {
+    const mil = this.sim.services.military;
+    if (!mil?.hostile) return 0;
+    const houses: HouseId[] = [];
+    for (const a of mil.armies()) if (houses.length < 24 && !houses.includes(a.house)) houses.push(a.house);
+    let sum = 0;
+    for (const a of houses) for (const b of houses) if (a !== b && mil.hostile(a, b)) sum = (sum + Math.imul(a * 131 + b * 7 + 1, 0xc2b2ae35)) | 0;
     return sum;
   }
 
@@ -246,11 +269,8 @@ export class Territory implements TerritoryRuntime {
 
   ownerOf(settlement: number): LandOwner { this.sync(); const o = this.ownerInternal(settlement); return { house: o.house, title: o.title, holder: o.holder, lord: o.lord }; }
 
-  /** The House whose lord holds the lands round a person's home (what a commoner's loyalty follows). */
-  private lordHouseAt(settlement: number): HouseId {
-    const holder = this.lands.holderOf(settlement);
-    return this.ownerInternal(holder >= 0 ? holder : settlement).house;
-  }
+  /** The House whose lord holds a person's home place (what a commoner's loyalty follows; a castle's people are its lord's). */
+  private lordHouseAt(settlement: number): HouseId { return this.ownerInternal(settlement).house; }
 
   // ---------------------------------------------------------------- land
 
@@ -277,7 +297,7 @@ export class Territory implements TerritoryRuntime {
       const d2 = (c.x - x) ** 2 + (c.z - z) ** 2;
       if (d2 <= r2 && d2 < bd) { bd = d2; best = c; }
     }
-    if (best && best.owner === NO_OWNER) best.owner = this.ownerInternal(this.lands.holderOf(best.parent) >= 0 ? this.lands.holderOf(best.parent) : best.parent);
+    if (best && best.owner === NO_OWNER) best.owner = this.ownerInternal(best.parent);
     return best;
   }
 

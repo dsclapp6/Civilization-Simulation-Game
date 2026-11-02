@@ -32,15 +32,23 @@ const px = size / WORLD_SIZE;
 
 const c = renderContinent(world, size);
 if (wantLands) {
-  const lands = new LandsIndex(world.settlements);
-  const step = 48;
-  for (let z = step / 2; z < WORLD_SIZE; z += step) for (let x = step / 2; x < WORLD_SIZE; x += step) {
-    if (world.macro.water[Math.floor(z / world.macro.cell) * world.macro.res + Math.floor(x / world.macro.cell)] === 1) continue;
-    const id = lands.lookup(x, z);
-    if (id < 0) continue;
-    const h = ((id * 2654435761) >>> 0) / 4294967296;
-    const col: RGB = [90 + 150 * h, 90 + 150 * ((h * 7) % 1), 90 + 150 * ((h * 13) % 1)];
-    c.circle(x * px, z * px, Math.max(1, step * px * 0.6), col, 0.32);
+  // the lands of every settlement: wild ground (beyond every reach, or high country) greyed, borders between lands drawn
+  const lands = new LandsIndex(world.settlements, { biome: world.macro.biome, res: world.macro.res, cell: world.macro.cell });
+  const step = 40, cols = Math.floor(WORLD_SIZE / step);
+  const id = new Int16Array(cols * cols);
+  const sea = (x: number, z: number): boolean => world.macro.water[Math.floor(z / world.macro.cell) * world.macro.res + Math.floor(x / world.macro.cell)] === 1;
+  for (let j = 0; j < cols; j++) for (let i = 0; i < cols; i++) id[j * cols + i] = sea((i + 0.5) * step, (j + 0.5) * step) ? -2 : lands.lookup((i + 0.5) * step, (j + 0.5) * step);
+  for (let j = 0; j < cols; j++) for (let i = 0; i < cols; i++) {
+    const v = id[j * cols + i];
+    if (v === -2) continue;
+    const x = (i + 0.5) * step * px, y = (j + 0.5) * step * px;
+    if (v === -1) c.circle(x, y, Math.max(1, step * px * 0.75), [70, 70, 70], 0.45);
+    for (const [di, dj] of [[1, 0], [0, 1]]) {
+      const ni = i + di, nj = j + dj;
+      if (ni >= cols || nj >= cols) continue;
+      const w = id[nj * cols + ni];
+      if (w !== v && w !== -2) c.circle(x + di * step * px * 0.5, y + dj * step * px * 0.5, 0.9, [20, 20, 20], 0.85);
+    }
   }
 }
 const legend: string[] = [];
