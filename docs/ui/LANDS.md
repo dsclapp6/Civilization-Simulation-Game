@@ -146,7 +146,7 @@ place the offer opens the seat of government instead. It is on: the **settlement
 * **Deposits**: every `world.deposits` entry as a small coloured disc with a glyph (iron red, stone white, clay orange, salt cyan, silver
   pale blue, gold yellow, as in `docs/world/RESOURCES.md`), tooltip *"Iron ore deposit: rich / In the lands of Hjortlund (House
   Thorfinnsson) / A mine and a bloomery make iron…"*; clicking one shows its card, with **Found an outpost here** / **Build a working
-  here** when you may (it opens builder mode over it with the right building in hand). Icons under the HUD's clock and dock are hidden.
+  here** when you may (it opens builder mode over it with the right building in hand). Icons under the HUD's clock, dock and action prompt are hidden.
 * **Outposts**: `construction.outposts()`, a flag and the name.
 * **Filters**: *Borders*, *Outposts*, *Deposits* and one chip per kind of deposit, kept while the game runs; the existing place filters
   (towns, villages, castles, abbeys, markets) and the search are unchanged.
