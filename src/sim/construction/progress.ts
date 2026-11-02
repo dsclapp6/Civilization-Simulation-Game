@@ -36,15 +36,27 @@ export function workFactor(C: Construction, p: Person): number {
 /** Careers whose people hire themselves out by the day, in the order they are hired. */
 const HIRED_CAREERS: Record<string, number> = { labourer: 0, cottar: 1, servant: 2, woodward: 3, farmer: 4, shepherd: 5, swineherd: 5, none: 6 };
 
-interface PlanCtx {
+export interface PlanCtx {
   busy: Set<PersonId>;
   pools: Map<number, Person[]>;
   taken: Map<number, number>;
   serfs: Map<number, Person[]>;
   week: Map<number, number>;
+  /** The household members on the 'build' task, by paying household (asked of the economy once a morning). */
+  members: Map<number, Person[]>;
+  /** The households whose stores a payer draws on at a place. */
+  stores: Map<string, Household[]>;
 }
 
-function newPlanCtx(): PlanCtx { return { busy: new Set(), pools: new Map(), taken: new Map(), serfs: new Map(), week: new Map() }; }
+/** The morning's plan in progress: the sites by paying household, dealt out over the shards of the hour. */
+export interface PlanRun { ctx: PlanCtx; groups: SiteRec[][] }
+
+/** The hourly system runs in this many shards, so the plan of a hundred sites never lands on one frame. */
+export const PLAN_SHARDS = 4;
+
+function newPlanCtx(): PlanCtx {
+  return { busy: new Set(), pools: new Map(), taken: new Map(), serfs: new Map(), week: new Map(), members: new Map(), stores: new Map() };
+}
 
 /** Adults of the settlement who work for a day's wage, hired in turn (a different set each day). */
 function poolFor(C: Construction, ctx: PlanCtx, settlement: number): Person[] {
@@ -96,7 +108,9 @@ function weekCapacity(C: Construction, ctx: PlanCtx, settlement: number): number
 }
 
 /** Members of the paying household set to the 'build' task by their head (the economy's plan), the player excluded. */
-function buildMembers(C: Construction, payer: Household): Person[] {
+function buildMembers(C: Construction, ctx: PlanCtx, payer: Household): Person[] {
+  const hit = ctx.members.get(payer.id);
+  if (hit) return hit;
   const lines = C.economy.householdPlan?.(payer.id) ?? [];
   const player = C.state.run.playerId;
   const out: Person[] = [];
@@ -105,7 +119,17 @@ function buildMembers(C: Construction, payer: Household): Person[] {
     const p = C.living(l.person);
     if (p && !p.flags.captive) out.push(p);
   }
-  return out.sort((a, b) => a.id - b.id);
+  out.sort((a, b) => a.id - b.id);
+  ctx.members.set(payer.id, out);
+  return out;
+}
+
+function storesFor(C: Construction, ctx: PlanCtx | undefined, payer: Household, settlement: number): Household[] {
+  if (!ctx) return C.storeHouseholds(payer, settlement);
+  const key = `${payer.id}|${settlement}`;
+  let hit = ctx.stores.get(key);
+  if (!hit) { hit = C.storeHouseholds(payer, settlement); ctx.stores.set(key, hit); }
+  return hit;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -123,8 +147,8 @@ function horizonFraction(rec: SiteRec): number {
  * Draws the materials the next days need from the payer's stores and orders what is missing at a market. Returns the first thing
  * the site is waiting for, in words, and whether anything is on its way.
  */
-function supply(C: Construction, rec: SiteRec, payer: Household): { text: string; coming: boolean; stuck: boolean } {
-  const hhs = C.storeHouseholds(payer, rec.settlement);
+function supply(C: Construction, rec: SiteRec, payer: Household, ctx?: PlanCtx): { text: string; coming: boolean; stuck: boolean } {
+  const hhs = storesFor(C, ctx, payer, rec.settlement);
   const f = horizonFraction(rec);
   let text = '', coming = false, stuck = false;
   const proc = C.economy.procure;
@@ -200,7 +224,7 @@ function planSite(C: Construction, ctx: PlanCtx, rec: SiteRec): void {
   rec.from = [0, 0, 0];
   rec.planned = C.day;
 
-  const sup = supply(C, rec, payer);
+  const sup = supply(C, rec, payer, ctx);
   const cap = capacity(rec);
   const holy = isHolyDay(C.absDay);
   const crewCap = maxCrew(rec.labour);
@@ -208,7 +232,7 @@ function planSite(C: Construction, ctx: PlanCtx, rec: SiteRec): void {
 
   if (!holy && cap > 0.001) {
     // 1. the household's own, on the 'build' task
-    for (const m of buildMembers(C, payer)) {
+    for (const m of buildMembers(C, ctx, payer)) {
       if (units >= Math.min(cap, crewCap) - 1e-6) break;
       if (ctx.busy.has(m.id)) continue;
       const f = workFactor(C, m);
@@ -296,22 +320,47 @@ function planSite(C: Construction, ctx: PlanCtx, rec: SiteRec): void {
   C.bump();
 }
 
-/** The morning plan of every open site: those of one payer together, in the order of their priority. */
-export function planAll(C: Construction): void {
+/** Starts the morning plan: the open sites grouped by paying household, in the order of their priority. */
+export function beginPlan(C: Construction): void {
+  C.plan = null;
   const open = C.openSites();
+  if (open.length === 0) return;
   // the old crews are off
   C.crewOf.clear();
   const ctx = newPlanCtx();
   // sites already planned today keep their people out of the pool
   for (const s of open) if (s.planned === C.day) for (const p of s.crew) { ctx.busy.add(p); C.crewOf.set(p, s.id); }
   open.sort((a, b) => a.household - b.household || a.priority - b.priority || a.id - b.id);
+  const groups: SiteRec[][] = [];
   for (const s of open) {
     if (s.planned === C.day) continue;
-    planSite(C, ctx, s);
+    const g = groups[groups.length - 1];
+    if (g && g[0].household === s.household) g.push(s); else groups.push([s]);
   }
-  // a finished or cancelled site is forgotten after a few days
+  C.plan = { ctx, groups };
+}
+
+/** Plans the groups of one shard (group number modulo the shards). */
+export function planShard(C: Construction, shard: number): void {
+  const run = C.plan;
+  if (!run) return;
+  for (let gi = shard; gi < run.groups.length; gi += PLAN_SHARDS) {
+    for (const s of run.groups[gi]) if (s.closed === 0) planSite(C, run.ctx, s);
+  }
+}
+
+/** Ends the morning plan: a finished or cancelled site is forgotten after a few days. */
+export function endPlan(C: Construction): void {
+  C.plan = null;
   const keep = C.save.sites.filter((s) => s.closed === 0 || s.closed + 3 > C.day + 1);
   if (keep.length !== C.save.sites.length) { C.save.sites = keep; C.reindex(); C.touch(); }
+}
+
+/** The whole morning plan at once (tests and tools; the game runs it in shards). */
+export function planAll(C: Construction): void {
+  beginPlan(C);
+  for (let k = 0; k < PLAN_SHARDS; k++) planShard(C, k);
+  endPlan(C);
 }
 
 /** A site just staked out: its materials are ordered at once and, in working hours, its crew is set. */
@@ -422,10 +471,14 @@ export function accrueAll(C: Construction): void {
   }
 }
 
-export function hourly(C: Construction, info: HourInfo): void {
-  if (C.save.sites.length === 0) return;
-  if (info.hour === WORK_START - 1) planAll(C);
-  else if (info.hour >= WORK_START && info.hour < WORK_END) accrueAll(C);
+export function hourly(C: Construction, info: HourInfo, shard = 0): void {
+  if (info.hour === WORK_START - 1) {
+    if (shard === 0) beginPlan(C);
+    planShard(C, shard);
+    if (shard === PLAN_SHARDS - 1) endPlan(C);
+    return;
+  }
+  if (shard === 0 && C.save.sites.length > 0 && info.hour >= WORK_START && info.hour < WORK_END) accrueAll(C);
 }
 
 // ---------------------------------------------------------------------------------------------

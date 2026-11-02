@@ -13,7 +13,7 @@ import { catalogue } from './catalogue';
 import { constructionProvider } from './actions';
 import { Construction } from './core';
 import { levelCost } from './data';
-import { hourly, planNow } from './progress';
+import { PLAN_SHARDS, hourly, planNow } from './progress';
 import { noScopeReason, scopeInfo } from './scope';
 import {
   applyRazed, canManageSite, cancelSite, demolishSite, repairSite, setHired, setPriority, placeSite, upgradeSite, viewOf,
@@ -41,7 +41,7 @@ export function installConstruction(sim: Simulation, deps: Wave3Deps): Construct
   C.planNow = (rec) => planNow(C, rec);
 
   const offs: Array<() => void> = [];
-  offs.push(sim.registerSystem({ name: 'construction.hourly', phase: 'hourly', order: 70, run: (_ctx, info) => hourly(C, info) }));
+  offs.push(sim.registerSystem({ name: 'construction.hourly', phase: 'hourly', order: 70, shards: PLAN_SHARDS, run: (_ctx, info, shard = 0) => hourly(C, info, shard) }));
   offs.push(sim.actions.register(constructionProvider(C)));
 
   let memoKey = '';

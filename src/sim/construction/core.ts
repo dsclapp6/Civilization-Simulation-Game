@@ -8,6 +8,7 @@ import type { Simulation } from '../sim';
 import { fullName, type GameState, type Household, type HouseId, type HouseholdId, type Person, type PersonId } from '../state';
 import type { Wave3Deps } from '../wave3deps';
 import { Spatial } from './geometry';
+import type { PlanRun } from './progress';
 import { EXT_KEY, normalise, type ConstructionSave, type OutpostRec, type SiteRec } from './save';
 
 const r2 = (v: number): number => Math.round(v * 100) / 100;
@@ -30,6 +31,8 @@ export class Construction {
   version = 0;
   /** Cache of views and checks, cleared when `version` or the building registry moves. */
   cacheKey = '';
+  /** The morning plan in progress (between the first shard of the hour and the last). */
+  plan: PlanRun | null = null;
   /** Set by the progress module: plans a site's materials (and its crew, in working hours) at once. */
   planNow: ((rec: SiteRec) => void) | undefined = undefined;
 
