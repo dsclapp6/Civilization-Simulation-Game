@@ -62,6 +62,19 @@ export function tacticalPanel(ctx: PanelCtx): UiPanel {
   const held = new Set<string>();
   let prevSpeed = 1;
   let usedPose = false;
+  let field0: { x: number; z: number; radius: number; distance: number } | null = null;
+  let verifyAt = 0;
+
+  /** Is the overhead camera really up (the field's centre near the middle of the screen)? If the renderer has none, a free camera does it. */
+  function verifyOverview(): void {
+    if (!r || !field0) return;
+    const gy = game.sim.world.heightAt(field0.x, field0.z);
+    const p = r.project(field0.x, gy, field0.z);
+    const w = window.innerWidth, hh = window.innerHeight;
+    if (p && Math.abs(p.x - w / 2) < w * 0.22 && Math.abs(p.y - hh / 2) < hh * 0.28) return;
+    r.setCameraPose?.({ x: field0.x, y: gy + field0.distance * 0.9, z: field0.z - field0.distance * 0.55 }, { x: field0.x, y: gy, z: field0.z }, 0.8);
+    usedPose = true;
+  }
 
   const bar = new GroupBar((key) => pick(key));
   const banners = new BannerLayer(hudCtx, true);
@@ -166,14 +179,11 @@ export function tacticalPanel(ctx: PanelCtx): UiPanel {
     const view = readBattle({ game: () => game });
     own = view.own; enemy = view.enemy;
     const ov = overviewFor(own, enemy, b ? { x: b.x, z: b.z } : null);
+    field0 = ov;
     if (r && ov) {
-      if (r.setOverview) r.setOverview({ x: ov.x, z: ov.z, radius: ov.radius, distance: ov.distance });
-      else if (r.setCameraPose) {
-        // a renderer without the overhead camera: a free camera high above the field, looking down
-        const gy = game.zone.nav.groundY(ov.x, ov.z);
-        r.setCameraPose({ x: ov.x, y: gy + ov.distance * 0.9, z: ov.z - ov.distance * 0.55 }, { x: ov.x, y: gy, z: ov.z }, 0.8);
-        usedPose = true;
-      }
+      r.setOverview?.({ x: ov.x, z: ov.z, radius: ov.radius, distance: ov.distance });
+      // the UI's renderer controls always have a setOverview; whether the renderer behind it draws one is found out in a moment (tick)
+      verifyAt = performance.now() / 1000 + 1.8;
     }
     // the world slows
     prevSpeed = game.sim.view.clock().speed;
@@ -190,8 +200,8 @@ export function tacticalPanel(ctx: PanelCtx): UiPanel {
     window.removeEventListener('keyup', onKeyUp, true);
     if (r) {
       r.setOrderMarks?.(null);
-      if (r.setOverview) r.setOverview(null);
-      else if (usedPose) r.setCameraMode('follow');
+      r.setOverview?.(null);
+      if (usedPose) r.setCameraMode('follow');
     }
     battleBus.tactical = false;
     battleBus.closeTactical = null;
@@ -215,6 +225,7 @@ export function tacticalPanel(ctx: PanelCtx): UiPanel {
         r?.setOrderMarks?.(marks());
       }
       banners.update(own, enemy, battleBus.selected);
+      if (verifyAt > 0 && performance.now() / 1000 >= verifyAt) { verifyAt = 0; verifyOverview(); }
       // pan with the keys
       if (r?.pan && held.size > 0) {
         const dx = (held.has('KeyD') || held.has('ArrowRight') ? 1 : 0) - (held.has('KeyA') || held.has('ArrowLeft') ? 1 : 0);

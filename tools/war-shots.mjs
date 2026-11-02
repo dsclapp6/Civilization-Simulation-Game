@@ -8,9 +8,13 @@
 //   node tools/war-shots.mjs --seed=abc --size=1280x720 --quality=medium
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { mkdirSync, statSync } from 'node:fs';
+import { mkdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+// every line of the log carries the time, so it can be set beside the machine's memory when the browser is killed
+const log0 = console.log.bind(console);
+console.log = (...a) => log0(new Date().toISOString().slice(11, 19), ...a);
 
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
@@ -45,13 +49,20 @@ if (!(await serverUp())) vite = await startVite();
 else if (!(await serverIsOurs())) throw new Error(`port ${PORT} is busy with another server`);
 mkdirSync(OUT, { recursive: true });
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: W, height: H } });
-page.setDefaultTimeout(0);
-page.on('console', (m) => { const t = m.text(); if (t.startsWith('war:')) console.log(t); if (m.type() === 'error' && !/GPU stall|ReadPixels|WebGL/.test(t)) console.log(`[browser error] ${t}`); });
-page.on('pageerror', (e) => console.log(`[pageerror] ${e.message}`));
+let page = null;
+/** A fresh page for each scene (a scene that crashes the tab does not take the next one with it). */
+async function freshPage() {
+  if (page) { try { await page.close(); } catch { /* already gone */ } }
+  page = await browser.newPage({ viewport: { width: W, height: H } });
+  page.setDefaultTimeout(0);
+  page.on('console', (m) => { const t = m.text(); if (t.startsWith('war:')) console.log(t); if (m.type() === 'error' && !/GPU stall|ReadPixels|WebGL/.test(t)) console.log(`[browser error] ${t}`); });
+  page.on('pageerror', (e) => console.log(`[pageerror] ${e.message}`));
+  page.on('crash', () => console.log('[page crashed]'));
+}
 const base = `http://localhost:${PORT}/?seed=${encodeURIComponent(seed)}&quality=${quality}&shots=1`;
 
 async function load(extra = 'autostart=1&time=0.42') {
+  await freshPage();
   await page.goto(`${base}&${extra}`, { timeout: 120000 });
   await page.waitForFunction(() => window.__game !== undefined && window.__ui !== undefined, null, { timeout: 300000, polling: 250 });
   await page.evaluate(() => window.__game.ready());
@@ -62,14 +73,22 @@ async function load(extra = 'autostart=1&time=0.42') {
 /** Afternoon light (the calendar day stays where it is). */
 const afternoon = () => page.evaluate(() => { const c = window.__m.sim.clock; const d = Math.floor(c.absDay); const t = c.absDay - d; c.state.absDay = d + (t > 0.45 ? 1 : 0) + 0.45; });
 async function shot(name, { settle = true } = {}) {
-  if (settle) await page.evaluate(() => window.__game.settle());
+  if (process.env.WAR_DEBUG) console.log('war: shot', name, 'begins');
+  // the renderer's own settle() builds everything in view in one blocking call, which on a shared box with little memory to spare can
+  // take the tab down; drawing frames lets it stream within its usual budget, with a pause for the garbage collector between them
+  if (settle) for (let i = 0; i < 24; i++) { await page.evaluate(() => window.__game.draw()); await page.waitForTimeout(60); }
+  if (process.env.WAR_DEBUG) console.log('war: shot', name, 'streamed');
   // the HUD is the UI's frame: draw (the camera moves), let the UI update from that camera (banners are projected), draw again
   await page.evaluate(() => { const g = window.__game; g.draw(); g.tick(0.07); g.draw(); });
   const file = resolve(OUT, `war-${name}.png`);
   await page.screenshot({ path: file });
   console.log(`${name}: ${Math.round(statSync(file).size / 1024)} KB`);
 }
-const advance = (seconds, input = {}) => page.evaluate(([s, i]) => window.__game.advance(s, i), [seconds, input]);
+const advance = async (seconds, input = {}) => {
+  const t0 = Date.now();
+  await page.evaluate(([s, i]) => window.__game.advance(s, i), [seconds, input]);
+  if (process.env.WAR_DEBUG) console.log(`war: advance ${seconds}s took ${Date.now() - t0} ms, heap ${await page.evaluate(() => Math.round(performance.memory.usedJSHeapSize / 1e6))} MB`);
+};
 
 async function prepare() {
   await page.evaluate(async () => {
@@ -107,9 +126,29 @@ async function findField(x0, z0) {
   }, [x0, z0]);
 }
 
-/** A scene that fails (a hook missing, a page error) is reported and the next one still runs. */
-async function scene(name, fn) {
-  try { await fn(); } catch (e) { console.log(`war: scene ${name} failed: ${e && e.message ? e.message : e}`); }
+/**
+ * Chromium is the first thing the kernel kills when the machine's memory runs short (a shared build box with several builders): wait for
+ * room before a scene starts, so a scene is not lost half way. Reads the memory cgroup this process lives in; absent = no waiting.
+ */
+async function waitForRoom(limitMB = Number(process.env.WAR_ROOM_MB ?? 8200), maxMinutes = 25) {
+  let dir = null;
+  try {
+    const line = readFileSync('/proc/self/cgroup', 'utf8').split('\n').find((l) => /:memory:/.test(l));
+    if (line) dir = `/sys/fs/cgroup/memory${line.split(':')[2]}`;
+  } catch { return; }
+  if (!dir) return;
+  const used = () => { try { return Number(readFileSync(`${dir}/memory.usage_in_bytes`, 'utf8')) / 1048576; } catch { return 0; } };
+  const t0 = Date.now();
+  while (used() > limitMB && Date.now() - t0 < maxMinutes * 60000) await new Promise((r) => setTimeout(r, 15000));
+  console.log(`war: memory in use ${Math.round(used())} MB (waited ${Math.round((Date.now() - t0) / 1000)} s)`);
+}
+
+/** A scene that fails (the tab crashed, a hook missing) is tried again from a fresh page, then reported; the next scene still runs. */
+async function scene(name, fn, tries = 6) {
+  for (let i = 1; i <= tries; i++) {
+    await waitForRoom();
+    try { await fn(); return; } catch (e) { console.log(`war: scene ${name} failed (try ${i}/${tries}): ${e && e.message ? String(e.message).split('\n')[0] : e}`); }
+  }
 }
 
 try {
@@ -155,18 +194,17 @@ try {
     console.log('war: groups', JSON.stringify(await page.evaluate(() => window.__m.mil.battleGroups('own').map((g) => [g.key, g.count, g.order]))));
     await afternoon();
     // behind the player and above, so both lines show
-    await page.evaluate(() => { const r = window.__m.s.renderer; r.zoom(7); r.orbit(0, 0.45); });
+    await page.evaluate(() => { const r = window.__m.s.renderer; r.zoom(5); r.orbit(0, 0.12); });
     await advance(2.5);
-    await shot('battle-start');
-    console.log('war: sides', JSON.stringify(await page.evaluate(() => {
-      const { mil, s } = window.__m; const b = s.services.player.body(); const r = s.controls;
-      const row = (g) => [g.key, g.count, Math.round(g.x), Math.round(g.z), g.order, (() => { const p = r.project?.(g.x, 2, g.z); return p ? [Math.round(p.x), Math.round(p.y)] : null; })()];
-      return { body: [Math.round(b.x), Math.round(b.z)], own: mil.battleGroups('own').map(row), enemy: mil.battleGroups('enemy').map(row) };
-    })));
-    console.log('war: banners', JSON.stringify(await page.evaluate(() => [...document.querySelectorAll('.mu-bt-banner')].map((e) => [e.textContent, e.style.display, e.style.left, e.style.top]))));
-    await advance(10);
-    await advance(1);
     await shot('battle');
+    console.log('war: projection', JSON.stringify(await page.evaluate(() => {
+      const { mil, s } = window.__m; const b = s.services.player.body(); const cam = s.renderer.getCamera(); const r = s.controls;
+      const d = cam.getWorldDirection(new cam.position.constructor());
+      const row = (g) => { const p = r.project(g.x, 2, g.z); return [g.key, Math.round(g.x), Math.round(g.z), p ? [Math.round(p.x), Math.round(p.y)] : null]; };
+      const pb = r.project(b.x, b.y + 1.5, b.z);
+      return { cam: [cam.position.x, cam.position.y, cam.position.z].map(Math.round), dir: [d.x, d.y, d.z].map((v) => +v.toFixed(2)), yaw: +s.renderer.getCameraYaw().toFixed(2), body: [Math.round(b.x), Math.round(b.z), +b.yaw.toFixed(2)], bodyScreen: pb ? [Math.round(pb.x), Math.round(pb.y)] : null, own: mil.battleGroups('own').map(row), enemy: mil.battleGroups('enemy').map(row), win: [innerWidth, innerHeight] };
+    })));
+    console.log('war: banners', JSON.stringify(await page.evaluate(() => [...document.querySelectorAll('.mu-bt-banner')].map((e) => [e.textContent, e.style.display, e.style.left, e.style.top, e.style.getPropertyValue('--lift')]))));
     if (want('wheel', 'orders')) {
       await page.keyboard.press('Digit5');
       await page.waitForTimeout(150);
@@ -180,7 +218,7 @@ try {
     if (want('tactical', 'orders')) {
       await page.keyboard.press('KeyC');
       await page.waitForTimeout(700);
-      await advance(1.2);
+      await advance(0.6);
       await shot('tactical', { settle: false });
       console.log('war: tactical open', await page.evaluate(() => window.__ui.isOpen('battle')), 'speed', await page.evaluate(() => window.__m.sim.view.clock().speed));
       await page.keyboard.press('KeyC');
@@ -215,7 +253,7 @@ try {
       const A = M.army(id);
       const gate = (st.buildingsAt.get(castle.id) ?? []).find((b) => b.kind === 'gatehouse');
       let ox = gate.x - castle.x, oz = gate.z - castle.z; const ol = Math.hypot(ox, oz) || 1; ox /= ol; oz /= ol;
-      A.x = gate.x + ox * 130; A.z = gate.z + oz * 130; A.px = A.x; A.pz = A.z; A.supplies = A.men.length * 200; A.morale = 1;
+      A.x = gate.x + ox * 75; A.z = gate.z + oz * 75; A.px = A.x; A.pz = A.z; A.supplies = A.men.length * 200; A.morale = 1;
       // the player: the host's commander (assault) or the highest man of the place (defend)
       let me = 0;
       if (role === 'assault') me = A.commander;
@@ -272,48 +310,54 @@ try {
       return b.filter((x) => x.kind === 'wall' || x.kind === 'tower' || x.kind === 'gatehouse').map((x) => [x.kind, Math.round(x.x), Math.round(x.z), +x.rot.toFixed(2)]);
     }, [info.castle.id, info.out]);
     console.log('war: walls', JSON.stringify(frames.slice(0, 10)), frames.length);
-    for (let k = 0; k < 14; k++) {
-      await advance(k === 0 ? 3 : 12);
+    for (let k = 0; k < 12; k++) {
+      await advance(k === 0 ? 3 : 10);
       const sv = await survey();
       console.log(`war: t${k}`, JSON.stringify(sv));
       const ram = sv.works.find((x) => x[0] === 'ram');
       const lad = sv.works.find((x) => x[0] === 'ladder');
       const gx = info.gate.x, gz = info.gate.z, [ox, oz] = info.out;
-      // the host and the wall from the camp's side
-      if (k === 0) { await place([gx + ox * 70 + oz * 14, 5, gz + oz * 70 - ox * 14], [gx + ox * 8, 4, gz + oz * 8]); await shot(`${role}-1-approach`, { settle: true }); }
-      if (ram && [3, 6, 9].includes(k)) {
-        const yaw = ram[4]; const fx = Math.sin(yaw), fz = Math.cos(yaw);
-        await place([ram[1] - fx * 11 + fz * 4, 3.6, ram[3] - fz * 11 - fx * 4], [ram[1] + fx * 5, 2.5, ram[3] + fz * 5]);
-        await shot(`${role}-2-ram-t${k}`, { settle: false });
-      }
-      // the player lends his shoulder: E at the beam is "Push the ram" (the verb is offered by the war actions provider)
-      if (ram && k === 2 && role === 'assault') {
-        const yaw = ram[4]; const fx = Math.sin(yaw), fz = Math.cos(yaw);
-        const offered = await page.evaluate(([x, z, yaw]) => {
-          const p = window.__m.s.services.player;
-          p.placeAt(x, z, yaw);
-          window.__game.advance(0.4);
-          return p.options().map((o) => `${o.provider}/${o.id}:${o.label}:${o.enabled}`);
-        }, [ram[1] - fx * 3, ram[3] - fz * 3, yaw]);
-        console.log('war: options at the ram', JSON.stringify(offered));
-        await advance(0.2, { interact: true });
-        await advance(2.5);
-        await place([ram[1] - fx * 9 + fz * 5, 3.2, ram[3] - fz * 9 - fx * 5], [ram[1] - fx * 1, 1.5, ram[3] - fz * 1]);
-        await shot(`${role}-6-push`, { settle: false });
-      }
-      if (lad && [4, 7, 10].includes(k)) {
-        const yaw = lad[4]; const fx = Math.sin(yaw), fz = Math.cos(yaw);
-        await place([lad[1] - fx * 9 + fz * 3, 3.2, lad[3] - fz * 9 - fx * 3], [lad[1] + fx * 3, 5.5, lad[3] + fz * 3]);
-        await shot(`${role}-3-ladder-t${k}`, { settle: false });
-      }
-      if ([2, 5, 8, 11].includes(k)) {
-        await place([gx + ox * 34 + oz * 26, 9, gz + oz * 34 - ox * 26], [gx + oz * 14, 7, gz - ox * 14]);
-        await shot(`${role}-4-wall-t${k}`, { settle: false });
-      }
-      if (sv.status && sv.status.gate === 'broken' && !info.brokenShot) {
-        info.brokenShot = true;
-        await place([gx + ox * 18 + oz * 5, 4.5, gz + oz * 18 - ox * 5], [gx, 3.5, gz]);
-        await shot(`${role}-5-gate-broken`, { settle: false });
+      if (role === 'assault') {
+        // the host and the wall from the camp's side
+        if (k === 0) { await place([gx + ox * 62 + oz * 14, 5, gz + oz * 62 - ox * 14], [gx + ox * 8, 4, gz + oz * 8]); await shot(`${role}-1-approach`, { settle: true }); }
+        // the player lends his shoulder: E at the beam is "Push the ram" (the verb is offered by the war actions provider)
+        if (ram && k === 2) {
+          const yaw = ram[4]; const fx = Math.sin(yaw), fz = Math.cos(yaw);
+          const offered = await page.evaluate(([x, z, yaw]) => {
+            const p = window.__m.s.services.player;
+            p.placeAt(x, z, yaw);
+            window.__game.advance(0.4);
+            return p.options().map((o) => `${o.provider}/${o.id}:${o.label}:${o.enabled}`);
+          }, [ram[1] - fx * 3, ram[3] - fz * 3, yaw]);
+          console.log('war: options at the ram', JSON.stringify(offered));
+          await advance(0.2, { interact: true });
+          await advance(2.5);
+          await place([ram[1] - fx * 9 + fz * 5, 3.2, ram[3] - fz * 9 - fx * 5], [ram[1] - fx * 1, 1.5, ram[3] - fz * 1]);
+          await shot(`${role}-6-push`, { settle: false });
+        }
+        if (ram && [4, 8].includes(k)) {
+          const yaw = ram[4]; const fx = Math.sin(yaw), fz = Math.cos(yaw);
+          await place([ram[1] - fx * 11 + fz * 4, 3.6, ram[3] - fz * 11 - fx * 4], [ram[1] + fx * 5, 2.5, ram[3] + fz * 5]);
+          await shot(`${role}-2-ram-t${k}`, { settle: false });
+        }
+        if (lad && [5, 9].includes(k)) {
+          const yaw = lad[4]; const fx = Math.sin(yaw), fz = Math.cos(yaw);
+          await place([lad[1] - fx * 9 + fz * 3, 3.2, lad[3] - fz * 9 - fx * 3], [lad[1] + fx * 3, 5.5, lad[3] + fz * 3]);
+          await shot(`${role}-3-ladder-t${k}`, { settle: false });
+        }
+        if ([3, 7].includes(k)) {
+          await place([gx + ox * 34 + oz * 26, 9, gz + oz * 34 - ox * 26], [gx + oz * 14, 7, gz - ox * 14]);
+          await shot(`${role}-4-wall-t${k}`, { settle: false });
+        }
+        if (sv.status && sv.status.gate === 'broken' && !info.brokenShot) {
+          info.brokenShot = true;
+          await place([gx + ox * 18 + oz * 5, 4.5, gz + oz * 18 - ox * 5], [gx, 3.5, gz]);
+          await shot(`${role}-5-gate-broken`, { settle: false });
+        }
+      } else if ([1, 4, 7].includes(k) || (sv.status && sv.status.gate === 'broken' && !info.brokenShot)) {
+        // the lord inside: his own camera, the group bar and the storm card, the gate in front
+        if (sv.status && sv.status.gate === 'broken') info.brokenShot = true;
+        await shot(`${role}-${k}`, { settle: false });
       }
       if (!(await page.evaluate(() => window.__m.mil.battles().length))) { console.log('war: battle over at', k); break; }
     }

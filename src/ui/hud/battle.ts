@@ -156,7 +156,8 @@ export class BannerLayer {
 
   constructor(private readonly ctx: HudPartCtx, private readonly draggable = false) {
     const g = ctx.game();
-    if (g) this.groundY = (x, z) => g.zone.nav.groundY(x, z);
+    // the world's own height: the zone's navigation knows the ground only where it has loaded it (and answers 0 elsewhere)
+    if (g) this.groundY = (x, z) => g.sim.world.heightAt(x, z);
   }
 
   /** Puts a banner over each group at its place on the screen; hides those behind the camera or off it. */

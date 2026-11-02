@@ -55,7 +55,12 @@ settled by the macro model.
 the wall buildings: wall 6 m, palisade 3 m, tower 9 m, gatehouse 7 m above the ground, two to a wall segment, a pair in a tower, one
 at the gate. The stations nearest the besiegers' camp are manned first, and towers and the gate are preferred. Archers and
 crossbowmen go up and shoot from the height (a shot from 6 m reaches further and the parapet covers the man behind it); spearmen and
-the rest hold the gate and the breaches. The attackers have the same stairs: a man who gets inside goes up to the wall-walk.
+the rest hold the gate and the breaches. A garrison seldom has archers enough for its walls, but every castle has bows in its
+armoury: the lowest of the men who carry none take a shortbow (24 arrows) until two in five of the defenders shoot, as many as
+there are stations; men without a shield go first, a man at arms needed on the wall leaves his shield, knights and riders hold the
+gate. Once a ladder is up, two of the reserve take the stations beside its head. The attackers have the same stairs: with the gate
+open or a breach made, the men inside go up to the wall-walk after the men still shooting from it (if no wall stands between them and
+the stairs).
 
 **The ram.** A crew of at least two carries it from the camp to the gate (the draw item is a `ram` in the `siegeWorks` view source, with
 its swing phase). At the gate it swings every 3.2 s and on the stroke the gate takes a blow of `0.043 × crew/5` (0.3..1.3; an upgraded
@@ -87,12 +92,14 @@ that are in the fight (`commandSpan`). `military.battleGroups('own')` lists his 
 `battleGroups('enemy')` the enemy's groups as far as they are in sight, each with count, centre, facing, order, formation, target,
 whether engaged and morale.
 
-**Orders** (`military.orderGroup(group, order)`): `follow` (come with me), `hold` (here), `advance` (to a point, or to the enemy),
-`move` (to a point, no fighting on the way), `charge` (at a man, or the enemy), `loose` (archers: at a man or the enemy), `retreat`,
-`formation` (`loose`, `line`, `shield_wall`, `wedge`). Foot, archers and horse take them each their own way: archers hold back and
-loose at range, the horse charge as a wedge, a shield wall locks shields and moves at a crawl, `retreat` runs for the edge. Every man
-keeps a **slot** in the formation relative to a moving anchor (the group's anchor walks at 1.85 m/s for foot, 2.7 for horse; the men
-close up by their cohesion). A man in melee fights where he stands and comes back to his slot after.
+**Orders** (`military.orderGroup(group, order)`): `follow` (come with me: the group keeps about 4.5 m behind the player), `hold` (here),
+`advance` (to a point, or towards the enemy), `move` (to a point, and no fighting on the way), `charge` (every man at the enemy, or the man
+named), `loose` (at will, or at the man named: archers shoot, the rest fight as they please), `retreat` (to a point behind the group, and
+off the field once clear of the enemy: they are counted among those who got away), and `formation`: `loose` (open order), `line` (two
+ranks, 1.35 m between men), `shield_wall` (0.86 m between men, shields up, a crawl: 0.85 of the pace) and `wedge` (rows of 1, 3, 5…
+with the strongest man at the tip). Every man keeps a **slot** in the formation relative to a moving anchor (the group's anchor walks at
+1.85 m/s for foot, 2.7 for horse, slower while the group is ragged: the men close up by their cohesion); a man in melee fights where he
+stands and comes back to his slot after; archers shoot from theirs.
 
 **Morale** is each man's own: it drifts towards a level set by his health (and his legs) and by the odds, as a ratio of the men still
 standing (a handful against a crowd breaks, an army that has lost a few does not); a blow, and a death nearby, push it down at once,
@@ -153,16 +160,67 @@ let go: the captive goes into the same book as a prisoner of war (ransom, releas
 
 ## 7. Budgets and measurements
 
-TODO
+TODO-MEASUREMENTS
 
 ## 8. Tests
 
-TODO
+`npm test` runs all of these (the timing file only with `npm run test:perf`):
+
+| File | What it pins down |
+| --- | --- |
+| `tests/sim/military/alert.test.ts` (10) | breach and gate rules, `alertOf` by army distance, siege camp and storm, `fortState` and the forts view, its cost |
+| `tests/sim/military/captive.test.ts` (5) | `takeCaptive` / `release`, a prisoner taken in a fight is bound up, the old ransom flow still works |
+| `tests/sim/military/storm.test.ts` (4) | the macro assault becomes a detail storm with the player in it, runs to a result and concludes the macro siege; defender and commander cases |
+| `tests/sim/military/commandModel.test.ts` (9) | keys, wheel, clicks, marks, the overview circle, the signature that decides when banners are rebuilt |
+| `tests/combat/command.test.ts` (9) | formation slots, groups and the AI commander, the player's orders (hold, advance, retreat, shield wall, follow), determinism |
+| `tests/combat/storm.test.ts` (11) | stations at the wall-walk height, the armoury, crews and squads, the shut gate and the ram, pouring in, ladders and the climb, breaches, shots stopped by the parapet, engines, determinism |
+| `tests/combat/warActions.test.ts` (6) | push the ram, climb a ladder (with and without a way up), man a station, nothing offered outside a storm |
+| `tests/combat/mounted.test.ts` (7) | what can be couched, the sword from the saddle, the couched spear, horses hit by arrows and blows, rearing, falling, thrown riders, the braced spear |
+| `tests/combat/subdue.test.ts` (5) | strike to wound, the downed are not struck, the captured list, determinism, the other side winning |
+| `tests/combat/foot.test.ts` (6) | the sword's cut cycle, spear reach, the bow's draw, range and flight |
+| `tests/combat/war.perf.test.ts` (2, `PERF=1`) | 60 a side, a field battle and a storm: < 1 ms mean, < 8 ms worst per sub-step |
+
+The storm tests use a ring of curtain wall with four towers and a gatehouse built into the mock world (`tests/combat/stormHelpers.ts`);
+the military tests use the real combat module and the real player controller on a fake zone (`tests/sim/military/stormRig.ts`).
 
 ## 9. Screenshots
 
-TODO
+TODO-SHOTS
 
 ## 10. Contract changes and hand-offs
 
-TODO
+**Contract changes, all additive** (`src/sim/wave3.ts` is untouched):
+
+- `src/core/time.ts`: `SLOW_SPEED = 0.25` and `SPEEDS = [1, 3, 8, SLOW_SPEED]`. The clock could not go below 1×, which the tactical view
+  needs (the brief allows this one change). `setSpeed` accepts it; the clock's buttons never offer it; the tactical view sets it and puts
+  the previous speed back; the combat module puts a game loaded at 0.25 back to 1×.
+- `src/sim/military/war.ts` (new): `SiegeSetup`, `WarEngageOpts` (`engage`'s options: `intent`, `subdueSide`, `siege`, `command`), `SiegeStatus`,
+  `WarCombatApi` (`groups`, `orderGroup`, `siegeStatus`, `sideOf` on the combat module), `isWarCombat`. The combat module satisfies the
+  contract's `CombatApi` as before; the extended members are found with `isWarCombat`.
+- `MilitaryRuntime` (`src/sim/military/types.ts`) now has `alertOf`, `fortState`, `battleGroups`, `orderGroup`, `takeCaptive`, `release`
+  (they are optional in the contract's `MilitaryApi`, required members of the runtime).
+- Projectile kind `stone` (engine shots) in `src/combat/projectiles.ts`; the `siegeWorks` view source is fed by the combat module.
+
+**For B2 (3D and art):** draw `view.forts()` (a `shut` gate leaf, a `broken` gate, a breach by its 0..1: rubble across the segment) with
+`view.fortsVersion()` to know when to rebuild; draw `view.siegeWorks()` (a ram with its roof and swing phase 0..1, ladders leaning from
+their foot on the ground to the wall-top, mantlets, trebuchets and mangonels with the arm phase); the `climb` and `push` clips for the
+men on a ladder and at the beam; the horse's `rear` animation and a horse corpse (an `AnimalDrawItem` with the `dead` animation, left where the horse fell); the `stone`
+projectile; `setOverview` and `setOrderMarks` (the tactical view drives both; without them it falls back to `setCameraPose` and the
+orders are not drawn on the ground).
+
+**For B3 (law, watch, player body):** `ZoneApi.wallStations(settlement)` is consumed by the storm scene when present (the fallback
+heights are in §2); for a player on the wall-walk the navigation must be able to stand a body at the station's height (until it can,
+the climb ends inside the wall at the foot of the stairs). The zone reads `military.alertOf` (watch doubled, militia to the walls,
+bells) and `military.fortState` (a shut gate is solid; the navigation does not block the gatehouse, so a shut gate is the zone's to
+enforce; a breach ≥ 0.5 is a way in). `combat.engage(sides, { intent: 'subdue' })` takes the side without the player as the one that
+strikes to wound (else side 0, or `subdueSide`); `FightResult.captured` lists those it took alive; `military.takeCaptive(captive, captor,
+{ settlement?, reason? })` and `military.release(captive, 'escaped' | 'pardoned' | 'served' | 'ransomed')` put them in the military book
+and let them go.
+
+**For B6 / B1 (UI):** keys 4–7 select a group, 8 opens the order wheel, C is the tactical view in a battle where the player commands men
+and the command panel otherwise (`KEYMAP.battle`, handled through `registerHotkey` in the HUD part, so the key dispatch needs no edit);
+the HUD part is `registerHudPart('battle')` and the tactical view the ext panel `battle`. `tools/game-flow.mjs` has no step for them.
+
+**Not done:** the wall-walk is not a place the player can stand until the zone's navigation has heights; ranged garrisons are
+the macro model's (a garrison with no archers is given bows from its armoury, §2); the macro kinds `archer` and `crossbow` that are not
+careers are not turned into bows in the detail fight; a detail fight is not saved (a load settles it by the macro model, as before).
