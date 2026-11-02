@@ -102,7 +102,7 @@ describe('raising men', () => {
   });
 
   it('buys the gear the stores lack from smiths at their price and tells the books', () => {
-    const { sim, realm, lord, hh, settlement } = scene();
+    const { sim, realm, mil, lord, hh, settlement } = scene();
     youths(sim, settlement, 5);
     const purse0 = hh.purse;
     const opt = realm.recruitOptions(lord.id, settlement).find((o) => o.kind === 'man_at_arms')!;
@@ -116,12 +116,12 @@ describe('raising men', () => {
     expect(Object.keys(p.inventory).some((k) => k.startsWith('padded_armour'))).toBe(true);
     expect(p.career).toBe('man_at_arms');
     // drilled to the standard of the post
-    expect(sim.services.military!.armsQuality!(p.id)).toBeGreaterThan(0.7);
+    expect(mil!.armsQuality(p.id)).toBeGreaterThan(0.7);
     expect(realm.accounts!(lord.id).find((l) => l.label === 'Troops: fees and gear')?.pence).toBeCloseTo(-spent, 1);
   });
 
   it('gives a mounted sergeant a horse from the stores, kept by his household', () => {
-    const { sim, realm, lord, hh, settlement } = scene();
+    const { sim, realm, mil, lord, hh, settlement } = scene();
     youths(sim, settlement, 3);
     stock(sim, hh, { 'horse#2': 1 });
     const horses0 = Object.keys(hh.stores).filter((k) => k.startsWith('horse')).reduce((a, k) => a + hh.stores[k], 0);
@@ -134,7 +134,8 @@ describe('raising men', () => {
     expect(Object.keys(gh.stores).some((k) => k.startsWith('horse'))).toBe(true);
     expect(man.career).toBe('sergeant');
     expect(man.rankTier).toBe(3);
-    expect(sim.services.military!.forces(lord.house).garrison).toBeGreaterThanOrEqual(1);
+    militaryContext(sim).forces.clear();
+    expect(mil!.forces(lord.house).garrison).toBeGreaterThanOrEqual(1);
   });
 
   it('takes on only as many as the treasury can pay, with a week\'s wages in hand', () => {

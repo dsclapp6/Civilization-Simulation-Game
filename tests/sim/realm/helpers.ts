@@ -54,6 +54,11 @@ export interface RealmSimOptions extends TestSimOptions {
 export function realmSim(opts: RealmSimOptions = {}): RealmSim {
   const sim = newSim({ preset: 'small', ...opts });
   if (!opts.keepPlayer) noPlayer(sim);
+  return bootRealm(sim, opts);
+}
+
+/** Installs the modules on a simulation (a fresh one, or one just loaded from a save) in the order the game does. */
+export function bootRealm(sim: Simulation, opts: RealmSimOptions = {}): RealmSim {
   const social = installSocial(sim);
   const economy = installEconomy(sim, { social });
   const deps0 = { economy, social };
@@ -185,6 +190,12 @@ export function runToHour(sim: Simulation, hour: number): void {
   let hours = hour - Math.floor(frac * 24 + 1e-6);
   if (hours <= 0) hours += 24;
   sim.advanceHours(hours);
+}
+
+/** Sets the calendar to an absolute day (and the hours as fired, so that nothing catches up). */
+export function setDay(sim: Simulation, absDay: number): void {
+  sim.state.clock.absDay = absDay;
+  sim.state.clock.firedHour = Math.floor(absDay * 24 + 1e-6);
 }
 
 /** Raises a finished building of a kind in a settlement (a smithy, a school, a barracks…), as a hand-made scenario needs it. */
