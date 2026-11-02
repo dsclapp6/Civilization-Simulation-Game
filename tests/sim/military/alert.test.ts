@@ -129,12 +129,14 @@ describe('alertOf', () => {
     expect(mil.alertOf(castle.id)).not.toBe('assault');
   });
 
-  it('answers a thousand times in a few milliseconds (cached until something changes)', () => {
+  it('answers the same until something changes, and again after a touch (the cache is only a cache)', () => {
     const { sim, mil } = milSim({ seed: 'alert-d' });
+    const M = militaryContext(sim);
     const s = sim.world.settlements[0];
-    const t0 = performance.now();
-    for (let i = 0; i < 20000; i++) mil.alertOf(s.id);
-    expect(performance.now() - t0).toBeLessThan(500);
+    const first = mil.alertOf(s.id);
+    for (let i = 0; i < 50; i++) expect(mil.alertOf(s.id)).toBe(first);
+    M.touch();
+    expect(mil.alertOf(s.id)).toBe(first);
   });
 });
 
@@ -200,7 +202,7 @@ describe('fortState and the forts view', () => {
     expect(listed).not.toContain(raw.id);
   });
 
-  it('the version moves only when the list changes, and reading it is cheap', () => {
+  it('the version moves only when the list changes', () => {
     const t = stage('fort-d');
     setDayFraction(t.sim, 0.5);
     const v0 = t.sim.view.fortsVersion!();
@@ -211,8 +213,5 @@ describe('fortState and the forts view', () => {
     const v1 = t.sim.view.fortsVersion!();
     expect(v1).toBeGreaterThan(v0);
     expect(t.sim.view.fortsVersion!()).toBe(v1);
-    const t0 = performance.now();
-    for (let i = 0; i < 20000; i++) { t.sim.view.fortsVersion!(); t.mil.fortState(t.gate.id); }
-    expect(performance.now() - t0).toBeLessThan(500);
   });
 });

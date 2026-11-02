@@ -160,7 +160,21 @@ let go: the captive goes into the same book as a prisoner of war (ransom, releas
 
 ## 7. Budgets and measurements
 
-TODO-MEASUREMENTS
+The war runs inside the arena's own sub-step (`combat.step`, 20 Hz), so the budget is the arena's (ARCHITECTURE §13, the wave 3 rule):
+**under 1 ms per sub-step on average, no step over 8 ms**. `tests/combat/war.perf.test.ts` measures it (`npm run test:perf`; after a
+throw-away fight, best of three identical deterministic fights, 90 s of fight at most), on a quiet machine:
+
+| Scene | Sub-steps | `combat.step` mean | worst step |
+| --- | --- | --- | --- |
+| 20 v 20 brawl (the arena's own test, for reference) | 271 | 0.14 ms | 3.1 ms |
+| field battle, **60 a side**: groups, formations, an AI commander on each side, archers, horse | 1072 | 0.47 ms | 3.0 ms |
+| storm, **60 a side**: walls manned, ram, three ladders, shots from the height, the commander's orders | 1800 | 0.57 ms | 4.5 ms |
+
+Other costs: `alertOf`, `fortState` and the `forts` version cost 28 ns an ask when nothing has changed (60 000 asks, 1.7 ms:
+`tests/sim/military/alert.perf.test.ts`); the list behind them is rebuilt only when a building, an army, a siege, a war or the night changes.
+The military module's hourly systems are as before (the storm adds no per-step work outside the arena). The macro/detail bridge builds the
+siege set-up and the groups once, when the fight begins. In the live game the cost of drawing a crowd is the renderer's and the zone's:
+a detail fight is capped at `CFG.detailMax` (60) men a side.
 
 ## 8. Tests
 
@@ -168,24 +182,51 @@ TODO-MEASUREMENTS
 
 | File | What it pins down |
 | --- | --- |
-| `tests/sim/military/alert.test.ts` (10) | breach and gate rules, `alertOf` by army distance, siege camp and storm, `fortState` and the forts view, its cost |
+| `tests/sim/military/alert.test.ts` (10) | breach and gate rules, `alertOf` by army distance, siege camp and storm, `fortState` and the forts view |
 | `tests/sim/military/captive.test.ts` (5) | `takeCaptive` / `release`, a prisoner taken in a fight is bound up, the old ransom flow still works |
 | `tests/sim/military/storm.test.ts` (4) | the macro assault becomes a detail storm with the player in it, runs to a result and concludes the macro siege; defender and commander cases |
 | `tests/sim/military/commandModel.test.ts` (9) | keys, wheel, clicks, marks, the overview circle, the signature that decides when banners are rebuilt |
-| `tests/combat/command.test.ts` (9) | formation slots, groups and the AI commander, the player's orders (hold, advance, retreat, shield wall, follow), determinism |
+| `tests/combat/command.test.ts` (10) | formation slots, groups and the AI commander (the horse waits, rides in when its foot are locked and carries the charge on), the player's orders (hold, advance, retreat, shield wall, follow), determinism |
 | `tests/combat/storm.test.ts` (11) | stations at the wall-walk height, the armoury, crews and squads, the shut gate and the ram, pouring in, ladders and the climb, breaches, shots stopped by the parapet, engines, determinism |
-| `tests/combat/warActions.test.ts` (6) | push the ram, climb a ladder (with and without a way up), man a station, nothing offered outside a storm |
+| `tests/combat/warActions.test.ts` (7) | push the ram (also offered with a man in front), climb a ladder (with and without a way up), man a station, nothing offered outside a storm |
 | `tests/combat/mounted.test.ts` (7) | what can be couched, the sword from the saddle, the couched spear, horses hit by arrows and blows, rearing, falling, thrown riders, the braced spear |
 | `tests/combat/subdue.test.ts` (5) | strike to wound, the downed are not struck, the captured list, determinism, the other side winning |
 | `tests/combat/foot.test.ts` (6) | the sword's cut cycle, spear reach, the bow's draw, range and flight |
 | `tests/combat/war.perf.test.ts` (2, `PERF=1`) | 60 a side, a field battle and a storm: < 1 ms mean, < 8 ms worst per sub-step |
+| `tests/sim/military/alert.perf.test.ts` (1, `PERF=1`) | the alert and forts answers are cheap when nothing has changed |
 
 The storm tests use a ring of curtain wall with four towers and a gatehouse built into the mock world (`tests/combat/stormHelpers.ts`);
 the military tests use the real combat module and the real player controller on a fake zone (`tests/sim/military/stormRig.ts`).
 
 ## 9. Screenshots
 
-TODO-SHOTS
+Taken with `node tools/war-shots.mjs` (Vite on :5186, headless Chromium, software GL; the REAL combat and military modules and the real
+UI, the scenes set up through their APIs: `--quality=low --men=26` keeps the detail line small enough for the browser to draw on a shared
+box; scene names on the command line: `battle wheel tactical assault defend mounted subdue foot`). The renderer in this branch has none of
+B2's war art yet (no ram or ladder meshes, no order marks on the ground, no `setOverview`), so those are the gaps in the pictures.
+
+`docs/military/`:
+
+- `war-battle.png` — a field battle, the player a lord leading his host: the group bar (keys 4–7, count, order, morale), the gold banner
+  over his foot, the enemy's red banners over the far line.
+- `war-wheel.png` — the order wheel (8), foot selected: follow, hold, advance, charge, loose, fall back, line, shield wall, wedge.
+- `war-tactical.png` — the tactical view (C): the world at a quarter speed (the clock shows no button lit), the camera over the field
+  (the fallback overhead camera: this renderer has no `setOverview`), the two lines with their banners and orders, the order buttons.
+- `war-assault-1-approach.png` — a castle stormed from the besiegers' side, the storm card at the top ("The gate holds · 1 ram · 5
+  shooting from the walls": the garrison's armoury at work) and the defenders' banners over the gate.
+- `war-assault-gate.png`, `war-assault-wall.png`, `war-assault-wall-foot.png` — the host before the gate, along the wall under fire,
+  and at its foot with arrows in the grass and blood (two ladders up, four men on the wall-walk).
+- `war-assault-push.png` — the player puts his shoulder to the ram: "Push the ram" in the action bar (the group bar sits above it).
+- `war-defend.png`, `war-defend-gate-broken.png` — the same storm from inside: the lord with his men and a knight at his side, the
+  enemy's foot advancing and then charging through the broken gate (the card reads "The gate is broken").
+
+`docs/combat/`:
+
+- `war-mounted-charge.png`, `war-mounted-fallen.png` — horsemen with lances ride into spearmen: a rider standing over the fallen, a
+  horse down beside him, blood on the grass; riders and horses falling after the impact.
+- `war-subdue.png` — a patrol against two trespassers, struck to the ground and taken alive (`captured`, nobody dead).
+- `war-foot-bow-and-sword.png` — the bow and the sword on foot: an archer at full draw, a melee of axes, spears and shields, a man
+  down with an arrow in him.
 
 ## 10. Contract changes and hand-offs
 
