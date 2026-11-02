@@ -11,4 +11,7 @@ import './battle';
 // civilization pass, wave B: the law (patrols, captivity) and its HUD plaque
 import './law';
 import '../hud/law';
+// civilization pass, wave B: builder mode (B) and the ruler's seat of government (U)
+import '../builder/builder';
+import '../ruler/ruler';
 export {};
