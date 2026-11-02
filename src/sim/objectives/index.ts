@@ -159,6 +159,10 @@ export function installObjectives(sim: Simulation, deps: Wave3Deps): ObjectivesR
     feed({ t: 'flag', name: 'married' });
     retireGoals(O);
   }));
+  offs.push(on('realmOrder', (e) => {
+    if (e.person !== O.playerId) return;
+    feed({ t: 'flag', name: e.kind === 'plan' || e.kind === 'works' ? 'realm.plan' : 'realm.command' });
+  }));
   offs.push(on('birth', (e) => storyBorn(O, e.person, e.mother, e.father)));
   offs.push(on('request', () => { syncRequests(O); follow(); }));
   offs.push(on('notify', (e) => { if (e.ref && e.ref.startsWith('request:')) { syncRequests(O); follow(); } }));

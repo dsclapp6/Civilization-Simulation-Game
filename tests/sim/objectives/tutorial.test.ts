@@ -1,7 +1,7 @@
 // The first-day tutorial of each birth chain: made from what is really at hand, every step located, completed by
 // the scripted player through real actions, conversations, trades and sleep.
 import { describe, expect, it } from 'vitest';
-import { chainOf } from '../../../src/sim/objectives/tutorial';
+import { advanceTutorial, chainOf } from '../../../src/sim/objectives/tutorial';
 import { dayPart } from '../../../src/sim/calendar';
 import type { BirthClass } from '../../../src/sim/state';
 import { active, allText, byTitle, install, objSim, playObjectives, playerOf, recOf, setTime, stepOf, tracked, type ObjSim } from './helpers';
@@ -162,5 +162,30 @@ describe('the tutorial chains', () => {
       o.obj.poll(true);
       expect(rec.steps[1].done || rec.steps[0].done).toBe(true);
     }
+  });
+});
+
+describe('the lord chain (a run that starts as a lord)', () => {
+  it('is chosen for a lord, and the ruler’s orders complete its ruling stages', async () => {
+    const { installRealm } = await import('../../../src/sim/realm');
+    const o = objSim({ seed: 'lord1', preset: 'small', start: 'lord', install: false });
+    const realm = installRealm(o.sim, o.deps);
+    install(o);
+    const me = playerOf(o.sim);
+    expect(o.sim.state.titlesHeldBy(me.id).size).toBeGreaterThan(0);
+    expect(chainOf(o.obj.obj)).toBe('lord');
+    // walk the chain: finish whatever stage is live until the plan stage appears
+    let plan = byTitle(o, /fields and labour/i);
+    for (let guard = 0; guard < 6 && !plan; guard++) {
+      const live = active(o, 'tutorial')[0];
+      if (live) o.obj.obj.finish(recOf(o, live.id), 'done');
+      advanceTutorial(o.obj.obj);
+      plan = byTitle(o, /fields and labour/i);
+    }
+    expect(plan, 'the plan stage is made').toBeTruthy();
+    const view = realm.view(me.id)!;
+    const s = view.settlements[0];
+    expect(realm.setWorksShare(me.id, s, 0.25).ok).toBe(true);
+    expect(byTitle(o, /fields and labour/i)?.state).toBe('done');
   });
 });

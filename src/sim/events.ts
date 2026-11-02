@@ -70,6 +70,8 @@ export type SimEvents = {
   /** News of the realm and its neighbours (src/sim/realm): rivals' works, research, troops, wars. */
   news: { id: number; kind: string; house: number; settlement: number; text: string; threat: number };
   /** A research project changed (src/sim/realm). */
+  /** A ruler's order went through (the ruler's seat or the AI): fields, works, research, men, knighting, trade. */
+  realmOrder: { person: number; kind: 'plan' | 'works' | 'research' | 'recruit' | 'dub' | 'trade' };
   research: { phase: 'started' | 'done' | 'stalled' | 'abandoned'; project: number; tech: string; house: number; researcher: number };
   /** Trespass on someone's land (src/sim/territory): seen, warned, escorted, attacked, captured, released. */
   trespass: { phase: 'seen' | 'warned' | 'escorted' | 'left' | 'attacked' | 'captured' | 'released' | 'escaped'; person: number; house: number; settlement: number; level: 'private' | 'hostile' };

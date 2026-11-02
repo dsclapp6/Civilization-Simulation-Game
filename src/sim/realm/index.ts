@@ -5,6 +5,7 @@
 // politics, construction, territory) lazily on `sim.services`, any of which may be absent. See docs/REALM.md.
 import type { Simulation } from '../sim';
 import type { Wave3Deps } from '../wave3deps';
+import type { SimEvents } from '../events';
 import { closeBooks, yearOf } from './books';
 import { HOURS } from './config';
 import { installNews, newsDaily, newsList, newsYearly, outpostsDaily, rivalsOf } from './news';
@@ -61,6 +62,12 @@ export function installRealm(sim: Simulation, deps: Wave3Deps): RealmRuntime {
   offs.push(installNews(R));
   for (const ev of ['inheritance', 'death', 'office', 'playerSwitched', 'captured'] as const) offs.push(sim.events.on(ev, () => { R.version++; }));
 
+  /** Tells the rest of the game (the objectives) that a ruler's order went through. */
+  const order = <T extends { ok: boolean }>(person: number, kind: SimEvents['realmOrder']['kind'], r: T): T => {
+    if (r.ok) sim.events.emit('realmOrder', { person, kind });
+    return r;
+  };
+
   const api: RealmRuntime = {
     ctx: R,
     dispose() {
@@ -75,24 +82,24 @@ export function installRealm(sim: Simulation, deps: Wave3Deps): RealmRuntime {
     rules: (person) => rulesOf(R, person),
 
     researchOptions: (person) => researchOptions(R, person),
-    startResearch: (person, tech, researcher, building, opts) => startResearch(R, person, tech, researcher, building, opts),
+    startResearch: (person, tech, researcher, building, opts) => order(person, 'research', startResearch(R, person, tech, researcher, building, opts)),
     stopResearch: (person, project) => stopResearch(R, person, project),
     projects: (house) => projectsOf(R, house),
 
     recruitOptions: (person, settlement) => recruitOptions(R, person, settlement),
-    recruit: (person, settlement, kind, count) => recruit(R, person, settlement, kind, count),
-    dub: (person, candidate) => dub(R, person, candidate),
+    recruit: (person, settlement, kind, count) => order(person, 'recruit', recruit(R, person, settlement, kind, count)),
+    dub: (person, candidate) => order(person, 'dub', dub(R, person, candidate)),
     troops: (person, settlement) => troopsOf(R, person, settlement),
     discharge: (person, man) => discharge(R, person, man),
 
     cropPlan: (settlement) => cropPlan(R, settlement),
-    setCropPlan: (person, settlement, field, crop) => setCropPlan(R, person, settlement, field, crop),
+    setCropPlan: (person, settlement, field, crop) => order(person, 'plan', setCropPlan(R, person, settlement, field, crop)),
     cropPlanView: (settlement) => cropPlanView(R, settlement),
     worksShare: (settlement) => worksShare(R, settlement),
-    setWorksShare: (person, settlement, share) => setWorksShare(R, person, settlement, share),
+    setWorksShare: (person, settlement, share) => order(person, 'works', setWorksShare(R, person, settlement, share)),
 
     tradeOrders: (person) => tradeOrders(R, person),
-    addTradeOrder: (person, order) => addTradeOrder(R, person, order),
+    addTradeOrder: (person, o) => order(person, 'trade', addTradeOrder(R, person, o)),
     removeTradeOrder: (person, id) => removeTradeOrder(R, person, id),
 
     news: (limit) => newsList(R, limit),

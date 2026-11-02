@@ -12,7 +12,7 @@ import { pickWork, type WorkChoice, workTitle } from './choices';
 import type { NewObjective, Obj, Reward } from './core';
 import { CHAINS, T, cap, type Vars } from './data';
 import {
-  buildingPhrase, buildingTarget, churchOf, describePerson, doorXZ, personTarget, placeTarget, stripCentre, stripPhrase, stripTarget,
+  buildingPhrase, buildingTarget, buildingsOfKind, churchOf, nearestOf, describePerson, doorXZ, personTarget, placeTarget, stripCentre, stripPhrase, stripTarget,
 } from './places';
 import { boardFor, enabledOption, headOf, meetPerson, neighbourFor, priestOf, stewardOf, traderFor } from './roles';
 import type { ObjectiveTarget } from './types';
@@ -215,6 +215,42 @@ function stageSteward(c: Ctx): Built {
   }], { vars, pay: { opinion: 2, skill: 'stewardship', xp: 8 } });
 }
 
+/** A lord's first orders (the ruler's seat): fields and labour, then research, men or trade. */
+function stageOrder(c: Ctx, id: 'plan' | 'command'): Built {
+  const realm = c.O.sim.services.realm as { canRule(p: number): boolean } | undefined;
+  if (!realm || !realm.canRule(c.me.id)) return null;
+  // the orders are given from the ruler's seat (U) anywhere; the step points at the lord's hall
+  const home = c.O.state.households.get(c.me.household)?.home;
+  const hall = home !== undefined ? c.O.state.buildings.get(home) : undefined;
+  const spec = make(c, id, [{
+    text: T('tutorial', `${id}.do.text`, c.vars, c.cls), hint: T('tutorial', `${id}.do.hint`, c.vars, c.cls),
+    ...(hall ? { target: buildingTarget(c.O, hall, 'Your hall') } : {}),
+    m: { k: 'flag', name: `realm.${id}` },
+  }], { pay: { skill: 'stewardship', xp: 10 } });
+  delete spec.giver;
+  return spec;
+}
+
+/** Drill at the training yard: the lord is a person too, and must be made strong. */
+function stageTrain(c: Ctx): Built {
+  const { O, me } = c;
+  const yards = buildingsOfKind(O, me.settlement, ['training_yard']);
+  const home = O.state.households.get(me.household)?.home;
+  const hb = home !== undefined ? O.state.buildings.get(home) : undefined;
+  const s = O.settlementById.get(me.settlement);
+  const yard = nearestOf(yards, hb?.x ?? s?.x ?? 0, hb?.z ?? s?.z ?? 0);
+  if (!yard) return null;
+  if (!enabledOption(O, me, { kind: 'building', id: yard.id }, /^combat\.pell/)) return null;
+  const at = buildingTarget(O, yard);
+  const spec = make(c, 'train', [
+    reachAt(T('tutorial', 'train.go.text', c.vars, c.cls), T('tutorial', 'train.go.hint', c.vars, c.cls), at, 22),
+    { text: T('tutorial', 'train.do.text', c.vars, c.cls), hint: T('tutorial', 'train.do.hint', c.vars, c.cls), target: at, goal: 2, progress: 0,
+      m: { k: 'act', ids: ['combat.pell'], at: { kind: 'building', id: yard.id }, need: 2 } },
+  ], { pay: { skill: 'melee', xp: 10 } });
+  delete spec.giver;
+  return spec;
+}
+
 function stageFolk(c: Ctx): Built {
   const { O, me } = c;
   const hh = O.state.households.get(me.household);
@@ -248,6 +284,7 @@ function stageNight(c: Ctx): Built {
 const STAGES: Record<string, (c: Ctx) => Built> = {
   meet: stageMeet, work: stageWork, errand: stageErrand, trade: stageTrade, chapel: stageChapel, lessons: stageLessons,
   steward: stageSteward, folk: stageFolk, night: stageNight,
+  plan: (c) => stageOrder(c, 'plan'), command: (c) => stageOrder(c, 'command'), train: stageTrain,
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -255,6 +292,9 @@ const STAGES: Record<string, (c: Ctx) => Built> = {
 // ---------------------------------------------------------------------------------------------
 
 export function chainOf(O: Obj): string {
+  // a run that starts as a lord learns to rule (and to fight) first
+  const me = O.me;
+  if (me && O.state.titlesHeldBy(me.id).size > 0) return 'lord';
   return CHAIN_OF[O.state.run.birthClass] ?? 'farm';
 }
 

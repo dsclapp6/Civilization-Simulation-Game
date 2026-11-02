@@ -30,6 +30,8 @@ export const KEYMAP = {
     politics: 'KeyK', techs: 'KeyT', requests: 'KeyR', wounds: 'KeyB', help: 'F1',
     /** Clarity pass: the journal (objectives, today, people you know), the minimap toggle and the "What now?" card. */
     journal: 'KeyO', minimap: 'KeyN', whatNow: 'KeyY',
+    /** The ruler's seat: lands, purse, fields, research, men, trade orders, rivals (docs/CIV.md §6). */
+    ruler: 'KeyU',
   },
 } as const;
 

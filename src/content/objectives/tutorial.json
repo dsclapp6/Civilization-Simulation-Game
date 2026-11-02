@@ -5,7 +5,8 @@
     "craft": ["meet", "work", "errand", "trade", "night"],
     "merchant": ["meet", "trade", "errand", "night"],
     "noble": ["meet", "chapel", "lessons", "errand", "trade", "night"],
-    "baron": ["meet", "steward", "folk", "errand", "trade", "night"]
+    "baron": ["meet", "steward", "folk", "errand", "trade", "night"],
+    "lord": ["meet", "steward", "plan", "command", "train", "night"]
   },
   "text": {
     "meet.title": "Meet your family",
@@ -106,6 +107,28 @@
     "night.home.hint": "Follow the golden beacon. The door glows when you are near.",
     "night.sleep.text": "Sleep until dawn",
     "night.sleep.hint": "Hold E at the door and choose 'Sleep until dawn', or press Z.",
-    "night.reward": "A summary of your day, and a fresh morning"
+    "night.reward": "A summary of your day, and a fresh morning",
+
+    "lord:steward.why": "Your steward keeps the accounts and knows every field and every debt of {village}. Hear his report before you give your first orders.",
+    "lord:steward.talk.hint": "Walk up to the steward and press E (or click him). Ask about the lands and the people.",
+    "plan.title": "Set your fields and labour",
+    "plan.why": "The manor lives on its fields. Name what each field will grow, and decide how much of your serfs' week-work goes to building instead of the demesne.",
+    "plan.do.text": "Open the ruler's seat (U) and give an order under Fields & labour",
+    "plan.do.hint": "Press U. Under Fields & labour, choose a crop for a field's next sowing, or move the slider for labour sent to your works.",
+    "plan.reward": "A manor that works to your plan",
+    "command.title": "Put your purse to work",
+    "command.why": "Coin in a chest builds nothing. Set a man to research, raise soldiers, or tell your steward what to sell.",
+    "command.do.text": "In the ruler's seat (U), begin research, raise men, or give a trade order",
+    "command.do.hint": "Press U, then use Research, Men & arms or Trade orders. A greyed-out choice says what it still needs.",
+    "command.reward": "The first works of your rule",
+    "train.title": "Make yourself strong",
+    "train.why": "A lord who cannot fight is a lord on borrowed time. Your own arm counts: drill at the training yard.",
+    "train.go.text": "Go to the training yard of {village}",
+    "train.go.hint": "Follow the golden beacon.",
+    "train.do.text": "Drill at the pell twice",
+    "train.do.hint": "Stand in the yard and press E (or click the yard), then choose 'Drill at the pell'. Melee, Strength and Endurance grow.",
+    "train.reward": "Melee practice, and the respect of your men",
+    "lord:folk.why": "These are your people. Learn their faces and their names; a lord who is known is obeyed more gladly.",
+    "lord:meet.why": "Your household will want to see you before the day begins."
   }
 }

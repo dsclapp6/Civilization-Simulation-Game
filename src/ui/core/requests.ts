@@ -41,7 +41,7 @@ export type InternalRequest =
 export type PanelRequest = UiRequest | InternalRequest;
 
 /** Which module a dock button needs: it is hidden while the module is not installed in this run. */
-export type DockNeeds = 'politics' | 'military' | 'advancement' | 'happenings' | 'combat';
+export type DockNeeds = 'politics' | 'military' | 'advancement' | 'happenings' | 'combat' | 'realm';
 
 export interface DockEntry {
   id: string;
@@ -65,6 +65,7 @@ export const DOCK_ENTRIES: readonly DockEntry[] = [
   { id: 'map', label: 'Map', key: 'M', panelId: 'map', request: { panel: 'map' }, group: 'core' },
   { id: 'chronicle', label: 'Chronicle', key: 'L', panelId: 'chronicle', request: { panel: 'chronicle' }, group: 'core' },
   { id: 'rest', label: 'Rest', key: 'Z', panelId: 'rest', request: { panel: 'rest' }, group: 'core' },
+  { id: 'ruler', label: 'Ruler’s seat: fields, research, men, trade', key: 'U', panelId: 'ruler', request: { panel: 'ext', name: 'ruler' }, needs: 'realm', group: 'realm' },
   { id: 'requests', label: 'Requests and news', key: 'R', panelId: 'requests', request: { panel: 'ext', name: 'requests' }, needs: 'happenings', group: 'realm' },
   { id: 'wounds', label: 'Wounds', key: 'B', panelId: 'wounds', request: { panel: 'ext', name: 'wounds' }, needs: 'combat', group: 'realm' },
   { id: 'techs', label: 'House techniques', key: 'T', panelId: 'techs', request: { panel: 'ext', name: 'techs' }, needs: 'advancement', group: 'realm' },
@@ -79,7 +80,7 @@ export function panelForKey(key: string, has: (needs: DockNeeds) => boolean): { 
     case 'ledger': return { request: { panel: 'ledger' }, panelId: 'ledger' };
     case 'map': return { request: { panel: 'map' }, panelId: 'map' };
     case 'command': return has('military') ? { request: { panel: 'ext', name: 'army' }, panelId: 'army' } : { request: { panel: 'ledger', tab: 'household' }, panelId: 'ledger' };
-    case 'politics': case 'techs': case 'requests': case 'wounds': {
+    case 'politics': case 'techs': case 'requests': case 'wounds': case 'ruler': {
       const e = DOCK_ENTRIES.find((d) => d.id === key);
       return e && (!e.needs || has(e.needs)) ? { request: e.request, panelId: e.panelId } : null;
     }

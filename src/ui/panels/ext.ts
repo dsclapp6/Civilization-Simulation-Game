@@ -5,4 +5,5 @@ import './politics';
 import './combat';
 import './advancement';
 import './military';
+import './ruler';
 export {};
