@@ -356,3 +356,10 @@
 .mu-mini-word.good { color: #2f7d32; }
 .mu-mini-word.miss { color: #b3261e; }
 .mu-mini-help { font-size: 12px; opacity: 0.8; text-align: center; }
+
+/* ---- the lord's agenda in the tracker ---- */
+.mu-agenda-item { display: flex; align-items: flex-start; gap: 6px; width: 100%; text-align: left; margin: 4px 0 0; padding: 4px 6px;
+  font: inherit; font-size: 13px; background: rgba(255, 255, 255, 0.25); border: 1px solid rgba(31, 19, 9, 0.25); border-radius: 2px; cursor: pointer; color: inherit; }
+.mu-agenda-item:hover { background: rgba(255, 255, 255, 0.5); }
+.mu-agenda-item.danger { border-color: #b3261e; box-shadow: 0 0 6px rgba(179, 38, 30, 0.45); color: #7d1a14; font-weight: 700; }
+.mu-agenda-item.warn { border-color: #a5762a; }

@@ -84,3 +84,40 @@ describe('the duty of a post', () => {
     expect(recOf(o, week.id).state).toBe('done');
   });
 });
+
+describe('the duties of one\'s station (in place of quests)', () => {
+  it('a knight with no master has a duty of his station each working day: the yard, the bounds, the forge or the watch', () => {
+    const o = objSim({ seed: 'duty-k', install: false });
+    const me = playerOf(o.sim);
+    for (const t of [...o.sim.state.titlesHeldBy(me.id)]) o.sim.state.setTitleHolder(t, 0);
+    me.career = 'knight';
+    me.birthDay -= 16 * 14; // a grown man
+    goHome(o);
+    install(o);
+    skipTutorial(o);
+    const titles = new Set<string>();
+    for (let d = 1; d <= 6; d++) {
+      runTo(o, Math.floor(o.sim.absDay) + 1, 6);
+      for (const j of active(o, 'job')) titles.add(j.title);
+    }
+    const all = [...titles].join(' | ');
+    expect(all).toMatch(/Your duty: (ride the bounds|train the men at the yard|see to your arms at the forge|stand the watch)/);
+  });
+
+  it('a lord has no chores, duties or goals: he manages', () => {
+    const o = objSim({ seed: 'duty-l', install: false });
+    const me = playerOf(o.sim);
+    me.birthDay -= 16 * 20; // a grown man
+    // he holds the manor of his own village
+    const title = [...o.sim.state.titles.values()].find((t) => t.settlement === me.settlement) ?? [...o.sim.state.titles.values()][0];
+    o.sim.state.setTitleHolder(title, me.id);
+    goHome(o);
+    install(o);
+    skipTutorial(o);
+    expect(o.sim.state.titlesHeldBy(me.id).size).toBeGreaterThan(0);
+    runTo(o, Math.floor(o.sim.absDay) + 1, 7);
+    expect(active(o, 'chore')).toHaveLength(0);
+    expect(active(o, 'job')).toHaveLength(0);
+    expect(active(o, 'goal')).toHaveLength(0);
+  });
+});

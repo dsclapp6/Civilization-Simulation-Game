@@ -11,6 +11,7 @@ import type { NewObjective, Obj } from './core';
 import { STAT_TITLE } from './core';
 import { T, type Vars } from './data';
 import { buildingPhrase, buildingTarget, buildingsOfKind, describePerson, findNear, homeOf, nearbySettlements, nearestOf, personTarget, placeTarget } from './places';
+import { managesRealm } from './duties';
 import { bagQty } from './sources';
 
 type Step = NewObjective['steps'][number];
@@ -194,6 +195,8 @@ export function refreshGoals(O: Obj): number {
   const me = O.me;
   if (!me) return 0;
   O.save.goalsDay = O.dayNo;
+  // a lord's path is chosen: he rules (the realm's matters stand where the goals would)
+  if (managesRealm(O, me)) return 0;
   let live = O.active().filter((o) => o.source === 'goal').length;
   let n = 0;
   for (const g of GENERATORS) {
@@ -211,6 +214,7 @@ export function retireGoals(O: Obj): void {
   if (!me) return;
   for (const o of O.active()) {
     if (o.source !== 'goal') continue;
+    if (managesRealm(O, me)) { O.finish(o, 'expired'); continue; }
     const age = O.age(me);
     if (o.key === 'goal:court' && me.spouse) O.finish(o, 'done');
     else if (o.key === 'goal:archer' && (age > 35 || CAREERS[me.career].field === 'arms')) O.finish(o, CAREERS[me.career].field === 'arms' ? 'done' : 'expired');

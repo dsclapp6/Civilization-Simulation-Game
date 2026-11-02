@@ -12,6 +12,7 @@ import {
   awayFromHome, buildingPhrase, buildingTarget, describePerson, findNear, homeOf, personTarget, stripCentre, stripPhrase, stripTarget,
 } from './places';
 import { enabledOption } from './roles';
+import { managesRealm, roleDuty } from './duties';
 
 type Step = NewObjective['steps'][number];
 
@@ -133,12 +134,16 @@ export function makeJobs(O: Obj): number {
   const me = O.me;
   if (!me || isHolyDay(O.day) || awayFromHome(O, me)) return 0;
   O.save.jobsDay = O.dayNo;
+  // a lord has no duties: he manages
+  if (managesRealm(O, me)) return 0;
   let n = 0;
   const emp = O.deps.economy.employment(me.id);
   if (emp) {
     const duty = dutyFor(O, me, emp);
     if (duty && O.add(duty)) n++;
   }
+  // no master to set the day: the duty of one's station (a knight's round, the priest's, the master craftsman's)
+  if (n === 0) { const d = roleDuty(O, me); if (d && O.add(d)) n++; }
   n += makeWeekWork(O, me);
   return n;
 }

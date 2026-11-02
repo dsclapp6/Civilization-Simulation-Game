@@ -214,7 +214,7 @@ export class Hud {
     this.feedEl.append(this.feedList, this.feedBar);
     this.tracker = new Tracker({
       game: () => deps.game(), nav: this.nav, nameOf: (id) => deps.nameOf(id),
-      openJournal: () => deps.open({ panel: 'journal' }), whatNow: () => this.whatNow.toggle(),
+      openJournal: () => deps.open({ panel: 'journal' }), whatNow: () => this.whatNow.toggle(), open: (req) => deps.open(req),
     });
     this.whatNow = new WhatNow({
       game: () => deps.game(), nav: this.nav, show: (spot) => { showPlace(deps.game(), deps.pins, spot); }, say: (text) => deps.say('info', text),

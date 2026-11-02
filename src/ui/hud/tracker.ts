@@ -13,6 +13,8 @@ import { bar, type BarHandle } from '../components/widgets';
 import type { Objective } from '../../sim/objectives/types';
 import type { GameServices } from '../types';
 import type { NavState } from './navstate';
+import { realmAgenda } from '../core/agenda';
+import type { PanelRequest } from '../core/requests';
 
 export interface TrackerDeps {
   game(): GameServices | null;
@@ -20,6 +22,8 @@ export interface TrackerDeps {
   openJournal(): void;
   whatNow(): void;
   nameOf(id: number): string;
+  /** Opens a page (the lord's agenda points at the ruler's seat, the build page, battle command). */
+  open?(req: PanelRequest): void;
 }
 
 export class Tracker {
@@ -38,6 +42,10 @@ export class Tracker {
   private readonly reward = h('div.mu-tracker-reward.mu-hide');
   private readonly empty = h('div.mu-tracker-empty.mu-hide', null, 'Nothing is asked of you just now. Press ', h('span.mu-key', null, 'Y'), ' to see what is worth doing.');
   private readonly body = h('div.mu-tracker-body');
+  /** A lord's card: the matters of the realm (he manages; he is not sent on errands). */
+  private readonly agenda = h('div.mu-tracker-agenda.mu-hide');
+  private agendaSig = '';
+  private agendaAt = -10;
   private sig = '';
   /** The module's change counter when the tracked task was last read (it says when anything about the tasks changed). */
   private version = -2;
@@ -58,7 +66,7 @@ export class Tracker {
       this.title, this.step, this.hint, this.prog, this.where, this.reward,
     );
     this.el.append(
-      this.body, this.empty,
+      this.body, this.agenda, this.empty,
       h('div.mu-tracker-foot', null,
         h('button.mu-btn.small', { type: 'button', tip: 'Your tasks, the day, the people you know and the places (O)', onclick: () => this.deps.openJournal() }, icon('scroll', 14), 'Journal ', h('span.mu-key', null, 'O')),
         h('button.mu-btn.small.primary', { type: 'button', tip: 'What is worth doing right now (Y)', onclick: () => this.deps.whatNow() }, icon('question', 14), 'What now? ', h('span.mu-key', null, 'Y'))),
@@ -95,6 +103,7 @@ export class Tracker {
         this.paint(this.cur, game.sim.absDay);
       }
     }
+    if (now - this.agendaAt > 2) { this.agendaAt = now; this.paintAgenda(game); }
     const o = this.cur;
     // the way to go changes as you walk and turn
     if (o) {
@@ -112,9 +121,28 @@ export class Tracker {
     }
   }
 
+  /** The ruler's matters, shown when no task is tracked (a lord has none of his own). */
+  private paintAgenda(game: GameServices): void {
+    const items = this.cur ? [] : realmAgenda(game);
+    const rules = !this.cur && !!game.realm?.canRule(game.sim.state.run.playerId);
+    const sig = rules ? `r|${items.map((i) => `${i.key}:${i.text}`).join('|')}` : '';
+    if (sig === this.agendaSig) return;
+    this.agendaSig = sig;
+    this.agenda.classList.toggle('mu-hide', !rules);
+    this.empty.classList.toggle('mu-hide', !!this.cur || rules);
+    if (!rules) return;
+    this.agenda.replaceChildren(
+      h('div.mu-tracker-top', null, h('span.mu-tracker-src', null, icon('crown', 14), 'Matters of the realm'), h('span.mu-dim.mu-small', null, h('span.mu-key', null, 'U'))),
+      ...(items.length
+        ? items.slice(0, 4).map((i) => h('button.mu-agenda-item', { type: 'button', class: i.tone, onclick: (e: Event) => { e.stopPropagation(); this.deps.open?.(i.open); } }, icon(i.icon, 14), h('span', null, i.text)))
+        : [h('div.mu-small.mu-dim', null, 'The realm is quiet. Your stewards see to the day; walk your lands, or take up another life (V).')]),
+    );
+  }
+
   private paint(o: ReturnType<NonNullable<GameServices['objectives']>['tracked']>, absDay: number): void {
     this.body.classList.toggle('mu-hide', !o);
-    this.empty.classList.toggle('mu-hide', !!o);
+    this.empty.classList.toggle('mu-hide', !!o || this.agendaSig !== '');
+    if (o) { this.agenda.classList.add('mu-hide'); this.agendaSig = ''; this.agendaAt = -10; }
     this.lastTargetText = '';
     if (!o) return;
     const step = currentStep(o);
