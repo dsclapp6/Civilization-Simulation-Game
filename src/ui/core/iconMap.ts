@@ -1,6 +1,6 @@
 // Which icon stands for which game concept (skills, stats, action categories, goods, slots…).
 import type { SettlementKind, SkillId, StatId } from '../../core/domain';
-import type { ActionCategory } from '../../sim/actions';
+import type { ActionCategory, ActionOption } from '../../sim/actions';
 import type { EquipSlot, GoodCategory } from '../../sim/economy/types';
 import type { OptionKind } from '../../sim/social/types';
 import type { IconName } from './icons';
@@ -18,6 +18,24 @@ export const CATEGORY_ICON: Record<ActionCategory, IconName> = {
   work: 'hammer', trade: 'trade', talk: 'talk', use: 'hand', social: 'users', travel: 'signpost', manage: 'key',
   combat: 'swords', rest: 'bed', learn: 'book',
 };
+
+/**
+ * The icon of one option in the action wheel: a few verbs have their own (leading and letting go of animals, working on a building,
+ * the slaughterhouse and the butcher's block, the forge, the digs, living as someone), the rest the icon of their category.
+ */
+export function optionIcon(o: Pick<ActionOption, 'id' | 'category' | 'data'>): IconName {
+  const id = o.id;
+  if (id === 'lead.start') return 'lead';
+  if (id === 'lead.letgo' || id === 'lead.letgo.all') return 'letgo';
+  if (id === 'build.work') return (o.data as { skill?: string } | undefined)?.skill === 'masonry' ? 'masonry' : 'carpentry';
+  if (id === 'live.as') return 'user';
+  if (id.startsWith('stock.slaughter.')) return 'knife';
+  if (id.startsWith('stock.butcher.')) return 'cleaver';
+  if (id === 'dig.timber') return 'woodcutting';
+  if (id.startsWith('dig.')) return 'mining';
+  if (id.startsWith('craft.')) return 'anvil';
+  return CATEGORY_ICON[o.category] ?? 'hand';
+}
 
 export const CATEGORY_LABEL: Record<ActionCategory, string> = {
   work: 'Work', trade: 'Trade', talk: 'Talk', use: 'Use', social: 'Social', travel: 'Travel', manage: 'Manage',

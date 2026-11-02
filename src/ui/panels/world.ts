@@ -198,7 +198,7 @@ export function personPanel(ctx: PanelCtx, id: PersonId): UiPanel {
   const opinion = id === me ? 0 : ctx.social.opinion(id, me);
   const relation = id === me ? 'You' : ctx.social.relationLabel(me, id);
   const house = p.house ? sim.state.houses.get(p.house) : undefined;
-  const canSwitch = id !== me && sim.eligibleSwitchTargets().includes(id);
+  const canSwitch = id !== me && !p.death && sim.canSwitchTo(id);
   append(win.body,
     h('div.mu-row.mu-gap-16.mu-top', null,
       shield(house?.heraldry, 52),
@@ -212,7 +212,7 @@ export function personPanel(ctx: PanelCtx, id: PersonId): UiPanel {
   );
   win.showFoot(
     id !== me && !p.death ? button('Talk', { icon: 'talk', variant: 'primary', onClick: () => { ctx.close(); const r = ctx.player.talkTo(id); if (!r.ok) ctx.say('warn', r.reason ?? 'They are not here.'); } }) : null,
-    canSwitch ? button('Play as them', { icon: 'user', onClick: () => confirmPlayAs(ctx, id) }) : null,
+    canSwitch ? button(`Live as ${p.first}`, { icon: 'user', tip: 'Take up their life (V)', onClick: () => confirmPlayAs(ctx, id) }) : null,
     h('div.mu-grow'),
     button('Close', { onClick: () => ctx.close() }),
   );

@@ -56,6 +56,15 @@ export class Sfx {
         case 'ding': this.ding(t, g, pitch); break;
         case 'bell': this.bell(t, g, pitch); break;
         case 'click': this.tone(t, 1500 * pitch, 0.035, 0.12 * g, 'sine'); break;
+        case 'bellows': this.bellows(t, g, pitch); break;
+        case 'quench': this.quench(t, g, pitch); break;
+        case 'cut': this.cut(t, g, pitch); break;
+        case 'stir': this.stir(t, g, pitch); break;
+        case 'fire': this.fire(t, g, pitch); break;
+        case 'grind': this.grind(t, g, pitch); break;
+        case 'scrape': this.scrape(t, g, pitch); break;
+        case 'knead': this.knead(t, g, pitch); break;
+        default: { const unknown: never = name; void unknown; }
       }
     } catch { /* a node failed: skip this sound */ }
   }
@@ -133,6 +142,59 @@ export class Sfx {
 
   private saw(t: number, g: number, p: number): void {
     for (let i = 0; i < 3; i++) this.hiss(t + i * 0.1, 0.09, 0.22 * g, 'bandpass', 1500 * p + i * 150, 2400 * p, 3);
+  }
+
+  // ---- hands-on work (CIV §8): the cues of the steps of a bout ----
+
+  /** The forge's bellows: a breath in, a long breath out. */
+  private bellows(t: number, g: number, p: number): void {
+    this.hiss(t, 0.5, 0.3 * g, 'bandpass', 220 * p, 620 * p, 0.9);
+    this.hiss(t + 0.5, 0.7, 0.4 * g, 'bandpass', 700 * p, 260 * p, 0.8);
+    this.tone(t + 0.5, 62 * p, 0.6, 0.12 * g, 'sine', 48 * p);
+  }
+
+  /** Hot iron into water: a burst, then a long sizzle. */
+  private quench(t: number, g: number, p: number): void {
+    this.hiss(t, 0.3, 0.45 * g, 'bandpass', 900 * p, 380 * p, 0.9);
+    this.hiss(t, 1.0, 0.4 * g, 'highpass', 1800 * p, 5600 * p, 0.7);
+    this.hiss(t + 0.25, 0.7, 0.14 * g, 'highpass', 4200 * p, 7600 * p, 1.2);
+  }
+
+  /** A knife through meat or hide: a slice and a thud on the block. */
+  private cut(t: number, g: number, p: number): void {
+    this.hiss(t, 0.12, 0.34 * g, 'bandpass', 2400 * p, 5200 * p, 2);
+    this.tone(t + 0.07, 150 * p, 0.11, 0.38 * g, 'sine', 66 * p);
+  }
+
+  /** A paddle through mash or brine: soft and round. */
+  private stir(t: number, g: number, p: number): void {
+    this.hiss(t, 0.55, 0.17 * g, 'bandpass', 480 * p, 820 * p, 1.2);
+    this.hiss(t + 0.25, 0.4, 0.11 * g, 'bandpass', 760 * p, 430 * p, 1.2);
+  }
+
+  /** A fire catching: a low rumble and a few pops. */
+  private fire(t: number, g: number, p: number): void {
+    this.hiss(t, 0.7, 0.14 * g, 'lowpass', 420 * p, 190 * p, 0.7);
+    [0.03, 0.11, 0.16, 0.27, 0.34, 0.5].forEach((d, i) => this.hiss(t + d, 0.03, (0.2 + (i % 3) * 0.06) * g, 'highpass', 3200 * p, 1500 * p));
+  }
+
+  /** A blade on the grindstone: a steady rasp over a low hum. */
+  private grind(t: number, g: number, p: number): void {
+    this.hiss(t, 0.75, 0.3 * g, 'bandpass', 1900 * p, 2700 * p, 4);
+    this.tone(t, 92 * p, 0.7, 0.1 * g, 'sawtooth');
+  }
+
+  /** A scraper on a hide or a board. */
+  private scrape(t: number, g: number, p: number): void {
+    this.hiss(t, 0.3, 0.28 * g, 'highpass', 2600 * p, 4200 * p, 1);
+    this.hiss(t + 0.14, 0.28, 0.2 * g, 'highpass', 2200 * p, 3800 * p, 1);
+  }
+
+  /** Dough or clay worked with the heel of the hand: two soft thumps. */
+  private knead(t: number, g: number, p: number): void {
+    this.tone(t, 128 * p, 0.13, 0.36 * g, 'sine', 70 * p);
+    this.hiss(t, 0.1, 0.18 * g, 'lowpass', 640 * p, 250);
+    this.tone(t + 0.24, 118 * p, 0.13, 0.3 * g, 'sine', 64 * p);
   }
 
   private coins(t: number, g: number, p: number): void {

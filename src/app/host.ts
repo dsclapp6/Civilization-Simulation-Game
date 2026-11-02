@@ -5,7 +5,7 @@ import { clamp } from '../core/math';
 import type { Profile } from '../sim/legacy';
 import { hasSavedRun, saveProfile, type SaveStore } from '../sim/save';
 import { Simulation } from '../sim/sim';
-import type { GameServices, GameUI, Settings, UiHost, UiRendererControls, UiScreen } from '../ui/types';
+import type { CameraPose, GameServices, GameUI, Settings, UiHost, UiRendererControls, UiScreen } from '../ui/types';
 import { generateWorld } from '../world/generate';
 import { qualityParam, readSettings, writeSettings } from './settings';
 import { buildSession, type Session } from './session';
@@ -65,6 +65,26 @@ export class AppHost implements UiHost {
   releaseMouseLook(): boolean { return this.input?.releaseLook() ?? false; }
 
   mouseLooking(): boolean { return this.input?.pointerLocked ?? false; }
+
+  /** Where the camera is and what it looks at (the glide from one body to another starts here). */
+  cameraPose(focus?: { x: number; y: number; z: number }): CameraPose | null {
+    const r = this.session?.renderer;
+    if (!r) return null;
+    const cam = r.getCamera();
+    cam.updateMatrixWorld();
+    const e = cam.matrixWorld.elements;
+    const px = e[12], py = e[13], pz = e[14];
+    if (focus) return { position: { x: px, y: py, z: pz }, lookAt: { x: focus.x, y: focus.y, z: focus.z } };
+    // no focus given: where the view ray meets the ground, or 8 m ahead when it looks level or up
+    const dx = -e[8], dy = -e[9], dz = -e[10];
+    const len = Math.hypot(dx, dy, dz) || 1;
+    let t = 8;
+    if (dy < -0.02) {
+      const ground = Math.max(0, this.session!.sim.world.heightAt(px, pz));
+      t = Math.min(400, Math.max(1, (py - ground) / (-dy / len)));
+    }
+    return { position: { x: px, y: py, z: pz }, lookAt: { x: px + (dx / len) * t, y: py + (dy / len) * t, z: pz + (dz / len) * t } };
+  }
 
   settings(): Settings { return this.settingsObj; }
 

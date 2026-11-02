@@ -5,6 +5,7 @@ import { h } from '../core/dom';
 import { distanceText } from '../core/format';
 import { icon, type IconName } from '../core/icons';
 import { relativeYaw, ribbonSpot, ribbonTicks, hex } from '../core/nav';
+import { MARK_GLYPH } from '../core/questMarks';
 import type { NavMarker, NavState } from './navstate';
 
 const SPAN = (200 * Math.PI) / 180;
@@ -12,9 +13,11 @@ const MAX_MARKS = 6;
 
 const KIND_ICON: Record<NavMarker['kind'], IconName> = {
   objective: 'flag', home: 'home', work: 'hammer', person: 'user', place: 'pin', church: 'church', market: 'market', pin: 'pin',
+  // quest marks draw their own glyph (a gold "!", a silver "?"); the icon is only a fallback
+  quest: 'exclaim', turnin: 'question',
 };
 
-const PRIORITY: Record<NavMarker['kind'], number> = { objective: 0, pin: 1, person: 2, work: 3, home: 4, place: 5, church: 6, market: 7 };
+const PRIORITY: Record<NavMarker['kind'], number> = { objective: 0, pin: 1, turnin: 1.4, quest: 1.5, person: 2, work: 3, home: 4, place: 5, church: 6, market: 7 };
 
 interface Slot { el: HTMLElement; ico: HTMLElement; dist: HTMLElement; kind: string; side: number }
 
@@ -67,7 +70,8 @@ export class Compass {
       acc.push({ m, x: spot.x, inside: spot.inside, side: spot.side });
     }
     let sig = '';
-    for (const a of acc) sig += `${a.m.id}:${Math.round(a.x)}:${Math.round(a.m.dist / 5)};`;
+    // the words are part of the signature: a task's words arrive a moment after the mark does
+    for (const a of acc) sig += `${a.m.id}:${Math.round(a.x)}:${Math.round(a.m.dist / 5)}:${a.m.label};`;
     if (!(Math.abs(nav.camYaw - this.lastYaw) <= 0.004)) { this.lastYaw = nav.camYaw; this.drawTicks(nav.camYaw); }
     if (sig !== this.lastSig) {
       this.lastSig = sig;
@@ -112,11 +116,17 @@ export class Compass {
       s.el.classList.remove('mu-hide');
       s.el.style.left = `${Math.round(a.x)}px`;
       s.el.classList.toggle('primary', a.m.primary);
+      s.el.classList.toggle('quest', a.m.kind === 'quest');
+      s.el.classList.toggle('turnin', a.m.kind === 'turnin');
       s.el.classList.toggle('edge', !a.inside);
       s.el.dataset.side = String(a.side);
       s.el.style.setProperty('--c', hex(a.m.color));
       s.el.setAttribute('data-tip', `${a.m.label} · ${distanceText(a.m.dist)}`);
-      if (s.kind !== a.m.kind) { s.kind = a.m.kind; s.ico.replaceChildren(icon(KIND_ICON[a.m.kind], 15)); }
+      if (s.kind !== a.m.kind) {
+        s.kind = a.m.kind;
+        if (a.m.kind === 'quest' || a.m.kind === 'turnin') s.ico.replaceChildren(h('span.mu-compass-glyph', null, MARK_GLYPH[a.m.kind]));
+        else s.ico.replaceChildren(icon(KIND_ICON[a.m.kind], 15));
+      }
       s.dist.textContent = distanceText(a.m.dist);
     }
   }

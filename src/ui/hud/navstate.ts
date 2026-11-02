@@ -5,11 +5,13 @@ import type { WorldMarker } from '../../core/view';
 import type { Settlement } from '../../world/types';
 import { yawBetween } from '../core/nav';
 import type { PinStore } from '../core/pins';
+import { COMPASS_RANGE, MARK_COLOR, QuestMarkView } from '../core/questMarks';
 import type { GameServices, UiHost } from '../types';
 
 export interface NavMarker {
   id: string;
-  kind: WorldMarker['kind'] | 'church' | 'market' | 'pin';
+  /** 'quest' and 'turnin' (civilization pass): a person with a gold "!" over their head, or a silver "?" (CIV §1). */
+  kind: WorldMarker['kind'] | 'church' | 'market' | 'pin' | 'quest' | 'turnin';
   x: number;
   z: number;
   /** Height for projecting to the screen. */
@@ -22,7 +24,13 @@ export interface NavMarker {
   yaw: number;
 }
 
-export const COLOR = { objective: 0xf2c14e, home: 0x6fbf73, work: 0x6fa8dc, person: 0xe0705a, place: 0xb7a6e8, church: 0xf4efe0, market: 0xe6a35a, pin: 0x7fd0d8 };
+export const COLOR = {
+  objective: 0xf2c14e, home: 0x6fbf73, work: 0x6fa8dc, person: 0xe0705a, place: 0xb7a6e8, church: 0xf4efe0, market: 0xe6a35a, pin: 0x7fd0d8,
+  quest: MARK_COLOR.quest, turnin: MARK_COLOR.turnin,
+};
+
+/** At most this many quest marks stand on the compass at once (the nearest). */
+const MAX_QUEST_MARKS = 3;
 
 const CHURCHES = new Set(['church', 'abbey_church', 'cathedral', 'chapel']);
 const MARKETS = ['market_cross', 'market_hall', 'market_stall'];
@@ -37,6 +45,8 @@ export class NavState {
   /** Street camera on the world (the compass and arrows only make sense then). */
   street = true;
   readonly markers: NavMarker[] = [];
+  /** The people with a quest mark over their head and what they want (docs/CIV.md §1), refreshed with the markers. */
+  readonly quest = new QuestMarkView();
   /** The settlement the body stands in, or −1. */
   settlementId = -1;
   private pool: NavMarker[] = [];
@@ -44,7 +54,7 @@ export class NavState {
   private placesFor = -2;
   private places: Array<{ kind: 'church' | 'market'; x: number; z: number; label: string }> = [];
 
-  update(game: GameServices, host: UiHost, pins: PinStore): void {
+  update(game: GameServices, host: UiHost, pins: PinStore, now = typeof performance !== 'undefined' ? performance.now() / 1000 : 0): void {
     const sim = game.sim;
     const body = game.player.body();
     if (body) { this.x = body.x; this.z = body.z; this.bodyYaw = body.yaw; }
@@ -55,6 +65,24 @@ export class NavState {
     this.settlementId = here ? here.id : -1;
 
     this.used = 0;
+    // the people who want something of you ("!") or can be handed a finished task ("?"): the nearest few within 150 m. They come first, so the mark
+    // over a head is not lost to the church, the market or the door of a home they happen to stand at (the same spot is shown once)
+    const qrows = this.quest.update(game, { x: this.x, z: this.z }, now);
+    let taken = 0;
+    let floor = -1;
+    while (taken < MAX_QUEST_MARKS) {
+      let best = -1;
+      for (let i = 0; i < qrows.length; i++) {
+        const r = qrows[i];
+        if (r.dist > COMPASS_RANGE || r.dist <= floor) continue;
+        if (best < 0 || r.dist < qrows[best].dist) best = i;
+      }
+      if (best < 0) break;
+      const r = qrows[best];
+      floor = r.dist;
+      this.push(`q${r.person}`, r.kind, r.x, r.z, sim.world.heightAt(r.x, r.z) + 2.6, r.text, MARK_COLOR[r.kind], false);
+      taken++;
+    }
     let haveHome = false, haveWork = false;
     const src = sim.view.worldMarkers?.();
     if (src) {
@@ -77,9 +105,9 @@ export class NavState {
     for (const p of this.places) this.push(p.kind, p.kind, p.x, p.z, sim.world.heightAt(p.x, p.z) + 6, p.label, p.kind === 'church' ? COLOR.church : COLOR.market, false);
     const pin = pins.get();
     if (pin) this.push('pin', 'pin', pin.x, pin.z, sim.world.heightAt(pin.x, pin.z) + 3, pin.label, COLOR.pin, false);
-
     // the same spot marked twice (the church the task points at, and the church we mark anyway; a pin on the home) is
-    // shown once, as the first of them: the objectives module's markers come first
+    // shown once, as the first of them: the people who want something, then the objectives module's markers (the tracked
+    // objective's own marker is never dropped)
     let n = 0;
     for (let i = 0; i < this.used; i++) {
       const m = this.pool[i];

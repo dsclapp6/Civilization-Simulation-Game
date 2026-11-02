@@ -17,8 +17,11 @@ export type FamilyTab = 'tree' | 'household' | 'house';
 export type JournalTab = 'objectives' | 'today' | 'people' | 'places';
 export type LedgerTab = 'holdings' | 'household' | 'obligations' | 'property' | 'ledger' | 'authority';
 
+/** The character sheet's pages (civilization pass: wounds moved here from their own page). */
+export type CharacterTab = 'sheet' | 'wounds';
+
 export type InternalRequest =
-  | { panel: 'character' }
+  | { panel: 'character'; tab?: CharacterTab }
   | { panel: 'inventory' }
   | { panel: 'family'; tab?: FamilyTab }
   | { panel: 'ledger'; tab?: LedgerTab; settlement?: number }
@@ -41,7 +44,7 @@ export type InternalRequest =
 export type PanelRequest = UiRequest | InternalRequest;
 
 /** Which module a dock button needs: it is hidden while the module is not installed in this run. */
-export type DockNeeds = 'politics' | 'military' | 'advancement' | 'happenings' | 'combat';
+export type DockNeeds = 'politics' | 'military' | 'advancement' | 'happenings' | 'combat' | 'construction' | 'realm';
 
 export interface DockEntry {
   id: string;
@@ -66,7 +69,9 @@ export const DOCK_ENTRIES: readonly DockEntry[] = [
   { id: 'chronicle', label: 'Chronicle', key: 'L', panelId: 'chronicle', request: { panel: 'chronicle' }, group: 'core' },
   { id: 'rest', label: 'Rest', key: 'Z', panelId: 'rest', request: { panel: 'rest' }, group: 'core' },
   { id: 'requests', label: 'Requests and news', key: 'R', panelId: 'requests', request: { panel: 'ext', name: 'requests' }, needs: 'happenings', group: 'realm' },
-  { id: 'wounds', label: 'Wounds', key: 'B', panelId: 'wounds', request: { panel: 'ext', name: 'wounds' }, needs: 'combat', group: 'realm' },
+  // civilization pass: builder mode (B) and ruler mode (U) take the places of the wounds page (now a tab of the character sheet)
+  { id: 'builder', label: 'Builder mode: raise, upgrade, repair or pull down buildings', key: 'B', panelId: 'builder', request: { panel: 'ext', name: 'builder' }, needs: 'construction', group: 'realm' },
+  { id: 'ruler', label: 'Ruler mode: the seat of government', key: 'U', panelId: 'ruler', request: { panel: 'ext', name: 'ruler' }, needs: 'realm', group: 'realm' },
   { id: 'techs', label: 'House techniques', key: 'T', panelId: 'techs', request: { panel: 'ext', name: 'techs' }, needs: 'advancement', group: 'realm' },
   { id: 'politics', label: 'Realm and politics', key: 'K', panelId: 'politics', request: { panel: 'ext', name: 'politics' }, needs: 'politics', group: 'realm' },
   { id: 'army', label: 'Command and army', key: 'C', panelId: 'army', request: { panel: 'ext', name: 'army' }, needs: 'military', group: 'realm' },
@@ -76,10 +81,12 @@ export const DOCK_ENTRIES: readonly DockEntry[] = [
 export function panelForKey(key: string, has: (needs: DockNeeds) => boolean): { request: PanelRequest; panelId: string } | null {
   switch (key) {
     case 'character': case 'inventory': case 'family': case 'chronicle': case 'rest': return { request: { panel: key }, panelId: key };
+    // the wounds are a page of the character sheet since the civilization pass
+    case 'wounds': return { request: { panel: 'character', tab: 'wounds' }, panelId: 'character' };
     case 'ledger': return { request: { panel: 'ledger' }, panelId: 'ledger' };
     case 'map': return { request: { panel: 'map' }, panelId: 'map' };
     case 'command': return has('military') ? { request: { panel: 'ext', name: 'army' }, panelId: 'army' } : { request: { panel: 'ledger', tab: 'household' }, panelId: 'ledger' };
-    case 'politics': case 'techs': case 'requests': case 'wounds': {
+    case 'politics': case 'techs': case 'requests': {
       const e = DOCK_ENTRIES.find((d) => d.id === key);
       return e && (!e.needs || has(e.needs)) ? { request: e.request, panelId: e.panelId } : null;
     }

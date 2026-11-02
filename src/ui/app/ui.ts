@@ -25,8 +25,13 @@ import {
   noticeForBattle, noticeForCall, noticeForHappening, noticeForRaid, noticeForRequest, noticeForSiege, noticeForWar, type NoticeCtx,
 } from '../core/notices';
 import { hasModule } from '../core/modules';
+import { styledName } from '../core/titles';
+import { classifyAccolade, isKnighting, type AccoladeData } from '../core/accolade';
 import { Hud } from '../hud/hud';
 import { runHotkeys, type HudPartCtx } from '../core/extHud';
+import { liveAsProvider } from '../core/liveAsAction';
+import { whoNowCard, type LiveAsReason } from '../core/liveAsModel';
+import { LifeSwitcher } from '../core/lifeSwitch';
 import { Toasts } from '../hud/toasts';
 import { Guide } from '../hud/guide';
 import { createPanel } from '../panels/registry';
@@ -90,8 +95,15 @@ export class UiApp implements GameUIExt {
   private chronicleTimer = 0;
   private lastEncounterKey = '';
   private lastMenuPause: boolean | null = null;
+  /** Taking up another life (CIV §2): the glide or fade, its clock and the veil over the screen. */
+  private readonly lives: LifeSwitcher;
+  private readonly veil = h('div.mu-veil');
+  private veilOpacity = 0;
+  /** Knighthoods the simulation announced (`careerChanged`): the chronicle line that says how comes a moment later, so they wait a frame. */
+  private knights: Array<{ person: PersonId; from: string; at: number }> = [];
 
   constructor(private readonly parent: HTMLElement, private readonly host: UiHost) {
+    this.lives = new LifeSwitcher({ game: () => this.bound?.game ?? null, host, say: (kind, text) => this.say(kind, text) });
     this.toasts = new Toasts((req) => this.openPanel(req));
     this.guide = new Guide({
       game: () => this.bound?.game ?? null,
@@ -134,7 +146,7 @@ export class UiApp implements GameUIExt {
     this.hud.setVisible(false);
     // #ui > * is pointer-events:auto in base.css; the root must let clicks through to the 3D canvas (map picking, mouse look)
     this.root.style.pointerEvents = 'none';
-    this.root.append(goldDefs(), this.menu.el, this.loading.el, this.hudLayer, this.panelLayer, this.tipLayer);
+    this.root.append(goldDefs(), this.menu.el, this.loading.el, this.hudLayer, this.panelLayer, this.tipLayer, this.veil);
     parent.appendChild(this.root);
     this.tooltips = new Tooltips(this.root, this.tipLayer);
     this.sound = new SoundDirector(host, this.root);
@@ -168,6 +180,8 @@ export class UiApp implements GameUIExt {
       else if (!g) return;
     }
     const sim = this.bound!.game.sim;
+    this.stepLives(dt);
+    this.flushKnights();
     if (sim.state.run.phase === 'alive') this.guardedHud();
     try { this.sound.update(this.clock); } catch (err) { console.error('sound failed', err); }
     for (const p of [...this.stack.all()]) {
@@ -281,8 +295,12 @@ export class UiApp implements GameUIExt {
 
   showBanner(): void { this.hud.announce(); }
 
-  debugState(): { pin: { x: number; z: number; label: string } | null; whatNowOpen: boolean; tracker: string } {
-    return { pin: this.pins.get(), whatNowOpen: this.hud.whatNow.isOpen(), tracker: this.hud.tracker.el.textContent ?? '' };
+  debugState(): NonNullable<ReturnType<NonNullable<GameUIExt['debugState']>>> {
+    return {
+      pin: this.pins.get(), whatNowOpen: this.hud.whatNow.isOpen(), tracker: this.hud.tracker.el.textContent ?? '',
+      arrival: this.hud.arrival.current()?.name ?? null, switching: this.lives.fx.phase, veil: this.veilOpacity,
+      cues: [...this.sound.cuesPlayed],
+    };
   }
 
   closePanel(id: string): void { this.stack.close(id); }
@@ -393,9 +411,12 @@ export class UiApp implements GameUIExt {
       on('battle', (e) => this.notice(noticeForBattle(e, this.noticeCtx()))),
       on('happening', (e) => this.notice(noticeForHappening(e, this.noticeCtx()))),
       on('objective', (e) => this.onObjective(e)),
+      on('careerChanged', (e) => { if (isKnighting(e)) this.knights.push({ person: e.person, from: e.from, at: this.clock }); }),
       on('dayEnd', (e) => this.onDayEnd(e)),
       on('skip', (e) => { if (e.phase !== 'start' && this.summaryDay !== null) this.showSummarySoon(true); }),
     );
+    // "Live as Godwin" in the action wheel (it only asks the UI to open the card)
+    try { offs.push(sim.actions.register(liveAsProvider())); } catch (err) { console.error('could not add Live as to the wheel', err); }
     this.sound.bind(game);
     this.seenChronicle.clear();
     this.hud.reset();
@@ -406,6 +427,11 @@ export class UiApp implements GameUIExt {
     const b = this.bound;
     this.sound.bind(null);
     this.summaryDay = null;
+    this.lives.reset();
+    this.knights = [];
+    this.veilOpacity = 0;
+    this.veil.style.opacity = '0';
+    this.hud.arrival.hide();
     if (!b) { this.stack.clear(); return; }
     // close the panels while still bound so a pause the UI is holding is released with them
     this.stack.clear();
@@ -425,15 +451,72 @@ export class UiApp implements GameUIExt {
     this.openPanel({ panel: 'death' });
   }
 
+  /**
+   * The character changed (taken up from the death screen, a list, the wheel, V, or by a tool). Closes what belonged to the old
+   * life and sees the change across (`LifeSwitcher`: the camera glides to the new body when it is near, else the screen fades); then
+   * the card says who you are now.
+   */
   private onPlayerSwitched(e: SimEvents['playerSwitched']): void {
     this.stack.close('death');
+    this.stack.close('liveAs');
     for (const p of [...this.stack.all()]) if (p.group === 'main' || p.group === 'dialogue' || p.group === 'trade') this.stack.close(p.id);
     this.hud.setVisible(true);
     this.hud.reset();
+    // the toasts were about the old life (and the new one's tasks, said by the objectives module as the change was made, are on the card)
+    this.toasts.clear();
     const g = this.bound?.game;
-    if (g) {
-      const to = g.sim.state.persons.get(e.to);
-      if (to) this.toasts.push({ tone: 'gold', icon: 'user', title: e.reason === 'death' ? 'You carry on' : 'A new life', text: `You are now ${fullName(to)}.`, ttl: 6, key: 'switched' }, this.clock);
+    if (!g) return;
+    const to = g.sim.state.persons.get(e.to);
+    if (!to) return;
+    const arrival = this.lives.arrived(e);
+    const card = whoNowCard(g, e.to, arrival?.doing);
+    if (card) this.hud.arrival.show(card, this.clock);
+    this.say('quest', e.reason === 'death' ? `You carry on as ${styledName(to)}.` : `You are now ${styledName(to)}.`);
+  }
+
+  /** Called by the panels (`ctx.liveAs`): crosses to another life, with the glide or the fade. */
+  liveAs(id: PersonId, opts: { reason?: LiveAsReason } = {}): { ok: boolean; reason?: string } {
+    if (!this.bound || this.screen !== 'game') return { ok: false, reason: 'There is no game to change in.' };
+    return this.lives.liveAs(id, opts.reason ?? 'choose');
+  }
+
+  /** Every frame: the clock of the glide or fade, the veil over the screen, and "Rule this town" opening the seat of government. */
+  private stepLives(dt: number): void {
+    const ruler = this.lives.step(dt);
+    const v = this.lives.veil;
+    if (Math.abs(v - this.veilOpacity) > 0.004 || (v === 0 && this.veilOpacity !== 0)) { this.veilOpacity = v; this.veil.style.opacity = v.toFixed(3); }
+    const g = this.bound?.game;
+    if (ruler !== null && g) {
+      const realm = g.sim.services.realm ?? g.realm;
+      let can = true;
+      try { can = realm ? realm.canRule(ruler) : true; } catch { can = true; }
+      if (can) this.openPanel({ panel: 'ext', name: 'ruler' });
+    }
+  }
+
+  /**
+   * A knighthood (docs/CIV.md §9): the player's own (their liege, a lord, valour on the field) or one of their men dubbed by their hand
+   * gets a scene card — the vigil in the church, the accolade. In a fight it waits as a notice instead of seizing the screen.
+   */
+  private flushKnights(): void {
+    if (this.knights.length === 0 || !this.bound) return;
+    const g = this.bound.game;
+    const st = g.sim.state;
+    // the chronicle line is written just after the event: read it a frame later
+    const ready = this.knights.filter((k) => this.clock - k.at >= 0.05);
+    if (ready.length === 0) return;
+    this.knights = this.knights.filter((k) => !ready.includes(k));
+    const me = st.run.playerId;
+    for (const k of ready) {
+      const data: AccoladeData = classifyAccolade(st.chronicle, k.person, me, k.from);
+      // the player's own knighthood, or a man of theirs dubbed by the player's hand
+      if (k.person !== me && !(data.kind === 'player' && data.by === me)) continue;
+      const req: PanelRequest = { panel: 'ext', name: 'accolade', id: k.person, data };
+      const knight = st.persons.get(k.person);
+      const inFight = !!g.player.hud()?.combat?.engaged;
+      if (inFight) {
+        this.toasts.push({ tone: 'gold', icon: 'crown', title: k.person === me ? 'You are made a knight' : `${knight?.first ?? 'A man'} is made a knight`, text: 'Read what happened.', ttl: 16, key: `accolade:${k.person}`, action: { label: 'Read it', request: req } }, this.clock);
+      } else this.openPanel(req);
     }
   }
 
@@ -532,7 +615,8 @@ export class UiApp implements GameUIExt {
   /** A task was added, moved on or finished: say so, and draw the eye to the tracker. */
   private onObjective(e: SimEvents['objective']): void {
     this.hud.tracker.flash(e.phase === 'added' ? 'added' : e.phase === 'progress' ? 'progress' : 'done');
-    if (e.phase === 'added') this.toasts.push({ tone: 'lapis', icon: 'flag', title: 'A new task', text: e.title, ttl: 6, key: `obj-${e.id}` }, this.clock);
+    // the tasks of a life just taken up are on the "who you are now" card: not one toast each on top of it
+    if (e.phase === 'added') { if (!this.hud.arrival.settling(this.clock)) this.toasts.push({ tone: 'lapis', icon: 'flag', title: 'A new task', text: e.title, ttl: 6, key: `obj-${e.id}` }, this.clock); }
     else if (e.phase === 'done') this.toasts.push({ tone: 'gold', icon: 'check', title: 'Task done', text: e.title, ttl: 6, key: `obj-${e.id}` }, this.clock);
     else if (e.phase === 'failed' || e.phase === 'expired') this.toasts.push({ tone: 'vermilion', icon: 'warning', title: e.phase === 'failed' ? 'Task failed' : 'Task lapsed', text: e.title, ttl: 6, key: `obj-${e.id}` }, this.clock);
   }
@@ -581,6 +665,8 @@ export class UiApp implements GameUIExt {
       toLocal: (p) => { const s = this.scale || 1; return { x: p.x / s, y: p.y / s }; },
       pins: this.pins,
       nav: this.hud.nav,
+      liveAs: (id, opts) => this.liveAs(id, opts),
+      noteOpened: (id) => this.guide.notePanel(id),
     };
   }
 
@@ -769,6 +855,7 @@ export class UiApp implements GameUIExt {
       return true;
     }
     if (this.hud.whatNow.isOpen()) { this.hud.whatNow.close(); return true; }
+    if (this.hud.arrival.isOn()) { this.hud.arrival.hide(); return true; }
     if (g.sim.state.run.phase !== 'alive') return true;
     this.openPanel({ panel: 'pause' });
     return true;

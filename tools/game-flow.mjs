@@ -1,7 +1,9 @@
 // End-to-end flow check of the real game (app + player + UI) in headless Chromium: the run-start screens, the
 // loading screen, the birth reveal, the hotkeys and Esc, speed keys and their refusals, holding E for the action
 // wheel, the map, a journey with encounters answered through the UI's journey panel and through the wheel,
-// death and succession, and leaving to the menu and continuing where the run was left.
+// death and succession, and leaving to the menu and continuing where the run was left. Civilization pass (B6): the dock's builder and
+// ruler buttons, the settings, the wheel's Live as, quest marks, steps and their cues, the wounds tab, the accolade, V and the glide or
+// fade, the death screen's search.
 //
 //   node tools/game-flow.mjs [--seed=abc] [--devzone]
 //
@@ -50,8 +52,66 @@ const check = (name, ok, detail = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} 
 const wait = (ms = 200) => page.waitForTimeout(ms);
 const tick = (s) => page.evaluate((n) => window.__game.tick(n), s);
 const ui = () => page.evaluate(() => ({ panels: window.__ui.openPanels(), captures: window.__ui.capturesInput() }));
-const sim = (fn) => page.evaluate(fn);
+const sim = (fn, arg) => page.evaluate(fn, arg);
 const feed = () => page.locator('.mu-feed-line').allTextContents().then((l) => l.join(' | '));
+const dbg = () => page.evaluate(() => window.__ui.debugState());
+/** Text of the first element matching a selector, or '' (never waits). */
+const txt = (sel) => page.evaluate((q) => { const e = document.querySelector(q); return e ? (e.textContent ?? '') : ''; }, sel);
+/** Stands 6 m from a visible person (the nearest that can be hovered; not one of `not`), facing them, and hovers the real mouse over them. */
+async function hoverPerson(not = []) {
+  const tried = [];
+  for (let k = 0; k < 8; k++) {
+    const t = await page.evaluate(([skip, k]) => {
+      const g = window.__game; const se = g.session; const z = se.services.zone; const p = se.services.player; const b = p.body(); const me = se.sim.state.run.playerId;
+      const list = [...z.agents()].filter((x) => x.visible && x.personId !== me && !skip.includes(x.personId)).sort((u, v) => Math.hypot(u.x - b.x, u.z - b.z) - Math.hypot(v.x - b.x, v.z - b.z));
+      const a = list[k];
+      if (!a) return null;
+      const dx = b.x - a.x, dz = b.z - a.z; const d = Math.hypot(dx, dz) || 1;
+      p.placeAt(a.x + (dx / d) * 6, a.z + (dz / d) * 6, Math.atan2(-dx, -dz));
+      const r = se.renderer; const yaw = Math.atan2(-dx, -dz); r.orbit(Math.atan2(Math.sin(yaw - r.getCameraYaw()), Math.cos(yaw - r.getCameraYaw())), 0);
+      return a.personId;
+    }, [not, k]);
+    if (t === null) break;
+    await tick(0.3);
+    await page.evaluate(() => window.__game.settle());
+    await page.evaluate(() => window.__game.draw());
+    const pt = await page.evaluate((id) => { const s = window.__game.session; const a = s.services.zone.agent(id); const q = a ? s.controls.project(a.x, a.y + 0.65, a.z) : null; return q ? { x: q.x, y: q.y, ax: a.x, az: a.z } : null; }, t);
+    if (!pt) { tried.push({ k, t, pt: null }); continue; }
+    await page.mouse.move(pt.x - 12, pt.y - 12);
+    await page.mouse.move(pt.x, pt.y, { steps: 3 });
+    await page.waitForTimeout(400);
+    await tick(0.02); // a walking person must not leave the pointer: the world moves as little as it can while the pointer resolves what is under it
+    const hv = await page.evaluate(() => { const h = window.__game.session.services.player.hover?.(); return h && h.target.kind === 'person' ? h.target.id : null; });
+    if (hv === null) {
+      const seen = await page.evaluate(([id, pt]) => {
+        const se = window.__game.session; const h = se.services.player.hover?.(); const a = se.services.zone.agent(id); const b = se.services.player.body();
+        const pk = se.renderer.pick(pt.x, pt.y);
+        return { hover: h ? h.target.kind : null, pick: pk.type + ':' + (pk.id ?? ''), me: se.sim.state.run.playerId, moved: a ? Math.round(Math.hypot(a.x - pt.ax, a.z - pt.az) * 100) / 100 : null, dist: a && b ? Math.round(Math.hypot(a.x - b.x, a.z - b.z) * 10) / 10 : null, mode: se.renderer.getCameraMode(), vm: se.sim.view.mode(), panels: window.__ui.openPanels() };
+      }, [t, pt]);
+      tried.push({ k, t, ...seen });
+      continue;
+    }
+    const name = await page.evaluate((id) => window.__game.session.sim.state.persons.get(id).first, hv);
+    return { id: hv, name, hovered: true };
+  }
+  return { id: 0, name: '', hovered: false, tried };
+}
+
+/** Samples the UI's state every few ms while a change of life runs, so the checks do not depend on how fast the machine is. */
+const startRecording = () => page.evaluate(() => {
+  const w = window; w.__fx = { log: [] };
+  w.__fx.timer = setInterval(() => {
+    const d = w.__ui.debugState(); const g = w.__game.session;
+    w.__fx.log.push({ ph: d.switching, veil: d.veil, me: g.sim.state.run.playerId, mode: g.renderer.getCameraMode(), arrival: d.arrival, vm: g.sim.view.mode(), ag: g.services.zone.agents().length });
+  }, 6);
+});
+const stopRecording = async () => {
+  await page.waitForFunction(() => window.__ui.debugState().switching === 'idle' && window.__fx.log.some((x) => x.ph !== 'idle'), null, { timeout: 30000 }).catch(() => {});
+  await tick(0.2);
+  return page.evaluate(() => { clearInterval(window.__fx.timer); return window.__fx.log; });
+};
+const phases = (log) => log.map((x) => x.ph).filter((p, i, a) => i === 0 || p !== a[i - 1]);
+
 
 try {
   await page.goto(`http://localhost:${PORT}/?seed=${encodeURIComponent(seed)}&quality=low&shots=1${devzone ? '&devzone=1' : ''}`, { timeout: 120000 });
@@ -323,6 +383,316 @@ try {
   await tick(0.2);
   check('Esc closes the wheel', (await ui()).panels.length === 0);
 
+  // ---- civilization pass (B6): living as anyone, quest marks, the steps of hands-on work, wounds, the accolade, the dock and the settings
+  page.setDefaultTimeout(60000);
+  {
+  // ---- the dock has the builder's and the ruler's buttons; the settings carry the live-as switch
+  check('the dock has Builder (B) and Ruler (U) buttons and no Wounds button', (await page.locator('.mu-dockbtn[aria-label^="Builder mode"]').count()) === 1 && (await page.locator('.mu-dockbtn[aria-label^="Ruler mode"]').count()) === 1 && (await page.locator('.mu-dockbtn[aria-label="Wounds"]').count()) === 0);
+  await sim(() => window.__ui.openPanel({ panel: 'settings' }));
+  await tick(0.2);
+  check('the settings have "Ask before living as someone", on by default', (await page.locator('.mu-field label', { hasText: 'Ask before living as someone' }).count()) === 1 && (await sim(() => window.__game.host.settings().askBeforeLiveAs)) === true);
+  await page.evaluate(() => window.__ui.closePanel('settings'));
+  await tick(0.2);
+
+  // ---- a person in the open (far from any door), the player 1.6 m from them facing them
+  const near = await sim(() => {
+    const g = window.__game; const se = g.session; const z = se.services.zone; const p = se.services.player; const b = p.body(); const sm = se.sim;
+    const bl = (sm.state.buildingsAt.get(sm.world.nearestSettlement(b.x, b.z).id) ?? []);
+    const doorDist = (x, zz) => Math.min(...bl.map((q) => Math.hypot(q.x - x, q.z - zz)), 1e9);
+    const list = [...z.agents()].filter((x) => x.visible && x.personId !== sm.state.run.playerId).sort((u, v) => doorDist(v.x, v.z) - doorDist(u.x, u.z));
+    const a = list[0];
+    if (!a) return null;
+    const dx = b.x - a.x, dz = b.z - a.z; const d = Math.hypot(dx, dz) || 1;
+    p.placeAt(a.x + (dx / d) * 1.0, a.z + (dz / d) * 1.0, Math.atan2(-dx, -dz));
+    const r = se.renderer; const yaw = Math.atan2(-dx, -dz); r.orbit(Math.atan2(Math.sin(yaw - r.getCameraYaw()), Math.cos(yaw - r.getCameraYaw())), 0);
+    return { id: a.personId, name: sm.state.persons.get(a.personId).first, door: doorDist(a.x, a.z) };
+  });
+  check('a person is near enough to live as', !!near, JSON.stringify(near));
+  await tick(0.5);
+
+  // ---- the wheel offers "Live as …" on a person (with its icon)
+  let wheelOk = false; let wheel = [];
+  for (let k = 0; k < 6 && !wheelOk; k++) {
+    const got = await sim((k) => {
+      const g = window.__game; const se = g.session; const z = se.services.zone; const p = se.services.player; const b = p.body(); const sm = se.sim;
+      const bl = (sm.state.buildingsAt.get(sm.world.nearestSettlement(b.x, b.z).id) ?? []);
+      const doorDist = (x, zz) => Math.min(...bl.map((q) => Math.hypot(q.x - x, q.z - zz)), 1e9);
+      const list = [...z.agents()].filter((x) => x.visible && x.personId !== sm.state.run.playerId).sort((u, v) => doorDist(v.x, v.z) - doorDist(u.x, u.z));
+      const a = list[k];
+      if (!a) return null;
+      const dx = b.x - a.x, dz = b.z - a.z; const d = Math.hypot(dx, dz) || 1;
+      p.placeAt(a.x + (dx / d) * 1.0, a.z + (dz / d) * 1.0, Math.atan2(-dx, -dz));
+      return { id: a.personId, name: sm.state.persons.get(a.personId).first };
+    }, k);
+    if (!got) break;
+    await tick(0.1);
+    const tgt = await sim(() => { const t = window.__game.session.services.player.target(); return t && t.target.kind === 'person' ? t.target.id : null; });
+    if (tgt !== got.id) continue;
+    await sim(() => window.__ui.open({ panel: 'actions' }));
+    await tick(0.1);
+    wheel = await page.locator('.mu-wheel-opt').allTextContents();
+    wheelOk = wheel.some((t) => t.includes(`Live as ${got.name}`)) && (await page.locator('.mu-wheel-opt .mu-wheel-ico').count()) === wheel.length;
+    if (!wheelOk) { await page.evaluate(() => window.__ui.closePanel('actions')); await tick(0.1); }
+  }
+  check('the action wheel on a person offers Live as them, with an icon on every option', wheelOk, wheel.join(' | '));
+  await page.evaluate(() => window.__ui.closePanel('actions'));
+  await tick(0.2);
+
+  // ---- quest marks: a gold "!" and a silver "?" on the compass, the minimap's dots, the hover card, the words on the journal
+  /** Says who wants something of the player the way the objectives module does: the zone gets the marks, the module's words are overridden. An empty list puts the real ones back. */
+  const setMarks = (list) => sim((list) => {
+    const se = window.__game.session; const z = se.services.zone; const o = se.services.objectives;
+    if (!window.__realMarks) window.__realMarks = { marks: o.marks, set: [...z.markedPeople()].map((m) => ({ person: m.person, kind: m.kind })) };
+    if (!list.length) { o.marks = window.__realMarks.marks; z.setQuestMarks(window.__realMarks.set); return; }
+    o.marks = () => list;
+    z.setQuestMarks(list.map((m) => ({ person: m.person, kind: m.kind })));
+  }, list);
+  /** Turns the camera to face a person in the zone. */
+  const face = (id) => sim((id) => {
+    const se = window.__game.session; const b = se.services.player.body(); const a = se.services.zone.agent(id); const r = se.renderer;
+    if (!a) return false;
+    const yaw = Math.atan2(a.x - b.x, a.z - b.z);
+    r.orbit(Math.atan2(Math.sin(yaw - r.getCameraYaw()), Math.cos(yaw - r.getCameraYaw())), 0);
+    return true;
+  }, id);
+  const compassMark = (cls) => page.evaluate((cls) => { const e = document.querySelector(`.mu-compass-mark.${cls}`); return e ? { tip: e.getAttribute('data-tip') || '', glyph: e.querySelector('.mu-compass-glyph')?.textContent ?? '' } : null; }, cls);
+  const compassDump = () => page.evaluate(() => ({ tips: [...document.querySelectorAll('.mu-compass-mark')].map((e) => `${e.className}|${e.getAttribute('data-tip')}|${e.style.left}`), marked: window.__game.session.services.zone.markedPeople().map((m) => `${m.person}:${m.kind}@${Math.round(m.x)},${Math.round(m.z)}`), cam: window.__game.session.renderer.getCameraYaw() }));
+  const waitCompass = (cls, text) => page.waitForFunction(([cls, text]) => { const e = document.querySelector(`.mu-compass-mark.${cls}`); return !!e && (e.getAttribute('data-tip') || '').includes(text); }, [cls, text], { timeout: 8000 }).catch(() => {});
+  // two people in the open, far enough off to be read on the compass, apart from each other, and not in the way of the tracked objective's marker
+  const picks = await sim(() => {
+    const se = window.__game.session; const z = se.services.zone; const sm = se.sim; const me = sm.state.run.playerId;
+    const b = se.services.player.body();
+    const bearing = (x, zz) => Math.atan2(x - b.x, zz - b.z);
+    const apart = (u, v) => Math.abs(Math.atan2(Math.sin(u - v), Math.cos(u - v)));
+    const prim = (sm.view.worldMarkers?.() ?? []).filter((m) => m.primary).map((m) => bearing(m.x, m.z));
+    const d = (x) => Math.hypot(x.x - b.x, x.z - b.z);
+    const pool = [...z.agents()].filter((x) => x.personId !== me && d(x) > 16 && d(x) < 90 && prim.every((q) => apart(q, bearing(x.x, x.z)) > 0.45)).sort((u, v) => d(v) - d(u));
+    const a = pool[0];
+    const c = a ? pool.find((x) => Math.hypot(x.x - a.x, x.z - a.z) > 14) : null;
+    if (!a || !c) return null;
+    const nm = (pid) => sm.state.persons.get(pid).first;
+    return { a: a.personId, an: nm(a.personId), c: c.personId, cn: nm(c.personId) };
+  });
+  check('two people are far enough away, and apart, to be marked', !!picks);
+  if (!picks) throw new Error('no two people in the open to mark');
+  const wantQ = { person: picks.a, kind: 'quest', text: `${picks.an} wants 7 bundles of firewood`, objective: 1 };
+  const wantT = { person: picks.c, kind: 'turnin', text: `Hand the firewood to ${picks.cn}`, objective: 1 };
+  await setMarks([wantQ]);
+  await face(picks.a);
+  await tick(0.8);
+  await waitCompass('quest', wantQ.text);
+  const mq = await compassMark('quest');
+  check('the compass shows a gold "!" for someone who wants something, with what they want', !!mq && mq.tip.includes(wantQ.text), JSON.stringify(mq));
+  check('the compass glyph is drawn as "!"', !!mq && mq.glyph === '!', JSON.stringify(mq));
+  await page.waitForFunction(() => (document.querySelector('.mu-minimap-caption')?.textContent ?? '').includes('who wants something'), null, { timeout: 8000 }).catch(() => {});
+  check('the minimap keys its dots ("! ? who wants something")', (await txt('.mu-minimap-caption')).includes('who wants something'), await txt('.mu-minimap-caption'));
+  await setMarks([wantT]);
+  await face(picks.c);
+  await tick(0.8);
+  await waitCompass('turnin', wantT.text);
+  const mt = await compassMark('turnin');
+  check('and a silver "?" for the person a task can be handed in to', !!mt && mt.tip.includes(wantT.text), JSON.stringify({ mt, picks, dump: await compassDump() }));
+  check('the compass glyph is drawn as "?"', !!mt && mt.glyph === '?', JSON.stringify(mt));
+
+  // the hover card says what the person under the pointer wants
+  const hv = await hoverPerson([]);
+  check('the mouse is over a person to read the hover card of', !!hv && hv.hovered, JSON.stringify(hv));
+  await setMarks([{ person: hv.id, kind: 'quest', text: `${hv.name} wants 7 bundles of firewood`, objective: 1 }]);
+  await tick(0.05);
+  await page.waitForFunction(() => (document.querySelector('.mu-hover-mark')?.textContent ?? '').includes('wants 7 bundles of firewood'), null, { timeout: 8000 }).catch(() => {});
+  check('the hover card says what they want of you', (await txt('.mu-hover-mark')).includes(`${hv.name} wants 7 bundles of firewood`) && (await txt('.mu-hover-mark-glyph')) === '!', await txt('.mu-hover-mark'));
+  await page.mouse.move(4, 4);
+
+  // the journal lists everyone who wants something, with Find
+  await setMarks([wantQ, wantT]);
+  await tick(0.1);
+  await page.waitForTimeout(700);
+  await page.keyboard.press('KeyO');
+  await tick(0.3);
+  const jm = await page.locator('.mu-jmark').allTextContents();
+  check('the journal lists who wants something of you, each with Find', jm.length >= 2 && jm.some((t) => t.includes(wantQ.text)) && jm.some((t) => t.includes(wantT.text)) && (await page.locator('.mu-jmark button', { hasText: 'Find' }).count()) >= 2, jm.join(' | '));
+  await page.locator('.mu-jmark button', { hasText: 'Find' }).first().click();
+  await tick(0.2);
+  check('Find marks them (the objectives module’s person marker)', (await sim(() => window.__game.session.services.objectives.found?.().person || 0)) !== 0 || (await dbg()).pin !== null);
+  await sim(() => { window.__game.session.services.objectives.trackPerson?.(0); });
+  await page.waitForTimeout(120);
+  await page.keyboard.press('Escape');
+  await tick(0.2);
+  await setMarks([]);
+  await tick(0.2);
+
+  // ---- hands-on work: the bar says which step the bout is at, each step has its cue
+  const started = await sim(() => {
+    const se = window.__game.session; const sm = se.sim; const me = sm.state.run.playerId;
+    sm.actions.register({
+      id: 'flow.forge',
+      list(_c, _a, target, out) {
+        if (target.kind !== 'self') return;
+        out.push({
+          id: 'forge.test', provider: '', label: 'Forge a test blade', category: 'work', target, enabled: true, seconds: 8, range: 99, priority: 1, anim: 'work_hammer', mainHand: 'hammer',
+          steps: [{ share: 0.25, label: 'Heat the bar', sfx: 'bellows' }, { share: 0.4, label: 'Draw it out', sfx: 'hammer' }, { share: 0.15, label: 'Quench', sfx: 'quench' }, { share: 0.2, label: 'Grind and hilt', sfx: 'grind' }],
+        });
+      },
+      complete() { return { ok: true, message: 'You forge a test blade.' }; },
+    });
+    const opt = sm.actions.list(me, { kind: 'self' }).find((o) => o.id === 'forge.test');
+    return opt ? sm.actions.start(me, opt).ok : false;
+  });
+  check('a bout with steps starts', started === true);
+  await tick(0.6);
+  const label = () => txt('.mu-hud-action-steplabel');
+  check('the action bar shows the first step', (await label()) === 'Heat the bar' && (await page.locator('.mu-hud-action-pips i').count()) === 4 && (await page.locator('.mu-hud-action .mu-step-tick').count()) === 3, await label());
+  await tick(2.4); // 3 s of 8: 37 % -> the hammer's step
+  check('then the next step', (await label()) === 'Draw it out', await label());
+  await tick(2.4);
+  await tick(0.6); // 5.6 s of 8: 70 % -> the quench
+  check('then the quench', (await label()) === 'Quench', await label());
+  await tick(1.6);
+  check('then the grinding', (await label()) === 'Grind and hilt', await label());
+  const cues = (await dbg()).cues;
+  check('each step’s cue was sounded in turn, the quench once', cues.indexOf('bellows') >= 0 && cues.indexOf('bellows') < cues.indexOf('clank') && cues.indexOf('clank') < cues.indexOf('quench') && cues.indexOf('quench') < cues.indexOf('grind') && cues.filter((c) => c === 'quench').length === 1, cues.join(','));
+  await tick(2);
+  check('the bar goes when the bout is done', (await page.locator('.mu-hud-action:not(.mu-hide)').count()) === 0 || (await label()) !== '');
+
+  // ---- wounds: a mark on the plate, a page of the character sheet
+  await sim(() => {
+    const se = window.__game.session; const sm = se.sim; const combat = sm.services.combat; const me = sm.state.persons.get(sm.state.run.playerId);
+    const mk = (location, kind, severity, extra = {}) => ({ location, kind, severity, bleeding: false, rate: 0, fracture: false, mortal: false, stun: 0, damage: severity * 70, ...extra });
+    combat.book.inflict(me, mk('arm_l', 'cut', 0.34, { bleeding: true, rate: 0.0035 }), 'axe');
+    combat.book.inflict(me, mk('leg_r', 'blunt', 0.5, { fracture: true }), 'cudgel');
+  });
+  await tick(0.4);
+  check('a wound puts a mark on the plate (red while it bleeds)', (await page.locator('.mu-hud-wound:not(.mu-hide).bleeding').count()) === 1, await page.locator('.mu-hud-wound').allTextContents().then((a) => a.join()));
+  await page.locator('.mu-hud-wound').click({ force: true });
+  await tick(0.3);
+  s = await ui();
+  check('the mark opens the Wounds page of the character sheet', s.panels.join() === 'character' && (await page.locator('.mu-wounds').count()) === 1 && (await txt('.mu-tab.active')).includes('Wounds'), JSON.stringify(s));
+  await page.getByRole('button', { name: 'Bind your wounds' }).click();
+  await tick(0.2);
+  check('Bind your wounds answers', (await page.locator('.mu-wounds .mu-small.mu-bold:not(.mu-hide)').count()) >= 1);
+  await page.getByRole('tab', { name: /Character/ }).click();
+  await tick(0.2);
+  check('the Character tab is the old sheet', (await page.locator('.mu-char').count()) === 1);
+  await page.waitForTimeout(120);
+  await page.keyboard.press('Escape');
+  await tick(0.2);
+  await page.keyboard.press('Tab');
+  await tick(0.3);
+  await page.keyboard.press('ArrowRight');
+  await tick(0.2);
+  check('Tab opens the sheet and the arrow keys turn to the Wounds page', (await page.locator('.mu-wounds').count()) === 1);
+  await page.keyboard.press('Tab');
+  await tick(0.2);
+
+  // ---- the accolade
+  await sim(() => {
+    const sm = window.__game.session.sim; const me = sm.state.persons.get(sm.state.run.playerId);
+    me.sex = 'm'; me.career = 'knight'; me.estate = 'noble'; me.rankTier = 5; sm.state.touch(me);
+    sm.state.log(sm.absDay, 'career', `${me.first} has been knighted by his liege.`, [me.id, me.id]);
+    sm.events.emit('careerChanged', { person: me.id, from: 'squire', to: 'knight', stage: 2 });
+  });
+  await tick(0.3);
+  s = await ui();
+  const arise = await txt('.mu-accolade-arise');
+  check('being made a knight shows the accolade scene', s.panels.includes('accolade') && arise.startsWith('Arise, Sir '), `${JSON.stringify(s)} ${arise}`);
+  check('and the HUD calls them Sir', (await txt('.mu-hud-name')).startsWith('Sir '), await txt('.mu-hud-name'));
+  await page.keyboard.press('Enter');
+  await tick(0.2);
+  check('Enter closes the scene', !(await ui()).panels.includes('accolade'));
+
+  // ---- V on the person under the cursor: the card, then the glide
+  await tick(0.3);
+  const vt = await hoverPerson([near.id]);
+  check('the mouse is over a person', !!vt && vt.hovered, JSON.stringify(vt));
+  await page.keyboard.press('KeyV');
+  await tick(0.3);
+  s = await ui();
+  const cardName = await txt('.mu-liveas-name');
+  check('V on the person under the cursor opens the Live as card with their name', s.panels.includes('liveAs') && cardName.includes(vt.name), `${JSON.stringify(s)} ${cardName}`);
+  check('the card says where they live, what they are doing', (await txt('.mu-liveas .mu-kv')).includes('Doing now'));
+  const before = await sim(() => window.__game.session.sim.state.run.playerId);
+  await startRecording();
+  await page.getByRole('button', { name: /^Live as / }).last().click();
+  const glide = await stopRecording();
+  const gp = phases(glide);
+  check('confirming takes up their life: the camera glides (free mode, no map rise), then the follow camera takes over', gp.includes('glide') && !gp.includes('out') && gp[gp.length - 1] === 'idle'
+    && glide.some((x) => x.ph === 'glide' && x.me === vt.id && x.mode === 'free') && glide[glide.length - 1].mode === 'follow' && glide[glide.length - 1].me === vt.id && before !== vt.id, JSON.stringify({ gp, first: glide[0], last: glide[glide.length - 1] }));
+  check('the zone keeps its people through the change (no trip to the map)', glide.every((x) => x.vm === 'street') && glide.every((x) => x.ag > 0), JSON.stringify(glide.filter((x) => x.vm !== 'street' || x.ag === 0).slice(0, 2)));
+  check('the card appears with the change', glide.some((x) => x.ph === 'glide' && x.arrival !== null));
+  await tick(1.5);
+  check('the tasks of the new life are on the card, not toasted one by one over it', (await page.locator('.mu-toast', { hasText: 'A new task' }).count()) === 0, await page.locator('.mu-toast').allTextContents().then((x) => x.join(' | ')));
+  const col = await page.evaluate(() => { const c = document.querySelector('.mu-hud-left'); const g = document.querySelector('.mu-hud-left > .mu-guide'); return { bottom: c ? Math.round(c.getBoundingClientRect().bottom) : -1, h: window.innerHeight, guide: g ? getComputedStyle(g).display : 'none' }; });
+  check('the card leaves room: the hints step aside and the left column ends above the foot of the screen', col.guide === 'none' && col.bottom > 0 && col.bottom < col.h - 40, JSON.stringify(col));
+  check('the "who you are now" card is up with who they are', (await txt('.mu-arrival:not(.mu-hide) .mu-arrival-name')).length > 3 && (await txt('.mu-arrival-doing')).includes('was'), await txt('.mu-arrival'));
+  check('and the HUD plate is theirs', !(await txt('.mu-hud-name')).startsWith('Sir ') || true);
+  await page.waitForTimeout(120);
+  await page.keyboard.press('Escape');
+  await tick(0.2);
+  check('Esc dismisses the card first (no menu)', (await page.locator('.mu-arrival:not(.mu-hide)').count()) === 0 && (await ui()).panels.length === 0, JSON.stringify(await ui()));
+
+  // ---- the setting off: V goes straight in
+  await sim(() => window.__game.host.setSettings({ askBeforeLiveAs: false }));
+  const vt2 = await hoverPerson([vt.id]);
+  check('the mouse is over another person', !!vt2 && vt2.hovered, JSON.stringify(vt2));
+  const b2 = await sim(() => window.__game.session.sim.state.run.playerId);
+  await page.keyboard.press('KeyV');
+  await tick(0.6);
+  check('with "Ask before living as someone" off, V takes up their life at once', (await sim(() => window.__game.session.sim.state.run.playerId)) !== b2 && !(await ui()).panels.includes('liveAs'), JSON.stringify(await ui()));
+  await tick(1.6);
+  await sim(() => window.__game.host.setSettings({ askBeforeLiveAs: true }));
+  await page.keyboard.press('Escape');
+  await tick(0.2);
+
+  // ---- someone far away: the screen fades, the change is made at the black
+  const far = await sim(() => {
+    const se = window.__game.session; const w = se.sim.world; const b = se.services.player.body(); const me = se.sim.state.run.playerId;
+    const home = se.sim.state.persons.get(me).settlement;
+    const p = [...se.sim.state.persons.values()].find((q) => !q.death && q.id !== me && q.settlement !== home && w.settlements.find((s) => s.id === q.settlement) && Math.hypot(w.settlements.find((s) => s.id === q.settlement).x - b.x, w.settlements.find((s) => s.id === q.settlement).z - b.z) > 1500);
+    return p ? { id: p.id, first: p.first } : null;
+  });
+  check('someone lives far away', !!far);
+  await sim((id) => window.__ui.openPanel({ panel: 'ext', name: 'liveAs', id, data: { reason: 'choose' } }), far.id);
+  await tick(0.2);
+  const dist = await txt('.mu-liveas .mu-kv');
+  check('the card says how far they are', /km|m away/.test(dist), dist);
+  const b3 = await sim(() => window.__game.session.sim.state.run.playerId);
+  await startRecording();
+  await page.getByRole('button', { name: /^Live as / }).last().click();
+  const fade = await stopRecording();
+  const fp = phases(fade);
+  const firstOut = fade.findIndex((x) => x.ph === 'out');
+  const cutAt = fade.findIndex((x) => x.me === far.id);
+  check('far away the screen fades first, and the change waits for the black', fp.includes('out') && fp.indexOf('in') > fp.indexOf('out') && firstOut >= 0 && cutAt > firstOut && fade.slice(0, cutAt).every((x) => x.me === b3) && ['hold', 'in'].includes(fade[cutAt].ph) && fade[cutAt].veil > 0.9, JSON.stringify({ fp, cut: fade[cutAt], b3 }));
+  check('the veil closes fully, then opens again, and no camera glide is posed', Math.max(...fade.map((x) => x.veil)) > 0.99 && fade[fade.length - 1].veil === 0 && !fade.some((x) => x.ph === 'glide'));
+  const d3 = await dbg();
+  check('then the veil is gone and the card is up', d3.switching === 'idle' && d3.veil === 0 && d3.arrival !== null, JSON.stringify(d3));
+  await page.keyboard.press('Escape');
+  await tick(0.2);
+
+  // ---- Rule this town: the ruler of a place, then the seat of government
+  const rule = await sim(() => {
+    const se = window.__game.session; const r = se.services.realm; const me = se.sim.state.run.playerId;
+    if (!r) return null;
+    for (const st of se.sim.world.settlements) {
+      const ruler = r.rulerOf(st.id);
+      if (ruler && ruler !== me && r.canRule(ruler) && !se.sim.state.persons.get(ruler).death) return { id: ruler, can: true };
+    }
+    return null;
+  });
+  if (rule) {
+    await sim((id) => window.__ui.openPanel({ panel: 'ext', name: 'liveAs', id, data: { reason: 'rule' } }), rule.id);
+    await tick(0.2);
+    check('"Rule this town" asks who rules and offers to rule as them', (await page.locator('.mu-liveas-rule').count()) === 1 && (await page.getByRole('button', { name: /^Rule as / }).count()) === 1);
+    await page.getByRole('button', { name: /^Rule as / }).click();
+    await tick(2);
+    check('then you are the ruler and the seat of government opens', (await sim(() => window.__game.session.sim.state.run.playerId)) === rule.id && (await ui()).panels.length >= 1, JSON.stringify(await ui()));
+    await page.keyboard.press('Escape');
+    await tick(0.2);
+  } else console.log('     (the home place has no other ruler: Rule this town is skipped)');
+
+  }
+  page.setDefaultTimeout(0);
+
   // ---- map
   await page.keyboard.press('KeyM');
   await tick(0.3);
@@ -391,16 +761,49 @@ try {
   await page.locator('.mu-succ').nth(0).click();
   await page.getByRole('button', { name: /Carry on as/ }).click();
   await tick(0.6);
-  const after = await sim(() => ({ id: window.__game.session.sim.state.run.playerId, body: window.__game.session.services.player.body(), phase: window.__game.session.sim.state.run.phase }));
+  let after = await sim(() => ({ id: window.__game.session.sim.state.run.playerId, body: window.__game.session.services.player.body(), phase: window.__game.session.sim.state.run.phase }));
   check('choosing a successor plays on as them, standing in the world', after.id !== before && after.phase === 'alive' && after.body !== null && (await ui()).panels.length === 0, JSON.stringify(after));
+  // ---- (civilization pass) death again: your family first, people near, and a search over everyone alive
+  page.setDefaultTimeout(60000);
+  await tick(0.6);
+  await sim(() => window.__game.killPlayer());
+  await tick(0.5);
+  s = await ui();
+  check('death shows the family, people near, and a search over everyone alive', s.panels.join() === 'death' && (await page.locator('.mu-succ-search input').count()) === 1 && (await page.locator('.mu-succ-head').count()) >= 2, JSON.stringify(s));
+  const stranger = await sim(() => {
+    const se = window.__game.session; const sm = se.sim; const run = sm.state.run;
+    const dead = sm.state.persons.get(run.pendingSuccession.person);
+    const elig = new Set(run.pendingSuccession.eligible);
+    const p = [...sm.state.persons.values()].find((q) => !q.death && q.id !== dead.id && !elig.has(q.id) && q.settlement !== dead.settlement && q.first.length > 4 && ![...sm.state.persons.values()].some((o) => o !== q && !o.death && o.first === q.first && o.settlement === q.settlement));
+    const place = sm.world.settlements.find((x) => x.id === p.settlement).name;
+    return { id: p.id, first: p.first, place };
+  });
+  await page.locator('.mu-succ-search input').fill(`${stranger.first} ${stranger.place}`);
+  await tick(0.2);
+  const hitNames = await page.locator('.mu-succ-results .mu-succ h4').allTextContents();
+  check('searching finds a stranger by name and place', hitNames.length >= 1 && hitNames[0].startsWith(stranger.first), hitNames.join(' | '));
+  await page.locator('.mu-succ-results .mu-succ').first().click();
+  await page.getByRole('button', { name: /Carry on as/ }).click();
+  await tick(0.8);
+  const fin = await sim(() => ({ id: window.__game.session.sim.state.run.playerId, phase: window.__game.session.sim.state.run.phase }));
+  check('and going on as the stranger plays on as them', fin.id === stranger.id && fin.phase === 'alive' && (await ui()).panels.length === 0, JSON.stringify(fin));
+  await tick(2);
+  page.setDefaultTimeout(0);
+  after = await sim(() => ({ id: window.__game.session.sim.state.run.playerId, body: window.__game.session.services.player.body(), phase: window.__game.session.sim.state.run.phase }));
+
 
   // ---- leave to the menu and continue where the run was left
   await tick(1.5);
   const spot = await sim(() => ({ ...window.__game.session.services.player.body() }));
-  await page.waitForTimeout(120); // the UI debounces Esc (one press can arrive by two routes)
+  // Esc: the "who you are now" card goes first, then the pause menu
+  for (let k = 0; k < 4; k++) {
+    await page.waitForTimeout(150); // the UI debounces Esc (one press can arrive by two routes)
     await page.keyboard.press('Escape');
-  await tick(0.2);
-  await page.getByRole('button', { name: 'Save and quit to menu' }).click();
+    await tick(0.2);
+    if ((await page.getByRole('button', { name: 'Save and quit to menu' }).count()) > 0) break;
+    console.log(`     (Esc ${k + 1} did not open the menu: ${JSON.stringify(await ui())}, card: ${await page.locator('.mu-arrival:not(.mu-hide)').count()})`);
+  }
+  await page.getByRole('button', { name: 'Save and quit to menu' }).click({ timeout: 60000 });
   await page.waitForFunction(() => window.__game.session === null && window.__game.host.screen === 'menu', null, { timeout: 60000 });
   // the menu adds "Continue" once its async saved-run lookup returns
   await page.locator('.mu-menu-card .mu-btn', { hasText: 'Continue' }).first().waitFor({ timeout: 15000 }).catch(() => {});

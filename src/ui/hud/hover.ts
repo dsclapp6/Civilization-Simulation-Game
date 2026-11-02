@@ -7,6 +7,10 @@ import { distanceText } from '../core/format';
 import { icon, type IconName } from '../core/icons';
 import { CATEGORY_ICON } from '../core/iconMap';
 import type { ActionCategory } from '../../sim/actions';
+import { MARK_GLYPH, type QuestKind } from '../core/questMarks';
+
+/** What the person under the cursor wants of you (docs/CIV.md §1): "Maire wants 7 bundles of firewood". */
+export interface HoverWant { kind: QuestKind; text: string }
 
 const TONE_CLASS: Partial<Record<LabelTone, string>> = {
   kin: 'kin', household: 'household', friend: 'friend', rival: 'foe', enemy: 'foe', lord: 'lord', clergy: 'clergy', quest: 'kin',
@@ -26,6 +30,8 @@ export class HoverCard {
   private readonly actNote = h('span.mu-hover-note');
   private readonly dist = h('span.mu-hover-dist');
   private readonly head = h('div.mu-hover-head', null, this.ico, h('div.mu-hover-names', null, this.name, this.sub), this.dist);
+  private readonly want = h('div.mu-hover-mark.mu-hide');
+  private wantKey = '';
   private version = -1;
   private since = 0;
   private sinceVersion = -1;
@@ -33,7 +39,7 @@ export class HoverCard {
 
   constructor() {
     this.act.append(icon('mouse_l', 17, 'mu-hover-mouse'), this.actLabel, this.actNote);
-    this.el.append(this.head, this.act);
+    this.el.append(this.head, this.want, this.act);
   }
 
   hide(): void {
@@ -44,8 +50,9 @@ export class HoverCard {
   }
 
   /** `x`,`y` are in interface pixels (already divided by the interface scale); `w`,`hh` the interface size. */
-  update(info: HoverInfo | null, now: number, x: number, y: number, w: number, hh: number): void {
+  update(info: HoverInfo | null, now: number, x: number, y: number, w: number, hh: number, want: HoverWant | null = null): void {
     if (!info) { this.hide(); return; }
+    this.setWant(want);
     const bare = info.target.kind === 'ground';
     if (info.version !== this.sinceVersion) { this.sinceVersion = info.version; this.since = now; }
     if (now - this.since < (bare ? GROUND_AFTER : SHOW_AFTER)) { if (this.visible) this.hide(); return; }
@@ -56,6 +63,15 @@ export class HoverCard {
     if (px + tw + 8 > w) px = Math.max(8, x - tw - 14);
     if (py + th + 8 > hh) py = Math.max(8, y - th - 14);
     this.el.style.transform = `translate(${Math.round(px)}px, ${Math.round(py)}px)`;
+  }
+
+  private setWant(w: HoverWant | null): void {
+    const key = w ? `${w.kind}|${w.text}` : '';
+    if (key === this.wantKey) return;
+    this.wantKey = key;
+    this.want.classList.toggle('mu-hide', !w);
+    this.want.classList.toggle('turnin', w?.kind === 'turnin');
+    if (w) this.want.replaceChildren(h('span.mu-hover-mark-glyph', null, MARK_GLYPH[w.kind]), h('span', null, w.text));
   }
 
   private paint(info: HoverInfo, bare: boolean): void {

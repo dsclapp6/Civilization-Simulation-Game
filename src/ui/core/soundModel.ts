@@ -3,7 +3,10 @@
 import { daylight, toDate } from '../../core/time';
 import type { AnimState } from '../../core/view';
 
-export type SfxName = 'swish' | 'chop' | 'clank' | 'pick' | 'dig' | 'saw' | 'coins' | 'chime' | 'ding' | 'bell' | 'click' | 'thud';
+export type SfxName =
+  | 'swish' | 'chop' | 'clank' | 'pick' | 'dig' | 'saw' | 'coins' | 'chime' | 'ding' | 'bell' | 'click' | 'thud'
+  // civilization pass (CIV §8): the cues of the steps of hands-on work
+  | 'bellows' | 'quench' | 'cut' | 'stir' | 'fire' | 'grind' | 'scrape' | 'knead';
 
 export interface WorkSound {
   sfx: SfxName;
@@ -50,4 +53,38 @@ export function carry(distance: number, reach: number): number {
   if (distance >= reach) return 0;
   const k = 1 - distance / reach;
   return k * k * (3 - 2 * k) * 0.8 + 0.2 * k;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Hands-on work (docs/CIV.md §8): each step of a bout carries a sound cue; the UI plays it once as the step begins, and — for the
+// rhythmic ones — the strokes of the tool every `period` seconds while the step lasts.
+// ---------------------------------------------------------------------------------------------
+
+export interface CueSound {
+  sfx: SfxName;
+  /** Loudness 0..1. */
+  gain: number;
+  /** Seconds between strokes while the step goes on; absent = the cue sounds once. */
+  period?: number;
+}
+
+/** The cues the economy names in `ActionStep.sfx` (docs/ECONOMY.md "Playing steps back"). */
+export const CUE_SOUND: Readonly<Record<string, CueSound>> = {
+  bellows: { sfx: 'bellows', gain: 0.8, period: 1.7 },
+  hammer: { sfx: 'clank', gain: 0.9, period: 0.8 },
+  quench: { sfx: 'quench', gain: 1 },
+  saw: { sfx: 'saw', gain: 0.6, period: 0.75 },
+  chop: { sfx: 'chop', gain: 1, period: 1.25 },
+  cut: { sfx: 'cut', gain: 0.85, period: 1.1 },
+  dig: { sfx: 'dig', gain: 0.85, period: 1.3 },
+  stir: { sfx: 'stir', gain: 0.6, period: 1.5 },
+  fire: { sfx: 'fire', gain: 0.7 },
+  grind: { sfx: 'grind', gain: 0.8, period: 1.2 },
+  scrape: { sfx: 'scrape', gain: 0.8, period: 0.9 },
+  knead: { sfx: 'knead', gain: 0.7, period: 1.05 },
+};
+
+/** The sound of a step's cue, or null when the step names none (or one this build does not know). */
+export function cueSound(cue: string | undefined): CueSound | null {
+  return cue ? CUE_SOUND[cue] ?? null : null;
 }

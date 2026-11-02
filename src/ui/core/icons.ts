@@ -147,6 +147,12 @@ const ICONS = {
   sound: `<path d="M4.6 9.6h3.4l4.4-3.8v12.4L8 14.4H4.6z"/><path d="M15.4 9.2a4 4 0 0 1 0 5.6M17.8 6.8a7.4 7.4 0 0 1 0 10.4"/>`,
   sound_off: `<path d="M4.6 9.6h3.4l4.4-3.8v12.4L8 14.4H4.6z"/><path d="M16 9.6l4.4 4.8M20.4 9.6 16 14.4"/>`,
   sunrise: `<path d="M3 17.4h18M6.6 17.4a5.4 5.4 0 0 1 10.8 0M12 5.4v3.2M5.4 8.6l2 2M18.6 8.6l-2 2"/>`,
+  // --- civilization pass: hands-on work (the wheel), the people lists
+  lead: `<circle cx="5.6" cy="6.4" r="2.6"/><path d="M7.6 8c3.6 1.4 2.4 5.2 6.2 5.2 3.4 0 3.6 3.6 6.2 4.8"/><path d="M13.6 13.2c-.4 3-2.6 4.8-5.6 5"/>`,
+  letgo: `<path d="M3.6 13.4c3.2-3.6 6.4-3.4 8.6-.6M15.2 10.2c2.2-1.4 3.8-1.2 5.4.4"/><path d="M12.8 15.2l1.6 2.2M16 17.8l1 2.2M9.6 16.4l-1 2.4" stroke-dasharray="1.4 2.4"/>`,
+  knife: `<path d="M4.2 19.6C11 18 18 12 20 4.4 14 6 7.6 11.6 4.2 19.6z"/><path d="M4.2 19.6l-1.2 1.6M9.4 14.6l2 1.6"/>`,
+  cleaver: `<path d="M3.4 5.6h10.4l1.6 2.6v8.4H3.4z"/><circle cx="6.4" cy="8.8" r="1"/><path d="M15.4 11.4H21M18 9.4v4"/>`,
+  anvil: `<path d="M3.6 8.8h14c0 2.4-1.8 3.4-4 3.8V15h2.4v3.4H7.4V15h2.4v-2.4c-3.2-.4-5.4-1.4-6.2-3.8zM17.6 8.8H21l-1.2 2.4h-2.8"/>`,
 } as const;
 
 export type IconName = keyof typeof ICONS;

@@ -6,6 +6,7 @@ import type { AppRoot } from '../../main';
 import type { Difficulty } from '../../core/domain';
 import type { PersonId } from '../../sim/state';
 import { gainSkill } from '../../sim/skills';
+import { settlementCard } from '../../sim/api';
 import { killPerson } from '../../sim/succession';
 import type { Simulation } from '../../sim/sim';
 import { createUI } from '../index';
@@ -31,6 +32,8 @@ interface Ctx {
   frames(n?: number): Promise<void>;
   click(selector: string, times?: number, index?: number): void;
   setBg(bg: Bg): void;
+  /** Holds the UI's own clock (the gallery drives it by hand with `ui.update`) until the next entry runs: a veil caught half closed. */
+  hold(on: boolean): void;
 }
 
 interface Entry { id: string; label: string; group: string; run(c: Ctx): void | Promise<void> }
@@ -73,8 +76,9 @@ export async function start(root: AppRoot): Promise<void> {
     sim.state.clock.firedHour = Math.floor(abs * 24);
   };
 
+  let holdUi = false;
   const ctx: Ctx = {
-    ui, host, frames, setBg: (bg) => { currentBg = bg; setBg(bg); },
+    ui, host, frames, setBg: (bg) => { currentBg = bg; setBg(bg); }, hold: (on) => { holdUi = on; },
     async enter(o = {}) {
       let mock = host.mock();
       if (!mock || o.fresh || mock.sim.state.run.phase !== 'alive') mock = await host.create(o.difficulty ?? 'knight', {}, true);
@@ -119,6 +123,19 @@ export async function start(root: AppRoot): Promise<void> {
   const me = (mock: MockGame): { id: PersonId; sim: Simulation } => ({ id: mock.sim.state.run.playerId, sim: mock.sim });
 
   const stepSim = (mock: MockGame, seconds: number): void => { for (let i = 0; i < Math.round(seconds * 20); i++) mock.sim.step(0.05); };
+
+  /** A living adult of the player's household who is not the player (any living person else). */
+  const someoneElse = (mock: MockGame): PersonId => {
+    const { id, sim } = me(mock);
+    const p = sim.state.persons.get(id);
+    const hh = p ? sim.state.households.get(p.household) : undefined;
+    for (const m of hh?.members ?? []) {
+      const q = sim.state.persons.get(m);
+      if (q && !q.death && m !== id && (sim.absDay - q.birthDay) / 16 >= 16) return m;
+    }
+    for (const q of sim.state.persons.values()) if (!q.death && q.id !== id) return q.id;
+    return id;
+  };
 
   /** Decorates the player so sheets and panels have something to show. */
   const richCharacter = (mock: MockGame): void => {
@@ -390,6 +407,106 @@ export async function start(root: AppRoot): Promise<void> {
     { id: 'building', label: 'Building info', group: 'Panels', run: async (c) => { const mock = await c.enter(); const hh = mock.sim.state.households.get(mock.sim.state.persons.get(mock.sim.state.run.playerId)?.household ?? 0); c.ui.openPanel({ panel: 'building', id: hh?.home ?? 0 }); await c.frames(3); } },
     { id: 'person', label: 'Person info', group: 'Panels', run: async (c) => { const mock = await c.enter(); const p = mock.sim.state.persons.get(mock.sim.state.run.playerId); c.ui.openPanel({ panel: 'person', id: p?.father || p?.mother || 0 }); await c.frames(3); } },
     { id: 'message', label: 'Message', group: 'Panels', run: async (c) => { await c.open({ panel: 'message', title: 'A Letter from the Steward', text: 'By the lord’s command, all tenants of the manor are to attend the harvest boon-work at first light on the morrow, bringing their own sickles.\n\nThose who fail to attend shall answer to the reeve, and pay a fine of fourpence for each day missed.' }); } },
+    // civilization pass, B6: living as anyone, the accolade, the death screen's search
+    {
+      id: 'lives-liveas', label: 'Live as: the card', group: 'Lives', run: async (c) => {
+        const mock = await c.enter({ target: 'person' });
+        c.ui.openPanel({ panel: 'ext', name: 'liveAs', id: someoneElse(mock), data: { reason: 'choose' } });
+        await c.frames(3);
+      },
+    },
+    {
+      id: 'lives-liveas-rule', label: 'Rule this town: the card', group: 'Lives', run: async (c) => {
+        const mock = await c.enter({ target: 'person' });
+        const sim = mock.sim;
+        const p = sim.state.persons.get(sim.state.run.playerId);
+        const card = p ? settlementCard(sim, p.settlement) : null;
+        const lord = card && card.lord ? card.lord : someoneElse(mock);
+        // the gallery has no realm module: a stand-in that says the lord rules the place
+        (mock as unknown as { realm: unknown }).realm = {
+          canRule: () => true, rules: () => [],
+          view: () => ({ name: card ? `the ${card.kind} of ${card.name}` : 'the manor', role: 'holder' }),
+        };
+        c.ui.openPanel({ panel: 'ext', name: 'liveAs', id: lord, data: { reason: 'rule' } });
+        await c.frames(3);
+      },
+    },
+    {
+      id: 'lives-arrival', label: 'Who you are now', group: 'Lives', run: async (c) => {
+        const mock = await c.enter({ time: 0.36 });
+        mock.sim.dispatch({ type: 'switchCharacter', personId: someoneElse(mock) });
+        // the veil opens and the card is up: let the UI's own clock run past the fade
+        for (let i = 0; i < 8; i++) c.ui.update(0.25);
+        await c.frames(3);
+      },
+    },
+    {
+      id: 'lives-fade', label: 'Living as someone far away: the screen fades', group: 'Lives', run: async (c) => {
+        const mock = await c.enter({ time: 0.36, fresh: true });
+        c.ui.openPanel({ panel: 'ext', name: 'liveAs', id: someoneElse(mock), data: { reason: 'choose' } });
+        await c.frames(3);
+        // the gallery has no camera to glide: the change goes by the fade. The UI's own clock is driven by hand: the veil closing
+        [...document.querySelectorAll<HTMLButtonElement>('.mu-btn')].find((b) => /^Live as /.test(b.textContent ?? ''))?.click();
+        c.hold(true);
+        c.ui.update(0.05);
+        c.ui.update(0.2);
+        await c.frames(2);
+      },
+    },
+    {
+      id: 'lives-death', label: 'Death: anyone alive (search)', group: 'Lives', run: async (c) => {
+        const mock = await c.enter({ fresh: true, bg: 'night', time: 0.3 });
+        const sim = mock.sim;
+        const p = sim.state.persons.get(sim.state.run.playerId);
+        const hh = p ? sim.state.households.get(p.household) : undefined;
+        if (hh && hh.head !== sim.state.run.playerId) sim.dispatch({ type: 'switchCharacter', personId: hh.head });
+        logLife(mock);
+        sim.state.run.maxTier = 3;
+        const who = sim.state.persons.get(sim.state.run.playerId);
+        if (who) killPerson(sim, who, 'plague', sim.absDay);
+        await c.frames(4);
+        // a stranger from another place, found by the first letters of the name
+        const run = sim.state.run;
+        const kin = new Set(run.pendingSuccession?.eligible ?? []);
+        let query = 'smith';
+        for (const q of sim.state.persons.values()) {
+          if (q.death || kin.has(q.id) || q.settlement === who?.settlement || q.first.length < 5) continue;
+          query = q.first.slice(0, 3).toLowerCase();
+          break;
+        }
+        const input = document.querySelector<HTMLInputElement>('.mu-succ-search input');
+        if (input) { input.value = query; input.dispatchEvent(new Event('input', { bubbles: true })); }
+        c.click('.mu-succ-list .mu-succ.compact', 1, 1);
+        await c.frames(3);
+        // the screen reveals itself row by row: let it finish before the picture is taken
+        await new Promise((r) => window.setTimeout(r, 1200));
+      },
+    },
+    {
+      id: 'lives-death-family', label: 'Death: your family first, the search above', group: 'Lives', run: async (c) => {
+        const mock = await c.enter({ fresh: true, bg: 'night', time: 0.3 });
+        const sim = mock.sim;
+        const p = sim.state.persons.get(sim.state.run.playerId);
+        const hh = p ? sim.state.households.get(p.household) : undefined;
+        if (hh && hh.head !== sim.state.run.playerId) sim.dispatch({ type: 'switchCharacter', personId: hh.head });
+        logLife(mock);
+        sim.state.run.maxTier = 3;
+        const who = sim.state.persons.get(sim.state.run.playerId);
+        if (who) killPerson(sim, who, 'plague', sim.absDay);
+        await c.frames(4);
+        await new Promise((r) => window.setTimeout(r, 1200));
+      },
+    },
+    {
+      id: 'lives-accolade', label: 'The accolade', group: 'Lives', run: async (c) => {
+        const mock = await c.enter({ time: 0.3 });
+        const sim = mock.sim;
+        const me2 = sim.state.persons.get(sim.state.run.playerId);
+        if (me2) { me2.sex = 'm'; me2.career = 'knight'; me2.estate = 'noble'; sim.state.touch(me2); }
+        c.ui.openPanel({ panel: 'ext', name: 'accolade', id: sim.state.run.playerId, data: { kind: 'liege', by: 0 } });
+        await c.frames(3);
+      },
+    },
     {
       id: 'icons', label: 'Icon sheet', group: 'Dev', run: async (c) => {
         await c.host.quitToMenu();
@@ -415,6 +532,7 @@ export async function start(root: AppRoot): Promise<void> {
   const run = (id: string): Promise<void> => {
     running = running.then(async () => {
       document.getElementById('icon-sheet')?.remove();
+      holdUi = false;
       const e = byId.get(id);
       if (!e) throw new Error(`unknown gallery entry ${id}`);
       document.documentElement.dataset.shot = '';
@@ -469,7 +587,7 @@ export async function start(root: AppRoot): Promise<void> {
     last = now;
     const mock = host.mock();
     if (mock && !STILL) { mock.sim.step(dt); mock.player.update?.(dt); }
-    ui.update(dt);
+    if (!holdUi) ui.update(dt);
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);

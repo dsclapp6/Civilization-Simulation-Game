@@ -52,11 +52,13 @@ export interface Settings {
   alwaysLook?: boolean;
   /** Clarity pass: the corner minimap (N). Default true. */
   minimap?: boolean;
+  /** Civilization pass (CIV §2): ask for confirmation before living as someone else (V, the action wheel, the lists). Default true. */
+  askBeforeLiveAs?: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   quality: 'medium', mouseSensitivity: 1, invertY: false, volume: 0.7, labels: true, uiScale: 1, pauseInMenus: true, hints: true,
-  alwaysLook: false, minimap: true,
+  alwaysLook: false, minimap: true, askBeforeLiveAs: true,
 };
 
 /** Renderer controls the UI may use (map panel, settings). */
@@ -112,7 +114,16 @@ export interface UiHost {
   releaseMouseLook?(): boolean;
   /** Is the mouse looking (pointer locked) right now? The HUD tells a drawn weapon with a free cursor from one with the mouse taken. */
   mouseLooking?(): boolean;
+  /**
+   * Civilization pass (CIV §2): where the camera is and what it looks at, for the glide from one body to another. `focus` is the
+   * point the street camera follows (the old body's head): it is what the pose looks at, so the boom can be told. Null when there
+   * is no street camera to read (menus, the gallery's fake host): the UI fades instead.
+   */
+  cameraPose?(focus?: { x: number; y: number; z: number }): CameraPose | null;
 }
+
+/** A camera position and the point it looks at (world metres). */
+export interface CameraPose { position: { x: number; y: number; z: number }; lookAt: { x: number; y: number; z: number } }
 
 export type UiScreen = 'menu' | 'loading' | 'game';
 
@@ -151,7 +162,12 @@ export interface GameUIExt extends GameUI {
   /** Shows the settlement banner for where the player stands now (tools and tests). */
   showBanner?(): void;
   /** The UI's own notes for tools and tests: the pinned place, the open cards. */
-  debugState?(): { pin: { x: number; z: number; label: string } | null; whatNowOpen: boolean; tracker: string };
+  debugState?(): {
+    pin: { x: number; z: number; label: string } | null; whatNowOpen: boolean; tracker: string;
+    /** Civilization pass: the name on the "who you are now" card (null when it is not up), the clock of a change of life
+     *  ('idle' | 'out' | 'hold' | 'in' | 'glide'), how dark the screen is (0..1) and the sound cues played so far. */
+    arrival?: string | null; switching?: string; veil?: number; cues?: string[];
+  };
 }
 
 /** Optional economy members the UI uses when the economy provides them. */

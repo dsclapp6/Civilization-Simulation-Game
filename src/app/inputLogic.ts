@@ -20,6 +20,8 @@ export interface FrameIntent {
   /** A speed key was pressed. */
   speed: Speed | null;
   togglePause: boolean;
+  /** The mount key (F) has been held long enough: call your horse (once per press; never for someone riding). Civilization pass, CIV §9. */
+  callHorse: boolean;
 }
 
 const MOVE_FORWARD = [KEYMAP.input.forward, 'ArrowUp'];
@@ -63,9 +65,14 @@ export class InputMapper {
   walkToggle = false;
   private readonly tracker = new InteractTracker();
   private readonly tap = { tap: false, openWheel: false, held: 0 };
-  private readonly intent: FrameIntent = { input: { ...EMPTY_INPUT }, openWheel: false, speed: null, togglePause: false };
+  private readonly intent: FrameIntent = { input: { ...EMPTY_INPUT }, openWheel: false, speed: null, togglePause: false, callHorse: false };
+  /** F: how long it has been held, whether the call went out, and whether the press found the player riding (then a hold is a slow dismount). */
+  private mountHeld = 0;
+  private mountFired = false;
+  private ridingAtPress = false;
+  private mountActive = false;
 
-  map(raw: RawKeys, ctx: { cameraYaw: number; attack: boolean; block: boolean; aim?: InputState['aim'] }, dt: number): FrameIntent {
+  map(raw: RawKeys, ctx: { cameraYaw: number; attack: boolean; block: boolean; aim?: InputState['aim']; riding?: boolean }, dt: number): FrameIntent {
     const { down, pressed, released } = raw;
     const i = this.intent.input;
     i.forward = (any(down, MOVE_FORWARD) ? 1 : 0) - (any(down, MOVE_BACK) ? 1 : 0);
@@ -78,6 +85,16 @@ export class InputMapper {
     i.interact = this.tap.tap;
     i.interactHeld = this.tap.held;
     i.mount = pressed.has(KEYMAP.input.mount);
+    // hold F to call your horse: the tap above has mounted (or dismounted) at once; a hold that began on foot and goes on without a
+    // mount having happened (the horse is not here) sends for it, once
+    this.intent.callHorse = false;
+    if (pressed.has(KEYMAP.input.mount)) { this.mountActive = true; this.mountHeld = 0; this.mountFired = false; this.ridingAtPress = !!ctx.riding; }
+    if (this.mountActive) {
+      if (down.has(KEYMAP.input.mount)) {
+        this.mountHeld += dt;
+        if (!this.mountFired && !this.ridingAtPress && !ctx.riding && this.mountHeld >= INTERACT_HOLD_SECONDS) { this.mountFired = true; this.intent.callHorse = true; }
+      } else this.mountActive = false;
+    }
     i.dodge = pressed.has(KEYMAP.input.dodge);
     i.cancel = pressed.has(KEYMAP.input.cancel);
     i.attack = ctx.attack;
@@ -99,6 +116,9 @@ export class InputMapper {
     this.intent.openWheel = false;
     this.intent.speed = null;
     this.intent.togglePause = false;
+    this.intent.callHorse = false;
+    this.mountActive = false;
+    this.mountHeld = 0;
   }
 }
 

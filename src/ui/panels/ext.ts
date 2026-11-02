@@ -14,4 +14,7 @@ import '../hud/law';
 // civilization pass, wave B: builder mode (B) and the ruler's seat of government (U)
 import '../builder/builder';
 import '../ruler/ruler';
+// civilization pass, wave B: living as anyone (B6)
+import './liveas';
+import './accolade';
 export {};

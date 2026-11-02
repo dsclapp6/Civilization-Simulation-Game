@@ -1,5 +1,5 @@
-// The per-frame snapshot of the places to point at: the objectives module's markers first, then the church and the
-// market of the place, then the pin. A spot marked twice shows once.
+// The per-frame snapshot of the places to point at: the people who want something of you, the objectives module's
+// markers, the church and the market of the place, then the pin. A spot marked twice shows once.
 import { describe, expect, it } from 'vitest';
 import { MockObjectives } from '../../src/ui/dev/mockObjectives';
 import { PinStore } from '../../src/ui/core/pins';
@@ -58,5 +58,43 @@ describe('The places to point at', () => {
     nav.update(game, host, pins);
     expect(nav.primary()).not.toBeNull();
     expect(nav.markers.some((m) => m.kind === 'pin')).toBe(false);
+  });
+});
+
+describe('The people who want something of you', () => {
+  type Marked = { person: number; kind: 'quest' | 'turnin'; x: number; z: number; inZone: boolean; indoors: boolean };
+  const folk = (game: GameServices, n: number) => [...game.sim.state.persons.values()].filter((p) => !p.death && p.id !== game.sim.state.run.playerId).slice(0, n);
+  const mark = (game: GameServices, list: () => Marked[]) => { (game.zone as unknown as { markedPeople: () => Marked[] }).markedPeople = list; };
+
+  it('keeps the mark over a head that stands where a place is marked: the spot is shown once, as the person', () => {
+    const { nav, game, host, pins } = setup();
+    nav.update(game, host, pins);
+    const home = nav.markers.find((m) => m.kind === 'home')!;
+    const [who] = folk(game, 1);
+    mark(game, () => [{ person: who.id, kind: 'quest', x: home.x + 1, z: home.z - 1, inZone: true, indoors: false }]);
+    nav.update(game, host, pins);
+    expect(nav.markers.some((m) => m.id === `q${who.id}` && m.kind === 'quest')).toBe(true);
+    expect(nav.markers.some((m) => m.kind === 'home')).toBe(false);
+    // the tracked objective is still the first of the objectives module's markers and is never dropped
+    expect(nav.primary()).not.toBeNull();
+  });
+
+  it('shows the nearest three within 150 m, with the words of the mark', () => {
+    const { nav, game, host, pins } = setup();
+    nav.update(game, host, pins);
+    const people = folk(game, 5);
+    mark(game, () => [
+      { person: people[0].id, kind: 'quest', x: nav.x + 120, z: nav.z, inZone: true, indoors: false },
+      { person: people[1].id, kind: 'turnin', x: nav.x, z: nav.z + 30, inZone: true, indoors: false },
+      { person: people[2].id, kind: 'quest', x: nav.x - 60, z: nav.z, inZone: true, indoors: false },
+      { person: people[3].id, kind: 'quest', x: nav.x, z: nav.z - 90, inZone: true, indoors: false },
+      { person: people[4].id, kind: 'quest', x: nav.x + 400, z: nav.z, inZone: true, indoors: false },
+    ]);
+    nav.update(game, host, pins);
+    const shown = nav.markers.filter((m) => m.kind === 'quest' || m.kind === 'turnin');
+    expect(shown.map((m) => m.id).sort()).toEqual([people[1], people[2], people[3]].map((p) => `q${p.id}`).sort());
+    expect(shown.find((m) => m.kind === 'turnin')!.label).toContain('Report to');
+    // all of them are rows for the minimap and the journal, near or far
+    expect(nav.quest.rows.length).toBe(5);
   });
 });

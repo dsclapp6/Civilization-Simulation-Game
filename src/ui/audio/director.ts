@@ -3,7 +3,8 @@
 // nearer the church), and a soft click on interface buttons.
 import { isHolyDay } from '../../sim/calendar';
 import type { SimEvents } from '../../sim/events';
-import { carry, massBellDay, workSound } from '../core/soundModel';
+import { carry, massBellDay, workSound, type CueSound } from '../core/soundModel';
+import { CueScheduler } from '../core/stepModel';
 import type { GameServices, UiHost } from '../types';
 import { Sfx } from './sfx';
 
@@ -17,6 +18,11 @@ export class SoundDirector {
   private nextWork = 0;
   private lastWorkAnim = '';
   private bellDay = -1;
+  /** Hands-on work (CIV §8): the cue of each step of a bout, once as the step begins, and the strokes of the rhythmic ones. */
+  private readonly cues = new CueScheduler();
+  private readonly cueOut: CueSound[] = [];
+  /** The step cues requested so far, newest last (the last 60): for tools and tests, since the browser may keep the audio asleep. */
+  readonly cuesPlayed: string[] = [];
   private readonly cleanups: Array<() => void> = [];
 
   constructor(private readonly host: UiHost, root: HTMLElement) {
@@ -63,10 +69,21 @@ export class SoundDirector {
     if (!game) return;
     const sim = game.sim;
     const clock = sim.view.clock();
-    if (clock.paused || clock.skipping) { this.nextWork = 0; return; }
+    if (clock.paused || clock.skipping) { this.nextWork = 0; this.cues.reset(); return; }
     // the tool the player is swinging
     const a = sim.actions.active(sim.state.run.playerId);
-    const w = a && a.option.seconds > 0 ? workSound(a.option.anim) : null;
+    // a bout with steps (the forge, the butcher's block, the digs…) sounds each step's cue as it begins; the tool's own stroke is
+    // the cue's, so the generic swing of the animation stays quiet meanwhile
+    if (a && a.option.seconds > 0 && a.option.steps && a.option.steps.length > 0) {
+      this.nextWork = 0;
+      this.cues.update(`${a.option.provider}/${a.option.id}`, a.option.steps, a.progress, now, this.cueOut);
+      for (const c of this.cueOut) {
+        this.sfx.play(c.sfx, c.gain, 0.94 + Math.random() * 0.12);
+        this.cuesPlayed.push(c.sfx);
+        if (this.cuesPlayed.length > 60) this.cuesPlayed.shift();
+      }
+    } else this.cues.reset();
+    const w = a && a.option.seconds > 0 && !(a.option.steps && a.option.steps.length > 0) ? workSound(a.option.anim) : null;
     if (w && a) {
       if (a.option.anim !== this.lastWorkAnim || this.nextWork === 0) { this.lastWorkAnim = a.option.anim ?? ''; this.nextWork = now + w.period * 0.55; }
       if (now >= this.nextWork) {
