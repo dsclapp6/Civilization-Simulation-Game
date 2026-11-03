@@ -119,6 +119,8 @@ export function listDig(E: Econ, p: Person, b: BuildingState, out: ActionOption[
   const block = holyDayBlock(E) ?? incapable(p);
   if (block) { o.enabled = false; o.reason = block; }
   out.push(o);
+  // long work as its own explicit choice (docs/WORK.md): bout after bout until stopped (Q), tired out or the pack is full
+  if (o.enabled) out.push({ ...o, id: `${spec.id}.keep`, label: `Keep at it: ${spec.label.toLowerCase()}`, open: true, bouts: undefined, priority: 3, preview: `Bout after bout until you stop (Q) · ${o.preview ?? ''}` });
 }
 
 /** One bout at a works of the land. */

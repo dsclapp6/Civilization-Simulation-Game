@@ -158,7 +158,7 @@ export class UiApp implements GameUIExt {
     window.addEventListener('keydown', onKey, true);
     this.offs.push(() => window.removeEventListener('keydown', onKey, true));
     const onKeyUp = (e: KeyboardEvent): void => {
-      if ((e.code === 'KeyJ' || e.code === 'KeyK') && this.hud.mini.active) { this.hud.mini.release(e.code === 'KeyJ' ? 'J' : 'K'); e.preventDefault(); }
+      if ((e.code === 'KeyJ' || e.code === 'KeyK') && this.hud.mini.active && this.hud.mini.release(e.code === 'KeyJ' ? 'J' : 'K')) e.preventDefault();
     };
     window.addEventListener('keyup', onKeyUp, true);
     this.offs.push(() => window.removeEventListener('keyup', onKeyUp, true));
@@ -809,11 +809,10 @@ export class UiApp implements GameUIExt {
       return;
     }
     if (this.screen !== 'game' || !this.bound) return;
-    // a bout of work is being played: J and K are its keys
-    if ((e.code === 'KeyJ' || e.code === 'KeyK') && this.hud.mini.active && !this.stack.top() && !isTypingTarget(e.target)) {
-      this.hud.mini.press(e.code === 'KeyJ' ? 'J' : 'K');
-      e.preventDefault(); e.stopPropagation();
-      return;
+    // a bout of work is being played: its keys (J, and K for seed and cover) are the game's; a key the game does not use
+    // keeps its page (K the realm), and with steel out the HUD runs no game, so J and K stay the weapon's (docs/WORK.md)
+    if ((e.code === 'KeyJ' || e.code === 'KeyK') && this.hud.mini.active && !this.stack.top() && !isTypingTarget(e.target) && !this.bound.game.player.drawn?.()) {
+      if (this.hud.mini.press(e.code === 'KeyJ' ? 'J' : 'K')) { e.preventDefault(); e.stopPropagation(); return; }
     }
     // with steel out, J and K strike and guard (the input layer's), not the ledger and the realm pages
     if ((e.code === KEYMAP.input.strike || e.code === KEYMAP.input.guard) && this.bound.game.player.drawn?.() && !this.stack.top()) return;

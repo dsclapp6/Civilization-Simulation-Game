@@ -414,6 +414,8 @@ function listBuilding(E: Econ, p: Person, id: number, out: ActionOption[]): void
     if (!bow) { o.enabled = false; o.reason = 'Needs a bow (the carpenter sells them)'; } else if (arrows < 6) { o.enabled = false; o.reason = 'Needs at least six arrows'; }
     else { const w = incapable(p); if (w) { o.enabled = false; o.reason = w; } }
     out.push(o);
+    // a round of shooting is one bout; an afternoon at the butts is its own choice (docs/WORK.md)
+    if (o.enabled) out.push({ ...o, id: 'arms.practise.keep', label: 'Keep shooting at the butts', open: true, bouts: undefined, priority: 2, preview: `Round after round until you stop (Q) or run short of arrows · ${o.preview ?? ''}` });
   }
 }
 

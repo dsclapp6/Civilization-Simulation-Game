@@ -20,7 +20,7 @@ import { applyForJob, employmentOf } from './jobs';
 import { capacityOf, carriedWeight } from './own';
 import { perkSum, perkTotal } from './perks';
 import {
-  BOUT_DAYS, boutDone, careOf, disabled, haveOf, holyDayBlock, incapable, option, payBout, round1, round2, secondsFor, speedOf, stoch,
+  BOUT_DAYS, boutDone, boutsLeft, careOf, disabled, haveOf, holyDayBlock, incapable, option, payBout, round1, round2, secondsFor, speedOf, stoch,
   toolFor, wearOut, type AccessMode, type ToolRef,
 } from './workkit';
 import { creditWeekWork } from './obligations';
@@ -206,6 +206,13 @@ function listStrip(E: Econ, p: Person, id: number, out: ActionOption[]): void {
   if (o) {
     if (holy) { o.enabled = false; o.reason = holy; } else if (weak) { o.enabled = false; o.reason = weak; }
     out.push(o);
+    // long work as its own explicit choice: task after task (plough, harrow, sow…) until stopped or nothing is left to do
+    if (o.enabled && t !== 'carry') {
+      out.push({
+        ...o, id: 'farm.keep', label: 'Keep working the strip', open: true, bouts: undefined, priority: 2,
+        preview: `Bout after bout, task after task, until you stop (Q) or the strip needs nothing more · now: ${o.label}`,
+      });
+    }
   }
   if (t === 'plough' || t === 'harrow' || t === 'sow') pushManure(E, p, st, base, out, holy ?? weak);
   // sowing offers one option per seed on hand
@@ -240,7 +247,14 @@ function stripWork(E: Econ, st: StripState, acc: Extract<Access, { ok: true }>):
   return { access: acc.mode, wage: acc.wage, employer: acc.employer };
 }
 
+/** A strip task as one job: every bout the task still needs (docs/WORK.md), labelled as the whole job. */
 function taskOption(E: Econ, p: Person, st: StripState, task: StripTask, acc: Extract<Access, { ok: true }>, base: { target: TargetRef; range: number }): ActionOption | null {
+  const o = taskBout(E, p, st, task, acc, base);
+  if (o && o.enabled && task !== 'carry') o.bouts = boutsLeft(TASK_BOUTS[task], peekExtra(E.farm, st.id)?.p ?? 0);
+  return o;
+}
+
+function taskBout(E: Econ, p: Person, st: StripState, task: StripTask, acc: Extract<Access, { ok: true }>, base: { target: TargetRef; range: number }): ActionOption | null {
   const ex = peekExtra(E.farm, st.id);
   const W = TASK_BOUTS[task === 'carry' ? 'carry' : task];
   const work = stripWork(E, st, acc);
@@ -372,6 +386,7 @@ function sowAlternatives(E: Econ, p: Person, st: StripState, acc: Extract<Access
       id: `farm.sow.${c}`, label: `Sow ${c}`, seconds: secondsFor(1, speed), anim: 'work_sow', mainHand: 'basket',
       preview: `Takes ${round1(need)} gallons of seed · Farming`, priority: 30, ...base,
       data: { act: 'strip', task: 'sow', strip: st.id, bouts: TASK_BOUTS.sow, fee: 0, mult: 1, yieldMult, method: 'broadcast', crop: c, ...work } as FarmData,
+      bouts: boutsLeft(TASK_BOUTS.sow, peekExtra(E.farm, st.id)?.p ?? 0),
     }));
   }
   return out;
@@ -389,6 +404,7 @@ function reapAlternative(E: Econ, p: Person, st: StripState, acc: Extract<Access
     id: 'farm.reap.scythe', label: `Mow ${st.crop} with the scythe`, seconds: secondsFor(1, speed), anim: 'work_scythe', mainHand: 'scythe',
     preview: 'Nearly twice as fast, but a little grain is shaken out · Farming', priority: 30, ...base,
     data: { act: 'strip', task: 'reap', strip: st.id, bouts: TASK_BOUTS.reap, fee: 0, mult: 1, yieldMult: yieldMult * 0.93, method: 'scythe', tool: scythe.key, ...work } as FarmData,
+    bouts: boutsLeft(TASK_BOUTS.reap, peekExtra(E.farm, st.id)?.p ?? 0),
   });
 }
 
@@ -780,7 +796,8 @@ function listGardenOptions(E: Econ, p: Person, hhId: number, buildingId: number,
   const bed = beds[idx];
   if (step === 'dig') {
     push(option({
-      id: 'garden.dig', label: 'Dig a garden bed', seconds: secondsFor(1, speed), anim: 'work_dig', mainHand: 'spade', priority: 40, ...base,
+      id: 'garden.dig', label: bed && (bed.p ?? 0) > 0 ? 'Finish digging the bed' : 'Dig a garden bed', seconds: secondsFor(1, speed), anim: 'work_dig', mainHand: 'spade', priority: 40, ...base,
+      bouts: boutsLeft(2, bed?.p ?? 0),
       preview: 'Two bouts of digging make a bed ready for sowing · Farming', data: { act: 'garden', step, bed: idx } as GardenData,
     }));
   } else if (step === 'sow') {
@@ -801,6 +818,7 @@ function listGardenOptions(E: Econ, p: Person, hhId: number, buildingId: number,
   } else {
     push(option({
       id: 'garden.harvest', label: `Gather the ${bed.c}`, seconds: secondsFor(1, speedOf(E, p, 'farming', 'agi', null)), anim: 'work_lift', mainHand: 'basket', priority: 45, ...base,
+      bouts: boutsLeft(2, bed.p ?? 0),
       preview: `About ${GARDEN_CROPS[bed.c]?.yield ?? 12} lb of vegetables · Farming`, data: { act: 'garden', step, bed: idx } as GardenData,
     }));
   }

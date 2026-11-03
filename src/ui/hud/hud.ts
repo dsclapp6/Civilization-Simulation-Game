@@ -10,7 +10,7 @@ import type { Speed } from '../../core/time';
 import { h, replace, textBinder, classBinder, attrBinder } from '../core/dom';
 import { clockText, dayPartLabel, formatMoney, minuteOfDay, pct } from '../core/format';
 import type { Feed, FeedLine, GainChip } from '../core/feed';
-import { actionView, dayFlags, healthLevel, needViews, promptView, secondsText, travelView, type NeedView } from '../core/hudModel';
+import { actionView, dayFlags, jobBarView, healthLevel, needViews, promptView, secondsText, travelView, type NeedView } from '../core/hudModel';
 import { icon, type IconName } from '../core/icons';
 import { DOCK_ENTRIES, type DockEntry, type PanelRequest } from '../core/requests';
 import { dockBadges, hasModule } from '../core/modules';
@@ -125,6 +125,9 @@ export class Hud {
   private readonly actionStepLabel = h('span.mu-hud-action-steplabel');
   private readonly actionStepPips = h('span.mu-hud-action-pips');
   private readonly setStepLabel = textBinder(this.actionStepLabel);
+  /** Work pass (docs/WORK.md): which bout of the job it is ("Bout 1 of 2 · Q stops"). */
+  private readonly actionBout = h('div.mu-hud-action-bout');
+  private readonly setActionBout = textBinder(this.actionBout);
   private stepsKey = '';
   private stepIndex = -1;
   private readonly promptEl = h('div.mu-hud-prompt.mu-hide');
@@ -327,7 +330,7 @@ export class Hud {
 
   private buildCenter(): void {
     this.actionStep.append(this.actionStepLabel, this.actionStepPips);
-    this.actionEl.append(h('div.mu-hud-action-top', null, this.actionLabel, this.actionSecs), this.actionBar.el, this.actionStep);
+    this.actionEl.append(h('div.mu-hud-action-top', null, this.actionLabel, this.actionSecs), this.actionBar.el, this.actionBout, this.actionStep);
     this.promptEl.append(
       h('div.mu-hud-prompt-main', null, this.promptKey, this.promptLabel, h('span.mu-hud-prompt-dot', null, '·'), this.promptTarget),
       this.promptReason,
@@ -480,7 +483,11 @@ export class Hud {
     const dt = this.lastFrame ? Math.min(0.1, Math.max(0, (now - this.lastFrame) / 1000)) : 0;
     this.lastFrame = now;
     // the game runs with the clock: paused, it waits
-    this.mini.update(hud?.action ?? null, sim.clock.paused ? 0 : dt);
+    // (work pass) a new bout is a new game; the bout's own kind of work picks the game, not the step's pose; with steel
+    // drawn J and K are the weapon's, and Settings can switch the games off
+    const run = hud?.action ? sim.actions.active(sim.state.run.playerId) : null;
+    const games = this.deps.host.settings().workGames !== false && !hud?.drawn;
+    this.mini.update(run && games ? { id: run.option.id, anim: run.option.anim ?? '', label: run.option.label, step: hud?.action?.step, serial: run.serial, seconds: run.option.seconds } : null, sim.clock.paused ? 0 : dt, sim.clock.paused);
     this.updateTravel(hud);
     this.updateCombat(game, hud);
     this.updateOverlays(clock, hud);
@@ -671,27 +678,34 @@ export class Hud {
   }
 
   private updateAction(game: GameServices, hud: ReturnType<GameServices['player']['hud']>): void {
-    const a = hud?.action ? actionView(hud.action) : null;
+    const pid = game.sim.state.run.playerId;
+    // one action is one job (docs/WORK.md): the bar shows the whole job — its label, the bout it is on, the time left for
+    // all of it at the current speed — and fills over the whole job
+    const job = hud?.action ? game.sim.actions.job(pid) : null;
+    const a = job ? jobBarView(job, game.sim.clock.speed) : hud?.action ? { ...actionView(hud.action), bout: '', open: false, bouts: 1 } : null;
     this.actionEl.classList.toggle('mu-hide', !a);
     if (!a) { this.stepsKey = ''; return; }
     this.setActionLabel(a.label);
-    this.setActionSecs(secondsText(a.secondsLeft));
+    this.setActionSecs(a.open ? `${secondsText(a.secondsLeft)} this bout` : secondsText(a.secondsLeft));
+    this.setActionBout(a.bout);
     this.actionBar.set(a.progress);
     // hands-on work: the bout is a few steps ("Heat the bar", "Draw it out", "Quench"), shares of its seconds
-    const act = game.sim.actions.active(game.sim.state.run.playerId);
+    const act = game.sim.actions.active(pid);
     const steps = act && act.option.steps && act.option.steps.length > 0 ? act.option.steps : null;
     const sv = steps && act ? stepAt(steps, act.progress) : null;
-    const key = steps && act ? `${act.option.provider}/${act.option.id}|${steps.length}` : '';
+    const key = `${steps && act ? `${act.option.provider}/${act.option.id}|${steps.length}` : ''}|${a.bouts}`;
     if (key !== this.stepsKey) {
       this.stepsKey = key;
       this.stepIndex = -1;
       for (const t of this.actionBar.el.querySelectorAll('b.mu-step-tick')) t.remove();
       this.actionStepPips.replaceChildren();
+      // the bar is the whole job: a tick between bouts; a one-bout job ticks between its steps
+      if (a.bouts > 1) for (let i = 1; i < a.bouts; i++) this.actionBar.el.appendChild(h('b.mu-step-tick', { style: { left: `${((i / a.bouts) * 100).toFixed(1)}%` } }));
       if (steps) {
         const ends = stepEnds(steps);
         steps.forEach((st, i) => {
           this.actionStepPips.appendChild(h('i', { tip: st.label }));
-          if (i < steps.length - 1) this.actionBar.el.appendChild(h('b.mu-step-tick', { style: { left: `${(ends[i] * 100).toFixed(1)}%` } }));
+          if (i < steps.length - 1 && a.bouts === 1) this.actionBar.el.appendChild(h('b.mu-step-tick', { style: { left: `${(ends[i] * 100).toFixed(1)}%` } }));
         });
       }
     }

@@ -135,9 +135,18 @@ export function incapable(p: Person): string | null {
 
 let optionCounter = 0;
 
+/**
+ * A work option. One action is one job (docs/WORK.md): a one-bout job unless the listing says how many bouts the job
+ * still needs (`bouts`, e.g. a bed is dug in two) or offers it as open-ended work (`open`, "Keep working the strip").
+ */
 export function option(o: Partial<ActionOption> & Pick<ActionOption, 'id' | 'label' | 'target' | 'seconds'>): ActionOption {
   optionCounter++;
-  return { provider: '', category: 'work', enabled: true, range: 8, priority: 20, repeat: true, ...o };
+  return { provider: '', category: 'work', enabled: true, range: 8, priority: 20, repeat: true, bouts: 1, ...o };
+}
+
+/** Bouts left of a task of `need` bouts that is `done` (0..1) done. */
+export function boutsLeft(need: number, done: number): number {
+  return Math.max(1, Math.ceil(need * (1 - Math.max(0, Math.min(1, done))) - 1e-3));
 }
 
 export function disabled(o: Partial<ActionOption> & Pick<ActionOption, 'id' | 'label' | 'target'>, reason: string): ActionOption {

@@ -9,6 +9,9 @@
 // Each stroke is scored 0..1 and given to the action runner (`sim.actions.perform`): good strokes finish the bout
 // sooner, and the bout's mean is the worker's hand — more experience, a better piece, a better-bound wound. Not
 // playing is no worse than before. The logic (`MiniLogic`) is pure, for the tests; `MiniGameView` draws it.
+// Work pass (docs/WORK.md): nothing is scored until the player's first key of the bout (ignoring the game costs nothing);
+// every bout starts a fresh game; while the game is paused keys are taken but play nothing; the card says what the hand
+// has given so far (the bout this much quicker); K is taken only by the game that uses it (seed and cover).
 import { h } from '../core/dom';
 import { keycap } from '../components/widgets';
 
@@ -19,7 +22,7 @@ export function miniKindOf(id: string, anim: string): MiniKind | null {
   if (!id || /^(recuperate|sleep|rest|wait|pray|talk|eat|read|wounds)/.test(id) || /\.(wait|hire_on)$/.test(id)) return null;
   if (/bow|crossbow/.test(anim) || id === 'arms.practise') return 'aim';
   if (id === 'tend' || id === 'bind' || anim === 'kneel' || anim === 'work_stir' || anim === 'work_spin') return 'steady';
-  if (/(^|\.)(sow|plant|seed)/.test(id)) return 'sow';
+  if (/(^|\.)(sow|plant|seed)/.test(id) || anim === 'work_sow') return 'sow';
   if (anim.startsWith('work_') || anim.startsWith('attack_')) return 'rhythm';
   return null;
 }
@@ -61,6 +64,8 @@ export class MiniLogic {
   last: Stroke | null = null;
   strokes = 0;
   total = 0;
+  /** The player has pressed a key in this bout: from then on a missed beat or a slipped hand counts. */
+  engaged = false;
   private readonly rnd: () => number;
 
   constructor(readonly kind: MiniKind, seed = 1, readonly speed = 1) {
@@ -71,6 +76,9 @@ export class MiniLogic {
 
   /** The mean of the strokes so far (−1 before the first). */
   get mean(): number { return this.strokes ? this.total / this.strokes : -1; }
+
+  /** Does this game use the key? (K is only the sower's second key: elsewhere it stays the realm page's.) */
+  uses(key: 'J' | 'K'): boolean { return key === 'J' || this.kind === 'sow'; }
 
   private stroke(score: number): Stroke {
     const s = Math.max(0, Math.min(1, score));
@@ -96,7 +104,8 @@ export class MiniLogic {
       }
       case 'sow': {
         this.asked += dt;
-        if (this.asked > 1.6 / this.speed) { out.push(this.stroke(0)); this.next(); }
+        // a seed not dropped in time is a miss only once the player is sowing (an ignored game costs nothing)
+        if (this.asked > 1.6 / this.speed) { if (this.engaged) out.push(this.stroke(0)); this.next(); }
         break;
       }
       case 'steady': {
@@ -104,6 +113,7 @@ export class MiniLogic {
         this.tick += dt;
         if (this.tick >= 0.5) {
           this.tick -= 0.5;
+          if (!this.engaged) break;
           const off = Math.abs(this.level - this.steadyBand());
           out.push(this.stroke(off <= 0.1 ? 1 : Math.max(0, 1 - (off - 0.1) * 4)));
         }
@@ -125,6 +135,7 @@ export class MiniLogic {
 
   /** A key goes down ('J' the stroke, 'K' the second key). */
   press(key: 'J' | 'K'): Stroke[] {
+    if (this.uses(key)) this.engaged = true;
     switch (this.kind) {
       case 'rhythm': {
         if (key !== 'J') return [];
@@ -166,8 +177,14 @@ export class MiniGameView {
   private readonly stage = h('div.mu-mini-stage');
   private readonly word = h('div.mu-mini-word');
   private readonly help = h('div.mu-mini-help');
+  /** What the hand has given in this bout: "Hand 78% · the bout 18% quicker". */
+  private readonly sum = h('div.mu-mini-sum');
   private logic: MiniLogic | null = null;
   private key = '';
+  private paused = false;
+  /** Share of the bout the strokes have saved (the runner's 4.5% of the bout per perfect stroke). */
+  private saved = 0;
+  private sumText = '';
   private wordTtl = 0;
   // parts of the stage (made once per kind)
   private needleEl: HTMLElement | null = null;
@@ -178,7 +195,7 @@ export class MiniGameView {
   private drawEl: HTMLElement | null = null;
 
   constructor(private readonly onStroke: (score: number) => void) {
-    this.el.append(this.title, this.stage, this.word, this.help);
+    this.el.append(this.title, this.stage, this.word, this.sum, this.help);
     // the card can be played with the mouse too: press and release on it
     this.el.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); this.press('J'); });
     this.el.addEventListener('pointerup', (e) => { e.preventDefault(); e.stopPropagation(); this.release('J'); });
@@ -187,38 +204,60 @@ export class MiniGameView {
   get active(): boolean { return this.logic !== null; }
   get mean(): number { return this.logic?.mean ?? -1; }
 
-  /** Each frame: the bout running (or null), the time step, the worker's skill level (0..20: a practised hand gets a faster game). */
-  update(action: { id?: string; anim?: string; label: string; step?: { label: string } } | null, dt: number, level = 0): void {
+  /** Does the running game use this key (K only for seed and cover)? */
+  uses(key: 'J' | 'K'): boolean { return !!this.logic && this.logic.uses(key); }
+
+  /**
+   * Each frame: the bout running (or null: no game), the real time step (0 while paused) and whether the game is paused.
+   * `serial` numbers the bout: a new bout is a new game (the kind comes from the bout's work, not the step's pose).
+   */
+  update(action: { id?: string; anim?: string; label: string; step?: { label: string }; serial?: number; seconds?: number } | null, dt: number, paused = false): void {
     const kind = action ? miniKindOf(action.id ?? '', action.anim ?? '') : null;
-    const key = action && kind ? `${action.id}|${kind}` : '';
+    const key = action && kind ? `${action.serial ?? action.id}|${action.id}|${kind}` : '';
+    this.paused = paused;
     if (key !== this.key) {
       this.key = key;
-      this.logic = kind ? new MiniLogic(kind, hashStr(key) + Math.floor(performance.now()), 0.85 + Math.min(20, level) * 0.02) : null;
+      this.logic = kind ? new MiniLogic(kind, hashStr(key) + Math.floor(performance.now()), 1) : null;
       this.el.classList.toggle('mu-hide', !kind);
+      this.saved = 0;
+      this.sumText = '';
+      this.sum.textContent = '';
       if (kind) this.build(kind);
     }
     const L = this.logic;
     if (!L) return;
+    this.el.classList.toggle('paused', paused);
     this.title.textContent = `${MINI_TITLE[L.kind]}${action?.step ? ` — ${action.step.label}` : ''}`;
     for (const s of L.update(Math.min(0.1, dt))) this.give(s);
     this.draw(L);
     if (this.wordTtl > 0) { this.wordTtl -= dt; if (this.wordTtl <= 0) this.word.textContent = ''; }
   }
 
+  /** A key goes down: true when the game took it (paused, it is taken and plays nothing: no strokes while time stands still). */
   press(key: 'J' | 'K'): boolean {
-    if (!this.logic) return false;
+    if (!this.logic || !this.logic.uses(key)) return false;
+    if (this.paused) return true;
     for (const s of this.logic.press(key)) this.give(s);
     return true;
   }
 
   release(key: 'J' | 'K'): boolean {
-    if (!this.logic) return false;
+    if (!this.logic || !this.logic.uses(key)) return false;
+    if (this.paused) { if (this.logic.kind === 'steady') this.logic.held = false; return true; }
     for (const s of this.logic.release(key)) this.give(s);
     return true;
   }
 
   private give(s: Stroke): void {
     this.onStroke(s.score);
+    // what the hand gives: the runner brings the bout's end 4.5% nearer per perfect stroke (capped near the end)
+    this.saved = Math.min(0.98, this.saved + 0.045 * s.score);
+    const L = this.logic;
+    if (L && L.strokes > 0) {
+      const m = L.mean;
+      const t = `Hand ${m >= 0.85 ? 'masterly' : m >= 0.6 ? 'good' : m >= 0.35 ? 'fair' : 'clumsy'} ${Math.round(m * 100)}% · bout ${Math.round(this.saved * 100)}% quicker`;
+      if (t !== this.sumText) { this.sumText = t; this.sum.textContent = t; this.sum.className = `mu-mini-sum ${m >= 0.6 ? 'good' : m >= 0.35 ? '' : 'miss'}`; }
+    }
     // the steady hand scores every half second: only a slip is worth a word
     if (this.logic?.kind === 'steady' && s.score >= 0.6) return;
     this.word.textContent = s.word;
@@ -233,7 +272,7 @@ export class MiniGameView {
       this.bandEl = h('div.mu-mini-band');
       this.needleEl = h('div.mu-mini-needle');
       this.stage.replaceChildren(h('div.mu-mini-track', null, this.bandEl, this.needleEl));
-      this.help.replaceChildren(kind === 'rhythm' ? keycap('J') : keycap('J'), kind === 'rhythm' ? ' strike as the needle crosses the gold' : ' hold to lift — keep it in the band');
+      this.help.replaceChildren(keycap('J'), kind === 'rhythm' ? ' strike as the needle crosses the gold' : ' hold to lift — keep it in the band');
     } else if (kind === 'sow') {
       this.keyEl = h('div.mu-mini-key');
       this.timerEl = h('div.mu-mini-timer');

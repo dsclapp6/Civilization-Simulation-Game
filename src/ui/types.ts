@@ -67,6 +67,8 @@ export interface Settings {
   alwaysLook?: boolean;
   /** Clarity pass: the corner minimap (N). Default true. */
   minimap?: boolean;
+  /** Work pass (docs/WORK.md): the hands-on mini-games over the action bar (J/K). Off, the work runs on its own as before. Default true. */
+  workGames?: boolean;
   /** Civilization pass (CIV §2): ask for confirmation before living as someone else (V, the action wheel, the lists). Default true. */
   askBeforeLiveAs?: boolean;
   /** The compact HUD (Settings → Interface): flat soft cards, narrower columns, a slim button bar. Default false. */
