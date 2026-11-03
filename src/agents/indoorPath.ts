@@ -5,7 +5,7 @@
 import type { InteriorPlan, PStair } from '../assets/interiors/types';
 
 const CELL = 0.2;
-const R = 0.22;
+const R = 0.17;
 
 interface Grid {
   x0: number; z0: number; nx: number; nz: number;
@@ -35,7 +35,7 @@ export function pathExists(plan: InteriorPlan, from: { x: number; y: number; z: 
   if (!m) { m = new Map(); reach.set(plan, m); }
   const key = `${from.x.toFixed(1)},${from.y.toFixed(1)},${from.z.toFixed(1)}>${to.x.toFixed(1)},${to.y.toFixed(1)},${to.z.toFixed(1)}`;
   let v = m.get(key);
-  if (v === undefined) { v = searchPath(plan, from, to) !== null; m.set(key, v); }
+  if (v === undefined) { v = findPath(plan, from, to) !== null; m.set(key, v); }
   return v;
 }
 
@@ -67,8 +67,8 @@ function gridOf(plan: InteriorPlan): Grid {
   });
   const cell = (l: number, x: number, z: number): number => {
     const ci = Math.floor((x - x0) / CELL), cj = Math.floor((z - z0) / CELL);
-    let best = -1, bd = 0.6;
-    for (let j = cj - 3; j <= cj + 3; j++) for (let i = ci - 3; i <= ci + 3; i++) {
+    let best = -1, bd = 1.0;
+    for (let j = cj - 5; j <= cj + 5; j++) for (let i = ci - 5; i <= ci + 5; i++) {
       if (i < 0 || j < 0 || i >= nx || j >= nz || !free[l]?.[j * nx + i]) continue;
       const d = Math.hypot(x0 + (i + 0.5) * CELL - x, z0 + (j + 0.5) * CELL - z);
       if (d < bd) { bd = d; best = j * nx + i; }
@@ -95,19 +95,19 @@ function levelOf(plan: InteriorPlan, y: number): number {
 
 /** A way from one point of a plan to another (local, with heights), as waypoints after the start; [] when there is none. */
 export function planPath(plan: InteriorPlan, from: { x: number; y: number; z: number }, to: { x: number; y: number; z: number }): PathPt[] {
-  return searchPath(plan, from, to) ?? [{ ...to }];
+  return findPath(plan, from, to) ?? [{ ...to }];
 }
 
 /** The path, or null when the grid has no way (or either end is off it). */
-function searchPath(plan: InteriorPlan, from: { x: number; y: number; z: number }, to: { x: number; y: number; z: number }): PathPt[] | null {
+export function findPath(plan: InteriorPlan, from: { x: number; y: number; z: number }, to: { x: number; y: number; z: number }): PathPt[] | null {
   const g = gridOf(plan);
   const { nx, nz, x0, z0 } = g;
   const N = nx * nz;
   const L = plan.levels.length;
-  const near = (l: number, x: number, z: number): number => {
-    const ci = Math.floor((x - x0) / CELL), cj = Math.floor((z - z0) / CELL);
-    let best = -1, bd = 0.9;
-    for (let j = cj - 5; j <= cj + 5; j++) for (let i = ci - 5; i <= ci + 5; i++) {
+  const near = (l: number, x: number, z: number, r = 0.9): number => {
+    const ci = Math.floor((x - x0) / CELL), cj = Math.floor((z - z0) / CELL), k = Math.ceil(r / CELL);
+    let best = -1, bd = r;
+    for (let j = cj - k; j <= cj + k; j++) for (let i = ci - k; i <= ci + k; i++) {
       if (i < 0 || j < 0 || i >= nx || j >= nz || !g.free[l]?.[j * nx + i]) continue;
       const d = Math.hypot(x0 + (i + 0.5) * CELL - x, z0 + (j + 0.5) * CELL - z);
       if (d < bd) { bd = d; best = j * nx + i; }
@@ -115,7 +115,8 @@ function searchPath(plan: InteriorPlan, from: { x: number; y: number; z: number 
     return best;
   };
   const la = levelOf(plan, from.y), lb = levelOf(plan, to.y);
-  const a = near(la, from.x, from.z), b = near(lb, to.x, to.z);
+  // (a bed is solid and is got into from its side or its foot: its place is reached from within a bed's length)
+  const a = near(la, from.x, from.z, 1.5), b = near(lb, to.x, to.z, 1.5);
   if (a < 0 || b < 0) return null;
   const prev = new Int32Array(N * L).fill(-1);
   const start = la * N + a, goal = lb * N + b;
@@ -136,6 +137,11 @@ function searchPath(plan: InteriorPlan, from: { x: number; y: number; z: number 
     if (i < nx - 1) tryN(l, c + 1);
     if (j > 0) tryN(l, c - nx);
     if (j < nz - 1) tryN(l, c + nx);
+    // diagonals too: at the head of a stair the free cells may meet at a corner only (the body of 0.22 m still passes)
+    if (i > 0 && j > 0) tryN(l, c - nx - 1);
+    if (i < nx - 1 && j > 0) tryN(l, c - nx + 1);
+    if (i > 0 && j < nz - 1) tryN(l, c + nx - 1);
+    if (i < nx - 1 && j < nz - 1) tryN(l, c + nx + 1);
     for (const lk of g.links) {
       if (lk.la === l && lk.a === c) tryN(lk.lb, lk.b);
       else if (lk.lb === l && lk.b === c) tryN(lk.la, lk.a);

@@ -44,6 +44,27 @@ describe('interior plans', () => {
     }
   });
 
+  it('the room over a gatehouse passage is reached by a door from the tower stair, and is furnished (the winch room)', () => {
+    for (const c of CULTURES) for (const lv of [1, 2]) {
+      const p = interiorPlan('gatehouse', lv, c, 0)!;
+      const winch = p.rooms.find((r) => r.name === 'the winch room');
+      expect(winch, `${c} gatehouse${lv} rooms: ${p.rooms.map((r) => r.name).join()}`).toBeTruthy();
+      // a door at the winch room's level joins it to the tower, and the winch's wheel stands in it
+      expect(p.doors.some((d) => !d.outer && d.level === winch!.level), `${c} gatehouse${lv} door`).toBe(true);
+      expect(p.furniture.some((f) => f.kind === 'gearwheel'), `${c} gatehouse${lv} winch`).toBe(true);
+      expect(p.spots.some((s) => s.room === p.rooms.indexOf(winch!) && s.use === 'work'), `${c} gatehouse${lv} spot`).toBe(true);
+      expect(validatePlan(p).problems).toEqual([]);
+    }
+  });
+
+  it('the tall planks towers of the norse abbey church and cathedral are reached to the top', () => {
+    for (const [kind, lv] of [['abbey_church', 2], ['cathedral', 1], ['cathedral', 2]] as Array<[BuildingKind, number]>) {
+      const p = interiorPlan(kind, lv, 'norse', 0)!;
+      expect(p.levels.length, kind).toBeGreaterThan(4);
+      expect(validatePlan(p).problems, `${kind}${lv}`).toEqual([]);
+    }
+  });
+
   it('a one-storey cottage has no stair; a townhouse goes up', () => {
     expect(interiorPlan('cottage', 1, 'anglo', 0)!.stairs.length).toBe(0);
     expect(interiorPlan('townhouse', 2, 'anglo', 0)!.stairs.length).toBeGreaterThan(1);

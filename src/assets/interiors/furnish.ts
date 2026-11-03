@@ -87,8 +87,8 @@ class Fill {
     const cell = (x: number, z: number, rr = 0.45): number => {
       // the nearest free cell within rr
       let best = -1, bd = rr;
-      const ci = Math.floor((x - gx0) / C), cj = Math.floor((z - gz0) / C);
-      for (let j = cj - 5; j <= cj + 5; j++) for (let i = ci - 5; i <= ci + 5; i++) {
+      const ci = Math.floor((x - gx0) / C), cj = Math.floor((z - gz0) / C), rc = Math.max(5, Math.ceil(rr / C));
+      for (let j = cj - rc; j <= cj + rc; j++) for (let i = ci - rc; i <= ci + rc; i++) {
         if (i < 0 || j < 0 || i >= nx || j >= nz || !free[j * nx + i]) continue;
         const d = Math.hypot(gx0 + (i + 0.5) * C - x, gz0 + (j + 0.5) * C - z);
         if (d < bd) { bd = d; best = j * nx + i; }
@@ -106,7 +106,8 @@ class Fill {
       if (st.from === lvl) { const e = stairEnd(st, 0, 0.5); want((e.x0 + e.x1) / 2, (e.z0 + e.z1) / 2, 0.3); }
       if (st.to === lvl) { const e = stairEnd(st, 1, 0.5); want((e.x0 + e.x1) / 2, (e.z0 + e.z1) / 2, 0.3); }
     }
-    for (const sp of plan.spots) if (sp.room === this.room.id) want(sp.x, sp.z);
+    // (a bed is solid: one gets into it from its side or its foot, so its place is reached from within a bed's length, as validate.ts reads it)
+    for (const sp of plan.spots) if (sp.room === this.room.id) want(sp.x, sp.z, sp.use === 'sleep' ? 1.4 : 0.45);
     if (missing) return false;
     if (need.length < 2) return true;
     const seen = new Uint8Array(nx * nz);
@@ -775,8 +776,20 @@ function fillRoom(pc: PlanCtx, f: Fill, type: string): void {
       f.light(f.r.x1 - 0.6, y + 1.2, f.r.z1 - 0.6, 'candle', 2.5);
       break;
     }
-    case 'guard': case 'winch': case 'dorm': {
-      if (type === 'winch') { f.put('gearwheel', f.cx, f.cz, H, 0.5, 2.0, 1.6); f.spot(f.cx + 0.9, f.cz, -H, 'work'); }
+    case 'winch': {
+      // the room over the gate passage, where the portcullis rises into: its winch (a drum and a wheel against a wall, the chains
+      // going down through the floor), the winder's place beside it, a chest of spare chain and a brazier
+      for (const [side, dx, dz, yaw] of [['nx', 0.9, 0, -H], ['px', -0.9, 0, H], ['nz', 0, 0.9, Math.PI], ['pz', 0, -0.9, 0]] as Array<[Side, number, number, number]>) {
+        const g = f.wall(side, 0.5, 'gearwheel', 1.5, 0.5, 1.6);
+        if (!g) continue;
+        f.spot(g.x + dx, g.z + dz, yaw, 'work');
+        break;
+      }
+      f.wall(f.w >= f.d ? 'pz' : 'px', 0.5, 'chest', 0.9, 0.5, 0.55);
+      f.light(f.cx, y + 1.4, f.cz, 'brazier', 4);
+      break;
+    }
+    case 'guard': case 'dorm': {
       const nBeds = type === 'dorm' ? Math.max(2, Math.floor(f.w / 1.25)) : f.w * f.d > 12 ? 2 : 1;
       f.row('nz', type === 'dorm' ? 'cot' : 'bunk', nBeds, 0.85, 2.0, type === 'dorm' ? 0.5 : 1.5, 'sleep', 0.5, 0.08, 0.92);
       if (type === 'dorm' && f.d > 5) f.row('pz', 'cot', nBeds, 0.85, 2.0, 0.5, 'sleep', 0.5, 0.08, 0.92);

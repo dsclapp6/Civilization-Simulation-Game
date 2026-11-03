@@ -135,7 +135,7 @@ export function validatePlan(plan: InteriorPlan): Reach {
   for (const sp of plan.spots) {
     const l = plan.levels.findIndex((lv) => Math.abs(lv.y - sp.y) < 0.5);
     if (l < 0) continue;
-    if (!reached(l, sp.x, sp.z, 0.9)) problems.push(`a place to ${sp.use} in room ${sp.room} is not reached`);
+    if (!reached(l, sp.x, sp.z, sp.use === 'sleep' ? 1.4 : 0.9)) problems.push(`a place to ${sp.use} in room ${sp.room} is not reached`);
   }
   const ascii = (l: number): string => {
     const rows: string[] = [];

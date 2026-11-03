@@ -11,7 +11,7 @@ import type { InteriorPlan, PFurn, PSpot, SpotUse } from '../assets/interiors/ty
 import type { Loaded } from './nav/interiors';
 import type { Intent } from './schedule';
 import type { Zone } from './zone';
-import { flightY, pathExists, planPath, type PathPt } from './indoorPath';
+import { findPath, flightY, pathExists, type PathPt } from './indoorPath';
 
 const MAX_ROOMS = 3;
 const MAX_PEOPLE = 14;
@@ -189,9 +189,11 @@ export class Indoors {
     const s = plan.spots[spot];
     o.spot = spot;
     o.seat = undefined;
-    o.path = planPath(plan, { x: o.x, y: o.y, z: o.z }, { x: s.x, y: s.y, z: s.z });
-    o.pi = 0; o.sx = o.x; o.sz = o.z;
-    o.anim = 'walk';
+    const way = findPath(plan, { x: o.x, y: o.y, z: o.z }, { x: s.x, y: s.y, z: s.z });
+    o.pi = 0;
+    if (way) { o.path = way; o.sx = o.x; o.sz = o.z; o.anim = 'walk'; return; }
+    // no way from where they stand (a part of the building that meets this one nowhere inside): they are there
+    o.path = []; o.x = s.x; o.y = s.y; o.z = s.z; this.settle(o, plan);
   }
 
   /** Someone the zone just let in at the door (behaviour.ts ghost): they walk to their place from it. */
@@ -209,14 +211,13 @@ export class Indoors {
     const uses = usesFor(activity, q.career);
     const head = this.isHead(room, q);
     let best = -1, bestScore = Infinity;
-    const door = plan.main >= 0 ? plan.doors[plan.main] : null;
-    const from = door ? { x: door.x - door.nx * (door.t + 0.3), y: door.y, z: door.z - door.nz * (door.t + 0.3) } : null;
+    const entrances = entrancesOf(plan);
     plan.spots.forEach((s, i) => {
       if (taken.has(`${room.id}:${i}`)) return;
       const k = uses.indexOf(s.use);
       if (k < 0) return;
       // nobody is put on a floor they could not walk to from the door (up the stairs and ladders)
-      if (from && s.y > from.y + 0.5 && !pathExists(plan, from, s)) return;
+      if (entrances.length && !entrances.some((e) => pathExists(plan, e, s))) return;
       // the head of the house takes the best place; children and servants never do
       const score = k * 10 + (s.head ? (head ? -5 : 4) : 0) + hash01(q.id, i) * 2;
       if (score < bestScore) { bestScore = score; best = i; }
@@ -252,9 +253,11 @@ export class Indoors {
     const door = plan.main >= 0 ? plan.doors[plan.main] : null;
     if (!atPlace && door) {
       const from = { x: door.x - door.nx * (door.t + 0.3), y: door.y, z: door.z - door.nz * (door.t + 0.3) };
-      o.path = planPath(plan, from, target);
+      o.path = findPath(plan, from, target) ?? [];
       o.x = from.x; o.y = from.y; o.z = from.z; o.sx = o.x; o.sz = o.z;
       o.yaw = Math.atan2(-door.nx, -door.nz);
+      // no way from this door to the place (it is reached from another): they are simply there
+      if (!o.path.length) { o.x = target.x; o.y = target.y; o.z = target.z; o.sx = o.x; o.sz = o.z; o.yaw = s ? s.yaw : o.yaw; }
     } else {
       o.x = target.x; o.y = target.y; o.z = target.z;
       o.yaw = s ? s.yaw : hash01(q.id, 3) * 6.28;
@@ -277,7 +280,7 @@ export class Indoors {
     // asleep, or nobody near enough to see: just gone
     if (!door || o.anim === 'sleep' || !room.inside && !this.zone.player) { this.occ.delete(o.person); return; }
     o.leaving = true;
-    o.path = planPath(plan, { x: o.x, y: o.y, z: o.z }, { x: door.x - door.nx * (door.t * 0.5), y: door.y, z: door.z - door.nz * (door.t * 0.5) });
+    o.path = findPath(plan, { x: o.x, y: o.y, z: o.z }, { x: door.x - door.nx * (door.t * 0.5), y: door.y, z: door.z - door.nz * (door.t * 0.5) }) ?? [];
     o.pi = 0; o.sx = o.x; o.sz = o.z;
     o.spot = -1;
     o.seat = undefined;
@@ -372,6 +375,17 @@ export class Indoors {
   }
 
   clear(): void { this.occ.clear(); this.rooms = []; }
+}
+
+const entranceCache = new WeakMap<InteriorPlan, Array<{ x: number; y: number; z: number }>>();
+/** Where one stands just inside each of a building's outer doors (a cloister has more than one way in, to ranges that meet nowhere inside). */
+function entrancesOf(plan: InteriorPlan): Array<{ x: number; y: number; z: number }> {
+  let e = entranceCache.get(plan);
+  if (!e) {
+    e = plan.doors.filter((d) => d.outer && d.kind !== 'small').map((d) => ({ x: d.x - d.nx * (d.t + 0.3), y: d.y, z: d.z - d.nz * (d.t + 0.3) }));
+    entranceCache.set(plan, e);
+  }
+  return e;
 }
 
 function nearestFurn(plan: InteriorPlan, s: PSpot): PFurn | null {
