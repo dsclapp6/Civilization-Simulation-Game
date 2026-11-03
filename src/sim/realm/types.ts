@@ -236,8 +236,23 @@ export interface RealmApi {
   discharge?(person: PersonId, man: PersonId): Result;
   /** The three fields of a settlement: this year's role, the crop planned (if any) and the crops that may be chosen. */
   cropPlanView?(settlement: number): CropPlanLine[];
+  /** Men of the person's own House, oath or lands who could be knighted (not only those raised through `recruit`), best first. */
+  dubCandidates?(person: PersonId, max?: number): DubCandidate[];
   /** The treasury's year in lines (rents and dues, sales, wages, research, troops, purchases…): what `view().income/spending` are made of. */
   accounts?(person: PersonId): AccountLine[];
+}
+
+/** A man who could be given the accolade, and why he is put forward. */
+export interface DubCandidate {
+  person: PersonId;
+  /** "in your pay", "sworn to you", "of your House", "of Dromore". */
+  why: string;
+  /** "a squire", "a sergeant", "a man of the place". */
+  career: string;
+  age: number;
+  /** Melee skill level. */
+  melee: number;
+  settlement: number;
 }
 
 /** A man raised by the realm: where he serves, as what and at what wage. */

@@ -6,7 +6,7 @@ import type { NewsItem, RecruitOption, ResearchOption, ResearchProject, RivalVie
 import type { Deposit } from '../../../src/world/types';
 import {
   BATCH, BRANCHES, DAYS_PER_YEAR, NEWS_ICON, PAGES, RESERVE_DAYS, TOAST_THREAT, YIELD_GOODS, amountText, boxOf, cropOptions, cropName, dubbable, fieldRoleWords, fitBox,
-  groupResearch, growthWords, isPage, kindName, kmText, lackHints, newsFor, newsToastKey, newsToastWorthy, orderFormProblem, orderWords, polyPath, projectWords,
+  groupResearch, growthWords, isPage, kindName, kmText, knightsOf, lackHints, newsFor, newsToastKey, newsToastWorthy, orderFormProblem, orderWords, polyPath, projectWords,
   prosperityWord, recruitMax, recruitPreview, researchCostLines, roleMay, roleWords, sortRivals, splitBooks, stanceTone, startChoice, storeRows, threatWords, tradeProfile,
   troopCounts, worksShareWords, yearWords,
 } from '../../../src/ui/ruler/rulerModel';
@@ -295,5 +295,22 @@ describe('against the real realm', () => {
     }
     const rivals = realm.rivals(ruler);
     for (const r of sortRivals(rivals)) { expect(threatWords(r.threat).word.length).toBeGreaterThan(3); expect(kmText(r.distance).length).toBeGreaterThan(1); }
+  });
+});
+
+describe('your knights', () => {
+  const person = (id: number, o: Record<string, unknown> = {}): never => ({ id, career: 'knight', death: null, flags: {}, health: { hp: 1 }, house: 1, ...o } as never);
+  const st = (people: unknown[], titles: Record<number, Array<{ id: number; liege: number }>> = {}) => ({
+    persons: { get: (id: number) => (people as Array<{ id: number }>).find((p) => p.id === id) as never, values: () => people as never },
+    titlesHeldBy: (id: number) => new Set(titles[id] ?? []) as never,
+  });
+
+  it('lists the knights of the House, his vassals and the men in his pay, the paid first, the hurt after', () => {
+    const people = [person(1, { career: 'lord' }), person(2), person(3, { house: 2 }), person(4, { house: 3 }), person(5, { house: 3, health: { hp: 0.3 } }), person(6, { house: 3, flags: { captive: true } }), person(7, { house: 3, career: 'squire' })];
+    const rows = knightsOf(st(people, { 1: [{ id: 10, liege: 99 }], 3: [{ id: 11, liege: 10 }] }) as never, 1, [4]);
+    expect(rows.map((r) => [r.id, r.why, r.hurt])).toEqual([[4, 'in your pay', false], [3, 'your vassal', false], [2, 'of your House', false]]);
+    const hurt = knightsOf(st(people) as never, 1, [5], (id) => id === 2);
+    expect(hurt.find((r) => r.id === 5)).toMatchObject({ why: 'in your pay', hurt: true });
+    expect(hurt.find((r) => r.id === 2)!.hurt).toBe(true);
   });
 });

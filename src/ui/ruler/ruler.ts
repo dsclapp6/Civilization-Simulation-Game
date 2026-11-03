@@ -25,6 +25,7 @@ import { buildResearch } from './pages/research';
 import { buildRivals } from './pages/rivals';
 import { buildTrade } from './pages/trade';
 import '../builder/lands.css';
+import './liegeBar';
 import './newsToast';
 import './ruler.css';
 

@@ -16,7 +16,7 @@ import { addNews, bump } from './news';
 import { Pool } from './pool';
 import { mayCommand, poolOf, scopeOf, type RealmScope } from './rule';
 import type { Rlm, TroopRec } from './store';
-import type { RealmTroop, RecruitOption, Result } from './types';
+import type { DubCandidate, RealmTroop, RecruitOption, Result } from './types';
 
 const fail = (reason: string): Result => ({ ok: false, reason });
 
@@ -489,6 +489,46 @@ export function dub(R: Rlm, personId: PersonId, candidateId: PersonId): Result {
 // ---------------------------------------------------------------------------------------------
 // The men raised, and their keep
 // ---------------------------------------------------------------------------------------------
+
+/** Words for the careers a candidate may be found in. */
+const CAREER_WORDS: Readonly<Record<string, string>> = {
+  squire: 'a squire', sergeant: 'a sergeant', man_at_arms: 'a man-at-arms', archer: 'an archer', soldier: 'a soldier', crossbowman: 'a crossbowman',
+  steward: 'a steward', bailiff: 'a bailiff', reeve: 'a reeve', mercenary: 'a sell-sword',
+};
+const CAREER_WEIGHT: Readonly<Record<string, number>> = { squire: 40, sergeant: 30, man_at_arms: 24, soldier: 12, archer: 10, crossbowman: 10, mercenary: 6 };
+
+/**
+ * Every man of the ruler's own who could be knighted, whether or not he was ever raised through `recruit`: the men of the House, those
+ * sworn to it, and the men of the places held directly, grown, whole, not of the Church and not knights yet. Best first (squires and
+ * sergeants, then the skilled in arms), at most `max`. Whether the treasury can pay the vigil is for `dub` to say.
+ */
+export function dubCandidates(R: Rlm, personId: PersonId, max = 30): DubCandidate[] {
+  const sc = scopeOf(R, personId);
+  const dubber = R.alive(personId);
+  if (!sc || !dubber || !mayCommand(R, personId, 'realm')) return [];
+  if (dubber.career !== 'knight' && dubber.rankTier < 5) return [];
+  const house = sc.house;
+  const sworn = new Set(R.state.houses.get(house)?.sworn ?? []);
+  const direct = new Set(sc.direct);
+  const paid = new Set(R.data.troops.filter((t) => t.t === sc.treasury?.id).map((t) => t.p));
+  const out: Array<DubCandidate & { score: number }> = [];
+  for (const p of R.state.persons.values()) {
+    if (p.death || p.sex !== 'm' || p.id === personId || p.id === R.playerId) continue;
+    if (p.estate === 'clergy' || p.career === 'knight' || p.career === 'lord') continue;
+    if (p.flags.captive || p.flags.outlaw || p.flags.exile) continue;
+    const age = ageYears(p, R.day);
+    if (age < 18 || age > 55 || p.health.hp < 0.6 || p.traits.includes('lame')) continue;
+    const why = paid.has(p.id) ? 'in your pay' : sworn.has(p.id) ? 'sworn to you' : p.house === house || p.house === dubber.house ? 'of your House' : direct.has(p.settlement) ? `of ${R.placeName(p.settlement)}` : '';
+    if (!why) continue;
+    // a man with no arms at all and no standing is not put forward
+    const melee = skillLevel(p.skills.melee);
+    const weight = CAREER_WEIGHT[p.career] ?? 0;
+    if (weight === 0 && melee < 3 && p.rankTier < 3) continue;
+    out.push({ person: p.id, why, career: CAREER_WORDS[p.career] ?? 'a man of the place', age: Math.floor(age), melee, score: weight + melee * 3 + (paid.has(p.id) ? 5 : 0) + (p.estate === 'noble' ? 8 : 0), settlement: p.settlement });
+  }
+  out.sort((a, b) => b.score - a.score || a.person - b.person);
+  return out.slice(0, max).map(({ score: _s, ...c }) => c);
+}
 
 export function troopsOf(R: Rlm, personId: PersonId, settlement?: number): RealmTroop[] {
   const sc = scopeOf(R, personId);

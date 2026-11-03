@@ -8,6 +8,7 @@ import type {
   AccountLine, CropPlanLine, NewsItem, NewsKind, RealmRole, RealmTroop, RecruitOption, ResearchOption, ResearchProject, RivalView, TradeOrder,
 } from '../../sim/realm/types';
 import { formatMoney } from '../../sim/money';
+import type { Person, PersonId } from '../../sim/state';
 import type { Deposit, ResourceKind } from '../../world/types';
 import type { IconName } from '../core/icons';
 
@@ -232,6 +233,32 @@ export function troopCounts(troops: readonly Pick<RealmTroop, 'kind' | 'wage'>[]
     by.set(t.kind, e);
   }
   return [...by.entries()].map(([kind, v]) => ({ kind, ...v })).sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind));
+}
+
+/** A knight who fights for a ruler: of his House, his vassal, or in his pay. */
+export interface KnightRow { id: PersonId; why: 'in your pay' | 'your vassal' | 'of your House'; hurt: boolean }
+
+/**
+ * The knights the ruler may take the place of (`fightAs`): men of the House, those holding a title under one of his, and those on
+ * his roll. `wounded` says whether a man carries wounds; a man under half his health is hurt as well. Vassals and the paid first.
+ */
+export function knightsOf(
+  st: { persons: { get(id: PersonId): Person | undefined; values(): Iterable<Person> }; titlesHeldBy(id: PersonId): ReadonlySet<{ id: number; liege: number }> },
+  me: PersonId, paid: readonly PersonId[], wounded: (id: PersonId) => boolean = () => false,
+): KnightRow[] {
+  const mine = new Set([...st.titlesHeldBy(me)].map((t) => t.id));
+  const pay = new Set(paid);
+  const house = st.persons.get(me)?.house ?? 0;
+  const out: KnightRow[] = [];
+  for (const p of st.persons.values()) {
+    if (p.death || p.career !== 'knight' || p.id === me || p.flags.captive) continue;
+    const vassal = [...st.titlesHeldBy(p.id)].some((t) => mine.has(t.liege));
+    const why = pay.has(p.id) ? 'in your pay' : vassal ? 'your vassal' : house && p.house === house ? 'of your House' : null;
+    if (!why) continue;
+    out.push({ id: p.id, why, hurt: p.health.hp < 0.5 || wounded(p.id) });
+  }
+  const rank = { 'in your pay': 0, 'your vassal': 1, 'of your House': 2 } as const;
+  return out.sort((a, b) => rank[a.why] - rank[b.why] || Number(a.hurt) - Number(b.hurt) || a.id - b.id);
 }
 
 /** May this man be knighted? Not already a knight, and the module's own checks do the rest. */
