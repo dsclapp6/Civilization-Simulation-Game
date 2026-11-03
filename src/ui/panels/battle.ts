@@ -13,7 +13,7 @@ import type { PanelCtx, UiPanel } from '../app/panel';
 import { h } from '../core/dom';
 import type { HudPartCtx } from '../core/extHud';
 import { icon, type IconName } from '../core/icons';
-import { BannerLayer, GroupBar, battleBus, ensureBattleStyle, isEnemy, readBattle } from '../hud/battle';
+import { BannerLayer, CompanyCard, GroupBar, battleBus, ensureBattleStyle, isEnemy, readBattle } from '../hud/battle';
 import { panelOf } from './base';
 import { registerPanel } from './extRegistry';
 
@@ -89,7 +89,8 @@ export function tacticalPanel(ctx: PanelCtx): UiPanel {
     b.addEventListener('click', () => give(o));
     orders.append(b);
   }
-  const root = h('div.mu-tac', null, field, banners.el, head, leave, bar.el, orders);
+  const cards = new CompanyCard(hudCtx);
+  const root = h('div.mu-tac', null, field, banners.el, head, leave, bar.el, orders, cards.el);
 
   function pick(key: GroupKey): void {
     battleBus.selected = selectionAfter(battleBus.selected, key, own);
@@ -225,6 +226,7 @@ export function tacticalPanel(ctx: PanelCtx): UiPanel {
         r?.setOrderMarks?.(marks());
       }
       banners.update(own, enemy, battleBus.selected);
+      cards.update(now);
       if (verifyAt > 0 && performance.now() / 1000 >= verifyAt) { verifyAt = 0; verifyOverview(); }
       // pan with the keys
       if (r?.pan && held.size > 0) {
