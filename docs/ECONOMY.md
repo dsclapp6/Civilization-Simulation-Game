@@ -27,6 +27,12 @@ player's work, because a bout (12 s) is now a sixth of a game hour (`BOUT_HOURS`
   thirty bouts are a labourer's day and a hard day's work of sixty pays about twice that.
 * Strip tasks take as many bouts as before (`TASK_BOUTS`: plough 7, harrow 3, sow 4, weed 5, reap 7, bind 5 — a strip is reaped in a
   minute and a half of play, which is now a twentieth of a day). Felling a tree stays three bouts.
+* **One action is one job** (work pass, docs/WORK.md): an option says how many bouts its job still needs (`ActionOption.bouts`:
+  a strip task the bouts left of `TASK_BOUTS`, a garden bed two to dig and two to gather, a craft batch or a dig one) and the
+  runner starts the next bout only while the job lasts, then stops (`jobDone` on the last `completed` event). Work that goes
+  on is its own choice with `open: true` (*Keep working the strip*, *Keep at it: quarry stone*, *Keep shooting at the butts*).
+  `workkit.option()` makes a one-bout job unless told otherwise. The fresh result of the player's work lies where it was done
+  for a day (`notes.made`, `noteMade()`), and the household's garden beds are drawn before its door (`propfeed.ts`).
 * Experience and stat training per bout are scaled back with the day (`XP_SCALE` 0.083, `TRAIN_SCALE` 0.167, in `sim/skills.ts`:
   0.25 and 0.5 times 600 / `DAY_SECONDS`), tool wear by `WEAR_SCALE` (about a ninth), and the hunger and tiredness a bout costs
   likewise (`needs.ts drainWork`, scaled by the same factor), so a day of work earns, wears and tires as it did. A youth who
