@@ -11,7 +11,7 @@
 import type { GameRenderer } from '../render/types';
 import { EMPTY_INPUT, KEYMAP, type InputState } from '../player/types';
 import type { Speed } from '../core/time';
-import { InputMapper, MouseModes, escapeFor, mouseLook, type LookState, type MouseCtx, type MouseOut } from './inputLogic';
+import { InputMapper, MouseModes, WheelGesture, effectiveButton, escapeFor, mouseLook, scrollsByItself, wheelPixels, type LookState, type MouseCtx, type MouseOut } from './inputLogic';
 
 export interface InputHost {
   /** A panel or menu has the focus: movement and the camera must not react. */
@@ -20,8 +20,6 @@ export interface InputHost {
   inGame(): boolean;
   renderer(): GameRenderer | null;
   settings(): { mouseSensitivity: number; invertY: boolean };
-  /** The player is inside a building (its room has its own view): the mouse is not taken there. */
-  inRoom?(): boolean;
   /** The wheel settled on a view (0 = first person, else the third-person distance): remember it. */
   rememberView?(distance: number): void;
   /** The journey is under way: the camera follows the party, the player cannot walk. */
@@ -84,7 +82,11 @@ export class InputLayer {
     on<MouseEvent>(window, 'mousemove', (e) => this.onMouseMove(e));
     on<Event>(document.documentElement, 'mouseleave', () => { this.ptr.onView = false; });
     on<WheelEvent>(surface, 'wheel', (e) => this.onWheel(e), { passive: false });
-    on<Event>(surface, 'contextmenu', (e) => e.preventDefault());
+    // nothing in the game scrolls the page, zooms it by pinch or swipes it back (a touchpad's two-finger gestures): a wheel that
+    // is not over a list that scrolls by itself is swallowed
+    on<WheelEvent>(document, 'wheel', (e) => this.guardWheel(e), { passive: false });
+    // a two-finger click, a ctrl-click or the context key never opens the browser's menu over the game (text fields keep theirs)
+    on<Event>(document, 'contextmenu', (e) => this.guardContextMenu(e));
     on<Event>(document, 'pointerlockchange', () => this.onLockChange());
   }
 
@@ -137,8 +139,9 @@ export class InputLayer {
     }
     const mode = r ? r.getCameraMode() : 'follow';
     const mapView = mode === 'map' || this.host.travelling();
-    // the pointer is ours only in the street view: not on the map or the road, in a room, in builder mode or a cut-scene (mode 'free')
-    this.keepLock(mapView || mode !== 'follow' || !!this.host.inRoom?.());
+    // the pointer is ours only in the street view (inside a building too, the mouse keeps looking): not on the map or the road,
+    // in builder mode or a cut-scene (mode 'free')
+    this.keepLock(mapView || mode !== 'follow');
     if (this.viewDirty && performance.now() - this.viewDirty > 700 && r && mode === 'follow') {
       this.viewDirty = 0;
       const d = Math.round(r.getViewDistance() * 10) / 10;
@@ -292,17 +295,27 @@ export class InputLayer {
     if (this.host.captured() || !this.host.inGame()) return;
     const r = this.host.renderer();
     if (r && r.getCameraMode() === 'map') {
-      if (e.button === 0 && !this.host.travelling()) this.mapDragging = true;
+      if (this.buttonOf(e) === 0 && !this.host.travelling()) this.mapDragging = true;
       return;
     }
-    const out = this.modes.down(e.button, e.clientX, e.clientY, this.ctx(true), performance.now() / 1000);
+    const out = this.modes.down(this.buttonOf(e), e.clientX, e.clientY, this.ctx(true), performance.now() / 1000);
     this.apply(out);
   }
 
+  /** The button as the game sees it: a ctrl-click on a Mac is the right button, and a ctrl-click that began as one ends as one. */
+  private ctrlButton = false;
+  private buttonOf(e: MouseEvent, up = false): number {
+    if (up) { const was = this.ctrlButton; if (e.button === 0) this.ctrlButton = false; return was && e.button === 0 ? 2 : e.button; }
+    const b = effectiveButton(e.button, e.ctrlKey, isMac());
+    this.ctrlButton = b === 2 && e.button === 0;
+    return b;
+  }
+
   private onMouseUp(e: MouseEvent): void {
-    if (e.button === 0) this.mapDragging = false;
+    const button = this.buttonOf(e, true);
+    if (button === 0) this.mapDragging = false;
     if (this.host.captured() || !this.host.inGame()) { this.modes.clear(); return; }
-    const out = this.modes.up(e.button, e.clientX, e.clientY, this.ctx(this.onView(e)), performance.now() / 1000);
+    const out = this.modes.up(button, e.clientX, e.clientY, this.ctx(this.onView(e)), performance.now() / 1000);
     this.apply(out);
   }
 
@@ -341,10 +354,30 @@ export class InputLayer {
     const r = this.host.renderer();
     if (!r) return;
     e.preventDefault();
-    // first person ⇄ over the shoulder ⇄ farther out ⇄ the map (the rig steps between them); a trackpad sends many small events
-    const px = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY;
-    r.zoom(Math.max(-3, Math.min(3, px / 70)));
-    this.viewDirty = performance.now();
+    // first person <-> over the shoulder <-> farther out <-> the map (the rig steps between them). A mouse notch is a step; a
+    // touchpad swipe (dozens of small pixel events, then inertia) zooms by its length and takes one step between views
+    const steps = this.wheel.feed(wheelPixels(e.deltaY, e.deltaMode, e.ctrlKey), e.deltaMode, e.timeStamp, r.getViewDistance(), r.getCameraMode() === 'follow');
+    if (steps !== 0) { r.zoom(steps); this.viewDirty = performance.now(); }
+  }
+  private readonly wheel = new WheelGesture();
+
+  private guardWheel(e: WheelEvent): void {
+    if (e.defaultPrevented || !this.host.inGame()) return;
+    const t = e.target as Element | null;
+    if (!e.ctrlKey) {
+      for (let n: Element | null = t; n && n !== document.documentElement; n = n.parentElement) {
+        const o = getComputedStyle(n).overflowY;
+        if (scrollsByItself(o, n.scrollHeight, n.clientHeight)) return;
+      }
+    }
+    e.preventDefault();
+  }
+
+  private guardContextMenu(e: Event): void {
+    if (!this.host.inGame()) return;
+    const t = e.target as HTMLElement | null;
+    if (t && (TYPING.has(t.tagName) || t.isContentEditable)) return;
+    e.preventDefault();
   }
 
   private onLockChange(): void {
@@ -359,6 +392,11 @@ export class InputLayer {
       if (!byUs) this.lockLostAt = performance.now();
     }
   }
+}
+
+function isMac(): boolean {
+  const n = navigator as Navigator & { userAgentData?: { platform?: string } };
+  return /mac|iphone|ipad/i.test(n.userAgentData?.platform ?? n.platform ?? '');
 }
 
 /** A key press or click happened lately enough for the browser to allow taking the pointer. */

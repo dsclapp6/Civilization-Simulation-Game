@@ -272,3 +272,81 @@ export function escapeFor(s: { locked: boolean; msSinceLockLost: number }): 'lea
   if (s.msSinceLockLost < 250) return 'ignore';
   return 'ui';
 }
+
+// ---------------------------------------------------------------------------------------------------
+// The wheel and the touchpad. A mouse wheel sends notches (line mode, or pixel deltas of ~100 each); a touchpad sends dozens of
+// small pixel deltas for one two-finger swipe, then more of them as inertia. A notch is a step; a swipe is ONE gesture: it zooms
+// smoothly (per pixel, not per event) and takes at most one step between the views (first person <-> shoulder, the farthest
+// boom <-> the map), then ignores the rest of the swipe and its inertia.
+// ---------------------------------------------------------------------------------------------------
+
+/** The rig's limits (render/camera/cameraRig.ts FOLLOW_MIN / FOLLOW_MAX): where the boom runs out into the next view. */
+export const BOOM_MIN = 2.4;
+export const BOOM_MAX = 140;
+/** A swipe that begins at or inside this boom (the shoulder view is 3.4 m) takes the step into first person. */
+export const NEAR_START = 4.2;
+/** Events closer together than this (ms) are one gesture (inertia events come every 8-16 ms). */
+export const GESTURE_GAP_MS = 200;
+/** A pixel delta this big at the start of a gesture is a mouse notch; touchpads start small and grow. */
+export const NOTCH_PX = 50;
+/** Pixels of swipe in one direction before a swipe takes a step between views. */
+export const STAGE_PX = 26;
+/** One zoom step (a factor of 1.15 of the boom) per this many pixels of swipe. */
+export const PAD_PX_PER_STEP = 110;
+
+/** Wheel event deltas to pixels (line mode ~16 px a line, page mode a screenful) and pinch (ctrl) scaled up. */
+export function wheelPixels(deltaY: number, deltaMode: number, ctrlKey = false): number {
+  const px = deltaMode === 1 ? deltaY * 16 : deltaMode === 2 ? deltaY * 400 : deltaY;
+  return ctrlKey ? px * 6 : px;
+}
+
+export class WheelGesture {
+  private last = -1e9;
+  private pad = false;
+  private acc = 0;
+  private swallow = false;
+  private startDist = 0;
+
+  /**
+   * One wheel event -> how many zoom steps to give the camera (positive out, negative in). `viewDist` is the camera's view
+   * (0 = first person, else the boom length), `follow` whether the street camera is the one on show.
+   */
+  feed(px: number, deltaMode: number, now: number, viewDist: number, follow: boolean): number {
+    const gap = now - this.last;
+    this.last = now;
+    if (gap > GESTURE_GAP_MS || (this.pad && this.acc * px < 0 && Math.abs(this.acc) > STAGE_PX && Math.abs(px) > 6)) {
+      this.pad = deltaMode === 0 && Math.abs(px) < NOTCH_PX;
+      this.acc = 0; this.swallow = false; this.startDist = viewDist;
+    }
+    if (!this.pad) return Math.max(-3, Math.min(3, px / 70));
+    this.acc += px;
+    if (this.swallow) return 0;
+    if (!follow) return Math.max(-2, Math.min(2, px / PAD_PX_PER_STEP));
+    if (viewDist <= 0) {
+      // first person: only a real swipe outward steps to the shoulder, once
+      if (this.acc >= STAGE_PX) { this.swallow = true; return 1; }
+      return 0;
+    }
+    // a swipe that began at the near boom (the shoulder view) goes in to first person at once; one that began at the far end goes out to the map
+    if (this.startDist <= NEAR_START && -this.acc >= STAGE_PX) { this.swallow = true; return Math.min(-0.5, Math.log((BOOM_MIN * 0.9) / viewDist) / Math.log(1.15)); }
+    if (this.startDist >= BOOM_MAX * 0.7 && this.acc >= STAGE_PX) { this.swallow = true; return Math.max(0.5, Math.log((BOOM_MAX * 1.05) / viewDist) / Math.log(1.15)); }
+    let steps = Math.max(-2, Math.min(2, px / PAD_PX_PER_STEP));
+    const f = Math.pow(1.15, steps);
+    // anywhere between, the boom stops at its ends: the swipe does not run through the stages
+    if (viewDist * f < BOOM_MIN) steps = viewDist > BOOM_MIN * 1.01 ? Math.log((BOOM_MIN * 1.01) / viewDist) / Math.log(1.15) : 0;
+    else if (viewDist * f > BOOM_MAX) steps = viewDist < BOOM_MAX * 0.99 ? Math.log((BOOM_MAX * 0.99) / viewDist) / Math.log(1.15) : 0;
+    return steps;
+  }
+
+  reset(): void { this.last = -1e9; this.acc = 0; this.swallow = false; }
+}
+
+/** On a Mac a ctrl-click is the secondary click (the browser sends button 0 with ctrlKey, then contextmenu): the right button. */
+export function effectiveButton(button: number, ctrlKey: boolean, mac: boolean): number {
+  return mac && ctrlKey && button === 0 ? 2 : button;
+}
+
+/** Does this element scroll by itself (a list in a panel)? Then the wheel over it belongs to it, not to the game or the page. */
+export function scrollsByItself(overflowY: string, scrollHeight: number, clientHeight: number): boolean {
+  return (overflowY === 'auto' || overflowY === 'scroll') && scrollHeight > clientHeight + 1;
+}

@@ -4,6 +4,7 @@
 // slerp.
 import * as THREE from 'three';
 import { clamp, lerp, smoothstep } from '../../core/math';
+import { SEE_THROUGH } from '../../assets/core/seeThrough';
 import type { CameraMode, OverviewView } from '../types';
 
 export interface CameraEnv {
@@ -552,6 +553,10 @@ export class CameraRig {
       cam.quaternion.copy(live.quat);
       cam.fov = live.fov;
     }
+    // third person: the walls and roofs between the camera and the player thin out (assets/core/seeThrough.ts)
+    SEE_THROUGH.on.value = this.mode === 'follow' && !this.ov && this.fpK < 0.5 && this.targetValid && this.distance < 45 ? 1 : 0;
+    SEE_THROUGH.eye.value.copy(cam.position);
+    SEE_THROUGH.focus.value.set(f.x, f.y + 1.1, f.z);
     // clip planes scale with altitude for depth precision
     const above = Math.max(0.5, this.heightAboveGround());
     cam.near = this.mode === 'follow' && this.fpK > 0.5 ? FP_NEAR : clamp(above * 0.012, 0.15, 60);

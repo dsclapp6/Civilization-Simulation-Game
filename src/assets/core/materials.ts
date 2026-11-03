@@ -1,6 +1,7 @@
 // Shared materials and the shader patches that make them react to the environment
 // (snow, seasonal grass tint, wind, night glow). One instance of each material is shared
 // by every asset; per-frame state lives in SharedUniforms, pushed by AssetLibrary.setEnvironment.
+import { GLSL_SEE, GLSL_SEE_PARS, seeUniforms } from './seeThrough';
 import * as THREE from 'three';
 
 export interface SharedUniforms {
@@ -110,6 +111,7 @@ function patchBuildingShader(shader: THREE.WebGLProgramParametersWithUniforms, u
   shader.uniforms.uCutFocus = BUILDING_CUT.focus;
   shader.uniforms.uCutHoleA = BUILDING_CUT.holeA;
   shader.uniforms.uCutHoleB = BUILDING_CUT.holeB;
+  seeUniforms(shader); // J2: third-person see-through (assets/core/seeThrough.ts)
   shader.uniforms.uILight = INDOOR_LIGHTS.pos;
   shader.uniforms.uILightCol = INDOOR_LIGHTS.col;
   shader.uniforms.uGrassTint = u.uGrassTint;
@@ -137,11 +139,13 @@ uniform vec2 uBFade;
 varying vec2 vSurf;
 varying vec3 vWPos;
 ${GLSL_CUT_PARS}
+${GLSL_SEE_PARS}
 ${GLSL_INDOOR}
 ${GLSL_NOISE}
 ${GLSL_SNOW}`)
     .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
 ${GLSL_CUT}
+${GLSL_SEE}
 if (uBFade.y > 0.5) {
   // screen-door LOD cross-fade: the incoming model takes the pattern cells below the progress,
   // the outgoing one keeps the rest, so the pair always covers the building exactly once

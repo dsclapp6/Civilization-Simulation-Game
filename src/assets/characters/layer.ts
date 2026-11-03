@@ -302,10 +302,12 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
       ctx.saddle = _saddle;
       ctx.stand = _stand;
     }
+    a.fp = item.id === fpId;
     evaluatePose(a, item, ctx);
     poseToBones(a, item, ctx, crowd.bones, crowd.boneOffset(st.slot, 0));
-    // first person (src/render/firstPerson.ts): the camera is inside the head, so the head, eyes and mouth are collapsed to nothing; the body and arms stay
-    if (item.id === fpId) { const o = crowd.boneOffset(st.slot, 0); for (const b of [HB.head, HB.eyes, HB.mouth, HB.ring]) setZero(crowd.bones, o + b * 12); }
+    // first person (src/render/firstPerson.ts): the camera is inside the head, so the head, eyes and mouth are left out of the view
+    // (crowd.setHidden, in the camera's pass only: the player's shadow keeps its head); the body and arms stay, and so does the ring's absence
+    if (item.id === fpId) { setZero(crowd.bones, crowd.boneOffset(st.slot, 0) + HB.ring * 12); crowd.setHidden(st.slot, HB.head, HB.eyes, HB.mouth); }
     crowd.setParams(st.slot, item.highlight, a.flash);
     if (horse) {
       // reins to the rider's hands, stirrups to the feet
@@ -487,7 +489,7 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
   }
 
   /** Hide this person's head (the camera is in it); -1 shows everyone whole. */
-  function setFirstPerson(id: number): void { fpId = id; }
+  function setFirstPerson(id: number): void { fpId = id; if (id < 0) crowd.setHidden(-1); }
   /** World position of a person's eyes this frame (from the last animation), false when not drawn. */
   function eyePos(id: number, out: THREE.Vector3): boolean {
     const st = states.get(id);

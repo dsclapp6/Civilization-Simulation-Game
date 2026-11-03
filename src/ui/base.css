@@ -1,4 +1,4 @@
-html, body { margin: 0; height: 100%; overflow: hidden; background: #10141c; color: #ece3cf;
+html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; background: #10141c; color: #ece3cf;
   font-family: Georgia, 'Times New Roman', serif; }
 #app, #viewport { position: fixed; inset: 0; }
 #viewport canvas { display: block; width: 100%; height: 100%; }

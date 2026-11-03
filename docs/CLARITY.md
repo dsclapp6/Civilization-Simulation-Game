@@ -109,6 +109,28 @@ under the tracked steps, dangers first, each opening the page where it is decide
 - **Esc** never depends on pointer lock: it leaves mouse-look, else closes the top panel, else opens the menu.
 - Setting: "Always use mouse-look" for players who prefer the old scheme.
 
+### First person, the camera and the touchpad (wave J2)
+
+- **Your arms.** In first person the arms are posed to be seen, at rest too: upper arms forward, elbows bent, hands ahead and low at the
+  bottom corners of the view, a tool or weapon held in them (`fpArms` in `assets/characters/human/animator.ts`, eased in and out
+  with `fpW`; the stride still swings them, a third as much). Clips that already work the arms (strike, draw, work, aim, carry a load) keep
+  their own poses, which are in view. Riding keeps the reins.
+- **Your shadow has a head.** The head, eyes and mouth are left out of the camera's pass only (`crowdHide` in the crowd shader, a
+  per-fragment discard); the depth and distance materials that cast shadows do not discard, so the shadow on the ground is whole.
+- **Third person: walls fade, the player never hides.** `assets/core/seeThrough.ts` holds the eye (camera) and the focus (the player's
+  chest), written by the rig each frame; every building shader drops fragments by the same 4x4 ordered dither as the LOD cross-fade,
+  more the nearer they are to the line of sight (none beyond 1.7 m of it, all within 0.5 m), between the camera and 0.6 m in front of the
+  player. Off in first person, beyond 45 m, on the map, and inside a cut-away building (which cuts its own walls).
+- **The touchpad.** A swipe is one gesture (`WheelGesture` in `app/inputLogic.ts`): its many small pixel events zoom by their length
+  (one boom step per 110 px) and take at most one step between views (first person, the shoulder, far out, the map) once 26 px have
+  gone one way, then the rest of the swipe and its inertia is ignored; events less than 200 ms apart belong to one gesture. A mouse notch
+  (line mode or ~100 px) is still a step each. Pinch (ctrl + wheel) zooms and never zooms the page. The mouse look is linear in pixels
+  (0.0022 rad per px at 1x, so 700 px across the pad is about 90 degrees), so many small `movementX/Y` equal one big one.
+- **No menu, no scroll.** The browser's context menu is blocked over the whole game (text fields keep theirs); a two-finger click arrives as a
+  right button and a Mac ctrl-click is read as one; a wheel anywhere that is not a list that scrolls by itself is swallowed, so the page
+  never scrolls or swipes back.
+- **Inside buildings the mouse keeps looking** (the old `inRoom` host hook is gone; interiors are walked into without a cut).
+
 ## 6. First minutes
 
 Birth reveal → a short scene-setting card ("Spring. You wake in your father's cottage in Dromore; the barley
