@@ -90,7 +90,8 @@ export function pickHome(state: GameState, rng: Rng, settlementId: number, prefe
   let homes = 0;
   let shared: BuildingState | null = null;
   for (const b of all) {
-    if (BUILDINGS[b.kind].cat !== 'home') continue;
+    // a home still going up is nobody's to move into (J1: it used to be held in its builder's name to keep families out)
+    if (BUILDINGS[b.kind].cat !== 'home' || b.construction < 1) continue;
     homes++;
     if (!b.household) {
       if (prefer && prefer.includes(b.kind)) return b;

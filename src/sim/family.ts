@@ -62,7 +62,8 @@ export class HomeAllocator {
 
   /** Picks a building in the settlement; `prefer` kinds first, then empty homes, then shared homes. */
   take(settlementId: number, prefer?: readonly BuildingKind[]): BuildingState | null {
-    const all = this.state.buildingsAt.get(settlementId);
+    // buildings still going up are nobody's to move into
+    const all = this.state.buildingsAt.get(settlementId)?.filter((b) => b.construction >= 1);
     if (!all || all.length === 0) return null;
     if (prefer) {
       for (const kind of prefer) {
@@ -89,7 +90,7 @@ export class HomeAllocator {
   freeHomes(settlementId: number): number {
     const all = this.state.buildingsAt.get(settlementId) ?? [];
     let n = 0;
-    for (const b of all) if (BUILDINGS[b.kind].cat === 'home' && !this.used.has(b.id)) n++;
+    for (const b of all) if (BUILDINGS[b.kind].cat === 'home' && b.construction >= 1 && !this.used.has(b.id)) n++;
     return n;
   }
 

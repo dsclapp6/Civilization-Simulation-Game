@@ -345,7 +345,7 @@ export function fleeToTown(E: Econ, p: Person, town: number): Result {
   const lodging = E.state.addHousehold({ id: E.state.households.alloc(), kind: 'family', head: 0, members: [], home: -1, settlement: s.id, purse: 0, stores: {} });
   E.state.joinHousehold(p, lodging);
   E.state.setHead(lodging, p);
-  const home = (E.state.buildingsAt.get(s.id) ?? []).find((b) => (b.kind === 'hovel' || b.kind === 'cottage') && !b.household);
+  const home = (E.state.buildingsAt.get(s.id) ?? []).find((b) => (b.kind === 'hovel' || b.kind === 'cottage') && !b.household && b.construction >= 1); // (J1: a home still going up is not empty)
   if (home) E.state.setHome(lodging, home.id);
   E.save.fug[String(p.id)] = { since: Math.floor(E.day), town: s.id, from };
   E.touchSave();

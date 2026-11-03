@@ -238,7 +238,6 @@ function planSite(C: Construction, ctx: PlanCtx, rec: SiteRec): void {
     payer = lordHouseholdAt(C, rec.settlement);
     if (!payer) { closeSite(C, rec, 'cancelled'); return; }
     rec.household = payer.id;
-    if (rec.work === 'build' && b.construction < 1 && rulesOf(rec.kind).cat === 'home') { b.household = payer.id; C.state.touchBuilding(b); }
     C.touch();
   }
   rec.crew = [];
@@ -550,7 +549,6 @@ function finish(C: Construction, rec: SiteRec): void {
       b.construction = 1;
       b.owner = rec.house;
       const cat = rulesOf(rec.kind).cat;
-      if (cat === 'home') { b.household = 0; b.occupied = false; }
       if (rec.occupant === 'builder' && payer) {
         if (cat === 'home') moveIn(C, payer, b);
         else {

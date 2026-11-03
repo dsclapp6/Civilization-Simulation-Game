@@ -194,3 +194,27 @@ describe('the herd follows the household\'s stock', () => {
     expect(mine().filter((a) => a.kind === 'sheep').length).toBeGreaterThanOrEqual(0);
   }, 90000);
 });
+
+describe('across a zone change', () => {
+  it('a led animal comes with its leader when the player is set down far away (a move, the Go-to skip), and is still on the halter', () => {
+    const { sim, zone, world } = rig;
+    const a = mine().find((q) => q.kind !== 'chicken' && !q.leader)!;
+    body.x = a.x + 2; body.z = a.z;
+    expect(sim.actions.start(me.id, options(a.id).find((x) => x.id === 'lead.start')!).ok).toBe(true);
+    // somewhere else entirely: another place, a few kilometres off
+    const other = world.settlements.filter((s) => Math.hypot(s.x - body.x, s.z - body.z) > 1500).sort((p, q) => Math.hypot(p.x - body.x, p.z - body.z) - Math.hypot(q.x - body.x, q.z - body.z))[0];
+    expect(other).toBeTruthy();
+    body.x = other.x + other.radius + 6; body.z = other.z; body.yaw = 1;
+    rig.focus.x = body.x; rig.focus.z = body.z;
+    zone.resync();
+    run(sim, 1);
+    const led = zone.ledBy!(me.id);
+    expect(led.map((q) => q.id)).toContain(a.id);
+    const b = led.find((q) => q.id === a.id)!;
+    expect(Math.hypot(b.x - body.x, b.z - body.z)).toBeLessThan(6);
+    // and it follows on from there
+    walkBody(1, 0, 20);
+    expect(Math.hypot(b.x - body.x, b.z - body.z)).toBeLessThan(6);
+    zone.fauna.unleadAll(me.id);
+  }, 60000);
+});

@@ -213,7 +213,8 @@ export class AnimalSystem {
   }
 
   clear(): void {
-    const keep = this.items.filter((a) => (a.summoned || a.claimed) && !a.dead);
+    // (an animal on a halter goes with its leader across a zone change: bringLed puts it by them)
+    const keep = this.items.filter((a) => (a.summoned || a.claimed || a.leader) && !a.dead);
     this.items.length = 0;
     this.byId.clear();
     for (const a of keep) { this.items.push(a); this.byId.set(a.id, a); }
@@ -260,6 +261,35 @@ export class AnimalSystem {
   resync(): void {
     this.clear();
     this.gather(true);
+    this.bringLed();
+  }
+
+  /**
+   * The leader was set down somewhere else (a zone change after a move of the player, the Go-to skip): the animals on the halter are
+   * brought up behind them, in their places in the line, and not left where they were to slip the rope.
+   */
+  bringLed(): number {
+    const z = this.zone;
+    let n = 0;
+    const out = { x: 0, z: 0 };
+    for (const a of this.items) {
+      if (!a.leader || a.dead) continue;
+      // (the player's body as drawn: its motion record is brought up to date in the step, after a set-down)
+      const pl = z.player && z.player.person === a.leader ? z.player.draw : null;
+      const lead = pl ? { x: pl.x, z: pl.z, yaw: pl.yaw } : z.motionOf(a.leader);
+      if (!lead || Math.hypot(lead.x - a.x, lead.z - a.z) < 10) continue;
+      const gap = 1.9 + 1.3 * a.leadSlot;
+      const side = a.leadSlot % 2 === 0 ? -0.55 : 0.55;
+      const fx = Math.sin(lead.yaw), fz = Math.cos(lead.yaw);
+      const tx = lead.x - fx * gap + fz * side, tz = lead.z - fz * gap - fx * side;
+      if (z.nav.nearestWalkable(tx, tz, 6, out)) { a.x = out.x; a.z = out.z; } else { a.x = tx; a.z = tz; }
+      a.y = z.nav.groundY(a.x, a.z);
+      a.dx = a.dz = a.dy = 0;
+      a.leadFar = 0; a.leadWait = 0;
+      a.yaw = lead.yaw;
+      n++;
+    }
+    return n;
   }
 
   hostileNear(radius: number): boolean {
@@ -304,7 +334,7 @@ export class AnimalSystem {
       const a = items[i];
       if (a.dead) { this.byId.delete(a.id); continue; }
       const dxf = a.x - fx, dzf = a.z - fz;
-      if (!a.summoned && !a.claimed && dxf * dxf + dzf * dzf > LEAVE_RADIUS * LEAVE_RADIUS) { this.byId.delete(a.id); a.dead = true; continue; }
+      if (!a.summoned && !a.claimed && !a.leader && dxf * dxf + dzf * dzf > LEAVE_RADIUS * LEAVE_RADIUS) { this.byId.delete(a.id); a.dead = true; continue; }
       if (!a.claimed) this.update(a, dt, night);
       if (a.dead) { this.byId.delete(a.id); continue; }
       items[w++] = a;
