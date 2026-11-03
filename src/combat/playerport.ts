@@ -8,12 +8,15 @@ import { SIM_DT } from '../core/time';
 import type { Person } from '../sim/state';
 import type { PlayerAim, PlayerCombatFrame, PlayerCombatPort, PlayerCombatPose } from '../sim/wave3';
 import { gap, type Arena } from './arena';
-import { S, normAngle, type Fighter } from './fighter';
+import { S, normAngle, type Fighter, type Line } from './fighter';
+import { feint } from './ai';
 import { ballisticPitch } from './projectiles';
 import { absorbRate } from './aiHelpers';
 import { COUCH_MIN_SPEED, couchable, type AttackKey } from './weapons';
 
 const HEAVY_HOLD = 0.26;
+/** The line the movement keys choose: forward high, back low, else the middle. */
+const lineOf = (forward: number): Line => (forward > 0.5 ? 'high' : forward < -0.5 ? 'low' : 'mid');
 const QUEUE_SECONDS = 0.4;
 const ENGAGED_LINGER = 5;
 
@@ -25,6 +28,9 @@ function kitSignature(p: Person): string {
 }
 
 export class PlayerPort implements PlayerCombatPort {
+  /** The movement keys as last read (they pick the line of a blow and of the guard). */
+  private stickF = 0;
+  private stickR = 0;
   private attackHeld = false;
   private blockHeld = false;
   private attackPending = false;
@@ -45,7 +51,9 @@ export class PlayerPort implements PlayerCombatPort {
 
   constructor(private readonly arena: Arena) {}
 
-  input(attack: boolean, block: boolean, aim: PlayerAim | null, cameraYaw: number): void {
+  input(attack: boolean, block: boolean, aim: PlayerAim | null, cameraYaw: number, stick?: { forward: number; right: number }): void {
+    this.stickF = stick?.forward ?? 0;
+    this.stickR = stick?.right ?? 0;
     if (attack && !this.attackHeld) { this.attackPending = true; this.pendingFor = 0; this.holdT = 0; this.gearT = 99; }
     if (!attack && this.attackHeld) this.releaseEdge = true;
     // pressing guard, aim or attack looks at the kit at once: a bow picked up a moment ago must not leave the port in melee Block
@@ -166,15 +174,26 @@ export class PlayerPort implements PlayerCombatPort {
         if (pf.st === S.Recover) a.toIdle(pf);
         const key = this.pick(pf, heavy);
         this.aimMelee(pf);
-        if (a.startAttack(pf, key)) { this.attackPending = false; this.engagedT = ENGAGED_LINGER; pf.cooldown = 0.05; }
+        // the line of the blow: W with it comes over the top, S with it cuts at the legs, A or D with it thrusts
+        const line: Line = key === 'overhead' ? 'high' : this.stickF < -0.5 && key === 'slash' ? 'low' : 'mid';
+        if (a.startAttack(pf, key, false, line)) { this.attackPending = false; this.engagedT = ENGAGED_LINGER; pf.cooldown = 0.05; }
       }
     }
+    // a feint: the guard key in the first part of one's own swing checks the blow and draws the foe's guard
+    if (this.blockEdge && pf.st === S.Windup && pf.t < pf.dur * 0.7) {
+      feint(a, pf, pf.target);
+      a.env.notify('info', pf.target && pf.target.openT > 0 ? 'Your feint draws his guard: strike now!' : 'You check the blow.', pf.personId);
+      return;
+    }
+    // the guard's line follows the movement keys while it is up
+    if (pf.st === S.Block) pf.guardLine = lineOf(this.stickF);
     // guard
     if (this.blockHeld && (pf.st === S.Idle || (pf.st === S.Recover && pf.t > pf.dur * 0.6))) {
       if (pf.st === S.Recover) a.toIdle(pf);
       if (pf.stamina > 4 && w(pf).guard > 0.05 || pf.gear.shield) {
         pf.set(S.Block, 'block', 99);
         pf.guardT = 0;
+        pf.guardLine = lineOf(this.stickF);
         this.engagedT = ENGAGED_LINGER;
       }
     } else if (!this.blockHeld && pf.st === S.Block) a.toIdle(pf);
@@ -182,9 +201,12 @@ export class PlayerPort implements PlayerCombatPort {
   }
 
   private pick(pf: Fighter, heavy: boolean): AttackKey {
-    if (heavy) return 'overhead';
+    if (heavy || this.stickF > 0.5) return 'overhead';
     const w = pf.gear.weapon;
     const t = pf.target;
+    // A or D with the blow: the point
+    if (Math.abs(this.stickR) > 0.5 && this.stickF >= -0.5) return 'thrust';
+    if (this.stickF < -0.5) return 'slash';
     if (w.id === 'spear' || w.id === 'lance') return 'thrust';
     if (t && absorbRate(t) >= 12 && w.attacks.thrust.ap > w.attacks.slash.ap + 0.1) return 'thrust';
     return 'slash';
@@ -322,8 +344,25 @@ export class PlayerPort implements PlayerCombatPort {
 
   // ---- the answer ----
 
+  /** A foe winding up a blow at the player, in reach (the line it comes on can be read). */
+  private threatOf(pf: Fighter): Fighter | null {
+    const fight = this.arena.fights.get(pf.fight);
+    if (!fight) return null;
+    for (let si = 0; si < fight.sides.length; si++) {
+      if (si === pf.side) continue;
+      for (const e of fight.sides[si].members) if (e.st === S.Windup && e.target === pf && gap(pf, e) <= e.gear.weapon.reach + 0.8) return e;
+    }
+    return null;
+  }
+
   private finish(pf: Fighter, out: PlayerCombatPose, fr: PlayerCombatFrame, inFight: boolean): void {
     this.engagedT = Math.max(0, this.engagedT - fr.dt);
+    // the duel's reading for the HUD: our guard, the line of the blow coming, the riposte window, breath
+    out.guardLine = pf.st === S.Block ? pf.guardLine : null;
+    const foe = this.threatOf(pf);
+    out.threat = foe ? foe.line : null;
+    out.riposte = pf.riposteT;
+    out.breath = clamp(pf.stamina / Math.max(1, pf.staminaMax), 0, 1);
     const hostile = inFight && pf.fight !== 0;
     const engaged = hostile || this.engagedT > 0 || this.aimingNow || pf.st !== S.Idle;
     out.engaged = engaged;

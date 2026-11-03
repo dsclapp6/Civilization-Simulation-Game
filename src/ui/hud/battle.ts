@@ -133,6 +133,20 @@ const CSS = `
 .mu-bt-storm .gbar { width: 70px; height: 7px; border-radius: 4px; background: rgba(246, 234, 208, 0.25); overflow: hidden; }
 .mu-bt-storm .gbar i { display: block; height: 100%; background: #b0541c; }
 .mu-bt-storm .gbar.broken i { background: #6a3b1c; }
+.mu-duel { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); width: 300px; padding: 6px 10px 8px; pointer-events: none;
+  background: rgba(20, 13, 6, 0.72); color: #f6e7be; border-radius: 3px; font-size: 12.5px; text-align: center; }
+.mu-duel.mu-hide { display: none; }
+.mu-duel-lines { display: flex; gap: 6px; justify-content: center; margin-bottom: 4px; }
+.mu-duel-line { flex: 1; padding: 2px 0; border: 1px solid rgba(246, 231, 190, 0.35); border-radius: 2px; opacity: 0.75; }
+.mu-duel-line.guard { background: rgba(91, 154, 62, 0.55); border-color: #a8d48a; opacity: 1; }
+.mu-duel-line.threat { border-color: #ff6b5a; box-shadow: 0 0 8px rgba(255, 80, 60, 0.8); opacity: 1; font-weight: 700; }
+.mu-duel-note { min-height: 17px; }
+.mu-duel-note .warn { color: #ff9a8a; }
+.mu-duel-note .ok { color: #a8d48a; }
+.mu-duel-note .dim { opacity: 0.75; }
+.mu-duel-riposte { color: #f2d27a; text-shadow: 0 0 6px rgba(242, 210, 122, 0.9); }
+.mu-duel-breath { height: 4px; margin-top: 4px; background: rgba(246, 231, 190, 0.2); border-radius: 2px; overflow: hidden; }
+.mu-duel-breath i { display: block; height: 100%; background: linear-gradient(90deg, #5b9a3e, #c49a35); }
 `;
 
 let styled = false;
@@ -378,6 +392,45 @@ export class BattleHud implements HudPart {
     this.closeWheel();
   }
 }
+
+// ---------------------------------------------------------------------------------------------
+// The duel's reading (steel out): the guard's line, the line of the blow coming, the riposte, breath (src/combat/playerport.ts)
+// ---------------------------------------------------------------------------------------------
+
+export function duelNote(c: { guardLine?: string | null; threat?: string | null; riposte?: number }): { kind: 'riposte' | 'ok' | 'warn' | 'dim'; text: string } {
+  if ((c.riposte ?? 0) > 0) return { kind: 'riposte', text: 'Riposte! (J)' };
+  if (c.threat) {
+    if (c.guardLine === c.threat) return { kind: 'ok', text: `Guarded: ${c.threat}` };
+    const what = c.threat === 'low' ? 'Low cut' : c.threat === 'high' ? 'Blow from above' : 'Blow at the body';
+    return { kind: 'warn', text: `${what}: guard ${c.threat === 'high' ? 'W+K' : c.threat === 'low' ? 'S+K' : 'K'}` };
+  }
+  return { kind: 'dim', text: 'W+J over · S+J low · A/D+J thrust · K mid-swing feints' };
+}
+
+export class DuelHud implements HudPart {
+  readonly el = h('div.mu-duel.mu-hide');
+  private key = '-';
+  constructor(private readonly ctx: HudPartCtx) { ensureBattleStyle(); }
+  update(): void {
+    const game = this.ctx.game();
+    const hud = game?.player.hud();
+    const c = hud?.combat;
+    const on = !!c && c.engaged && !c.ranged && c.state !== 'down' && !!hud?.drawn;
+    const key = on ? `${c.guardLine ?? ''}|${c.threat ?? ''}|${(c.riposte ?? 0) > 0 ? 'r' : ''}|${Math.round((c.breath ?? 1) * 10)}` : '';
+    if (key === this.key) return;
+    this.key = key;
+    this.el.classList.toggle('mu-hide', !on);
+    if (!on || !c) return;
+    const cell = (l: string): HTMLElement => h('span', { class: `mu-duel-line ${c.guardLine === l ? 'guard' : ''} ${c.threat === l ? 'threat' : ''}` }, l === 'high' ? 'High' : l === 'mid' ? 'Mid' : 'Low');
+    const n = duelNote(c);
+    this.el.replaceChildren(
+      h('div.mu-duel-lines', null, cell('high'), cell('mid'), cell('low')),
+      h('div.mu-duel-note', null, h(n.kind === 'riposte' ? 'b.mu-duel-riposte' : `span.${n.kind}`, null, n.text)),
+      h('div.mu-duel-breath', null, h('i', { style: { width: `${Math.round((c.breath ?? 1) * 100)}%` } })),
+    );
+  }
+}
+registerHudPart('duel', (ctx) => new DuelHud(ctx));
 
 // ---------------------------------------------------------------------------------------------
 // Registration (at import)

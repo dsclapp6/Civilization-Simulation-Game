@@ -2,7 +2,7 @@
 // guard, a roll or a step back, archers keep their distance and loose when the line is clear, beasts rush
 // in and fall back, and when the odds turn morale breaks: the humble run, nobles yield for ransom.
 // Thinking runs every ~0.12 s per fighter; the state machine in arena.tickShared does the timing.
-import { clamp, yawTo } from '../core/math';
+import { clamp, hash01, yawTo } from '../core/math';
 import { gap, type Arena, type Fight } from './arena';
 import { D, S, normAngle, type Fighter } from './fighter';
 import { absorbRate } from './aiHelpers';
@@ -25,6 +25,12 @@ export function think(a: Arena, f: Fighter, dt: number): void {
       f.wantSpeed = 0;
       const t = f.target;
       if (t && f.st === S.Windup && !Number.isNaN(f.wantYaw)) f.wantYaw = yawTo(f.x, f.z, t.x, t.z);
+      // a practised fighter feints: the blow is checked as the foe commits his guard to it, and the guard is drawn wide
+      if (t && f.st === S.Windup && f.t > f.dur * 0.35 && f.t < f.dur * 0.6 && t.st === S.Block && t.guardLine === f.line && f.melee >= 6 && !f.isAnimal
+        && f.feints < 4 && f.answeredSerial !== -f.serial) {
+        f.answeredSerial = -f.serial; // decide once per blow
+        if (hash01(f.personId, f.serial, 11) < 0.08 + 0.015 * f.melee) feint(a, f, t);
+      }
       return;
     }
     case S.Dodge: return;
@@ -210,9 +216,13 @@ function meleeThink(a: Arena, f: Fighter, t: Fighter, g: number, _fight: Fight):
     f.wantX = Math.sin(away); f.wantZ = Math.cos(away); f.wantSpeed = 1.8; f.anim = 'walk';
     return;
   }
+  // a parry is answered at once
+  if (f.riposteT > 0) f.cooldown = 0;
   if (f.cooldown <= 0 && f.stamina > 6 && canStrike(f, t)) {
     const key = chooseAttack(a, f, t, g);
-    if (a.startAttack(f, key)) {
+    // the line: a cut at the legs when the foe guards high (or now and then to keep him honest)
+    const low = key === 'slash' && !f.isAnimal && (t.guardLine === 'high' && t.st === S.Block ? hash01(f.personId, f.serial, 13) < 0.45 : hash01(f.personId, f.serial, 13) < 0.14);
+    if (a.startAttack(f, key, false, low ? 'low' : undefined)) {
       f.cooldown = (0.25 + a.rng.next() * 0.9) / f.aggression;
       f.wantSpeed = 0;
       return;
@@ -230,6 +240,20 @@ function meleeThink(a: Arena, f: Fighter, t: Fighter, g: number, _fight: Fight):
   f.anim = 'walk';
 }
 
+/** A feint: the blow is checked before it lands; the foe who guarded against it is drawn wide for a moment. */
+export function feint(a: Arena, f: Fighter, t: Fighter | null): void {
+  a.toIdle(f);
+  f.attack = null; f.impacted = false;
+  f.stamina = Math.max(0, f.stamina - 4);
+  f.feints++;
+  f.cooldown = 0;
+  if (t && t.st === S.Block) {
+    t.openT = 0.6;
+    a.toIdle(t);
+    if (t.isPlayer) a.env.notify('warn', 'A feint! Your guard is drawn wide.', t.personId);
+  }
+}
+
 function canStrike(f: Fighter, t: Fighter): boolean {
   void f; void t;
   return true;
@@ -245,12 +269,17 @@ function answer(a: Arena, f: Fighter, t: Fighter, g: number): boolean {
   const skill = f.melee;
   const react = clamp(0.42 + 0.035 * skill + 0.022 * (f.agi - 10) + (f.gear.shield ? 0.12 : 0) + (f.person?.traits.includes('brave') ? 0.04 : 0) - (1 - f.breath) * 0.2, 0.1, 0.9);
   if (rng.next() > react) return false;
-  const canGuard = f.stamina > 8 && (f.gear.weapon.guard > 0.15 || f.gear.shield !== null) && !f.isAnimal;
+  // a guard drawn wide (by a parry or a feint) cannot come back in time
+  const canGuard = f.stamina > 8 && (f.gear.weapon.guard > 0.15 || f.gear.shield !== null) && !f.isAnimal && f.openT <= 0;
   const dodgeP = f.isAnimal ? 0.55 : clamp(0.18 + 0.03 * (f.agi - 10) + (f.gear.worn > 8 ? -0.12 : 0), 0.05, 0.55);
   const r = rng.next();
   if (canGuard && r > dodgeP) {
     f.set(S.Block, 'block');
     f.guardT = 0;
+    // reading the blow: the line it comes on, by skill and a sharp eye (a feinter is read less surely)
+    const read = clamp(0.5 + 0.05 * skill + 0.02 * (f.per - 10) + (f.gear.shield ? 0.08 : 0) - 0.04 * t.feints, 0.3, 0.95);
+    const h = hash01(f.personId, t.serial, 17);
+    f.guardLine = h < read ? t.line : (t.line === 'mid' ? (h > 0.5 + read / 2 ? 'high' : 'low') : 'mid');
     f.guardFor = Math.max(0.15, remaining + 0.3 + rng.next() * 0.3);
     f.wantSpeed = 0;
     return true;

@@ -247,3 +247,87 @@ describe('a road fight', () => {
     expect(beasts.length).toBeGreaterThan(0);
   });
 });
+
+describe('the deeper duel: lines, guards, feints, ripostes, breath', () => {
+  it('a guard covers its own line, the next partly, the far one hardly at all; a shield covers the body', async () => {
+    const { guardCover } = await import('../../src/combat/fighter');
+    expect(guardCover('mid', 'mid', false)).toBe(1);
+    expect(guardCover('high', 'mid', false)).toBeCloseTo(0.7);
+    expect(guardCover('high', 'low', false)).toBeCloseTo(0.25);
+    expect(guardCover('low', 'high', true)).toBeGreaterThanOrEqual(0.7);
+    expect(guardCover('high', 'low', true)).toBeLessThan(0.65);
+  });
+
+  it('the movement keys choose the line: W+J comes over the top, S+J cuts low, A+J thrusts', () => {
+    const { r, pf, yaw } = duelRig('pl-lines');
+    const swing = (over: Parameters<typeof input>[0]): { key: string; line: string } => {
+      for (let i = 0; i < 40 && pf.st !== S.Idle; i++) frame(r, { cameraYaw: yaw });
+      pf.stamina = pf.staminaMax;
+      frame(r, { ...over, attack: true, cameraYaw: yaw });
+      frame(r, { ...over, attack: false, cameraYaw: yaw });
+      const out = { key: pf.attackKey as string, line: pf.line as string };
+      for (let i = 0; i < 40; i++) frame(r, { cameraYaw: yaw });
+      return out;
+    };
+    expect(swing({ forward: 1 })).toEqual({ key: 'overhead', line: 'high' });
+    expect(swing({ forward: -1 })).toEqual({ key: 'slash', line: 'low' });
+    expect(swing({ right: 1 }).key).toBe('thrust');
+    expect(swing({}).line).toBe('mid');
+  });
+
+  it('a guard on the wrong line lets the blow through; one on the right line stops it; a fresh one parries and gives a riposte', async () => {
+    const { applyBlow } = await import('../../src/combat/strike');
+    const { r, pf, ff } = duelRig('pl-guard');
+    const arena = r.combat.arena;
+    const blow = (line: 'high' | 'mid' | 'low') => ({ kind: 'cut' as const, dmg: 30, ap: 0, how: 'slash' as const, weapon: 'sword', fromX: ff.x, fromZ: ff.z, melee: true, heightDiff: 0, accuracy: 5, line });
+    const guard = (line: 'high' | 'mid' | 'low', fresh: boolean) => {
+      pf.set(S.Block, 'block', 99); pf.guardLine = line; pf.guardT = fresh ? 0 : 1; pf.openT = 0; pf.stamina = pf.staminaMax;
+      pf.yaw = Math.atan2(ff.x - pf.x, ff.z - pf.z);
+    };
+    guard('mid', true);
+    const parried = applyBlow(arena, ff, pf, blow('mid'));
+    expect(parried.outcome).toBe('parried');
+    expect(pf.riposteT).toBeGreaterThan(0);
+    expect(ff.openT).toBeGreaterThan(0);
+    // a held guard on the right line blocks most of it; on the far line almost nothing is stopped
+    let right = 0, wrong = 0;
+    for (let i = 0; i < 12; i++) {
+      guard('high', false); const a = applyBlow(arena, ff, pf, blow('high')); right += a.outcome === 'blocked' ? 0 : a.damage;
+      r.sim.state.persons.get(pf.personId)!.health.hp = 1;
+      guard('high', false); const b = applyBlow(arena, ff, pf, blow('low')); wrong += b.damage;
+      r.sim.state.persons.get(pf.personId)!.health.hp = 1;
+      if (pf.st !== S.Block) pf.set(S.Idle, 'idle');
+    }
+    expect(wrong).toBeGreaterThan(right);
+  });
+
+  it('the guard key in one\'s own swing is a feint: the blow is checked, and a foe guarding against it is drawn wide', () => {
+    const { r, pf, ff, yaw } = duelRig('pl-feint');
+    pf.stamina = pf.staminaMax;
+    frame(r, { attack: true, cameraYaw: yaw });
+    frame(r, { attack: false, cameraYaw: yaw });
+    expect(pf.st).toBe(S.Windup);
+    pf.target = ff;
+    ff.set(S.Block, 'block', 99); ff.guardLine = pf.line;
+    frame(r, { block: true, cameraYaw: yaw });
+    expect(pf.st).not.toBe(S.Windup);
+    expect(pf.feints).toBe(1);
+    expect(ff.openT).toBeGreaterThan(0);
+    expect(ff.st).not.toBe(S.Block);
+  });
+
+  it('a tired arm is slow: the windup of an exhausted fighter is longer', () => {
+    const { r, pf } = duelRig('pl-tired');
+    const arena = r.combat.arena;
+    pf.set(S.Idle, 'idle'); pf.stamina = pf.staminaMax; pf.riposteT = 0;
+    arena.startAttack(pf, 'slash');
+    const fresh = pf.dur;
+    pf.set(S.Idle, 'idle'); pf.stamina = pf.staminaMax * 0.08;
+    arena.startAttack(pf, 'slash');
+    const tired = pf.dur;
+    expect(tired).toBeGreaterThan(fresh * 1.2);
+    pf.set(S.Idle, 'idle'); pf.stamina = pf.staminaMax; pf.riposteT = 0.5;
+    arena.startAttack(pf, 'slash');
+    expect(pf.dur).toBeLessThan(fresh);
+  });
+});

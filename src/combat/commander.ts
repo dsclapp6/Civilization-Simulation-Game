@@ -83,7 +83,8 @@ function decide(a: Arena, fight: Fight, side: number, playerActive: boolean): vo
       }
       default: {
         // horse: wait on the flank, then ride them down when the foot are locked or the odds are good
-        const footLocked = cmd.groups.some((x) => x.side === side && x.gk === 0 && x.engaged);
+        // (the foot may be cut down between two thoughts of the general: it remembers they were locked a moment ago)
+        const footLocked = cmd.groups.some((x) => x.side === side && x.gk === 0 && (x.engaged || fight.t - x.lockedT < 10));
         const exposed = cmd.groups.some((x) => x.side !== side && x.gk === 1 && x.count > 0 && dist(x.cx, x.cz, g.cx, g.cz) < 70);
         // (a horse covers a hundred metres in ten seconds: the foot being locked is the moment, wherever the horse stood on the flank)
         const go = (footLocked && gd < 130) || (exposed && ratio > 0.7) || (gd < 30 && ratio > 1.0);

@@ -160,6 +160,11 @@ export interface PlayerCombatHud {
   ranged: boolean;
   /** Counts up while a blow lands or a hit is taken (so the HUD can flash on each). */
   hitSeq: number;
+  /** The duel's reading: the guard's line, the line of the blow coming, the riposte window (s), breath 0..1. */
+  guardLine?: string | null;
+  threat?: string | null;
+  riposte?: number;
+  breath?: number;
 }
 
 export interface Result { ok: boolean; reason?: string }
