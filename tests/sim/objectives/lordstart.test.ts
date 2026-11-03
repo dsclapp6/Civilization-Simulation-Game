@@ -5,7 +5,7 @@ import { installRealm } from '../../../src/sim/realm';
 import { advanceTutorial, chainOf } from '../../../src/sim/objectives/tutorial';
 import { ageYears } from '../../../src/sim/state';
 import { LORD_AGE_MAX, LORD_AGE_MIN } from '../../../src/sim/run';
-import { active, byTitle, install, objSim, playerOf, recOf } from './helpers';
+import { active, byTitle, install, objSim, playerOf, recOf, runTo } from './helpers';
 
 describe('starting as a lord', () => {
   it('makes the player a grown holder of a manor; the default is still the birth of a twelve-year-old', () => {
@@ -44,5 +44,16 @@ describe('starting as a lord', () => {
     expect(realm.setWorksShare(me.id, view.settlements[0], 0.25).ok).toBe(true);
     o.obj.poll(true);
     expect(byTitle(o, /fields and labour/i)?.state).toBe('done');
+  });
+
+  it('lives through some days with the realm: no chores, duties or goals, the lord\'s chain only, nothing thrown', () => {
+    const o = objSim({ seed: 'lord-days', preset: 'small', start: 'lord', install: false });
+    installRealm(o.sim, o.deps);
+    install(o);
+    for (let d = 1; d <= 4; d++) runTo(o, Math.floor(o.sim.absDay) + 1, 7);
+    for (const src of ['chore', 'job', 'goal'] as const) expect(active(o, src)).toHaveLength(0);
+    // the steps of the chain are plain data (they are saved with the run)
+    const live = active(o, 'tutorial');
+    for (const t of live) expect(() => JSON.parse(JSON.stringify(recOf(o, t.id)))).not.toThrow();
   });
 });
