@@ -66,6 +66,8 @@ export interface BodyTraits {
   capacity: number;
   hunger: number;
   rest: number;
+  /** Health 0..1 (H1: the hurt get their wind back slowly); absent = whole. */
+  hp?: number;
 }
 
 export interface BodyEnv {
@@ -256,5 +258,7 @@ export function stepBody(b: BodyState, input: Readonly<InputState>, env: BodyEnv
   const moving = b.speed > 0.2;
   stepStamina(b.stamina, {
     dt, sprinting, galloping, cantering, moving, sitting: b.sitting, effort: env.effort, hunger: t.hunger, rest: t.rest,
+    // quick breath after a sprint (H1): the pace, the build, the years, the load and the wounds set how fast the wind comes back
+    speed: b.speed, endurance: t.endurance, age: t.age, load: t.capacity > 0 ? t.weight / t.capacity : 0, hp: t.hp,
   });
 }
