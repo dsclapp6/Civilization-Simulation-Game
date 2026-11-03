@@ -27,9 +27,9 @@ function noRule(R: Rlm, personId: PersonId, settlement: number): string {
     : `You do not rule ${R.placeName(settlement)}`;
 }
 
-const FREE_CAREERS: ReadonlySet<string> = new Set(['labourer', 'soldier', 'cottar', 'none', 'outlaw', 'archer', 'man_at_arms']);
-const PROMOTABLE_TO_SERGEANT: ReadonlySet<string> = new Set(['archer', 'man_at_arms', 'soldier']);
-const PROMOTABLE_TO_KNIGHT: ReadonlySet<string> = new Set(['squire', 'sergeant', 'man_at_arms', 'archer', 'soldier']);
+const FREE_CAREERS: ReadonlySet<string> = new Set(['labourer', 'soldier', 'cottar', 'none', 'outlaw', 'archer', 'crossbowman', 'man_at_arms']);
+const PROMOTABLE_TO_SERGEANT: ReadonlySet<string> = new Set(['archer', 'crossbowman', 'man_at_arms', 'soldier']);
+const PROMOTABLE_TO_KNIGHT: ReadonlySet<string> = new Set(['squire', 'sergeant', 'man_at_arms', 'archer', 'crossbowman', 'soldier']);
 
 // ---------------------------------------------------------------------------------------------
 // Who can be raised

@@ -216,7 +216,7 @@ export function buildLook(state: GameState, p: Person, absDay: number, palette: 
   // arms-bearers
   if (p.career === 'man_at_arms') { armour = h(16) < 0.35 ? 'padded' : 'mail'; helmet = 'kettle'; shoes = 'boots'; }
   else if (p.career === 'sergeant') { armour = 'mail'; helmet = 'bascinet'; shoes = 'boots'; }
-  else if (p.career === 'soldier' || p.career === 'archer') { armour = 'padded'; helmet = 'cap'; }
+  else if (p.career === 'soldier' || p.career === 'archer' || p.career === 'crossbowman') { armour = 'padded'; helmet = 'cap'; }
   if (helmet !== 'none') headwear = 'none';
 
   const clothing: ClothingLook = { tunic, tunicStyle: style, legs, headwear, shoes };

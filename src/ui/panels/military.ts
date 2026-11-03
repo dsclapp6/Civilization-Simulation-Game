@@ -193,7 +193,7 @@ export function armyPanel(ctx: PanelCtx, startTab: Tab = 'command'): UiPanel {
           h('div.mu-small.mu-dim', null, 'Retinue and garrison are paid by your House; the levy owes feudal service, then wages.')),
         chip(`Strength ${Math.round(f.strength)}`, 'gold', 'shield')),
       h('div.mu-row.mu-wrap.mu-gap-6', { style: { margin: '8px 0' } },
-        chip(`${f.retinue} retinue`, '', 'helm'), chip(`${f.garrison} garrison`, '', 'shield'), chip(`${f.levyPool} liable to the levy`, '', 'users'),
+        chip(`${f.retinue} retinue`, '', 'helm'), chip(`${f.knights} knights`, '', 'helm'), chip(`${f.garrison} garrison`, '', 'shield'), chip(`${f.levyPool} liable to the levy`, '', 'users'),
         chip(`${f.militia} town militia`, '', 'archery'), chip(`${f.mercenaries} mercenaries`, '', 'coin')),
       h('div.mu-row.mu-wrap.mu-gap-6', null,
         button(`Call the levy (about ${mil.levySize(house.id, 'war') + f.retinue} men)`, { variant: 'primary', icon: 'flag' as IconName, onClick: () => act(mil.callLevy(), 'You raise your banners.') }),
@@ -301,9 +301,9 @@ export function armyPanel(ctx: PanelCtx, startTab: Tab = 'command'): UiPanel {
     wrap.append(heading('Forces of the great Houses', 'shield'),
       h('p.mu-small.mu-dim', null, 'Retinue and garrison are the standing men; the levy is every man of fifteen to sixty on the lord’s manors, called in war.'),
       h('table.mu-table', null,
-        h('thead', null, h('tr', null, ['House', 'Retinue', 'Garrison', 'Levy pool', 'Militia', 'Hired', 'In the field', 'Strength'].map((t) => h('th', null, t)))),
+        h('thead', null, h('tr', null, ['House', 'Retinue', 'Knights', 'Garrison', 'Levy pool', 'Militia', 'Hired', 'In the field', 'Strength'].map((t) => h('th', null, t)))),
         h('tbody', null, rows.slice(0, 16).map((r) => h('tr', { class: r.id === sim.state.run.houseId ? 'mine' : '' },
-          h('td', null, r.name), h('td', null, String(r.f.retinue)), h('td', null, String(r.f.garrison)), h('td', null, String(r.f.levyPool)),
+          h('td', null, r.name), h('td', null, String(r.f.retinue)), h('td', null, String(r.f.knights)), h('td', null, String(r.f.garrison)), h('td', null, String(r.f.levyPool)),
           h('td', null, String(r.f.militia)), h('td', null, String(r.f.mercenaries)), h('td', null, String(r.f.afield)), h('td', null, String(Math.round(r.f.strength))))))));
     return wrap;
   };

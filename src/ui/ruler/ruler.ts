@@ -14,7 +14,7 @@ import { tabKeys } from '../core/tabkeys';
 import { every, panelOf } from '../panels/base';
 import { registerPanel } from '../panels/extRegistry';
 import { ruleOffer } from './ruleTown';
-import { isPage, PAGES, roleMay, roleWords, type RulerPage } from './rulerModel';
+import { isPage, PAGES, roleMay, roleWords, housesWords, type RulerPage } from './rulerModel';
 import { money, type RulerEnv } from './rulerUi';
 import { buildDiplomacy } from './pages/diplomacy';
 import { buildFields } from './pages/fields';
@@ -166,7 +166,7 @@ class Seat {
 
   private updateTitle(): void {
     const v = this.viewNow;
-    this.win.setTitle('Seat of government', v ? `${v.name} · ${roleWords(v.role)}` : '');
+    this.win.setTitle('Seat of government', v ? `${v.name} · ${roleWords(v.role)}${housesWords(v) ? ` · ${housesWords(v)}` : ''}` : '');
   }
 
   private setPage(p: RulerPage): void {

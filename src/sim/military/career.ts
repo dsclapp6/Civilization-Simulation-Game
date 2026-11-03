@@ -38,7 +38,7 @@ export class CareerSystem {
     if (p.career === 'knight' && p.rankTier >= 5) return a ? 'knight' : 'none';
     if (p.career === 'sergeant' && p.careerStage >= 3) return a ? 'captain' : 'soldier';
     if (p.career === 'sergeant') return a ? 'sergeant' : 'soldier';
-    if (p.career === 'archer' || p.career === 'man_at_arms' || p.career === 'soldier') return a ? 'soldier' : 'soldier';
+    if (p.career === 'archer' || p.career === 'crossbowman' || p.career === 'man_at_arms' || p.career === 'soldier') return a ? 'soldier' : 'soldier';
     return a ? 'levy' : 'none';
   }
 
@@ -230,7 +230,7 @@ export class CareerSystem {
       M.notify(`Your courage is noticed: you are taken into the retinue as ${maa ? 'a man-at-arms' : 'an archer'}.`, 'gain', p.id);
       M.log('career', `${p.first} was taken into the retinue of ${M.houseName(a.house)} for his courage.`, [p.id]);
       M.sim.score.award('deed', 15, 'Won a place in the retinue');
-    } else if (role === 'soldier' && pm.valour >= STEPS.sergeant && (p.career === 'archer' || p.career === 'man_at_arms')) {
+    } else if (role === 'soldier' && pm.valour >= STEPS.sergeant && (p.career === 'archer' || p.career === 'crossbowman' || p.career === 'man_at_arms')) {
       p.career = 'sergeant'; p.careerStage = 2;
       if (p.rankTier < 3) setRank(M.sim, p, 3);
       M.state.touch(p);

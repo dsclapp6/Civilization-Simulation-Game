@@ -9,7 +9,7 @@ import type { UnitKind } from '../military/types';
 import { AI, TROOPS_AI } from './aiConfig';
 import { refreshFunds, type Sense } from './aiSense';
 import type { Ai } from './ai';
-import { dub, recruit, recruitOptions } from './recruit';
+import { discharge, dub, recruit, recruitOptions } from './recruit';
 
 /** How many men of his own the ruler would like to keep. */
 export function troopTarget(S: Sense): number {
@@ -42,11 +42,33 @@ export function armsRound(A: Ai, S: Sense): void {
   const R = A.R;
   if (!S.payer || S.places.length === 0) return;
   refreshFunds(R, S);
+  // thrift: a purse that nears comfort (under 1.6 times it) keeps a plain table - the economy spends less on luxuries there - until it is well above
+  {
+    const key = String(S.payer.id);
+    const on = R.data.thrift[key] === 1;
+    if (!on && S.funds < S.comfort * AI.thriftOn) { R.data.thrift[key] = 1; R.touch(); }
+    else if (on && S.funds >= S.comfort * AI.thriftOff) { delete R.data.thrift[key]; R.touch(); }
+  }
   const target = troopTarget(S);
   const cur = S.troops.length;
   const day = R.day;
   // the arrears of the treasury: no new men while the old are unpaid
   const behind = (R.data.behind[String(S.payer.id)] ?? 0) > 0;
+
+  // a purse below comfort trims: the dearest men (not the knights, who are paid by their lands) go back to the plough, a couple a round,
+  // down to a standing troop that matches the purse (so the wages stop draining it); recruiting waits until the purse is comfortable again
+  if (S.funds < S.comfort && cur > 0 && day - A.lastAt(S.house, 'trim') >= TROOPS_AI.trimGapDays) {
+    const ratio = S.funds / S.comfort;
+    // (a purse under half of comfort keeps no standing men of its own at all; above it, a troop of at least two)
+    const keep = ratio < 0.5 ? 0 : Math.max(2, Math.floor(Math.max(target, cur * 0.5) * Math.max(0.35, ratio)));
+    const dear = S.troops.filter((t) => t.k !== 'knight').sort((a, b) => b.wage - a.wage || a.p - b.p);
+    let n = Math.min(TROOPS_AI.trimPerRound, cur - keep, dear.length);
+    for (const t of dear) {
+      if (n <= 0) break;
+      if (discharge(R, S.ruler, t.p).ok) { n--; A.mark(S.house, 'trim'); }
+    }
+    S.troops = S.troops.filter((t) => !!R.alive(t.p) && R.data.troops.includes(t));
+  }
 
   if (cur < target && !behind && day >= 2 + 10 * hash01(S.house, 13) && day - A.lastAt(S.house, 'rec') >= TROOPS_AI.gapDays / Math.max(0.5, S.pace)) {
     // the wages of a year must be in hand besides the fee: the thin purse raises no one

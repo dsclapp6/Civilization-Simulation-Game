@@ -15,7 +15,7 @@ import { DATA, FIREPROOF } from './data';
 import type { HappeningKind, HappeningRec } from './types';
 
 const clamp = (v: number, a: number, b: number): number => Math.max(a, Math.min(b, v));
-const ARMS_CAREERS = new Set(['man_at_arms', 'sergeant', 'soldier', 'archer', 'knight', 'squire']);
+const ARMS_CAREERS = new Set(['man_at_arms', 'sergeant', 'soldier', 'archer', 'crossbowman', 'knight', 'squire']);
 const GRAIN = ['wheat', 'rye', 'barley', 'oats', 'peas', 'beans', 'flour', 'bread', 'malt', 'seed_corn'];
 const LIBRARY = ['cloister', 'abbey_church', 'cathedral', 'school'];
 

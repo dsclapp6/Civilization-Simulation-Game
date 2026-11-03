@@ -105,7 +105,7 @@ function dutyFor(O: Obj, me: Person, emp: Employment): NewObjective | null {
     }
   }
   // soldiers drill at the butts
-  if (emp.career === 'archer' || emp.career === 'man_at_arms' || emp.career === 'sergeant' || emp.career === 'soldier') {
+  if (emp.career === 'archer' || emp.career === 'crossbowman' || emp.career === 'man_at_arms' || emp.career === 'sergeant' || emp.career === 'soldier') {
     const butts = findNear(O, me, ['archery_butts', 'training_yard'], 1500);
     if (butts && enabledOption(O, me, { kind: 'building', id: butts.id }, /^arms\.practise/)) {
       vars.place = buildingPhrase(O, butts);

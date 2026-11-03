@@ -54,7 +54,7 @@ under the title that governs it: `titleAtSettlement`).
 **The books (`books.ts`).** Once a day (23:00) each treasury is closed: what the realm entered itself (`bookIn` / `bookOut` with a
 label: *Sales*, *Wages*, *Research*, *Goods bought*, *Troops: fees and gear*, *Dubbing*, *Research refunded*) is kept by label, and
 whatever else moved the purse since the last close (rents and dues, the household's spending, works paid by construction) is seen as
-the difference and counted as *Rents, dues and other receipts* or *Household, works and other costs*. Days nobody closed count for
+the difference and counted as *Rents, dues and other receipts* or *The household's keep and the works*. Days nobody closed count for
 nothing; buckets are overwritten after 16 days.
 
 ## Research (`research.ts`; prices in `src/content/techs.json` → `research`)
@@ -525,12 +525,18 @@ returns a plain-words `reason` to show when it refuses.
 finds him; the steward acts when the lord is held captive), a round a week per ruler, and none of it needs a second API. The calls are cheap,
 but `researchOptions` scans the realm's people (about 1 ms for a kingdom): a few times a year per House, not every day.
 
-## Known gaps
+## Gaps closed in wave J (J5) and the market stand-in
 
 * The economy's `procure` and `sell` are written by another builder; the realm was tested against a stand-in with the same
   signature (`tests/sim/realm/helpers.ts`, `MarketStub`). Goods that are not stock-and-flow goods may be thin at markets, so a
   research that wants 200 vellum is bought over several orders (the work waits for the carts).
-* Crossbowmen are archers to the military module (it has no crossbow career for garrison men); knights recruited are retinue.
-* Treasuries of NPC lords are pulled by the economy toward a rank-size purse (`householdDay`), which shows in their books as other costs;
-  the AI rulers' purses feel it too, and raids and ransoms take from them.
-* A regent / steward ruler's `view().house` is the holder's House (the realm's), not their own.
+* Crossbowmen are their own kind to the military module: `crossbowman` is a career (garrison men draw it, recruits of the crossbow kind
+  take it, detail fights give them the crossbow), `unitKindOf` reads it as `crossbow`, and `forces()` counts them (`crossbowmen`).
+* Knights recruited are counted as knights: `forces()` has `knights` apart from `retinue`, and every list of forces in the UI shows them.
+* The books name what moved the purse: other modules enter a movement with `realm.note(household, pence, label)` (army wages and
+  provisions, mercenaries, plunder, ransoms paid and received, a raid's toll, tribute, relief, a rising's loot); what is left is
+  *The household's keep and the works* (the economy's pull of an NPC lord's purse toward a rank-size purse shows there).
+* An AI ruler whose purse is below comfort trims: every four days at most two of the dearest men go back to the plough (down to a troop
+  that fits the purse, `TROOPS_AI.trimPerRound`), and no one is raised until the purse is comfortable again.
+* A regent / steward ruler's `view()` names both Houses: `house`/`houseName` is the realm's (the holder's), `ownHouse`/`ownHouseName` his
+  own; the ruler's window title shows both.

@@ -499,7 +499,7 @@ export class Wars {
     // the raiders' lord keeps half
     const rh = c.headOf(raider);
     const rhh = rh ? c.state.households.get(rh.household) : undefined;
-    if (rhh) { rhh.purse += Math.round(stolen * 0.5); c.state.touchHousehold(rhh); }
+    if (rhh) { rhh.purse += Math.round(stolen * 0.5); c.state.touchHousehold(rhh); c.sim.services.realm?.note?.(rhh.id, Math.round(stolen * 0.5), 'Spoils of raids'); }
     c.raiseUnrest(sid, 14);
     w.score = clamp(w.score + 12, -100, 100);
     const targetHouse = w.defenders[0];

@@ -34,6 +34,13 @@ export function isPage(v: unknown): v is RulerPage {
 }
 
 /** How the person comes to rule, in words for the title bar. */
+/** The Houses of a ruler's window: the one he acts for and, when it differs, his own (regent, steward). J5. */
+export function housesWords(v: { houseName?: string; ownHouseName?: string; house: number; ownHouse?: number; role?: RealmRole }): string {
+  if (!v.houseName) return '';
+  if (v.ownHouse && v.ownHouse !== v.house && v.ownHouseName) return `acting for House ${v.houseName} · of House ${v.ownHouseName}`;
+  return `House ${v.houseName}`;
+}
+
 export function roleWords(role: RealmRole | undefined): string {
   switch (role) {
     case 'regent': return 'Regent for the young lord';

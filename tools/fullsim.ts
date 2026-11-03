@@ -108,10 +108,11 @@ const aiSnapshot = (): AiState => {
       const S = realm.ai.sense(u.ruler);
       if (!S) continue;
       rulers++;
-      if (S.funds < S.comfort) below++;
+      if (S.funds < S.comfort) { below++; if (process.env.FULLSIM_DEBUG) console.log(`  below: house ${S.house} class ${S.class} tier ${S.tier} funds ${S.funds.toFixed(0)} comfort ${S.comfort.toFixed(0)} wages/day ${S.wages.toFixed(1)} men ${S.troops.length} open ${S.open.length} committed ${S.committed.toFixed(0)} | ${(realm.accounts?.(S.ruler) ?? []).map((l) => `${l.label} ${l.pence.toFixed(0)}`).join('; ')}`); }
       idx.push(S.funds / Math.max(1, S.comfort));
     }
   }
+  if (process.env.FULLSIM_DEBUG) console.log(`  thrifty households: ${Object.keys(realm.ctx.data.thrift).length}`);
   idx.sort((a, b) => a - b);
   return {
     buildings, fortPieces, troops: realm.ctx.data.troops.length, rulers, belowComfort: below,

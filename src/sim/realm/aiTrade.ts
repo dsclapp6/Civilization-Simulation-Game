@@ -74,8 +74,8 @@ export function orderRound(A: Ai, S: Sense): void {
     for (const o of orders) if (o.side === 'buy' && removeTradeOrder(R, S.ruler, o.id).ok) A.touch();
     return;
   }
-  // given once a year at most (the steward carries them out every day)
-  if (R.day - A.lastAt(S.house, 'orders') < 16) return;
+  // given once a year at most (the steward carries them out every day); a purse below comfort sells its surplus at once
+  if (R.day - A.lastAt(S.house, 'orders') < (S.funds < S.comfort ? 4 : 16)) return;
   A.mark(S.house, 'orders');
   const have = (good: string, side: 'sell' | 'buy'): boolean => orders.some((o) => o.good === good && o.side === side);
   for (const s of SELL) {

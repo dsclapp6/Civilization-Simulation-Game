@@ -46,7 +46,7 @@ export function runSpeed(p: Person, age: number): number {
   return clamp(v, age >= 12 && age <= 45 && p.health.hp >= 0.7 ? RUN_MIN : 2.4, RUN_MAX);
 }
 
-const RUNNING_CAREERS: ReadonlySet<string> = new Set(['soldier', 'archer', 'man_at_arms', 'sergeant', 'page', 'squire', 'peddler', 'servant']);
+const RUNNING_CAREERS: ReadonlySet<string> = new Set(['soldier', 'archer', 'crossbowman', 'man_at_arms', 'sergeant', 'page', 'squire', 'peddler', 'servant']);
 
 /**
  * May this person break into a jog because they are late? Youths and young people, soldiers and messengers — not the old, the hurt,

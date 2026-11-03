@@ -83,9 +83,11 @@ export class Unrest {
       }
       lhh.purse += got;
       c.state.touchHousehold(lhh);
+      c.sim.services.realm?.note?.(lhh.id, got, 'Harsh levies on the villagers');
     } else if (policy.rent < 0 || policy.labour < 0 || policy.justice === 'lenient') {
       // relief is paid for: feasts, alms and forgone fines
       const cost = Math.min(lhh.purse * 0.004 * (Math.abs(Math.min(0, policy.rent)) + Math.abs(Math.min(0, policy.labour)) + (policy.justice === 'lenient' ? 1 : 0)), 600);
+      c.sim.services.realm?.note?.(lhh.id, -Math.min(lhh.purse, cost), 'Relief: feasts, alms, forgone fines');
       lhh.purse = Math.max(0, lhh.purse - cost);
       c.state.touchHousehold(lhh);
     }
@@ -142,6 +144,7 @@ export class Unrest {
         const loot = Math.round(lhh.purse * 0.3);
         lhh.purse -= loot;
         c.state.touchHousehold(lhh);
+        c.sim.services.realm?.note?.(lhh.id, -loot, 'Looted in a rising');
         const hhs = c.state.householdList(sid).filter((h) => h.kind === 'family');
         for (const h of hhs) { h.purse += loot / Math.max(1, hhs.length); c.state.touchHousehold(h); }
       }

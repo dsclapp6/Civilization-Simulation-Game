@@ -168,7 +168,7 @@ export function raise(M: Mil, house: HouseId, reason: string, opts: RaiseOptions
   if (opts.target) a.target = opts.target;
   // food for the first days: bought with the House's purse (the rest is foraged)
   const want = a.men.length * CFG.startSupplies;
-  const paid = M.realm.debit(house, want * 0.4);
+  const paid = M.realm.debit(house, want * 0.4, 'Army: provisions');
   a.supplies = Math.max(a.men.length * 2, paid / 0.4);
   M.addArmy(a);
   if (a.men.length > 0 && !a.men.includes(a.commander)) a.commander = a.men[0];
@@ -233,7 +233,7 @@ export function shareSpoils(M: Mil, a: Army): void {
   let total = 0;
   for (let i = 0; i < a.men.length; i++) total += weight[kindAt(a, i)];
   const lordShare = a.funds * 0.25;
-  M.realm.credit(a.house, lordShare);
+  M.realm.credit(a.house, lordShare, 'Plunder and ransoms');
   const pool = a.funds - lordShare;
   for (let i = 0; i < a.men.length; i++) {
     const p = M.alive(a.men[i]);
@@ -456,7 +456,7 @@ export function upkeepDay(M: Mil, a: Army): boolean {
     else if ((k === 'archer' || k === 'crossbow') && a.reason !== 'garrison' && now - a.since > CFG.levyFreeDays * 2 && !isRetinue(M, a, i)) due += CFG.wage[k];
   }
   if (due > 0 || a.owed > 0) {
-    const pay = M.realm.debit(a.house, due + a.owed);
+    const pay = M.realm.debit(a.house, due + a.owed, 'Army: wages');
     if (pay >= due + a.owed - 0.01) a.owed = 0;
     else a.owed = Math.round((due + a.owed - pay) * 100) / 100;
     // the money reaches the men's pockets
@@ -514,7 +514,7 @@ export function upkeepDay(M: Mil, a: Army): boolean {
 
 function isRetinue(M: Mil, a: Army, i: number): boolean {
   const p = M.person(a.men[i]);
-  return !!p && p.house === a.house && (p.career === 'archer' || p.career === 'soldier');
+  return !!p && p.house === a.house && (p.career === 'archer' || p.career === 'crossbowman' || p.career === 'soldier');
 }
 
 /** Armies of a House (views). */

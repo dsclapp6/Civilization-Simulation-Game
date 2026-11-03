@@ -614,6 +614,8 @@ export class PoliticsCore {
     hb.purse += take;
     this.state.touchHousehold(ha);
     this.state.touchHousehold(hb);
+    this.sim.services.realm?.note?.(ha.id, -take, 'Tribute and indemnities paid'); // (J5: the books name it)
+    this.sim.services.realm?.note?.(hb.id, take, 'Tribute and indemnities received');
     return take;
   }
 }

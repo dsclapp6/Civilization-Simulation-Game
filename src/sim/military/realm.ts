@@ -166,19 +166,21 @@ export class Realm {
   }
   purse(house: HouseId): number { return this.householdOf(house)?.purse ?? 0; }
   /** Takes up to `pence` from the House's purse; returns what was paid. */
-  debit(house: HouseId, pence: number): number {
+  debit(house: HouseId, pence: number, label?: string): number {
     const hh = this.householdOf(house);
     if (!hh || pence <= 0) return 0;
     const pay = Math.min(hh.purse, pence);
     hh.purse = Math.round((hh.purse - pay) * 100) / 100;
     this.M.state.touchHousehold(hh);
+    if (label) this.M.sim.services.realm?.note?.(hh.id, -pay, label); // (J5: the realm's books name it)
     return pay;
   }
-  credit(house: HouseId, pence: number): void {
+  credit(house: HouseId, pence: number, label?: string): void {
     const hh = this.householdOf(house);
     if (!hh || pence <= 0) return;
     hh.purse = Math.round((hh.purse + pence) * 100) / 100;
     this.M.state.touchHousehold(hh);
+    if (label) this.M.sim.services.realm?.note?.(hh.id, pence, label);
   }
   headOf(house: HouseId): PersonId { return this.M.state.houses.get(house)?.head ?? NONE; }
 

@@ -178,20 +178,21 @@ function resources(M: Mil, p: Person): number {
 
 function drain(M: Mil, p: Person, amount: number, payer?: Person): number {
   let left = amount;
-  const take = (get: () => number, set: (v: number) => void): void => {
+  const take = (get: () => number, set: (v: number) => void, hhId?: number): void => {
     const x = Math.min(left, get());
     if (x <= 0) return;
     set(Math.round((get() - x) * 100) / 100);
     left -= x;
+    if (hhId) M.sim.services.realm?.note?.(hhId, -x, 'Ransoms'); // (J5: a treasury's books name it)
   };
   if (payer) { take(() => payer.money, (v) => { payer.money = v; M.state.touch(payer); }); }
   take(() => p.money, (v) => { p.money = v; M.state.touch(p); });
   const hh = M.state.households.get(p.household);
-  if (hh) take(() => hh.purse, (v) => { hh.purse = v; M.state.touchHousehold(hh); });
+  if (hh) take(() => hh.purse, (v) => { hh.purse = v; M.state.touchHousehold(hh); }, hh.id);
   const house = M.state.houses.get(p.house);
   const head = house ? M.state.persons.get(house.head) : undefined;
   const hhh = head ? M.state.households.get(head.household) : undefined;
-  if (hhh && hhh !== hh) take(() => hhh.purse, (v) => { hhh.purse = v; M.state.touchHousehold(hhh); });
+  if (hhh && hhh !== hh) take(() => hhh.purse, (v) => { hhh.purse = v; M.state.touchHousehold(hhh); }, hhh.id);
   return amount - left;
 }
 
@@ -218,9 +219,9 @@ export function payRansom(M: Mil, personId: PersonId, payerId?: PersonId): Resul
     const army = M.armyOfPerson.get(captor.id);
     const a = army ? M.army(army) : undefined;
     if (a) a.funds += paid - share;
-    else M.realm.credit(rec.holder, paid - share);
+    else M.realm.credit(rec.holder, paid - share, 'Ransoms');
   } else {
-    M.realm.credit(rec.holder, paid);
+    M.realm.credit(rec.holder, paid, 'Ransoms');
   }
   release(M, rec, 'paid');
   return { ok: true };
