@@ -274,6 +274,8 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
     };
   }
 
+  /** The person whose eyes the camera is at (-1: nobody), see setFirstPerson. */
+  let fpId = -1;
   const ctx: AnimContext = { place: _place, saddle: null, stand: null, horsePhase: 0, horseBob: 0, dt: 0, time: 0 };
 
   function animateOne(st: CharState, item: CharacterDrawItem, dt: number): void {
@@ -302,6 +304,8 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
     }
     evaluatePose(a, item, ctx);
     poseToBones(a, item, ctx, crowd.bones, crowd.boneOffset(st.slot, 0));
+    // first person (src/render/firstPerson.ts): the camera is inside the head, so the head, eyes and mouth are collapsed to nothing; the body and arms stay
+    if (item.id === fpId) { const o = crowd.boneOffset(st.slot, 0); for (const b of [HB.head, HB.eyes, HB.mouth]) setZero(crowd.bones, o + b * 12); }
     crowd.setParams(st.slot, item.highlight, a.flash);
     if (horse) {
       // reins to the rider's hands, stirrups to the feet
@@ -482,7 +486,18 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
     return true;
   }
 
-  const layer: CharacterLayer & { stats: typeof stats; crowd: SkinnedCrowd; options: typeof options; handPos: typeof handPos } = { object, update, pick, dispose, stats, crowd, options, handPos };
+  /** Hide this person's head (the camera is in it); -1 shows everyone whole. */
+  function setFirstPerson(id: number): void { fpId = id; }
+  /** World position of a person's eyes this frame (from the last animation), false when not drawn. */
+  function eyePos(id: number, out: THREE.Vector3): boolean {
+    const st = states.get(id);
+    if (!st || !st.anim || st.hidden || !st.ready || Number.isNaN(originX)) return false;
+    const W = st.anim.world, o = HB.eyes * 12;
+    out.set(W[o + 3] + originX + (st.lastX - st.fullX), W[o + 7] + (st.lastY - st.fullY), W[o + 11] + originZ + (st.lastZ - st.fullZ));
+    return true;
+  }
+
+  const layer: CharacterLayer & { stats: typeof stats; crowd: SkinnedCrowd; options: typeof options; handPos: typeof handPos; setFirstPerson: typeof setFirstPerson; eyePos: typeof eyePos } = { object, update, pick, dispose, stats, crowd, options, handPos, setFirstPerson, eyePos };
   return layer;
 }
 

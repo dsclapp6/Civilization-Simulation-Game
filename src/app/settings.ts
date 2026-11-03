@@ -6,7 +6,7 @@ import { DEFAULT_SETTINGS, type QualitySetting, type Settings } from '../ui/type
 
 const QUALITIES: readonly QualitySetting[] = ['low', 'medium', 'high'];
 
-const RANGES: Record<string, readonly [number, number]> = { mouseSensitivity: [0.1, 4], volume: [0, 1], uiScale: [0.8, 1.4] };
+const RANGES: Record<string, readonly [number, number]> = { mouseSensitivity: [0.1, 4], volume: [0, 1], uiScale: [0.8, 1.4], viewDistance: [0, 140] };
 
 /** The settings stored in a profile, validated and completed with defaults. */
 export function readSettings(profile: Profile): Settings {

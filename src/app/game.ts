@@ -100,6 +100,7 @@ export async function start(root: AppRoot): Promise<void> {
     inGame: () => host.screen === 'game' && host.session !== null,
     renderer: () => host.session?.renderer ?? null,
     settings: () => host.settings(),
+    rememberView: (d) => host.setSettings({ viewDistance: d }),
     travelling: () => host.session?.services.player.travel()?.phase === 'travelling',
     openWheel: () => ui.open({ panel: 'actions' }),
     setSpeed: speedKey,
@@ -138,7 +139,7 @@ export async function start(root: AppRoot): Promise<void> {
   const steerCamera = (intent: InputState, dt: number, s: Session): InputState => {
     const moving = Math.abs(intent.forward) > 0.1 || Math.abs(intent.right) > 0.1;
     // turning the camera by hand (the mouse looking) steers as before
-    const fighting = !!s.services.player.drawn?.() || s.renderer.getCameraMode() !== 'follow' || s.interior.active || !!host.input?.pointerLocked;
+    const fighting = !!s.services.player.drawn?.() || s.renderer.getCameraMode() !== 'follow' || s.interior.active || !!host.input?.pointerLocked || s.renderer.inFirstPerson(); // first person turns by hand only
     if (!moving || fighting) { walkFrame = null; walkKey = ''; walkFor = 0; return intent; }
     const key = `${Math.sign(intent.forward)}|${Math.sign(intent.right)}`;
     if (key !== walkKey || walkFrame === null) { walkKey = key; walkFrame = intent.cameraYaw; walkFor = 0; }
@@ -176,6 +177,7 @@ export async function start(root: AppRoot): Promise<void> {
   };
 
   // ---- the loop ----
+  let viewSession: Session | null = null;
   let last = 0;
   let worstWindow = 0;
   let worstClock = 0;
@@ -202,6 +204,8 @@ export async function start(root: AppRoot): Promise<void> {
       const g = s.services;
       // the journey is shown on the map: zooming into the street camera mid-journey is not allowed
       if (step && g.player.travel()?.phase === 'travelling' && s.renderer.getCameraMode() !== 'map') s.renderer.setCameraMode('map');
+      if (s !== viewSession) { viewSession = s; s.renderer.setViewDistance(host.settings().viewDistance ?? 0); }
+      s.renderer.setHeadBob(host.settings().headBob !== false);
       const intent = steerCamera(input.read(dt), dt, s);
       faceFoe(dt, s);
       const t1 = performance.now();

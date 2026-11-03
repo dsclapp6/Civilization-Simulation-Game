@@ -1,17 +1,17 @@
 // The DOM input layer (the one place in the player/app side that touches events): keyboard, the mouse, the wheel.
 //
-// The mouse (CLARITY §5): the cursor is free and visible. Hovering shows what is under it and what a click does;
-// a left click walks there and acts; the right button turns the camera while it is held (the pointer is locked only
-// then, so the cursor comes back where it was). With the weapon drawn (G, or a fight began) — or with the setting
-// "Always use mouse-look" — the mouse looks all the time: left strikes, right guards or aims. The click that takes
-// the mouse never strikes. Esc leaves mouse-look first; it opens the menu only when the mouse was already free.
+// The mouse looks (first person is the default view): the pointer is locked and moving the mouse turns the view, no button
+// held. The browser needs a click to hand over the pointer, so the first click in the game takes it (and never acts).
+// Left Alt / Option frees the cursor to point and click at the world and the HUD; again takes the mouse back. Esc frees it
+// too, and never opens the menu for that press. A page opening frees it; closing the page takes it back if it was looking.
+// With the cursor free the camera stays still. LMB strikes (weapon drawn) or acts on what is under the crosshair; RMB guards.
 //
 // The pure parts (which button does what) are in inputLogic.ts; this file records what happened and ignores
 // everything while the UI holds the focus (`ui.capturesInput()`).
 import type { GameRenderer } from '../render/types';
 import { EMPTY_INPUT, KEYMAP, type InputState } from '../player/types';
 import type { Speed } from '../core/time';
-import { InputMapper, MouseModes, escapeFor, mouseLook, type MouseCtx, type MouseOut } from './inputLogic';
+import { InputMapper, MouseModes, escapeFor, mouseLook, type LookState, type MouseCtx, type MouseOut } from './inputLogic';
 
 export interface InputHost {
   /** A panel or menu has the focus: movement and the camera must not react. */
@@ -19,7 +19,9 @@ export interface InputHost {
   /** The game is on screen (not a menu or loading screen). */
   inGame(): boolean;
   renderer(): GameRenderer | null;
-  settings(): { mouseSensitivity: number; invertY: boolean; alwaysLook?: boolean };
+  settings(): { mouseSensitivity: number; invertY: boolean };
+  /** The wheel settled on a view (0 = first person, else the third-person distance): remember it. */
+  rememberView?(distance: number): void;
   /** The journey is under way: the camera follows the party, the player cannot walk. */
   travelling(): boolean;
   openWheel(): void;
@@ -56,9 +58,10 @@ export class InputLayer {
   private mapDragging = false;
   private locked = false;
   private weReleasedLock = false;
-  /** In mouse-look mode the player wants the mouse captured (taken by the first click or by G; Esc gives it up). */
-  private combatLook = false;
-  private lastCombat = false;
+  /** The wheel moved the view: when it was (performance.now ms) and the last view saved. */
+  private viewDirty = 0;
+  private viewSaved = NaN;
+  private nonAlt = false;
   private lockLostAt = -1e9;
   private lastLockTry = -1e9;
   private lastCursor = '';
@@ -92,17 +95,24 @@ export class InputLayer {
 
   get pointerLocked(): boolean { return this.locked; }
 
+  /** 'look' (the mouse turns the view), 'wait' (a click will take it) or 'free' (the cursor is free to point and click). */
+  get lookState(): LookState { return this.modes.state; }
+
+  /** The hint's click: take the mouse back (for a click or key press, so the browser allows it). */
+  takeMouse(): void {
+    if (this.modes.state === 'free') this.modes.toggle(); else this.modes.state = 'wait';
+    this.requestLock();
+  }
+
   /**
    * Esc, as the interface asks for it: if the mouse is looking, Esc gives it back and that is all it does (true);
    * otherwise the interface closes its top page or shows the menu (false).
    */
   releaseLook(): boolean {
-    const verdict = escapeFor({ locked: this.locked, lookHeld: this.modes.lookHeld, msSinceLockLost: performance.now() - this.lockLostAt });
+    const verdict = escapeFor({ locked: this.locked, msSinceLockLost: performance.now() - this.lockLostAt });
     if (verdict === 'ignore') return true;
     if (verdict === 'ui') return false;
-    this.combatLook = false;
-    this.modes.lookHeld = false;
-    this.modes.attack = false; this.modes.block = false;
+    this.modes.toggle(); // look -> free
     this.exitLock();
     return true;
   }
@@ -116,6 +126,7 @@ export class InputLayer {
   read(dt: number): InputState {
     const r = this.host.renderer();
     if (this.host.captured() || !this.host.inGame()) {
+      this.modes.suspend();
       this.exitLock();
       this.clearHeld();
       this.host.pointerLeave();
@@ -124,9 +135,12 @@ export class InputLayer {
     }
     const mode = r ? r.getCameraMode() : 'follow';
     const mapView = mode === 'map' || this.host.travelling();
-    const combat = this.combatMode();
-    this.keepLock(combat, mapView);
-    this.lastCombat = combat;
+    this.keepLock(mapView);
+    if (this.viewDirty && performance.now() - this.viewDirty > 700 && r && mode === 'follow') {
+      this.viewDirty = 0;
+      const d = Math.round(r.getViewDistance() * 10) / 10;
+      if (d !== this.viewSaved) { this.viewSaved = d; this.host.rememberView?.(d); }
+    }
 
     const intent = this.mapper.map(
       { down: this.down, pressed: this.pressed, released: this.released },
@@ -134,10 +148,11 @@ export class InputLayer {
         cameraYaw: r ? r.getCameraYaw() : 0,
         // the buttons strike and guard only when the mouse is looking (never for the click that took it); with the
         // weapon drawn, J and K do the same from the keyboard alone
-        attack: (combat && this.locked && this.modes.attack) || (this.host.drawn() && this.down.has(KEYMAP.input.strike)),
-        block: (combat && this.locked && this.modes.block) || (this.host.drawn() && this.down.has(KEYMAP.input.guard)),
+        attack: (this.locked && this.modes.attack) || (this.host.drawn() && this.down.has(KEYMAP.input.strike)),
+        block: (this.locked && this.modes.block) || (this.host.drawn() && this.down.has(KEYMAP.input.guard)),
         aim: r && mode === 'follow' ? this.cameraRay(r) : null,
         riding: !!this.host.mounted?.(),
+        faceCamera: !!r && mode === 'follow' && r.inFirstPerson(),
       },
       dt,
     );
@@ -145,15 +160,17 @@ export class InputLayer {
     if (intent.togglePause) this.host.togglePause();
     if (intent.openWheel) this.host.openWheel();
     if (intent.callHorse) this.host.callHorse?.();
+    // a tap of the left button while looking, unarmed: the same as E on what is under the crosshair
+    if (this.actTap) { this.actTap = false; if (!mapView && !this.host.drawn()) intent.input.interact = true; }
 
     // the free cursor: what is under it, and what the pointer looks like
-    const free = !mapView && !combat && !this.locked && !this.modes.lookHeld;
+    const free = !mapView && !this.locked && this.modes.state === 'free';
     if (free && this.ptr.seen && this.ptr.onView) {
       this.host.pointerMove(this.ptr.x, this.ptr.y);
       this.setCursor(this.host.cursor());
     } else {
       this.host.pointerLeave();
-      this.setCursor(this.modes.lookHeld && !this.locked ? 'grabbing' : '');
+      this.setCursor('');
     }
 
     // on the map the movement keys pan it instead of walking
@@ -170,9 +187,6 @@ export class InputLayer {
     return intent.input;
   }
 
-  /** The weapon is drawn, or the player prefers the old scheme where the mouse always looks. */
-  private combatMode(): boolean { return this.host.drawn() || !!this.host.settings().alwaysLook; }
-
   /** Is the street camera live and the interface out of the way? */
   private active(): boolean {
     if (this.host.captured() || !this.host.inGame()) return false;
@@ -181,19 +195,13 @@ export class InputLayer {
   }
 
   private ctx(onView: boolean): MouseCtx {
-    return { active: this.active(), combat: this.combatMode(), locked: this.locked, onView };
+    return { active: this.active(), drawn: this.host.drawn(), locked: this.locked, onView };
   }
 
-  /** The pointer is locked exactly while the mouse is wanted for looking: the right button held, or mouse-look mode. */
-  private keepLock(combat: boolean, mapView: boolean): void {
-    if (mapView) { this.exitLock(); return; }
-    if (combat) {
-      // a fight drew the weapon (or a panel closed): take the mouse back if a key press or click is recent enough to allow it
-      if (!this.locked && (this.combatLook || !this.lastCombat) && recentGesture()) { this.combatLook = true; this.requestLock(); }
-      return;
-    }
-    this.combatLook = false;
-    if (this.locked && !this.modes.lookHeld) this.exitLock();
+  /** The pointer is ours whenever the mouse should look: after a click when the browser demands one, at once after a key press. */
+  private keepLock(mapView: boolean): void {
+    if (mapView) { this.modes.suspend(); this.exitLock(); return; }
+    if (this.modes.state === 'wait' && !this.locked && recentGesture()) this.requestLock();
   }
 
   private requestLock(): void {
@@ -240,6 +248,7 @@ export class InputLayer {
   private onKeyDown(e: KeyboardEvent): void {
     const t = e.target as HTMLElement | null;
     if (t && (TYPING.has(t.tagName) || t.isContentEditable)) return;
+    if (e.code === 'AltLeft' || e.code === 'AltRight') { this.onAltKey(e); return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (this.host.captured() || !this.host.inGame()) return;
     if (GAME_KEYS.has(e.code)) e.preventDefault();
@@ -253,11 +262,18 @@ export class InputLayer {
     if (this.down.delete(e.code)) this.released.add(e.code);
   }
 
-  /** G: draw or put away. Drawing takes the mouse at once (a key press is allowed to), putting away gives it back. */
+  /** Left Alt / Option: free the cursor to point and click, or take the mouse back (a key press is allowed to take it). */
+  private onAltKey(e: KeyboardEvent): void {
+    e.preventDefault();
+    if (e.repeat || e.ctrlKey || e.metaKey || !this.active()) return;
+    if (this.modes.toggle() === 'lock') this.requestLock(); else this.exitLock();
+  }
+
+  /** G: draw or put away. Drawing with the cursor free takes the mouse (a fight is no time to point). */
   private onWeaponKey(): void {
     if (!this.active()) return;
     this.host.toggleWeapon();
-    if (this.host.drawn()) { this.combatLook = true; this.requestLock(); } else this.combatLook = false;
+    if (this.host.drawn() && this.modes.state === 'free') { this.modes.state = 'wait'; this.requestLock(); }
   }
 
   // ---------------------------------------------------------------------------------------- mouse
@@ -286,13 +302,11 @@ export class InputLayer {
   }
 
   private apply(out: MouseOut): void {
-    if (out.lock) {
-      if (this.combatMode()) this.combatLook = true;
-      this.requestLock();
-    }
-    if (out.unlock) this.exitLock();
+    if (out.lock) this.requestLock();
+    if (out.act) this.actTap = true;
     if (out.click) this.host.pointerClick(out.click.x, out.click.y);
   }
+  private actTap = false;
 
   /** When the mouse last moved (performance.now ms): fighting from the keyboard turns to the foe only while it rests. */
   lastMouseMove = -1e9;
@@ -309,7 +323,7 @@ export class InputLayer {
       if (this.mapDragging && !this.host.travelling()) r.pan(dx, dy);
       return;
     }
-    this.modes.travel(dx, dy);
+    this.modes.travel(dx, dy, this.locked);
     if (this.modes.orbiting(this.ctx(true))) {
       const s = this.host.settings();
       const look = mouseLook(dx, dy, s.mouseSensitivity, s.invertY);
@@ -322,19 +336,22 @@ export class InputLayer {
     const r = this.host.renderer();
     if (!r) return;
     e.preventDefault();
-    // far out the follow camera becomes the map (the rig switches by itself)
-    r.zoom(Math.sign(e.deltaY) * Math.min(3, Math.abs(e.deltaY) / 60 + 0.5));
+    // first person ⇄ over the shoulder ⇄ farther out ⇄ the map (the rig steps between them); a trackpad sends many small events
+    const px = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY;
+    r.zoom(Math.max(-3, Math.min(3, px / 70)));
+    this.viewDirty = performance.now();
   }
 
   private onLockChange(): void {
     const was = this.locked;
     this.locked = document.pointerLockElement === this.surface;
+    if (!was && this.locked) this.modes.gained();
     if (was && !this.locked) {
       const byUs = this.weReleasedLock;
       this.weReleasedLock = false;
-      this.modes.attack = false; this.modes.block = false;
-      // the browser took the pointer back (Esc): the mouse is free again; a drawn weapon stays drawn until G or the fight ends
-      if (!byUs) { this.lockLostAt = performance.now(); this.combatLook = false; }
+      this.modes.lost(byUs);
+      // the browser took the pointer back (Esc): the cursor is free until Alt, the hint or a click on it
+      if (!byUs) this.lockLostAt = performance.now();
     }
   }
 }

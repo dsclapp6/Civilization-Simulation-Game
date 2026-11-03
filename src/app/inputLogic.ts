@@ -72,7 +72,7 @@ export class InputMapper {
   private ridingAtPress = false;
   private mountActive = false;
 
-  map(raw: RawKeys, ctx: { cameraYaw: number; attack: boolean; block: boolean; aim?: InputState['aim']; riding?: boolean }, dt: number): FrameIntent {
+  map(raw: RawKeys, ctx: { cameraYaw: number; attack: boolean; block: boolean; aim?: InputState['aim']; riding?: boolean; faceCamera?: boolean }, dt: number): FrameIntent {
     const { down, pressed, released } = raw;
     const i = this.intent.input;
     i.forward = (any(down, MOVE_FORWARD) ? 1 : 0) - (any(down, MOVE_BACK) ? 1 : 0);
@@ -100,6 +100,7 @@ export class InputMapper {
     i.attack = ctx.attack;
     i.block = ctx.block;
     i.aim = ctx.aim ?? null;
+    i.faceCamera = !!ctx.faceCamera;
     this.intent.openWheel = this.tap.openWheel;
     this.intent.speed = pressed.has(KEYMAP.input.speed1) ? 1 : pressed.has(KEYMAP.input.speed2) ? 3 : pressed.has(KEYMAP.input.speed3) ? 8 : null;
     this.intent.togglePause = pressed.has(KEYMAP.input.pause);
@@ -134,36 +135,44 @@ export function commandRefusal(reason: string | undefined): string {
   }
 }
 
-/** Mouse look: pixels → radians of camera yaw and pitch (yaw turns right when the mouse moves right). */
+/**
+ * Mouse look: pixels → radians of camera yaw and pitch (yaw turns right when the mouse moves right). A single event is
+ * capped: browsers now and then deliver a huge first movement when the pointer is taken, which would spin the view.
+ */
 export function mouseLook(dx: number, dy: number, sensitivity: number, invertY: boolean): { yaw: number; pitch: number } {
   const k = 0.0022 * sensitivity;
-  return { yaw: -dx * k, pitch: dy * k * (invertY ? -1 : 1) };
+  const cap = (v: number): number => Math.max(-MAX_STEP, Math.min(MAX_STEP, v));
+  return { yaw: -cap(dx) * k, pitch: cap(dy) * k * (invertY ? -1 : 1) };
 }
+const MAX_STEP = 220;
 
 // ---------------------------------------------------------------------------------------------------
-// The mouse (CLARITY §5): a free cursor by default, the right button turns the camera while held, a left click
-// walks to the thing and acts; with the weapon drawn (or the old "always mouse-look" scheme) the mouse looks and
-// the buttons strike and guard. The click that takes the mouse never strikes.
+// The mouse: it looks. The pointer is locked and moving the mouse (or a trackpad) turns the view, no button held.
+// Left Alt / Option frees the cursor to point and click at the world (and the HUD); again takes the mouse back.
+// Three states: 'look' (the pointer is ours), 'wait' (the mouse should look but the browser needs a click to hand over
+// the pointer: the start, and after a page closed) and 'free' (the player freed it). The click that takes the mouse never acts.
 // ---------------------------------------------------------------------------------------------------
+
+export type LookState = 'look' | 'wait' | 'free';
 
 export interface MouseCtx {
   /** In the game with the street camera and no panel holding the focus. */
   active: boolean;
-  /** Mouse-look mode: the weapon is drawn, or the player chose "always mouse-look". */
-  combat: boolean;
   /** The pointer is locked right now. */
   locked: boolean;
   /** The event started on the 3D view, not on an interface plate. */
   onView: boolean;
+  /** The weapon is drawn: the buttons strike and guard. */
+  drawn: boolean;
 }
 
 export interface MouseOut {
   /** Ask the browser to lock the pointer (the mouse is taken for looking). */
   lock: boolean;
-  /** Give the pointer back (the right button went up). */
-  unlock: boolean;
-  /** A left click on the world at this client position (walk there and act). */
+  /** A left click on the world while the cursor is free: walk there and act. */
   click: { x: number; y: number } | null;
+  /** A left tap while looking, unarmed: do what E would do on the thing under the crosshair. */
+  act: boolean;
 }
 
 /** A press this far (pixels of travel) or this long (s) is a drag or a hold, not a click. */
@@ -171,37 +180,36 @@ export const CLICK_SLOP = 8;
 export const CLICK_SECONDS = 0.7;
 
 export class MouseModes {
-  /** Left and right buttons as the combat module sees them (only in mouse-look mode, with the pointer locked). */
+  state: LookState = 'wait';
+  /** Left and right buttons as the combat module sees them (only while the pointer is locked and the weapon drawn). */
   attack = false;
   block = false;
-  /** The right button is down in free mode: moving the mouse turns the camera. */
-  lookHeld = false;
   private left: { x: number; y: number; moved: number; t: number } | null = null;
-  private readonly out: MouseOut = { lock: false, unlock: false, click: null };
+  /** The press that took the mouse: its release is no click and no blow. */
+  private swallow = false;
+  private readonly out: MouseOut = { lock: false, click: null, act: false };
 
   private fresh(): MouseOut {
     const o = this.out;
-    o.lock = false; o.unlock = false; o.click = null;
+    o.lock = false; o.click = null; o.act = false;
     return o;
   }
 
   down(button: number, x: number, y: number, c: MouseCtx, now: number): MouseOut {
     const o = this.fresh();
     if (!c.active || !c.onView) return o;
-    if (button === 0) {
-      if (c.combat) {
-        if (!c.locked) o.lock = true; // the click that takes the mouse is not a blow
-        else this.attack = true;
-      } else this.left = { x, y, moved: 0, t: now };
-    } else if (button === 2) {
-      if (c.combat) {
-        if (!c.locked) o.lock = true;
-        else this.block = true;
-      } else {
-        this.lookHeld = true;
-        o.lock = true;
-      }
+    if (this.state !== 'free' && !c.locked) {
+      // the click that takes the mouse
+      this.state = 'wait';
+      o.lock = true;
+      this.swallow = true;
+      return o;
     }
+    this.swallow = false;
+    if (button === 0) {
+      if (this.state !== 'free' && c.drawn) this.attack = true;
+      else this.left = { x, y, moved: 0, t: now };
+    } else if (button === 2 && this.state !== 'free' && c.drawn) this.block = true;
     return o;
   }
 
@@ -211,34 +219,55 @@ export class MouseModes {
       this.attack = false;
       const l = this.left;
       this.left = null;
-      if (l && c.active && c.onView && !c.combat && l.moved <= CLICK_SLOP && now - l.t <= CLICK_SECONDS && !this.lookHeld) o.click = { x, y };
-    } else if (button === 2) {
-      this.block = false;
-      if (this.lookHeld) {
-        this.lookHeld = false;
-        if (c.locked && !c.combat) o.unlock = true;
+      if (this.swallow) { this.swallow = false; return o; }
+      if (l && c.active && c.onView && l.moved <= CLICK_SLOP && now - l.t <= CLICK_SECONDS) {
+        if (this.state === 'free') o.click = { x, y };
+        else if (c.locked) o.act = true;
       }
-    }
+    } else if (button === 2) this.block = false;
     return o;
   }
 
-  /** Mouse travel (pixels) while a left press is pending: too much and it is a drag, not a click. */
-  travel(dx: number, dy: number): void {
-    if (this.left) this.left.moved += Math.abs(dx) + Math.abs(dy);
+  /** Mouse travel (pixels) while a left press is pending: too much and it is a drag, not a click. A locked pointer travels freely. */
+  travel(dx: number, dy: number, locked: boolean): void {
+    if (this.left && !locked) this.left.moved += Math.abs(dx) + Math.abs(dy);
   }
 
-  /** Does moving the mouse turn the camera now? */
-  orbiting(c: MouseCtx): boolean { return c.active && (c.locked || this.lookHeld); }
+  /** Does moving the mouse turn the view now? */
+  orbiting(c: MouseCtx): boolean { return c.active && c.locked; }
+
+  /** Alt / Option: free the cursor, or take the mouse back. Returns what to ask of the browser. */
+  toggle(): 'lock' | 'unlock' {
+    if (this.state === 'free') { this.state = 'wait'; return 'lock'; }
+    this.state = 'free';
+    this.attack = false; this.block = false; this.left = null;
+    return 'unlock';
+  }
+
+  /** The pointer came to us. */
+  gained(): void { this.state = 'look'; }
+
+  /** The pointer left: `byUs` when we gave it up (a page opened, the map came), else the browser took it back (Esc): the cursor is free. */
+  lost(byUs: boolean): void {
+    this.attack = false; this.block = false;
+    if (this.state === 'look') this.state = byUs ? 'wait' : 'free';
+  }
+
+  /** A page opened, the map came: the mouse stops looking but should look again afterwards. */
+  suspend(): void {
+    if (this.state === 'look') this.state = 'wait';
+    this.clear();
+  }
 
   /** The window lost the focus, a panel opened, the weapon went away: forget every button. */
   clear(): void {
-    this.attack = false; this.block = false; this.lookHeld = false; this.left = null;
+    this.attack = false; this.block = false; this.left = null; this.swallow = false;
   }
 }
 
-/** What Esc does with the mouse: leave mouse-look first (it never opens the menu), then the interface's own rules. */
-export function escapeFor(s: { locked: boolean; lookHeld: boolean; msSinceLockLost: number }): 'leave-look' | 'ignore' | 'ui' {
-  if (s.locked || s.lookHeld) return 'leave-look';
+/** What Esc does with the mouse: give it back first (it never opens the menu for that press), then the interface's own rules. */
+export function escapeFor(s: { locked: boolean; msSinceLockLost: number }): 'leave-look' | 'ignore' | 'ui' {
+  if (s.locked) return 'leave-look';
   // the browser took the pointer back for this very key press and the key event came along too
   if (s.msSinceLockLost < 250) return 'ignore';
   return 'ui';

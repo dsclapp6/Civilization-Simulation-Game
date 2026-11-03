@@ -207,8 +207,9 @@ export function stepBody(b: BodyState, input: Readonly<InputState>, env: BodyEnv
       moveX = Math.sin(b.yaw) * b.speed; moveZ = Math.cos(b.yaw) * b.speed;
     } else {
       b.speed = approach(b.speed, target, (target > b.speed ? 15 : 24) * dt);
+      if (input.faceCamera) b.yaw = turnToward(b.yaw, input.cameraYaw, 18, dt); // first person: the body looks where the camera does
       if (mag > 0.05) {
-        b.yaw = turnToward(b.yaw, Math.atan2(dirX, dirZ), 13, dt);
+        if (!input.faceCamera) b.yaw = turnToward(b.yaw, Math.atan2(dirX, dirZ), 13, dt);
         moveX = dirX * b.speed; moveZ = dirZ * b.speed;
       } else {
         moveX = Math.sin(b.yaw) * b.speed; moveZ = Math.cos(b.yaw) * b.speed;
