@@ -141,7 +141,10 @@ the day change, never while a field in it is being typed into.
 (the sim's `fightAs`; disabled when he is hurt): you take his place - his sword, skill and wounds - while your lord (RunState.liege) carries
 on. While you play him a ribbon at the top of the screen says whose knight you are, with *Return to your lord (U)*; **U** does the same
 (`returnToLiege`; `src/ui/ruler/liegeBar.ts`, a HUD part and a hotkey). *Men fit for the accolade*: `realm.dubCandidates` - any man of your
-House, your oath or your lands who is fit, not only those raised by `recruit` - each with **Dub a knight** (`docs/REALM.md`). The
+House, your oath or your lands who is fit, not only those raised by `recruit` - each with **Dub a knight** (`docs/REALM.md`). *Hostile neighbours* (Military page) and the Rivals page's House card carry **Plan an attack** on a hostile or warring House's seat: it calls
+`game.campaign?.plan(seat)` (`CampaignApi`, `src/ui/types.ts`, wired by the war builder: the lord raises his host and the player rides with it).
+The call is declared loosely in `pages/military.ts` (`campaignOf`) and guarded, so the button simply does not show where the campaign API is
+absent (this branch's base has none; after the merge it appears). The
 Overview's map of your lands draws the roads and tracks that cross the picture (`roadPath`, `landsMap.ts`).
 
 ## 3. *Rule this town*

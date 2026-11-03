@@ -81,7 +81,7 @@ it checks every piece (`evaluate`, the same checks as a single site), prices the
 footprints for the tint. `placeLine` is all or none: the plan must pass whole, the sites are staked with one shared `line` id
 (`SiteRec.line`, `SiteView.line`, `PlaceOptions.line`) and one notice, and a piece that fails after the plan passed calls the rest off
 again. The lengths of one line count as **one** work against the payer's sixteen open works (`affordReason`), and `cancelLine` calls
-them all off. `check.ts` lets a length of wall or palisade touch a tower or a gatehouse (0 m, like length to length; other buildings keep
+them all off. `check.ts` lets the pieces of a line - lengths, towers, a gatehouse (flanked by towers) - touch (0 m, like length to length; other buildings keep
 their 0.8 m).
 
 **Stocked** (`construction.json` `stock`, `data.ts` `stockOf` / `stockPence`). A stable comes with three horses (`horse#1`, common), a

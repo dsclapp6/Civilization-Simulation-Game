@@ -89,6 +89,16 @@ describe('a wall laid in a line', () => {
     expect(new Set(r.cons.lineSites!(res.line!).map((s) => s.line)).size).toBe(1);
   });
 
+  it('lets a gatehouse stand right beside a tower, as the flanked gates of a run do, and keeps the gap for other buildings', () => {
+    const { r, lord } = lordRig();
+    const t = r.cons.place(lord.id, 'tower', OPEN.x, OPEN.z, 0);
+    expect(t.ok, t.reason).toBe(true);
+    const gate = r.cons.check(lord.id, 'gatehouse', OPEN.x + BUILDINGS.tower.w / 2 + BUILDINGS.gatehouse.w / 2 + 0.02, OPEN.z, 0);
+    expect(gate.ok, gate.reason).toBe(true);
+    const hut = r.cons.check(lord.id, 'hovel', OPEN.x + BUILDINGS.tower.w / 2 + BUILDINGS.hovel.w / 2 + 0.02, OPEN.z, 0);
+    expect(hut.ok).toBe(false);
+  });
+
   it('refuses what is not a wall, and a run too long', () => {
     const { r, lord } = lordRig();
     expect(r.cons.planLine!(lord.id, 'cottage', OPEN, { x: OPEN.x + 50, z: OPEN.z }).ok).toBe(false);

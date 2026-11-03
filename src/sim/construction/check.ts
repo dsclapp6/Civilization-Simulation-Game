@@ -274,9 +274,9 @@ function groundReasonFor(C: Construction, rules: KindRules, kind: BuildingKind, 
 }
 
 const LINE_PIECES: ReadonlySet<BuildingKind> = new Set<BuildingKind>(['palisade', 'wall', 'tower', 'gatehouse']);
-/** Lengths of wall and palisade may touch end to end, and meet a tower or a gatehouse set in the line. */
+/** The pieces of a line of wall - lengths, towers, a gatehouse flanked by towers - touch end to end (other buildings keep their gap). */
 function linePiece(a: BuildingKind, b: BuildingKind): boolean {
-  return LINE_PIECES.has(a) && LINE_PIECES.has(b) && (!!BUILDINGS[a].segment || !!BUILDINGS[b].segment);
+  return LINE_PIECES.has(a) && LINE_PIECES.has(b);
 }
 
 function obstacleReason(C: Construction, kind: BuildingKind, fp: readonly P2[], x: number, z: number, ignore?: number): string | null {

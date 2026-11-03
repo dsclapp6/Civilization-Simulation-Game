@@ -53,6 +53,9 @@ export function buildMilitary(env: RulerEnv): HTMLElement {
     h('div.mu-row.mu-wrap.mu-gap-6', null, counts.map((c) => chip(`${c.n} ${kindName(c.kind, c.n)} · ${money(c.wage)} a day`, 'gold'))),
     h('div.mu-list.mu-rul-troops.mu-scroll', null, troops.slice(0, 80).map((t) => troopRow(env, t)))) : line('No man is on your pay. Raise some above.'));
 
+  // ---- the host against a hostile neighbour
+  wrap.append(attackCard(env));
+
   // ---- any man of yours fit for the accolade
   wrap.append(dubCard(env));
 
@@ -80,6 +83,40 @@ function knightsCard(env: RulerEnv): HTMLElement {
         const r = ctx.dispatch({ type: 'fightAs', personId: k.id });
         if (r.ok) { ctx.say('quest', `You are ${ctx.nameOf(k.id)}, your lord’s knight. Press U to return to your lord.`); ctx.close(); } else env.done(r, '');
       } })))));
+  return wrap;
+}
+
+/**
+ * The army campaign's call (`game.campaign`, `CampaignApi` of src/ui/types.ts, wired by the war builder; absent in a base without it,
+ * so it is declared loosely here and everything is guarded).
+ */
+export type CampaignCall = { plan(target: number, rideAs?: number): { ok: boolean; reason?: string } };
+export function campaignOf(env: Pick<RulerEnv, 'ctx'>): CampaignCall | undefined { return (env.ctx.game as unknown as { campaign?: CampaignCall }).campaign; }
+
+/** "Plan an attack": the lord raises his host against a hostile neighbour's seat and rides with it (the campaign mode of the war builder). */
+export function planAttackButton(env: RulerEnv, target: number, house: string): HTMLElement | null {
+  const c = campaignOf(env);
+  if (!c) return null;
+  return button('Plan an attack', { icon: 'swords', variant: 'danger', disabled: !env.may().realm,
+    tip: env.may().realm ? `Raise your host against ${house} and ride with it` : 'Only the holder, or a steward while the lord cannot act, raises the host',
+    onClick: () => env.ctx.confirm({
+      title: `Plan an attack on ${env.ctx.placeName(target)}?`, text: `Your banners are raised and an army musters to march on ${house}'s seat. You ride with it.`,
+      confirmLabel: 'Raise the host', cancelLabel: 'Not yet', danger: true,
+      onConfirm: () => { const r = c.plan(target); if (r.ok) { env.ctx.say('info', `Your host marches on ${env.ctx.placeName(target)}.`); env.ctx.close(); } else env.done(r, ''); },
+    }) });
+}
+
+/** Hostile Houses near, each with Plan an attack. */
+function attackCard(env: RulerEnv): HTMLElement {
+  const { ctx, realm } = env;
+  const wrap = h('div.mu-rul-attack');
+  if (!campaignOf(env)) return wrap;
+  const foes = realm.rivals(env.me()).filter((r) => (r.stance === 'hostile' || r.stance === 'war') && r.seat !== undefined);
+  wrap.append(heading(`Hostile neighbours · ${foes.length}`, 'swords'));
+  if (!foes.length) { wrap.append(line('No House near you stands against you.')); return wrap; }
+  wrap.append(h('div.mu-list', null, foes.map((r) => h('div.mu-li', null,
+    h('div.mu-grow', null, h('b', null, `House ${r.name}`), h('div.mu-tiny.mu-dim', null, `${r.stance === 'war' ? 'At war' : 'Hostile'} · seat ${ctx.placeName(r.seat as number)} · ${Math.round(r.distance / 100) / 10} km · strength ${Math.round(r.strength)}`)),
+    planAttackButton(env, r.seat as number, `House ${r.name}`)))));
   return wrap;
 }
 
