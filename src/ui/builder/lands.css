@@ -43,7 +43,7 @@
 /* ================================================================== builder mode */
 .mu-bld-root { display: contents; }
 .mu-modal.clear:has(.mu-bld-root) { justify-content: flex-end; padding-top: 210px; padding-bottom: 112px; }
-@media (max-height: 800px) { .mu-modal.clear:has(.mu-bld-root) { padding-bottom: 72px; } } /* a low screen keeps the room: the dock's top row lies under the window */
+@media (max-height: 800px) { .mu-modal.clear:has(.mu-bld-root) { padding-top: 150px; padding-bottom: 108px; } } /* a low screen: the window ends above the dock's two rows (about 101 px with its margin), it never covers them */
 .mu-modal .mu-win.mu-bld-win { max-width: 420px; height: 100%; min-height: 0; margin-left: auto; }
 .mu-bld-body { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; position: relative; z-index: 2; }
 .mu-bld-top { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 8px 22px 6px 26px; }

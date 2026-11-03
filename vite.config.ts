@@ -7,6 +7,8 @@ export default defineConfig({
   worker: { format: 'es' },
   build: { target: 'es2022', chunkSizeWarningLimit: 2000 },
   server: { host: true },
+  // parallel worktrees share node_modules (a symlink): VITE_CACHE_DIR gives each its own dependency cache so their dev servers do not break each other
+  cacheDir: process.env.VITE_CACHE_DIR || 'node_modules/.vite',
   // Subagent worktrees live under .claude/; their in-progress suites are not ours to run.
   // World generation in tests can take seconds on a loaded machine. Timing budgets live in
   // *.perf.test.ts and run alone, one file at a time: `npm run test:perf`.
