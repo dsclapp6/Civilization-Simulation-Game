@@ -457,6 +457,30 @@ export function fitBox(box: MapBox, w: number, h: number): { scale: number; x: (
   return { scale, x: (wx) => ox + (wx - box.minX) * scale, y: (wz) => oy + (wz - box.minZ) * scale };
 }
 
+/**
+ * The stretches of a road that lie inside the map's box (widened by `margin` of its size), as one path through a fit; points less than
+ * `minPx` apart on the page are dropped (a long road has thousands). Empty when none of it is in the picture.
+ */
+export function roadPath(points: readonly P2[], box: MapBox, fit: { x(wx: number): number; y(wz: number): number }, margin = 0.04, minPx = 2.5): string {
+  const mx = (box.maxX - box.minX) * margin, mz = (box.maxZ - box.minZ) * margin;
+  const inside = (p: P2): boolean => p.x >= box.minX - mx && p.x <= box.maxX + mx && p.z >= box.minZ - mz && p.z <= box.maxZ + mz;
+  let d = '';
+  let pen = false;
+  let lx = Infinity, ly = Infinity;
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    // a point outside still joins its inside neighbours, so a road runs off the edge instead of stopping short of it
+    const near = inside(p) || (i > 0 && inside(points[i - 1])) || (i + 1 < points.length && inside(points[i + 1]));
+    if (!near) { pen = false; continue; }
+    const x = fit.x(p.x), y = fit.y(p.z);
+    const last = i === points.length - 1 || !inside(points[i + 1]);
+    if (pen && !last && Math.abs(x - lx) < minPx && Math.abs(y - ly) < minPx) continue;
+    d += `${pen ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`;
+    pen = true; lx = x; ly = y;
+  }
+  return d;
+}
+
 /** An SVG path for a closed polygon, through a fit. */
 export function polyPath(poly: readonly P2[], fit: { x(wx: number): number; y(wz: number): number }): string {
   if (!poly.length) return '';
