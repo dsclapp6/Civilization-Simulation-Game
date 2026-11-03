@@ -350,7 +350,8 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     deposits.update(camera, lastBuildings, view.buildingsVersion(), time, atmo.day * (1 - atmo.overcast * 0.7), mapBlend < 0.9);
     // insides of buildings and the leaves of their doors (docs/INTERIORS.md)
     interiors.update(mapBlend < 0.5 ? (interiorView?.() ?? null) : null, camera, focusFor(view), dt, atmo.day * (1 - atmo.overcast * 0.5));
-    rig.inside = interiors.stats.inside >= 0;
+    // (the camera rig, src/render/camera, is the first-person builder's: inside a building the boom passes through its walls —
+    // BuildingSystem.setInteriorFocus — and the cut-away keeps the room in view; a first-person eye sees the room whole)
     lastStrips = view.strips();
     const sv = view.stripsVersion();
     g += fields.update(lastStrips, sv, camera, Math.max(0.5 * budgetScale, budget - g), dt);

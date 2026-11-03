@@ -674,7 +674,7 @@ function makeWalls(pc: PlanCtx): void {
         let a = p.a0;
         for (const g of gaps) {
           box(a, g[0], y0, y1);
-          box(g[0], g[1], y0 - 0.2, g[2]); // below a raised sill
+          if (g[2] > y0 + 0.3) box(g[0], g[1], y0, g[2]); // below a raised sill (one steps over a low one)
           box(g[0], g[1], g[3], y1); // over the head
           a = Math.max(a, g[1]);
         }

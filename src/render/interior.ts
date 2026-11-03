@@ -274,9 +274,12 @@ export class InteriorLayer {
       if (ang < 0.03 && !r.inside) continue;
       holes.push(doorHole(d));
     }
+    // a first-person eye (at the head, within a metre of the body) sees the room whole: walls, ceiling and the floor above
+    const firstPerson = Math.hypot(eye.x - fl.x, eye.z - fl.z) < 1.0 && Math.abs(eye.y - fl.y - 1.6) < 0.8;
+    const cutaway = r.inside && !firstPerson;
     return {
-      on: r.inside ? 2 : 1, inv, cutY: r.inside ? lv.cut : 1e9,
-      bounds: new THREE.Vector4(b.x0 - 0.7, b.z0 - 0.7, b.x1 + 0.7, b.z1 + 0.7), eye, focus: new THREE.Vector3(fl.x, lv.y, fl.z), holes,
+      on: cutaway ? 2 : 1, inv, cutY: cutaway ? lv.cut : 1e9,
+      bounds: new THREE.Vector4(b.x0 - 1.4, b.z0 - 1.4, b.x1 + 1.4, b.z1 + 1.4), eye, focus: new THREE.Vector3(fl.x, lv.y, fl.z), holes,
     };
   }
 

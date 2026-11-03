@@ -123,6 +123,8 @@ export class Nav implements NavApi {
     this.obstacles.bodySkip.clear();
   }
 
+  prepareInteriors(x: number, z: number): void { this.refreshInteriors(x, z); }
+
   private refreshInteriors(fx: number, fz: number): void {
     this.interiors.refresh(fx, fz, (ids) => {
       this.obstacles.bodySkip.clear();

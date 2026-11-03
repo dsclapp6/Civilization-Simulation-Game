@@ -92,12 +92,15 @@ export function createBody(x: number, z: number, yaw: number, y: number, enduran
 
 /** Puts the body somewhere; the previous position follows so nothing is interpolated across the jump. */
 export function placeBody(b: BodyState, x: number, z: number, yaw: number, nav: NavApi, walkY?: number): void {
+  // the insides round the new place are known before the body is set down in one
+  nav.prepareInteriors?.(x, z);
   // on a wall-walk (a ladder's top, the stairs): the floor must be there; otherwise the body is on the ground, and a point inside a
   // wall or a tower (a body saved on the walk) is set down beside it
   const top = walkY !== undefined && nav.walkTopAt ? nav.walkTopAt(x, z, walkY) : NaN;
   b.onWalk = top === top;
   b.fell = 0;
-  if (!b.onWalk && nav.groundBeside) { const g = { x, z }; if (nav.groundBeside(x, z, g)) { x = g.x; z = g.z; } }
+  const indoors = walkY !== undefined && !!nav.interiorAt && nav.interiorAt(x, z, walkY) >= 0;
+  if (!b.onWalk && !indoors && nav.groundBeside) { const g = { x, z }; if (nav.groundBeside(x, z, g)) { x = g.x; z = g.z; } }
   b.x = b.px = x;
   b.z = b.pz = z;
   b.yaw = b.pyaw = yaw;

@@ -125,6 +125,8 @@ export interface NavApi {
   floorY?(x: number, z: number, y: number): number;
   /** Additive (interiors): the building whose rooms a body at (x, z, y) is in (−1 none) and the level of its plan. */
   interiorAt?(x: number, z: number, y: number, out?: { level: number }): number;
+  /** Additive (interiors): load the insides round a point now (a body is about to be set down there). */
+  prepareInteriors?(x: number, z: number): void;
   /** Additive (interiors): the shut door a body at (x, z, y) is pressed against (the building, the door's index in its plan). */
   doorAgainst?(x: number, z: number, y: number): { building: number; door: number } | null;
   /** Walking path (smoothed waypoints, ends at `to` or the nearest reachable point); null if none. */

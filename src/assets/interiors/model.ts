@@ -264,7 +264,18 @@ function drawFloors(b: MeshBuilder, plan: InteriorPlan, s: CultureStyle, base: n
           break;
         }
         case 'straw': b.box(f.x0, f.y - 0.05, f.z0, f.x1, f.y, f.z1, { top: 0xb79a5c, side: 0x8a7448 }, 'b'); break;
-        default: b.box(f.x0, f.y - 0.05, f.z0, f.x1, f.y, f.z1, { top: 0x6e5a42, side: 0x5a4834 }, 'b');
+        default: {
+          // beaten earth, strewn with rushes in patches
+          b.box(f.x0, f.y - 0.05, f.z0, f.x1, f.y, f.z1, { top: 0x7e6648, side: 0x5a4834 }, 'b');
+          if (w > 1.2 && d > 1.2) {
+            const n = Math.min(10, Math.floor((w * d) / 2.5));
+            for (let i = 0; i < n; i++) {
+              const px = f.x0 + 0.3 + ((i * 0.618 + f.x0 * 0.13) % 1) * (w - 0.6), pz = f.z0 + 0.3 + ((i * 0.381 + f.z0 * 0.17) % 1) * (d - 0.6);
+              const hw = 0.25 + ((i * 7) % 5) * 0.06;
+              b.quad([px - hw, f.y + 0.004, pz + hw * 0.6], [px + hw, f.y + 0.004, pz + hw * 0.7], [px + hw * 0.8, f.y + 0.004, pz - hw * 0.6], [px - hw * 0.9, f.y + 0.004, pz - hw * 0.7], i % 2 ? 0xa48c58 : 0x9a8450);
+            }
+          }
+        }
       }
       if (upper) {
         // the floor's thickness and the joists seen from below
