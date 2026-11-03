@@ -11,6 +11,7 @@ import { CFG } from './config';
 import { ransomValue, takeCaptive } from './harm';
 import { unitKindOf } from './forces';
 import type { Mil } from './store';
+import { defaultPlan, siegeWorks } from './plan';
 import { UNIT_CHAR, type Army, type SiegeRec, type SiegeView } from './types';
 
 const DEFENCE_WEIGHT: Readonly<Record<string, number>> = { palisade: 0.45, wall: 0.9, tower: 0.25, gatehouse: 0.3, motte: 0.8, keep_stone: 1.1 };
@@ -173,12 +174,15 @@ export class SiegeSystem {
 
     // siege works
     const kinds = countKinds(a);
-    const works = men >= 25;
-    if (!rec.ladders && age >= CFG.siege.ladderDays && works) rec.ladders = true;
-    if (rec.rams < 1 && age >= CFG.siege.ramDays && works && wallIntegrity(M, sid) > 0) rec.rams = 1;
-    if (rec.rams === 1 && age >= CFG.siege.ramDays * 3 && men >= 120) rec.rams = 2;
+    // (what the assault plan's companies can field: a ram for each full crew, a ladder for each squad, the bows set at the walls;
+    // built over the days, and lost with the men)
+    const works = siegeWorks(a.plan ?? defaultPlan(M, a));
+    rec.ladders = works.ladders > 0 && age >= CFG.siege.ladderDays;
+    const built = age >= CFG.siege.ramDays ? 1 + Math.floor((age - CFG.siege.ramDays) / (CFG.siege.ramDays * 2)) : 0;
+    rec.rams = Math.max(0, wallIntegrity(M, sid) > 0 ? Math.min(works.rams, built) : Math.min(works.rams, rec.rams));
+    const crewed = men >= 25;
     const adv = M.advancement;
-    if (adv && (M.techBonus(a.house, 'siege.trebuchet') > 0 || adv.houseHas(a.house, 'trebuchet')) && age >= CFG.siege.trebuchetDays && men >= 60) {
+    if (adv && (M.techBonus(a.house, 'siege.trebuchet') > 0 || adv.houseHas(a.house, 'trebuchet')) && age >= CFG.siege.trebuchetDays && men >= 60 && crewed) {
       rec.trebuchets = Math.min(3, 1 + Math.floor(men / 160));
     }
     // mining needs men who know stone: masons and miners among the troops
@@ -241,7 +245,9 @@ export class SiegeSystem {
   private readyToStorm(rec: SiegeRec, a: Army): boolean {
     const M = this.M;
     const sid = rec.settlement;
-    const bonus = this.defenceBonus(rec);
+    // the bows the plan sets at the walls keep the defenders' heads down (the storm itself applies the plan again)
+    const bows = siegeWorks(a.plan ?? defaultPlan(M, a)).bows;
+    const bonus = this.defenceBonus(rec) * (1 - 0.08 * Math.min(1, bows / Math.max(10, inhabitants(M, sid) * 0.15)));
     const def = defendersOf(M, sid, M.realm.holderOf(sid));
     const att = fightersOf(M, [a]);
     if (att.total <= 0) return false;
