@@ -266,4 +266,4 @@ garrison and the militia on the walls and towers), 0.96 under assault (everyone 
 and out of the same windows: +0.03 to +0.05 ms per sub-step (1.50 → 1.53, 1.51 → 1.53, 0.97 → 1.02 ms). The sight test of the watch is a
 walk of 0.6 m steps along the line against the building boxes and trunks, for at most ten candidates twice a second while someone
 trespasses. `tests/agents/agents.perf.test.ts` (run with `PERF=1`) prints these.
-Tests: `tests/agents/` (schedule, nav, zone, pace, walking, walkcheck, sites, lead, plates, patrol, alert, horse, prisoner, lawzone, perf).
+Tests: `tests/agents/` (schedule, nav, zone, pace, walking, walkcheck, sites, lead, plates, patrol, alert, horse, prisoner, lawzone, perf, stairs, yard, interiors, doorTable). Live: `node tools/interiors-live.mjs` (docs/INTERIORS.md).
