@@ -16,7 +16,7 @@ import { ruleOffer } from '../ruler/ruleTown';
 import { BuilderCamera } from './builderCamera';
 import {
   CATEGORY_ICON, CATEGORY_LABEL, CATEGORY_ORDER, ROTATE_STEP, categoryCounts, cleanOutpostName, conditionWords, costLines, costSummary, cursorTip,
-  defaultOutpostName, filterCatalogue, ghostFrom, manageOptions, nearestOf, noBuildCard, overviewPlan, ownerWords, priorityFor, queueRows,
+  defaultOutpostName, filterCatalogue, ghostFrom, lineAreas, lineGhostPart, lineTip, manageOptions, nearestOf, noBuildCard, overviewPlan, ownerWords, priorityFor, queueRows,
   requirementLines, rotate, shortfall, siteCard, whereOptions, STATUS_TONE, type CursorTip, type ManageWork,
 } from './builderModel';
 import { heldPan, keyPanPixels } from './cameraModel';
@@ -124,6 +124,9 @@ class BuilderMode {
   private optionsAt = -1e9;
   private selected: BuildOption | null = null;
   private rot = 0;
+  /** A wall or palisade is laid as a run: where the first click set it going, and the towers and gate asked for. */
+  private lineFrom: { x: number; z: number } | null = null;
+  private lineOpts = { towers: false, gate: false };
   private occupant: 'builder' | 'vacant';
   private suggestion: { kind: BuildingKind; check: PlacementCheck; tries: number } | null = null;
   private picked: { type: 'building' | 'site'; id: number } | null = null;
@@ -256,7 +259,7 @@ class BuilderMode {
     }
     this.camera.tick();
     this.feedback(now);
-    if (now - this.lastAreaAt > 1) {
+    if (now - this.lastAreaAt > 1 && !this.lineFrom) {
       this.lastAreaAt = now;
       r.setBuildArea?.(this.cons.buildArea?.(this.ctx.playerId()) ?? []);
     }
@@ -303,6 +306,20 @@ class BuilderMode {
     }
     const g = r.screenToGround(this.ptr.x, this.ptr.y);
     if (!g) { r.setGhost?.(null); this.setCursor(null); return; }
+    if (this.lineFrom && this.isLineTool(sel) && this.cons.planLine) {
+      const plan = this.cons.planLine(this.ctx.playerId(), sel.kind, this.lineFrom, g, this.lineOpts);
+      const part = lineGhostPart(plan);
+      if (!part) {
+        r.setGhost?.(null);
+        r.setBuildArea?.([[this.lineFrom, g, { x: g.x + 0.01, z: g.z + 0.01 }]]);
+        this.setCursor({ tone: 'bad', text: plan.reason || 'The run cannot be laid there' });
+        return;
+      }
+      r.setGhost?.({ kind: part.kind, level: 1, x: part.x, z: part.z, rot: part.rot, ok: part.ok, footprint: part.footprint });
+      r.setBuildArea?.(lineAreas(plan));
+      this.setCursor(lineTip(plan, costSummary(plan.cost, (g2, q) => describeGood(this.eco, g2, q), 3)));
+      return;
+    }
     const check = this.cons.check(this.ctx.playerId(), sel.kind, g.x, g.z, this.rot);
     this.lastCheck = { check, at: this.lastNow };
     r.setGhost?.(ghostFrom(sel.kind, sel.level, check));
@@ -368,7 +385,7 @@ class BuilderMode {
       return;
     }
     if (d.button !== 0) return;
-    this.click(e.clientX, e.clientY);
+    this.click(e.clientX, e.clientY, e.shiftKey);
   }
 
   private onWheel(e: WheelEvent): void {
@@ -412,6 +429,7 @@ class BuilderMode {
   private onEscape(): boolean {
     if (this.naming) { this.closeNaming(); return true; }
     if (this.suggestion) { this.clearSuggestion(); return true; }
+    if (this.lineFrom) { this.endLine(); return true; }
     if (this.selected) { this.cancelTool(); return true; }
     if (this.picked) { this.picked = null; this.render(); return true; }
     return false;
@@ -419,7 +437,7 @@ class BuilderMode {
 
   // -------------------------------------------------------------------------------- clicking in the world
 
-  private click(x: number, y: number): void {
+  private click(x: number, y: number, chain = false): void {
     const r = this.ctx.host.renderer();
     if (!r) return;
     const sel = this.selected;
@@ -427,6 +445,7 @@ class BuilderMode {
       if (this.suggestion) this.clearSuggestion();
       const g = r.screenToGround(x, y);
       if (!g) return;
+      if (this.isLineTool(sel) && this.cons.placeLine) { this.clickLine(sel, g, chain); return; }
       const check = this.cons.check(this.ctx.playerId(), sel.kind, g.x, g.z, this.rot);
       this.stake(sel, check);
       return;
@@ -437,6 +456,26 @@ class BuilderMode {
       return;
     }
     if (this.picked) { this.picked = null; this.render(); }
+  }
+
+  /** A wall or palisade is laid from where you click to where you click again; Shift carries on from the end. */
+  private isLineTool(sel: BuildOption | null): boolean { return !!sel && !!BUILDINGS[sel.kind]?.segment; }
+
+  private clickLine(sel: BuildOption, g: { x: number; z: number }, chain: boolean): void {
+    if (!this.lineFrom) { this.lineFrom = { x: g.x, z: g.z }; this.renderInspector(); return; }
+    const res = this.cons.placeLine!(this.ctx.playerId(), sel.kind, this.lineFrom, g, this.lineOpts);
+    if (!res.ok) { this.ctx.say('warn', res.reason ?? 'It cannot be done.'); this.flash(res.reason ?? 'It cannot be done.', 'bad'); return; }
+    const n = res.sites?.length ?? 0;
+    this.ctx.say('gain', `A run of ${sel.name.toLowerCase()} is staked out (${n} pieces).`);
+    this.flash(`Staked out: ${n} pieces of ${sel.name.toLowerCase()}`, 'ok');
+    this.lineFrom = chain && res.plan ? { x: res.plan.end.x, z: res.plan.end.z } : null;
+    if (!this.lineFrom) this.ctx.host.renderer()?.setBuildArea?.(this.cons.buildArea?.(this.ctx.playerId()) ?? []);
+    this.lastSig = '';
+    this.refreshOptions(true);
+    this.renderTabsBadge();
+    if (this.tab === 'sites') this.renderSites();
+    this.renderList();
+    this.renderInspector();
   }
 
   private stake(sel: BuildOption, check: PlacementCheck): void {
@@ -491,7 +530,15 @@ class BuilderMode {
 
   // -------------------------------------------------------------------------------- the tool
 
+  private endLine(): void {
+    if (!this.lineFrom) return;
+    this.lineFrom = null;
+    this.ctx.host.renderer()?.setBuildArea?.(this.cons.buildArea?.(this.ctx.playerId()) ?? []);
+    this.renderInspector();
+  }
+
   private select(o: BuildOption): void {
+    this.endLine();
     this.selected = o;
     this.picked = null;
     this.clearSuggestion();
@@ -501,6 +548,7 @@ class BuilderMode {
 
   /** Puts the tool down (the ghost goes); `redraw` false when the caller redraws anyway. */
   private cancelTool(redraw = true): void {
+    this.endLine();
     this.selected = null;
     this.clearSuggestion();
     this.ctx.host.renderer()?.setGhost?.(null);
@@ -808,8 +856,13 @@ class BuilderMode {
       iconButton('cross', 'Put it down (Esc)', () => this.cancelTool(), { small: true }),
       home && o.ok ? h('div.mu-col.mu-gap-4', { style: { alignItems: 'flex-end' } }, h('span.mu-tiny.mu-dim', null, 'When it is built'),
         seg([{ id: 'builder' as const, label: 'We move in' }, { id: 'vacant' as const, label: 'Let to a family' }], this.occupant, (v) => { this.occupant = v; })) : null,
-      o.ok ? button('Place for me', { variant: 'primary', icon: 'pin', tip: 'The builders find a fitting spot near where you are looking; you confirm it', onClick: () => this.placeForMe() }) : null,
-      o.ok ? h('span.mu-tiny.mu-dim', null, `or click the land · Q and E turn it (${Math.round((ROTATE_STEP * 180) / Math.PI)}°)`) : null);
+      this.isLineTool(o) && o.ok ? h('div.mu-col.mu-gap-4', { style: { alignItems: 'flex-end' } }, h('span.mu-tiny.mu-dim', null, 'Along the run'),
+        h('div.mu-row.mu-gap-4', null,
+          button('Towers', { size: 'small', icon: 'towers', variant: this.lineOpts.towers ? 'primary' : undefined, tip: 'A tower at each end and about every 36 m (as many as the place may keep)', onClick: () => { this.lineOpts.towers = !this.lineOpts.towers; this.renderInspector(); } }),
+          o.kind === 'wall' ? button('Gate', { size: 'small', icon: 'door', variant: this.lineOpts.gate ? 'primary' : undefined, tip: 'A gatehouse at the middle of the run', onClick: () => { this.lineOpts.gate = !this.lineOpts.gate; this.renderInspector(); } }) : null)) : null,
+      o.ok && !this.isLineTool(o) ? button('Place for me', { variant: 'primary', icon: 'pin', tip: 'The builders find a fitting spot near where you are looking; you confirm it', onClick: () => this.placeForMe() }) : null,
+      o.ok && this.isLineTool(o) ? h('span.mu-tiny.mu-dim', null, this.lineFrom ? 'Click where it ends · Shift carries on from there · Esc drops the start' : 'Click where the run starts, then where it ends') : null,
+      o.ok && !this.isLineTool(o) ? h('span.mu-tiny.mu-dim', null, `or click the land · Q and E turn it (${Math.round((ROTATE_STEP * 180) / Math.PI)}°)`) : null);
     return h('div.mu-bld-tool-row', null, info, act);
   }
 
@@ -852,6 +905,10 @@ class BuilderMode {
         h('div.mu-row.mu-gap-6.mu-wrap', { style: { marginTop: '6px' } },
           button('Work this first', { size: 'small', icon: 'arrow_up', onClick: () => this.order(this.cons.setPriority(me, site.id, priorityFor(rows, 'first'))) }),
           button('Work it last', { size: 'small', icon: 'arrow_down', onClick: () => this.order(this.cons.setPriority(me, site.id, priorityFor(rows, 'last'))) }),
+          site.line && this.cons.cancelLine ? button('Cancel the whole run', { size: 'small', variant: 'danger', icon: 'cross', tip: 'Every length laid in the same run', onClick: () => this.ctx.confirm({
+            title: 'Cancel the whole run?', text: 'Every piece of this run is called off; the materials delivered come back to your stores.', confirmLabel: 'Cancel the run', cancelLabel: 'Keep it', danger: true,
+            onConfirm: () => { this.order(this.cons.cancelLine!(me, site.line!), 'The run is called off.'); this.picked = null; this.render(); },
+          }) }) : null,
           button('Cancel the work', { size: 'small', variant: 'danger', icon: 'cross', onClick: () => this.ctx.confirm({
             title: 'Cancel this work?', text: site.progress > 0.02 ? 'Most of the materials delivered come back to your stores (70 %); the labour already put in is lost.' : 'Nothing has been built yet: all the materials delivered come back.',
             confirmLabel: 'Cancel the work', cancelLabel: 'Keep it', danger: true, onConfirm: () => { this.order(this.cons.cancel(me, site.id), 'The work is cancelled.'); this.picked = null; this.render(); },

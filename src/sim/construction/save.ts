@@ -60,6 +60,8 @@ export interface SiteRec {
   shown: number;
   /** Day the site was finished or cancelled (0 = still open). */
   closed: number;
+  /** The line of wall it was laid in (absent = a single site). */
+  line?: number;
 }
 
 export interface OutpostRec {
@@ -80,6 +82,8 @@ export interface ConstructionSave {
   v: 1;
   nextSite: number;
   nextOutpost: number;
+  /** Next id of a laid line (absent in older saves). */
+  nextLine?: number;
   sites: SiteRec[];
   outposts: OutpostRec[];
   /** Ids of the world's own buildings that were pulled down (they reappear on load; the module removes them again at install). */
@@ -98,6 +102,7 @@ export function normalise(s: Partial<ConstructionSave> | undefined): Constructio
   if (!s || typeof s !== 'object') return out;
   if (typeof s.nextSite === 'number') out.nextSite = s.nextSite;
   if (typeof s.nextOutpost === 'number') out.nextOutpost = s.nextOutpost;
+  if (typeof s.nextLine === 'number') out.nextLine = s.nextLine;
   if (Array.isArray(s.sites)) out.sites = s.sites;
   if (Array.isArray(s.outposts)) out.outposts = s.outposts;
   if (Array.isArray(s.razed)) out.razed = s.razed;

@@ -273,13 +273,19 @@ function groundReasonFor(C: Construction, rules: KindRules, kind: BuildingKind, 
   return null;
 }
 
+const LINE_PIECES: ReadonlySet<BuildingKind> = new Set<BuildingKind>(['palisade', 'wall', 'tower', 'gatehouse']);
+/** Lengths of wall and palisade may touch end to end, and meet a tower or a gatehouse set in the line. */
+function linePiece(a: BuildingKind, b: BuildingKind): boolean {
+  return LINE_PIECES.has(a) && LINE_PIECES.has(b) && (!!BUILDINGS[a].segment || !!BUILDINGS[b].segment);
+}
+
 function obstacleReason(C: Construction, kind: BuildingKind, fp: readonly P2[], x: number, z: number, ignore?: number): string | null {
   const def = BUILDINGS[kind];
   const reach = Math.sqrt(def.w * def.w + def.d * def.d) / 2;
   const roadClear = def.segment ? 0.3 : 1;
   if (C.spatial.stripHit(fp, x, z, reach) >= 0) return 'On a strip of the open field';
   if (C.spatial.roadHit(fp, x, z, reach, roadClear) >= 0) return 'On the road';
-  const hit = C.spatial.buildingHit(fp, x, z, reach, (e) => (def.segment && e.segment ? 0 : 0.8), ignore);
+  const hit = C.spatial.buildingHit(fp, x, z, reach, (e) => (linePiece(kind, e.b.kind) ? 0 : 0.8), ignore);
   if (hit) return `Overlaps the ${hit.construction < 1 ? 'site of the ' : ''}${kindName(hit.kind).toLowerCase()}`;
   return null;
 }

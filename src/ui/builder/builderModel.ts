@@ -6,7 +6,7 @@ import { BUILDINGS, type BuildingKind } from '../../content/types';
 import type { P2 } from '../../core/math';
 import type { BuildGhost } from '../../render/types';
 import type {
-  BuildCategory, BuildCost, BuildOption, BuildRequirement, BuildScope, PlacementCheck, SiteStatus, SiteView,
+  BuildCategory, BuildCost, BuildOption, BuildRequirement, BuildScope, LinePart, LinePlan, PlacementCheck, SiteStatus, SiteView,
 } from '../../sim/construction/types';
 import { formatMoney } from '../../sim/money';
 import { toDate, SEASON_NAMES } from '../../core/time';
@@ -208,6 +208,23 @@ export function cursorTip(name: string, check: PlacementCheck, costText: string)
   return { tone: 'ok', text: `Click to stake out the ${name.toLowerCase()}`, sub: costText };
 }
 
+/** The label by the cursor while a run of wall is being drawn: its length, what it is made of, what it costs, or why it cannot be laid. */
+export function lineTip(plan: LinePlan, costText: string): CursorTip {
+  if (!plan.ok) return { tone: 'bad', text: plan.reason || 'The run cannot be laid there' };
+  const bits = Object.entries(plan.byKind).map(([k, n]) => `${n} ${(BUILDINGS[k as BuildingKind]?.name ?? k).toLowerCase()}${n === 1 ? '' : 's'}`);
+  return { tone: 'ok', text: `Click to lay ${Math.round(plan.length)} m: ${bits.join(', ')}`, sub: costText };
+}
+
+/** The footprints of every piece of a planned run, for the tint that shows the whole run on the ground. */
+export function lineAreas(plan: LinePlan): P2[][] {
+  return plan.parts.map((p) => p.footprint.map((q) => ({ x: q.x, z: q.z })));
+}
+
+/** The one piece of a run the ghost shows: the first that fails (red, with its reason), else the piece at the far end. */
+export function lineGhostPart(plan: LinePlan): LinePart | null {
+  return plan.parts.find((p) => !p.ok) ?? plan.parts[plan.parts.length - 1] ?? null;
+}
+
 /** Rotates by `steps` quarter-turns' fractions: 15° each, wrapped to (−π, π]. */
 export const ROTATE_STEP = Math.PI / 12;
 export function rotate(rot: number, steps: number): number {
@@ -377,6 +394,8 @@ export interface QueueRow {
   x: number;
   z: number;
   mine: boolean;
+  /** A laid run of wall, shown as one row: how many pieces it has. */
+  pieces?: number;
 }
 
 /**
@@ -398,7 +417,31 @@ export function queueRows(
       line: miss && s.status === 'waiting' && !s.note ? `Waiting for ${miss} kind${miss === 1 ? '' : 's'} of goods` : line, priority: s.priority, x: s.x, z: s.z, mine,
     });
   }
-  return rows.sort((a, b) => Number(b.mine) - Number(a.mine) || a.priority - b.priority || a.id - b.id);
+  return groupRuns(rows, sites).sort((a, b) => Number(b.mine) - Number(a.mine) || a.priority - b.priority || a.id - b.id);
+}
+
+/** The lengths of one laid run of wall become one row (the first piece's id and place, the mean progress, the worst status). */
+function groupRuns(rows: QueueRow[], sites: readonly SiteView[]): QueueRow[] {
+  const lineOf = new Map<number, number>();
+  for (const s of sites) if (s.line) lineOf.set(s.id, s.line);
+  const first = new Map<number, QueueRow>();
+  const out: QueueRow[] = [];
+  for (const r of rows) {
+    const ln = lineOf.get(r.id);
+    if (!ln) { out.push(r); continue; }
+    const head = first.get(ln);
+    if (!head) { first.set(ln, { ...r, pieces: 1 }); continue; }
+    head.progress = (head.progress * head.pieces! + r.progress) / (head.pieces! + 1);
+    head.pieces!++;
+    head.priority = Math.min(head.priority, r.priority);
+    if (r.status === 'stalled') { head.status = 'stalled'; head.statusWord = r.statusWord; }
+  }
+  for (const [, r] of first) {
+    r.title = `Laying a run of ${BUILDINGS[sites.find((s) => s.id === r.id)?.kind ?? 'wall']?.name.toLowerCase() ?? 'wall'} (${r.pieces} pieces)`;
+    r.line = `${Math.round(r.progress * 100)}% done on the whole`;
+    out.push(r);
+  }
+  return out;
 }
 
 /** The priority number that puts a site first / last among the sites it is queued with. */
