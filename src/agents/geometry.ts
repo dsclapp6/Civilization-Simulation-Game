@@ -14,7 +14,7 @@ const DOOR_X: Partial<Record<BuildingKind, number>> = {
   tithe_barn: 6, cowshed: -2.3, stable: 1.4, watermill: -3.2, smithy: -0.6, carpenter: 1.0, tannery: 2.4,
   // civilization pass: the five new works (src/assets/buildings/recipes/civ.ts, docs/ART.md §14): the slaughterhouse's wide door,
   // the salt pans' boiling house open at the front; the clay pit, the lumber camp's yard and the gaol have theirs in the middle
-  slaughterhouse: -0.2, salt_pan: 4.78,
+  slaughterhouse: -0.2, salt_pan: 4.78, library: -3.1,
   weaver: -1.7, fulling_mill: -3.2, bakehouse: -2.1, brewhouse: 1.8, alehouse: 0.8, tavern: -2.7,
   chapel: -2.9, church: -3.1, abbey_church: 8.8, cathedral: 12, infirmary: -6, keep_stone: 4.4,
   great_hall: -7.7, barracks: -3.3,
