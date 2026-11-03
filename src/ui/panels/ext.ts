@@ -17,4 +17,6 @@ import '../ruler/ruler';
 // civilization pass, wave B: living as anyone (B6)
 import './liveas';
 import './accolade';
+// H1: "Go to…" — the skip of the walk within your lands (`;`)
+import './goto';
 export {};

@@ -17,6 +17,7 @@ import type { BuildGhost, OrderMark, OverviewView } from '../render/types';
 import type { TerritoryApi } from '../sim/territory/types';
 import type { PersonId } from '../sim/state';
 import type { PanelRequest } from './core/requests';
+import type { GotoApi } from '../app/goto';
 
 export interface GameServices {
   readonly sim: Simulation;
@@ -33,6 +34,8 @@ export interface GameServices {
   readonly law?: LawApi;
   /** Riding with the host against a place (the ruler's "Plan an attack"; the companies card of the tactical view). */
   readonly campaign?: CampaignApi;
+  /** H1: "Go to…": the places of your lands and the skip of the walk there (src/app/goto.ts). */
+  readonly goto?: GotoApi;
 }
 
 export interface CampaignApi {
@@ -44,6 +47,8 @@ export interface CampaignApi {
   plan(target: number, rideAs?: number): { ok: boolean; reason?: string };
   /** Storm now (before the walls by day). */
   stormNow(): { ok: boolean; reason?: string };
+  /** H1: ride with a host marching against a place (your lord's, or your own): the march is skipped and you take over at its camp before the walls. */
+  rideWith?(army: number): { ok: boolean; reason?: string };
   /** Sound the retreat: break off the storm or the march and turn for home. */
   retreat?(): { ok: boolean; reason?: string };
 }

@@ -36,6 +36,8 @@ export const KEYMAP = {
      *  cursor or in front of you. B used to open the wounds page: wounds are now a tab of the character sheet (Tab) and the
      *  HUD's wound mark. */
     builder: 'KeyB', ruler: 'KeyU', liveAs: 'KeyV',
+    /** H1: "Go to…" — skip the walk to a place of your lands (the semicolon: every letter is taken). */
+    goto: 'Semicolon',
   },
   /** Civilization pass (CIV §9): in battle, select troop groups (all / foot / archers / horse) and toggle the tactical view
    *  (C, which opens the command panel outside battle). Handled by the battle HUD through the UI's hotkey hook. */

@@ -9,6 +9,7 @@ import { wrapAngle } from '../core/math';
 import { installPlayer } from '../player';
 import { InteriorMode } from './interior';
 import { CampaignMode, planAttack } from './campaign';
+import { GotoMode } from './goto';
 import type { HoverMark, PickPort, PickRay } from '../player/types';
 import { createRenderer } from '../render/renderer';
 import type { GameRenderer } from '../render/types';
@@ -130,9 +131,13 @@ export async function buildSession(sim: Simulation, o: SessionOptions): Promise<
     target: () => campaign.target,
     plan: (target, rideAs) => planAttack(sim, campaign, sim.state.run.playerId, target, rideAs ? { rideAs } : {}),
     stormNow: () => campaign.stormEarly(),
+    rideWith: (army) => campaign.rideWith(army),
     retreat: () => campaign.retreat(),
   };
-  const services: GameServices = { sim, economy, social, zone, player, objectives, territory, construction, realm, law, campaign: campaignApi };
+  // H1: "Go to…" — travel within your lands by skipping the walk (src/app/goto.ts); "Go there now" also on a building's wheel
+  const gotoMode = new GotoMode({ sim, player, zone, campaignPhase: () => campaign.phase, economy, social });
+  offs.push(sim.actions.register(gotoMode.provider()), () => gotoMode.dispose());
+  const services: GameServices = { sim, economy, social, zone, player, objectives, territory, construction, realm, law, campaign: campaignApi, goto: gotoMode.api() };
   return {
     interior, campaign,
     loadMs: { assets: t1 - t0, renderer: t2 - t1, modules: t3 - t2, settle: t5 - t4 },

@@ -6,7 +6,9 @@ export type PanelKey =
   | 'character' | 'inventory' | 'ledger' | 'map' | 'command' | 'family' | 'chronicle' | 'rest'
   | 'politics' | 'techs' | 'requests' | 'wounds' | 'help' | 'journal' | 'minimap' | 'whatNow'
   /** Civilization pass: builder mode (B), ruler mode (U), live as the person under the cursor / in front (V). */
-  | 'builder' | 'ruler' | 'liveAs';
+  | 'builder' | 'ruler' | 'liveAs'
+  /** H1: "Go to…" (;). */
+  | 'goto';
 
 export type KeyIntent =
   | { type: 'toggle'; panel: PanelKey }
@@ -43,6 +45,7 @@ const TOGGLES: ReadonlyArray<readonly [string, PanelKey]> = [
   [KEYMAP.ui.builder, 'builder'],
   [KEYMAP.ui.ruler, 'ruler'],
   [KEYMAP.ui.liveAs, 'liveAs'],
+  [KEYMAP.ui.goto, 'goto'],
 ];
 
 export function keyIntent(code: string, state: KeyState): KeyIntent | null {

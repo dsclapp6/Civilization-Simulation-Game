@@ -85,6 +85,21 @@ export class WhatNow {
     this.list.replaceChildren(...items.map((s, i) => this.row(s, i, game)));
   }
 
+  private goNow(t: Suggestion['target'], game: GameServices | null): HTMLElement | null {
+    const g = game?.goto;
+    const place = g && t ? g.find({ kind: t.kind, id: t.id, x: t.x, z: t.z }) : null;
+    if (!g || !place) return null;
+    const c = g.check(place);
+    const el = h('span.mu-whatnow-go', { role: 'button', tabindex: '0', title: c.ok ? 'Skip the walk there' : c.reason, style: { marginLeft: '8px', opacity: c.ok ? '1' : '0.5' } }, 'Go there now');
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const r = g.go(place);
+      this.deps.say(r.ok ? `You go to ${place.name}.` : r.reason ?? 'You cannot go there now.');
+      if (r.ok) this.close();
+    });
+    return el;
+  }
+
   private row(s: Suggestion, i: number, game: GameServices | null): HTMLElement {
     const nav = this.deps.nav;
     const t = s.target;
@@ -92,7 +107,9 @@ export class WhatNow {
     const el = h<HTMLButtonElement>('button.mu-whatnow-row', { type: 'button', class: i === 0 ? 'first' : '' },
       h('span.mu-whatnow-n', null, String(i + 1)),
       h('span.mu-whatnow-text', null, h('span', null, s.text), dist ? h('span.mu-whatnow-where', null, icon('pin', 12), dist) : null),
-      t || s.objective !== undefined ? h('span.mu-whatnow-go', null, 'Show me') : null);
+      t || s.objective !== undefined ? h('span.mu-whatnow-go', null, 'Show me') : null,
+      // H1: "Go there now" — the walk skipped, when the place is one of your lands and nothing forbids it (src/app/goto.ts)
+      this.goNow(t, game));
     el.addEventListener('click', () => {
       const api = game?.objectives;
       // a task is tracked (its marker follows its steps); anything else with a place on it is marked there

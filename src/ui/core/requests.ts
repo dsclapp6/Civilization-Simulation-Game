@@ -68,6 +68,7 @@ export const DOCK_ENTRIES: readonly DockEntry[] = [
   { id: 'map', label: 'Map', key: 'M', panelId: 'map', request: { panel: 'map' }, group: 'core' },
   { id: 'chronicle', label: 'Chronicle', key: 'L', panelId: 'chronicle', request: { panel: 'chronicle' }, group: 'core' },
   { id: 'rest', label: 'Rest', key: 'Z', panelId: 'rest', request: { panel: 'rest' }, group: 'core' },
+  { id: 'goto', label: 'Go to…: skip the walk to a place of your lands', key: ';', panelId: 'goto', request: { panel: 'ext', name: 'goto' }, group: 'core' },
   { id: 'requests', label: 'Requests and news', key: 'R', panelId: 'requests', request: { panel: 'ext', name: 'requests' }, needs: 'happenings', group: 'realm' },
   // civilization pass: builder mode (B) and ruler mode (U) take the places of the wounds page (now a tab of the character sheet)
   { id: 'builder', label: 'Builder mode: raise, upgrade, repair or pull down buildings', key: 'B', panelId: 'builder', request: { panel: 'ext', name: 'builder' }, needs: 'construction', group: 'realm' },
@@ -95,6 +96,7 @@ export function panelForKey(key: string, has: (needs: DockNeeds) => boolean): { 
     // civilization pass (wave B registers these ext panels: src/ui/builder, src/ui/ruler, the live-as flow)
     case 'builder': return { request: { panel: 'ext', name: 'builder' }, panelId: 'builder' };
     case 'ruler': return { request: { panel: 'ext', name: 'ruler' }, panelId: 'ruler' };
+    case 'goto': return { request: { panel: 'ext', name: 'goto' }, panelId: 'goto' };
     case 'liveAs': return { request: { panel: 'ext', name: 'liveAs' }, panelId: 'liveAs' };
     default: return null;
   }
