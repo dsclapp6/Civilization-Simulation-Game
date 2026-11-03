@@ -137,7 +137,7 @@ const CSS = `
 .mu-bt-storm .gbar { width: 70px; height: 7px; border-radius: 4px; background: rgba(246, 234, 208, 0.25); overflow: hidden; }
 .mu-bt-storm .gbar i { display: block; height: 100%; background: #b0541c; }
 .mu-bt-storm .gbar.broken i { background: #6a3b1c; }
-.mu-cc { position: absolute; left: 14px; bottom: 214px; width: 292px; padding: 6px 8px 8px; border-radius: 6px; pointer-events: auto; background: rgba(26, 17, 9, 0.86); border: 1px solid #8c6b36;
+.mu-cc { position: absolute; right: 14px; bottom: 112px; width: 292px; padding: 6px 8px 8px; border-radius: 6px; pointer-events: auto; background: rgba(26, 17, 9, 0.86); border: 1px solid #8c6b36;
   color: #f6ead0; font-size: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); }
 .mu-cc.mu-hide { display: none; }
 .mu-cc-head { display: flex; align-items: center; gap: 6px; width: 100%; padding: 2px 2px 4px; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-align: left; }
@@ -155,7 +155,7 @@ const CSS = `
   border: 1px solid var(--edge); background: linear-gradient(180deg, rgba(246, 234, 208, 0.96), rgba(221, 198, 144, 0.96)); color: var(--ink); }
 .mu-cc-btns button.go { background: linear-gradient(180deg, #e8a090, #c4382e); color: #fff; border-color: #6e1610; }
 .mu-cc-btns button.armed { background: linear-gradient(180deg, #e8a090, #c4382e); color: #fff; }
-.mu-duel { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); width: 300px; padding: 6px 10px 8px; pointer-events: none;
+.mu-duel { position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%); width: 300px; padding: 6px 10px 8px; pointer-events: none;
   background: rgba(20, 13, 6, 0.72); color: #f6e7be; border-radius: 3px; font-size: 12.5px; text-align: center; }
 .mu-duel.mu-hide { display: none; }
 .mu-duel-lines { display: flex; gap: 6px; justify-content: center; margin-bottom: 4px; }

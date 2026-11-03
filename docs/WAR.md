@@ -373,3 +373,14 @@ into a session with no combat module and runs the battle out.
 | `tests/sim/military/siege.test.ts` (+2) | 250 against 300 and the plan's worth, the retreat |
 | `tests/sim/military/storm.test.ts` (+1) | a save in the middle of a storm |
 | `tests/app/campaign.test.ts` (3) | the castle scenario, the camp and the dawn storm, the retreat |
+
+## 16. Screenshots of wave D1
+
+Taken with `PORT=5197 node tools/campaign-shots.mjs [duel] [camp] [wall]` (Vite on a private port, headless Chromium, software GL) into `docs/military/`:
+
+- `d1-duel.png` — a duel with steel out: the three lines under the action bar, the foe's blow coming at the body ringed red ("Blow at the body:
+  guard K"), the breath bar.
+- `d1-campaign-camp.png` — the castle scenario at nightfall: the host camped before the walls (tents, fires, the men round them), the companies card
+  at the right (250 men against Château Coury, 299 within; the plan's one line; five companies with their tasks and captains; Storm now and Sound the retreat).
+- `d1-wall-walk.png` — the player on the gatehouse of Wexthwaite Castle, six metres above the ground, the gate leaves below him (`placeAt` with a
+  height onto the real floor; `body().walk` is true).

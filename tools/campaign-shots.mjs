@@ -85,19 +85,17 @@ try {
     await shot('duel');
   }
   if (want('campaign') || want('camp')) {
+    // (the march itself is a skipped wait: the screen is dark with "On the march…"; the camp before the walls is the picture)
     await load('scenario=castle');
-    await page.evaluate(() => window.__game.freeze(false));
-    // the march: the host sets out in the afternoon
-    await page.evaluate(() => window.__game.freeze(true));
-    await page.waitForTimeout(400);
-    await page.evaluate(() => window.__game.tick(1.0));
-    if (want('campaign')) await shot('campaign-march');
-    if (want('camp')) {
+    // the march: the host sets out in the afternoon (the days pass on the road: a wait that ends at nightfall or at the walls)
+    await page.evaluate(() => { const g = window.__game; g.tick(0.3); });
+    {
       // run the world on until the host is camped before the walls for the night
       const phase = await page.evaluate(() => {
         const g = window.__game;
-        for (let i = 0; i < 400; i++) { g.tick(2); const p = g.session.services.campaign?.phase(); if (p === 'before' || p === 'camp') return p; }
-        return g.session.services.campaign?.phase() ?? 'none';
+        const seen = [];
+        for (let i = 0; i < 400; i++) { g.tick(1); if (i < 12) seen.push(g.session.services.campaign?.phase() + '@' + (g.session.sim.absDay % 1 * 24).toFixed(1) + (g.session.sim.clock.skip ? 's' : '')); if (g.session.sim.clock.skip) continue; const p = g.session.services.campaign?.phase(); if (p === 'before' || p === 'camp') return p; }
+        return seen.join(' ') + ' => ' + (g.session.services.campaign?.phase() ?? 'none');
       });
       console.log('camp phase:', phase);
       await page.evaluate(() => window.__game.tick(1.0));
@@ -129,7 +127,13 @@ try {
     });
     console.log('wall:', JSON.stringify(info));
     if (info) {
-      await page.evaluate(() => { const s = window.__game.session; s.renderer.setCameraMode?.('follow'); window.__game.advance(0.5); });
+      await page.evaluate(() => {
+        const s = window.__game.session; window.__game.advance(0.5);
+        // from outside and above, looking along the wall at the player on the walk
+        const b = s.services.player.body();
+        // high above and a little back, looking down: the walk, the parapet and the ground far below
+        s.controls.setCameraPose({ x: b.x - Math.sin(b.yaw) * 3.5, y: b.y + 8, z: b.z - Math.cos(b.yaw) * 3.5 }, { x: b.x, y: b.y + 0.5, z: b.z }, 0);
+      });
       await shot('wall-walk');
     }
   }
