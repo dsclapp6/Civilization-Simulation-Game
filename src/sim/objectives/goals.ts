@@ -12,6 +12,7 @@ import { STAT_TITLE } from './core';
 import { T, type Vars } from './data';
 import { buildingPhrase, buildingTarget, buildingsOfKind, describePerson, findNear, homeOf, nearbySettlements, nearestOf, personTarget, placeTarget } from './places';
 import { bagQty } from './sources';
+import { managesRealm } from './duties';
 
 type Step = NewObjective['steps'][number];
 
@@ -33,6 +34,8 @@ function allowed(O: Obj, key: string): boolean {
 function pathGoal(O: Obj, me: Person): NewObjective | null {
   if (O.age(me) < 12 || O.deps.economy.employment(me.id)) return null;
   const age = O.age(me);
+  // a grown man or woman with a trade of their own has chosen: tradesmen are not asked to "choose your path"
+  if (age >= 18 && CAREERS[me.career].field !== 'none' && me.career !== 'labourer') return null;
   const steps: Step[] = [];
   if (age < 14) {
     const years = Math.max(0.1, 14 - age);
@@ -194,6 +197,8 @@ export function refreshGoals(O: Obj): number {
   const me = O.me;
   if (!me) return 0;
   O.save.goalsDay = O.dayNo;
+  // a lord's path is chosen: he rules (the realm's matters stand where the goals would)
+  if (managesRealm(O, me)) return 0;
   let live = O.active().filter((o) => o.source === 'goal').length;
   let n = 0;
   for (const g of GENERATORS) {
@@ -211,6 +216,7 @@ export function retireGoals(O: Obj): void {
   if (!me) return;
   for (const o of O.active()) {
     if (o.source !== 'goal') continue;
+    if (managesRealm(O, me)) { O.finish(o, 'expired'); continue; }
     const age = O.age(me);
     if (o.key === 'goal:court' && me.spouse) O.finish(o, 'done');
     else if (o.key === 'goal:archer' && (age > 35 || CAREERS[me.career].field === 'arms')) O.finish(o, CAREERS[me.career].field === 'arms' ? 'done' : 'expired');

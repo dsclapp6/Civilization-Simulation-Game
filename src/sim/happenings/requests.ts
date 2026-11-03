@@ -253,6 +253,8 @@ function maybeOffer(H: Hap): void {
   const cfg = DATA.requests;
   const open = H.save.reqs.filter((r) => r.state === 'offered' || r.state === 'accepted').length;
   if (open >= cfg.maxOpen) return;
+  // a lord is not sent on villagers' errands: their petitions are matters of the realm, decided from the ruler's seat
+  if (H.state.titlesHeldBy(me.id).size > 0) return;
   const since = H.day - H.save.lastOffer;
   if (since < cfg.minGapDays * GAP) return;
   // a long quiet spell makes the next request likelier

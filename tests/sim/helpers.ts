@@ -18,6 +18,8 @@ export interface TestSimOptions {
   store?: MemorySaveStore;
   statUpgrades?: Parameters<typeof Simulation.newGame>[0]['statUpgrades'];
   autosave?: Parameters<typeof Simulation.newGame>[0]['autosave'];
+  /** 'lord': a manor of one's own from the first morning (default 'birth'). */
+  start?: 'birth' | 'lord';
 }
 
 export function newSim(opts: TestSimOptions = {}): Simulation {
@@ -28,6 +30,7 @@ export function newSim(opts: TestSimOptions = {}): Simulation {
     store: opts.store,
     profile: opts.store ? newProfile() : undefined,
     statUpgrades: opts.statUpgrades,
+    start: opts.start,
     autosave: opts.autosave,
   });
 }

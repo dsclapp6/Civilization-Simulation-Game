@@ -6,7 +6,7 @@
 //
 //   tutorial   a short chain fitted to the birth, on the first day                        (tutorial.ts)
 //   chore      what the household head asks at dawn                                       (chores.ts)
-//   job        the day's duty of a post, and a serf's week-work                           (work.ts)
+//   job        the day's duty of a post, a serf's week-work, a station's duty                (work.ts, duties.ts)
 //   goal       a path at fourteen, the archers' test, an apprenticeship, a tool, courting (goals.ts)
 //   request    villagers' requests, mirrored from the happenings                          (requests.ts)
 //   story      a dear one gravely ill, the wedding feast, a newborn, the levy call        (story.ts)
@@ -26,6 +26,7 @@ import { syncRequests } from './requests';
 import { storyBorn, storyHourly, storyMarried } from './story';
 import { closeDay, logAction, logTalk, logTrade, startLog, summaryOf } from './summary';
 import { suggest } from './suggest';
+import { moreDuty } from './duties';
 import { makeJobs } from './work';
 import type { Objective, ObjectivesApi, ObjectiveTarget } from './types';
 
@@ -176,7 +177,8 @@ export function installObjectives(sim: Simulation, deps: Wave3Deps): ObjectivesR
       const r = choreRoundAt(O, info.hour);
       if (r > 0 && O.save.choresDay === info.day && O.save.choresHour < O.dawnHour(info.day) + r * CHORE_STEP_HOURS) {
         O.save.choresHour = O.dawnHour(info.day) + r * CHORE_STEP_HOURS;
-        if (makeChores(O, r) > 0) round(O, null);
+        const made = makeChores(O, r) + moreDuty(O, r);
+        if (made > 0) round(O, null);
       }
     }
     storyHourly(O);

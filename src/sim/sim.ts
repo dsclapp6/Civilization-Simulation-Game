@@ -17,7 +17,7 @@ import type { SimContext } from './context';
 import type { SimEvents } from './events';
 import { levelProfile, newProfile, type Profile, type StatUpgrades } from './legacy';
 import { registerLifeSystems } from './life';
-import { abandonRun, attachRunHandlers, canSwitchTo, eligibleSwitchTargets, newRun, switchTo } from './run';
+import { abandonRun, attachRunHandlers, canSwitchTo, eligibleSwitchTargets, newRun, switchTo, type RunStart } from './run';
 import { RunSaver, loadProfile, loadRun, saveProfile, type SaveStore, type SaverOptions } from './save';
 import { hashState, warmUpSerializer } from './serialize';
 import { Scheduler, type Phase, type PhaseInfo, type System } from './scheduler';
@@ -76,6 +76,8 @@ export interface NewGameOptions {
   seed: string;
   difficulty: Difficulty;
   statUpgrades?: StatUpgrades;
+  /** 'birth' (default) or 'lord': a manor of one's own from the first morning (src/sim/run.ts). */
+  start?: RunStart;
   generateWorld: (seed: string, options?: WorldGenOptions) => WorldModel;
   worldOptions?: WorldGenOptions;
   store?: SaveStore;
@@ -173,7 +175,7 @@ export class Simulation implements SimContext {
       throw new Error('Simulation.newGame: pass the loaded profile (save.loadProfile) when a store is given');
     }
     const { world, state } = newRun({
-      seed: opts.seed, difficulty: opts.difficulty, statUpgrades: opts.statUpgrades,
+      seed: opts.seed, difficulty: opts.difficulty, statUpgrades: opts.statUpgrades, start: opts.start,
       generateWorld: opts.generateWorld, worldOptions: opts.worldOptions, profile: opts.profile,
     });
     const sim = new Simulation({ world, state, store: opts.store, profile: opts.profile, autosave: opts.autosave, fresh: true });

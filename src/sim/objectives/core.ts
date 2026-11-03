@@ -52,7 +52,10 @@ export type Match =
   | { k: 'wait'; until: number }
   | { k: 'age'; years: number }
   | { k: 'court'; with: number; progress: number }
-  | { k: 'flag'; name: string };
+  | { k: 'flag'; name: string }
+  /** A ruler's order of a kind has been given since the step was made (state-based, read from the realm: more fields named or works
+   *  share set than `base` for 'plan'; more research, trade orders or men raised than `base` for 'command'). */
+  | { k: 'realm'; what: 'plan' | 'command'; base: number };
 
 export interface StepRec extends ObjectiveStep {
   m: Match;

@@ -16,6 +16,7 @@ import {
 } from './places';
 import { boardFor, enabledOption, headOf, neighbourFor, priestOf } from './roles';
 import { bagQty } from './sources';
+import { managesRealm } from './duties';
 import { findNear } from './places';
 
 type Plan = 'fields' | 'garden' | 'livestock' | 'craft' | 'brew' | 'spin' | 'market' | 'wood' | 'service' | 'school' | 'play' | 'rest' | 'auto';
@@ -217,6 +218,8 @@ export function makeChores(O: Obj, round = 0): number {
   // the player must be at home (their own village or nearby), not away on the road or the map
   if (awayFromHome(O, me)) return 0;
   if (round === 0) { O.save.choresDay = O.dayNo; O.save.choresHour = -1; }
+  // nobody sets a lord chores: he manages
+  if (managesRealm(O, me)) return 0;
 
   const head = headOf(O, me);
   const hh = O.state.households.get(me.household);
