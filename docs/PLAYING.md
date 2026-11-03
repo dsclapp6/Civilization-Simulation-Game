@@ -26,7 +26,7 @@ eligible is left the run ends and your Legacy gold stays.
 | Key / mouse | Action |
 |---|---|
 | **W A S D** (or arrows) | Move, relative to the camera. The default gait is a jog (3.2 m/s) |
-| **Shift** | Sprint (5.5 m/s, drains stamina; out of breath = walk). On a horse (a trot, 3.5 m/s, by default): canter (6 m/s); held 1.2 s, gallop (10 m/s) |
+| **Shift** | Sprint (5.5 m/s, drains stamina; out of breath = walk; the wind comes back in a few seconds at a stand or a walk — slowly while you jog — by Endurance and age, slower when hungry, hurt or heavily laden). On a horse (a trot, 3.5 m/s, by default): canter (6 m/s); held 1.2 s, gallop (10 m/s) |
 | **X** | Toggle slow walk (1.4 m/s; riding: a walk, 1.7 m/s) |
 | **Space** | Dodge roll (costs stamina) |
 | **Mouse** (cursor free) | Point at a person, animal, door, strip or tree: a tooltip names it and what a click will do, the cursor shows the kind of action (talk, work, trade, go in, fight, walk here) and the thing is outlined |
@@ -37,6 +37,7 @@ eligible is left the run ends and your Legacy gold stays.
 | **G** | Draw or put away the weapon. While it is drawn the mouse looks around (left strikes, right guards; with a bow right draws and aims); a fight draws it by itself and it goes away a few seconds after the fight. The click that takes the mouse is never a blow. Esc frees the mouse, the weapon stays out |
 | **Q** | Stop the timed action in progress (walking away also stops it) |
 | **F** | Mount the horse in front of you (your household's, or your lord's if you serve him) / dismount. **Hold F** (½ s) with no horse at hand: call yours — it trots to you from the stable or where you left it |
+| **;** | **Go to…**: the places of your lands (see *Go to…*); the dock's boot button |
 | **Y** | The "What now?" card: the tracked task's next step first, then what the hour and the day suggest; choose a line to be shown the way |
 | **O** | The journal: tasks, today, the people you know, places (each with **Find**) |
 | **N** | Show or hide the minimap |
@@ -293,6 +294,25 @@ encounter offers *Face them* (street level: tap or hold **E** and the wheel list
 *Press on* (the same as running past the outlaws, paying the patrol or nodding to the harmless),
 *Turn back* (get away, then head for where you started) and *End the journey here* (in front of
 outlaws or wolves that means turning and running). **Cancel journey** on the HUD stops where you are.
+
+### Go to… (;)
+
+Within your lands you need not walk every road. **;** (or the boot in the dock) lists the places you know, by what they are and who keeps
+them: **Home**; **Yours** (your fields and garden, your work, your lord, the household at work); **In the village** (the smithy with its
+smith, the mill, the market and its stalls, the merchant, the fisherman's landing, the church, the alehouse, the manor…); **People you
+know** (the fields of the farmers you know); and **your lands and the next villages** within a few kilometres. Type to search. *Go*
+skips the walk: the screen shows the wait, the clock moves on by the time the walk would have taken (about three metres a second;
+a ride is quicker; the old and the slow take longer), the world, the needs and the people go on as in any wait, and you stand at the
+place's door, or at the edge of the field. You can also use *Go now* beside *Find* in the journal's places, *Go there now* on a
+"What now?" line, and *Go there now* in the action wheel on a far building. **Refused**, with the reason: in or near a fight or
+hostile men, on the host's march or in a siege, bound or held, on a journey of the map, on hostile land (yours or the place's), a place
+you do not know, one beyond the lands and a few kilometres (use the map), or when time is passing already. Out of doors in the dark
+you are warned (it is your own risk). Mounted, the horse comes with you and the time is a ride's.
+
+*Ride with the host.* Planning an attack (the ruler's *Plan an attack*) puts you in the host at once; so does *Ride with the host* on
+an army marching on a place (the ruler's military page, the army panel's list): the march is skipped — the days pass as the march
+would take them (supplies and attrition as ever), a night on the road is slept through in camp — and you take over at the camp before
+the walls (a night camp, the storm at dawn; by day the storm goes in at once). Far settlements by the map and its roads stay as they were.
 
 ### Fighting
 

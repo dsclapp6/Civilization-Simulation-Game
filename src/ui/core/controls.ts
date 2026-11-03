@@ -42,6 +42,8 @@ export const CONTROL_GROUPS: readonly ControlGroup[] = [
       { keys: ['Hold ' + k(K.input.interact)], what: 'The action wheel: every option on the target, with the reasons for the greyed ones.' },
       { keys: [k(K.input.cancel)], what: 'Stop the work you are doing (walking away stops it too). At the forge, the butcher’s block or the kiln the bar under your name says which step the work is at.' },
       { keys: [k(K.ui.rest)], what: 'Sleep or wait until a time you choose.' },
+      // H1: Go to…
+      { keys: [k(K.ui.goto)], what: 'Go to…: pick a place of your lands (home, your fields, the smithy, the mill, the market, the church, your lord, the next village) and the walk there is skipped: the time passes and you stand at its door. Not in a fight, with the host, bound or on hostile land.' },
       { keys: [k(K.ui.whatNow)], what: 'What now? The next step of your task and what else is worth doing; choose one to be shown the way.' },
       { keys: [k(K.ui.journal)], what: 'The journal: your tasks, who wants something of you (a gold ! over their head), what kind of day it is, the people you know (with Live as) and the places (each with Find).' },
       { keys: [k(K.ui.minimap)], what: 'Show or hide the minimap in the corner.' },

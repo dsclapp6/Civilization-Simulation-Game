@@ -237,7 +237,7 @@ export class CampaignMode {
     if (this.player.travel?.()) return { ok: false, reason: 'You are on a journey: finish it first' };
     const view = mil.armies().find((a) => a.id === armyId);
     const target = view?.target?.settlement;
-    if (!view || view.task !== 'march' || target === undefined) return { ok: false, reason: 'That host is not marching against a place' };
+    if (!view || (view.task !== 'march' && view.task !== 'muster') || target === undefined) return { ok: false, reason: 'That host is not marching against a place' };
     const M = militaryContext(this.sim);
     const a = M.army(armyId);
     if (!a) return { ok: false, reason: 'No such army' };

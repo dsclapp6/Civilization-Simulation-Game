@@ -254,12 +254,13 @@ export class GotoMode {
     }
 
     // your lands and the next villages within a few kilometres
-    for (const s of sim.world.settlements) {
-      if (s.id === me.settlement) continue;
+    const nearby = sim.world.settlements
+      .filter((s) => s.id !== me.settlement && dist(s.x, s.z, homeSpot.x, homeSpot.z) <= GOTO_RANGE)
+      .filter((s) => (lord && s.id === lord.settlement) || s.kind === 'village' || s.kind === 'hamlet' || s.kind === 'town')
+      .sort((a, b) => dist(a.x, a.z, homeSpot.x, homeSpot.z) - dist(b.x, b.z, homeSpot.x, homeSpot.z))
+      .slice(0, 8);
+    for (const s of nearby) {
       const d = dist(s.x, s.z, homeSpot.x, homeSpot.z);
-      if (d > GOTO_RANGE) continue;
-      const isLord = lord && s.id === lord.settlement;
-      if (!isLord && !(s.kind === 'village' || s.kind === 'hamlet' || s.kind === 'town')) continue;
       // the road in from your side: a short way inside the edge
       const dx = homeSpot.x - s.x, dz = homeSpot.z - s.z, n = Math.hypot(dx, dz) || 1;
       const r = Math.max(30, s.radius * EDGE_OFF);
