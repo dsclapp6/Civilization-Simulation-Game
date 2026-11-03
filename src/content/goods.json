@@ -26,6 +26,13 @@
   "meat":    { "name": "Meat",    "unit": "pounds of meat", "unitOne": "pound of meat", "category": "food", "basePrice": 0.5, "weight": 0.45, "spoilDays": 6, "food": 0.3, "macro": true, "sold": ["market"] },
   "salt_meat": { "name": "Salt meat", "unit": "pounds of salt meat", "unitOne": "pound of salt meat", "category": "food", "basePrice": 0.8, "weight": 0.45, "spoilDays": 120, "food": 0.3, "sold": ["market", "slaughterhouse"] },
   "fish":    { "name": "Fish",    "unit": "pounds of fish", "unitOne": "pound of fish", "category": "food", "basePrice": 0.35, "weight": 0.45, "spoilDays": 4, "food": 0.25, "macro": true, "sold": ["market"] },
+  "roast_meat": { "name": "Roast meat", "unit": "portions of roast meat", "unitOne": "portion of roast meat", "category": "food", "basePrice": 0.9, "weight": 0.5, "spoilDays": 2, "food": 0.5, "meal": true, "sold": ["tavern", "alehouse"] },
+  "roast_fowl": { "name": "Roast fowl", "unit": "roast fowls", "unitOne": "roast fowl", "category": "food", "basePrice": 1.6, "weight": 1.2, "spoilDays": 2, "food": 0.75, "meal": true, "sold": ["tavern", "alehouse"] },
+  "stew": { "name": "Meat stew", "unit": "bowls of stew", "unitOne": "bowl of stew", "category": "food", "basePrice": 0.8, "weight": 0.6, "spoilDays": 3, "food": 0.5, "meal": true, "sold": ["tavern", "alehouse"] },
+  "salt_stew": { "name": "Boiled salt meat", "unit": "bowls of boiled salt meat", "unitOne": "bowl of boiled salt meat", "category": "food", "basePrice": 0.8, "weight": 0.6, "spoilDays": 3, "food": 0.5, "meal": true, "sold": ["tavern", "alehouse"] },
+  "fish_dish": { "name": "Grilled fish", "unit": "portions of grilled fish", "unitOne": "portion of grilled fish", "category": "food", "basePrice": 0.7, "weight": 0.5, "spoilDays": 1.5, "food": 0.45, "meal": true, "sold": ["tavern", "alehouse"] },
+  "pottage": { "name": "Pottage", "unit": "bowls of pottage", "unitOne": "bowl of pottage", "category": "food", "basePrice": 0.4, "weight": 0.6, "spoilDays": 3, "food": 0.32, "meal": true, "sold": ["tavern", "alehouse"] },
+  "porridge": { "name": "Porridge", "unit": "bowls of porridge", "unitOne": "bowl of porridge", "category": "food", "basePrice": 0.25, "weight": 0.6, "spoilDays": 2, "food": 0.22, "meal": true, "sold": ["tavern", "alehouse"] },
   "salt":    { "name": "Salt",    "unit": "pounds of salt", "unitOne": "pound of salt", "category": "misc", "basePrice": 0.25, "weight": 0.45, "sold": ["market"], "macro": true, "supply": { "use": 0.03, "cover": 40, "relax": 0.04 } },
   "honey":   { "name": "Honey",   "unit": "pounds of honey", "unitOne": "pound of honey", "category": "food", "basePrice": 1.0, "weight": 0.5, "food": 0.3, "sold": ["market"] },
 

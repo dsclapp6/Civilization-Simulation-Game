@@ -13,7 +13,7 @@ import { TIER_PURSE } from '../people';
 import { NONE, type Household, type Person, type SettlementState } from '../state';
 import type { Econ } from './core';
 import { BEASTS, CAREER_ECON, GOODS, careerEcon, keyOf } from './data';
-import { GRAIN_PER_UNIT_DAY, RATION, STAPLE_GRAINS, dietOf, marketBuyShare } from './diet';
+import { COOKED_AS, FIREWOOD_PER_PORTION, GRAIN_PER_UNIT_DAY, MEALS, MEAL_RATION, RATION, STAPLE_GRAINS, dietOf, marketBuyShare } from './diet';
 import { daysToHarvest, farmDay, onBuild, seedWanted } from './farm';
 import { bagAdd } from './items';
 import { beginTick, endTick, marketBuy, marketDay, marketSell, postedPrice, tickPrice } from './market';
@@ -212,7 +212,24 @@ function eat(E: Econ, s: Settlement, hh: Household, units: number, tier: number,
   const st = hh.stores;
   let filled = 0;
   const optWant = units * diet.optionalShare;
-  for (const [g, w] of diet.optional) filled += take(st, g, (optWant * w) / RATION[g]) * RATION[g];
+  // the hearth: the day's meat and fish are cooked (a little fuel each) into dishes that feed better, and the cooked dishes in the
+  // larder - the household's own, or the player's cooking - are eaten first, while they keep
+  const cooked: Record<string, number> = {};
+  for (const [g, w] of diet.optional) {
+    const dish = COOKED_AS[g];
+    if (!dish) continue;
+    const portions = Math.min(st[g] ?? 0, (optWant * w) / RATION[g], (st.firewood ?? 0) / FIREWOOD_PER_PORTION);
+    if (portions <= 0.001) continue;
+    take(st, g, portions);
+    take(st, 'firewood', portions * FIREWOOD_PER_PORTION);
+    bagAdd(st, dish, portions);
+    cooked[g] = portions;
+  }
+  for (const m of MEALS) {
+    if (filled >= units - 0.001) break;
+    filled += take(st, m, (units - filled) / MEAL_RATION[m]) * MEAL_RATION[m];
+  }
+  for (const [g, w] of diet.optional) filled += take(st, g, Math.max(0, (optWant * w) / RATION[g] - (cooked[g] ?? 0))) * RATION[g];
   // other foods bought at the market by those who can pay
   if ((urban || tier >= 3) && hh.purse > 20) {
     for (const [g, w] of diet.optional) {
