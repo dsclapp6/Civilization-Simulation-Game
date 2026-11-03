@@ -19,6 +19,9 @@ export type StateId = (typeof S)[keyof typeof S];
 export const D = { Free: 0, Slot: 1, Charge: 2, Retreat: 3 } as const;
 export type DirMode = (typeof D)[keyof typeof D];
 
+/** The task his company has in the assault plan (sim/military/plan.ts `TASK_CODE`). */
+export const T = { None: 0, Loose: 1, Ram: 2, Ladders: 3, Charge: 4, Reserve: 5 } as const;
+
 /** What a man is doing in a storm (scene.ts): nothing special, pushing a ram, carrying a ladder, climbing one, or holding a place on the wall. */
 export const R = { None: 0, Ram: 1, Ladder: 2, Climb: 3, Wall: 4, Stairs: 5 } as const;
 
@@ -211,6 +214,9 @@ export class Fighter {
   // ---- storms (scene.ts) ----
   /** What the man does in the storm: ram crew, ladder man, climber, wall archer, gate holder…; 0 = nothing special. */
   role: number = 0;
+  /** The assault plan's task for his company (`T`), and the company's id; 0 = no plan. */
+  task: number = 0;
+  company: number = 0;
   /** The wall station he holds (a defender on the walk or in a tower), or null. */
   station: import('./scene').Station | null = null;
   /** The ladder or ram he works, or null. */

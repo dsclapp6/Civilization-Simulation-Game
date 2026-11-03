@@ -511,7 +511,7 @@ function siegeSetup(M: Mil, rec: BattleRec, a: Army, attackers: number, people: 
 }
 
 /** The tasks, companies and captains of the plan for these men of an army (for the detail storm and for re-tasking it). */
-export function planTasks(a: Army, people: readonly { id: PersonId }[]): Pick<SiegeSetup, 'tasks' | 'companies' | 'captains'> {
+export function planTasks(a: Army, people: readonly { id: PersonId }[]): Pick<SiegeSetup, 'tasks' | 'companies' | 'captains' | 'present'> {
   const plan = a.plan;
   if (!plan) return {};
   const who = assignCompanies(a, plan);
@@ -523,7 +523,7 @@ export function planTasks(a: Army, people: readonly { id: PersonId }[]): Pick<Si
     companies[p.id] = e.company;
   }
   for (const c of plan.companies) if (c.captain) captains[c.id] = c.captain;
-  return { tasks, companies, captains };
+  return { tasks, companies, captains, present: plan.companies.filter((c) => Object.values(c.men).some((n) => (n ?? 0) > 0)).map((c) => TASK_CODE[c.task]) };
 }
 
 /** The combat module reports a finished fight: remember who won so the battle can conclude. */

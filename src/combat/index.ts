@@ -258,6 +258,7 @@ export function installCombat(sim: Simulation, deps: Wave3Deps): CombatModule {
     groups: (side) => arena.groups(side),
     orderGroup: (group, order) => arena.orderGroup(group, order),
     siegeStatus: () => arena.siegeStatus(),
+    retask: (fight, tasks, companies) => arena.retask(fight, tasks, companies),
     sideOf: (person) => arena.fighterOf(person)?.side ?? -1,
     isFighting: (person) => arena.inFight(person),
     harm: (person, intensity, cause): HarmResult => {

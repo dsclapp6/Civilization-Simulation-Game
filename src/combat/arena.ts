@@ -1411,6 +1411,11 @@ export class Arena {
   }
 
   /** The storm near the player, for the HUD. */
+  /** The besiegers' tasks changed in the middle of a storm. */
+  retask(fight: number, tasks: Record<number, number>, companies?: Record<number, number>): void {
+    this.fights.get(fight)?.scene?.retask(tasks, companies);
+  }
+
   siegeStatus(): SiegeStatus | null {
     for (const f of this.fights.values()) if (f.scene && !f.ended) return f.scene.status();
     return null;

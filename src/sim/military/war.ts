@@ -24,6 +24,8 @@ export interface SiegeSetup {
   /** The assault plan: the task of each attacker (a `TASK_CODE`: 1 loose, 2 ram, 3 ladders, 4 charge, 5 reserve) and the captain's company, by person. */
   tasks?: Record<number, number>;
   companies?: Record<number, number>;
+  /** The task codes the plan has companies for, whole army (a part of the host in the zone may hold none of a company's men). */
+  present?: number[];
   /** The captain of each company (company id -> person): when he falls his men's hearts fail. */
   captains?: Record<number, number>;
 }
