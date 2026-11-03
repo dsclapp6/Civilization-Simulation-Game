@@ -53,9 +53,10 @@ to them to take it up. Gilded **wings** over someone mean a task can be finished
 the task card, hints, the clock card, the minimap, notices and messages all start folded to a line or a count (urgent
 notices still show); the arrow on each unfolds it, and the game remembers.
 
-You walk the village in third person with a **free cursor**. Point at a person, a door, a strip or a tree and a label
-says what it is and what a click will do; **click** to walk there and do it (or stand close and press **E**; hold **E** for
-every option). Hold the **right button** and drag to turn the camera. What you are meant to be doing is written in the
+You walk the village in **first person**: the mouse (or trackpad) turns the view, no button held, and the crosshair
+names the person, door, strip or tree you look at and what **E** does there (hold **E** for every option). **Alt**
+(**Option** on a Mac) frees the cursor to point and click at the world and the buttons; the mouse wheel steps out to a view
+over your shoulder, farther out, and the map. What you are meant to be doing is written in the
 top left corner (the *tracker*), shown by a gold marker in the world, the compass ribbon and the minimap; **Y** asks
 "what now?" and **O** opens the journal. A day lasts thirty minutes, a season four days, a year sixteen: speed it up with
 **2** and **3** while you wait, slow down when you work or fight. When you sleep, the day is written up.
@@ -65,10 +66,10 @@ top left corner (the *tracker*), shown by a gold marker in the world, the compas
 | Key / mouse | Action |
 |---|---|
 | **W A S D**, **Shift**, **X**, **Space** | Move, sprint, slow walk, dodge roll |
-| **Left click** | Walk to the thing under the cursor and do its default action (any movement key stops you) |
-| **Right button** (hold, drag) | Turn the camera; the cursor comes back where it was |
-| **E** (tap / hold) | The default action on what you face / the action wheel |
-| **G** | Draw or put away your weapon; while it is drawn (or in a fight) the mouse looks: left strikes, right guards, bow: draw and aim |
+| **Mouse**, **Alt** / **Option** | The mouse looks (the first click takes it); Alt frees the cursor to point and click (a click walks to the thing and does its default action); Alt again takes the mouse back. **Esc** frees it too |
+| **Wheel** | First person, over the shoulder, farther out, the map |
+| **E** (tap / hold) | The default action on what is under the crosshair / the action wheel |
+| **G** | Draw or put away your weapon; looking, with it drawn: left strikes, right guards, bow: draw and aim along the crosshair |
 | **F**, **Q** | Mount a horse, stop the work in hand |
 | **1 2 3**, **P** | Speed 1×, 3×, 8×; pause |
 | **Y**, **O**, **N** | What now? card, the journal (tasks, today, people, places), minimap on or off |

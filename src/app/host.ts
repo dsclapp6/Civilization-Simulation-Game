@@ -71,7 +71,7 @@ export class AppHost implements UiHost {
 
   mouseLooking(): boolean { return this.input?.pointerLocked ?? false; }
 
-  mouseState(): 'look' | 'wait' | 'free' | null { return this.session && this.screen === 'game' ? this.input?.lookState ?? null : null; }
+  mouseState(): 'look' | 'wait' | 'free' | null { return this.session && this.screen === 'game' && !this.session.interior.active ? this.input?.lookState ?? null : null; }
 
   takeMouse(): void { this.input?.takeMouse(); }
 

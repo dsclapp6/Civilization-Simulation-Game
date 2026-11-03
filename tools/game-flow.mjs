@@ -167,9 +167,8 @@ try {
     check('the click takes the mouse (the pointer is locked)', (await locked()) && (await lookState()) === 'look');
     check('a crosshair marks the middle of the view', (await page.locator('.mu-xhair:not(.mu-hide)').count()) === 1);
     const y0 = await yawOf();
-    await page.mouse.move(640, 360);
-    await page.mouse.move(700, 360, { steps: 6 });
-    await page.mouse.move(760, 360, { steps: 6 });
+    // (headless Chromium reports odd movement for synthetic mouse moves while the pointer is locked, so the movement is sent as the events a real mouse makes)
+    await page.evaluate(() => { for (let i = 0; i < 12; i++) document.getElementById('viewport').dispatchEvent(new MouseEvent('mousemove', { bubbles: true, movementX: 40, movementY: 0, clientX: 640, clientY: 360 })); });
     await tick(0.2);
     const y1 = await yawOf();
     check('moving the mouse turns the view, no button held', Math.abs(Math.atan2(Math.sin(y1 - y0), Math.cos(y1 - y0))) > 0.05, `${y0.toFixed(3)} -> ${y1.toFixed(3)}`);
@@ -199,13 +198,13 @@ try {
     await tick(0.3);
     check('closing it takes the mouse back', (await locked()) && (await lookState()) === 'look', await lookState());
     // the wheel steps out of first person to the shoulder, and back
-    await page.mouse.move(640, 360);
-    await page.mouse.wheel(0, 120);
+    const wheel = (dy) => page.evaluate((d) => document.getElementById('viewport').dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: d })), dy);
+    await wheel(120);
     await tick(0.6);
     const out = await sim(() => ({ fp: window.__game.session.renderer.inFirstPerson(), d: window.__game.session.renderer.getViewDistance() }));
     check('the wheel out of first person goes over the shoulder', !out.fp && out.d > 2 && out.d < 5, JSON.stringify(out));
     await page.waitForTimeout(600);
-    await page.mouse.wheel(0, -400);
+    await wheel(-400);
     await tick(0.8);
     check('the wheel in goes back to first person', await sim(() => window.__game.session.renderer.inFirstPerson()));
     // leave the cursor free for the pointing checks below

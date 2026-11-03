@@ -20,6 +20,8 @@ export interface InputHost {
   inGame(): boolean;
   renderer(): GameRenderer | null;
   settings(): { mouseSensitivity: number; invertY: boolean };
+  /** The player is inside a building (its room has its own view): the mouse is not taken there. */
+  inRoom?(): boolean;
   /** The wheel settled on a view (0 = first person, else the third-person distance): remember it. */
   rememberView?(distance: number): void;
   /** The journey is under way: the camera follows the party, the player cannot walk. */
@@ -61,7 +63,7 @@ export class InputLayer {
   /** The wheel moved the view: when it was (performance.now ms) and the last view saved. */
   private viewDirty = 0;
   private viewSaved = NaN;
-  private nonAlt = false;
+  private unlockedAt = -1e9;
   private lockLostAt = -1e9;
   private lastLockTry = -1e9;
   private lastCursor = '';
@@ -135,7 +137,8 @@ export class InputLayer {
     }
     const mode = r ? r.getCameraMode() : 'follow';
     const mapView = mode === 'map' || this.host.travelling();
-    this.keepLock(mapView);
+    // the pointer is ours only in the street view: not on the map or the road, in a room, in builder mode or a cut-scene (mode 'free')
+    this.keepLock(mapView || mode !== 'follow' || !!this.host.inRoom?.());
     if (this.viewDirty && performance.now() - this.viewDirty > 700 && r && mode === 'follow') {
       this.viewDirty = 0;
       const d = Math.round(r.getViewDistance() * 10) / 10;
@@ -201,7 +204,8 @@ export class InputLayer {
   /** The pointer is ours whenever the mouse should look: after a click when the browser demands one, at once after a key press. */
   private keepLock(mapView: boolean): void {
     if (mapView) { this.modes.suspend(); this.exitLock(); return; }
-    if (this.modes.state === 'wait' && !this.locked && recentGesture()) this.requestLock();
+    // (a lock this layer gave up itself a moment ago may be taken again without a new click or key press)
+    if (this.modes.state === 'wait' && !this.locked && (recentGesture() || performance.now() - this.unlockedAt < 8000)) this.requestLock();
   }
 
   private requestLock(): void {
@@ -215,6 +219,7 @@ export class InputLayer {
   private exitLock(): void {
     if (!this.locked || this.weReleasedLock) return;
     this.weReleasedLock = true;
+    this.unlockedAt = performance.now();
     document.exitPointerLock();
   }
 
@@ -280,7 +285,7 @@ export class InputLayer {
 
   private onView(e: Event): boolean {
     const t = e.target as Node | null;
-    return !!t && this.surface.contains(t);
+    return t instanceof Node && this.surface.contains(t);
   }
 
   private onMouseDown(e: MouseEvent): void {
