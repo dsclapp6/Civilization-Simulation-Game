@@ -8,6 +8,22 @@ export interface PlacementWorld {
   size: number;
   heightAt(x: number, z: number): number;
   waterSurfaceAt(x: number, z: number): number | null;
+  settlements?: ReadonlyArray<{ id: number; x: number; z: number }>;
+}
+
+/**
+ * A wall tower is turned by quarter turns so its door (the recipe's, on local +z) faces the middle of its place, inside the walls
+ * (agents/nav/walls.ts turns its stairs the same way: `towerTurn`).
+ */
+export function towerTurn(rot: number, x: number, z: number, cx: number, cz: number): number {
+  const want = Math.atan2(cx - x, cz - z);
+  let best = rot, bd = Infinity;
+  for (let k = 0; k < 4; k++) {
+    const r = rot + (k * Math.PI) / 2;
+    const d = Math.abs(Math.atan2(Math.sin(want - r), Math.cos(want - r)));
+    if (d < bd - 1e-9) { bd = d; best = r; }
+  }
+  return best;
 }
 
 /** Kinds whose model carries its mill race / quay on local −z (docs/ART.md section 8). */
@@ -18,7 +34,11 @@ function waterAt(w: PlacementWorld, x: number, z: number): boolean {
 }
 
 /** The yaw the model is drawn at: a water building faces its door away from the water. */
-export function placedRot(w: PlacementWorld, b: { kind: BuildingKind; x: number; z: number; rot: number }): number {
+export function placedRot(w: PlacementWorld, b: { kind: BuildingKind; x: number; z: number; rot: number; settlement?: number }): number {
+  if (b.kind === 'tower' && w.settlements && b.settlement !== undefined) {
+    const s = w.settlements.find((q) => q.id === b.settlement);
+    if (s) return towerTurn(b.rot, b.x, b.z, s.x, s.z);
+  }
   if (!WATER_KINDS.has(b.kind)) return b.rot;
   const def = BUILDINGS[b.kind];
   const fx = Math.sin(b.rot), fz = Math.cos(b.rot);

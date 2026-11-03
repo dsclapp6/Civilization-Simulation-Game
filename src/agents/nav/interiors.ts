@@ -24,7 +24,7 @@ export const INSIDE_RADIUS = 0.26;
 /** What the app gives the navigation: the plans of insides and where models stand (the renderer's placement). */
 export interface InteriorSource {
   plan(kind: BuildingKind, level: number, culture: CultureId, seed: number): InteriorPlan | null;
-  place(b: { kind: BuildingKind; x: number; z: number; rot: number }): { y: number; rot: number };
+  place(b: { kind: BuildingKind; x: number; z: number; rot: number; settlement: number }): { y: number; rot: number };
 }
 
 export interface Loaded {

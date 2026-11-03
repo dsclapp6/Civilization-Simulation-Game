@@ -303,7 +303,7 @@ export class BuildingSystem {
   /** Water buildings face their door away from the water; models sit on their lower corners (assets/buildings/placement.ts). */
   private orient(b: BuildingView): number { return placedRot(this.placeWorld, b); }
   private groundY(b: BuildingView, rot: number): number { return placedY(this.placeWorld, b, rot); }
-  private get placeWorld(): { size: number; heightAt(x: number, z: number): number; waterSurfaceAt(x: number, z: number): number | null } { return this.world as unknown as { size: number; heightAt(x: number, z: number): number; waterSurfaceAt(x: number, z: number): number | null }; }
+  private get placeWorld(): import('../assets/buildings/placement').PlacementWorld { return this.world as unknown as import('../assets/buildings/placement').PlacementWorld; }
 
   private sync(list: readonly BuildingView[]): void {
     const seen = new Set<number>();

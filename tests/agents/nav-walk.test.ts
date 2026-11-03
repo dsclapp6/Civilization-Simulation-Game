@@ -66,7 +66,7 @@ describe('the wall-walk', () => {
     const foot = r.walk.stairFootNear(0, 36, 8);
     expect(foot).toBeTruthy();
     expect(foot!.y).toBeCloseTo(11);
-    // the door faces the middle of the place (the origin): the foot is on the near side of the tower
+    // the door faces the middle of the place (the origin; the model turned by quarter turns): the foot is on the near side
     expect(foot!.foot.z).toBeLessThan(40);
     expect(r.walk.stairTopNear(foot!.top.x, foot!.top.z, 11, 2)).toBeTruthy();
     expect(r.walk.stairTopNear(foot!.top.x, foot!.top.z, 0, 2)).toBeNull(); // not from the ground
