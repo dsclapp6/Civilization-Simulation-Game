@@ -41,7 +41,7 @@ describe('the archer test', () => {
     let reached = -1;
     // shoot a few bouts every day (the village shoots together on holy days) for up to three years
     for (let day = 0; day < 48 && reached < 0; day++) {
-      runWork(sim, { home, targets: [{ kind: 'building', id: butts!.id }], accept: /^arms\.practise/, days: 1, counts });
+      runWork(sim, { home, targets: [{ kind: 'building', id: butts!.id }], accept: /^arms\.(practise|collect)/, days: 1, counts });
       if (player.trained.str >= 10 && skillLevel(player.skills.archery) >= 3) reached = ageYears(player, sim.absDay);
       // top up the arrows now and then (they are mostly picked up again). A bout is a few seconds of play whatever the length of the
       // day, so a day holds more bouts the longer it is and the arrows run down in proportion: two a day on a ten-minute day

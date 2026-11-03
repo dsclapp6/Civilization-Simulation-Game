@@ -59,7 +59,7 @@ describe('jobs: one action is one job', () => {
     expect(j0.secondsLeft).toBeCloseTo(dig.seconds * 2, 0);
     // half way through the first bout the bed is being dug (a quarter turned)
     for (let t = 0; t < dig.seconds * 0.6; t += 1 / 20) sim.step(1 / 20);
-    const props = (): string[] => eco.econ.sim.view.worldProps().filter((p) => /bed/.test(p.kind)).map((p) => `${p.kind}:${p.count}`);
+    const props = (): string[] => eco.econ.sim.view.worldProps().filter((p) => /bed/.test(p.kind) && p.id >= 1e10 + hh.id * 32 && p.id < 1e10 + hh.id * 32 + 32).map((p) => `${p.kind}:${p.count}`);
     expect(props()).toEqual(['garden_bed:1']);
     sim.actions.cancel(me);
     // finish it: the rest of the job, then nothing more

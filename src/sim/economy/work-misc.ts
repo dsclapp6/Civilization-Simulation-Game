@@ -422,7 +422,7 @@ function listBuilding(E: Econ, p: Person, id: number, out: ActionOption[]): void
     // the arrows shot stay in the straw until they are pulled out
     if (stuck > 0) {
       out.push(option({
-        id: 'arms.collect', label: `Pull your arrows from the butts (${stuck})`, seconds: 6 + Math.min(10, stuck * 0.25), anim: 'work_lift', mainHand: 'none', category: 'use', priority: stuck >= ARROWS_PER_ROUND ? 40 : 12,
+        id: 'arms.collect', label: `Pull your arrows from the butts (${stuck})`, seconds: 6 + Math.min(10, stuck * 0.25), anim: 'work_lift', mainHand: 'none', category: 'use', priority: 12,
         repeat: false, preview: 'They are yours again, the broken ones thrown away', target, range: 25, data: { act: 'collect', building: id } as WorkData,
       }));
     }
@@ -493,12 +493,12 @@ function practise(E: Econ, p: Person, buildingId: number): ActionOutcome {
   boutDone(E, p, { skill: 'archery', xp: 0, heavy: 0.5, str: 0, end: 0.4, bouts: 1 });
   trainStat(E.sim, p, 'str', 0.012 * heavy * TRAIN_SCALE); // drawing a bow is full-effort strength work: a longbow bout builds as much as a bout at the plough
   trainStat(E.sim, p, 'per', 0.006 * (holy ? 1.2 : 1) * TRAIN_SCALE);
-  // the round is six arrows from the quiver into the straw; one in thirty splits on the way. They stand in the butts (drawn there)
+  // the round is six arrows from the quiver into the straw; about one arrow in 160 splits on the way. They stand in the butts (drawn there)
   // until the shooter pulls them out (arms.collect)
   const shot = shootArrows(E, p, ARROWS_PER_ROUND);
   const lost = E.rng('arrows');
   let kept = 0;
-  for (const q of shot) if (lost.next() >= 0.03) { kept++; stickArrow(E, buildingId, q); }
+  for (const q of shot) if (lost.next() >= 0.006) { kept++; stickArrow(E, buildingId, q); }
   void kept;
   const lvl = skillLevel(p.skills.archery);
   return { ok: true, message: `Your arrows ${lvl < 3 ? 'wander about the target' : lvl < 8 ? 'cluster near the gold' : 'strike the gold'}.`, gains: [{ label: 'Archery', ref: 'archery' }, { label: 'Strength', ref: 'str' }] };

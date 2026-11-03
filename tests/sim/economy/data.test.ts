@@ -48,7 +48,7 @@ describe('economy content', () => {
     }
     // fourteen foods and fuels, and (civilization pass) twelve building materials and raw goods with a supply model
     expect(MACRO_GOODS.filter((g) => !GOODS[g].supply).length).toBe(14);
-    expect(MACRO_GOODS.filter((g) => GOODS[g].supply).length).toBe(12);
+    expect(MACRO_GOODS.filter((g) => GOODS[g].supply).length).toBe(14);
     for (const g of MACRO_GOODS) if (GOODS[g].supply) {
       const s = GOODS[g].supply!;
       expect(s.use, g).toBeGreaterThan(0);

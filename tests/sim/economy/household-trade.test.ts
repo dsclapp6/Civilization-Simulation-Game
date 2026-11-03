@@ -177,7 +177,7 @@ describe('the materials in the markets', () => {
   it('every market stocks them, at a price near the usual; the foods are as they were', () => {
     const { eco, markets, sim } = ledgerSim('house-materials');
     const mats = MACRO_GOODS.filter((g) => GOODS[g].supply);
-    expect(mats.length).toBe(12);
+    expect(mats.length).toBe(14);
     for (const m of markets) {
       const view = eco.market(m.id)!;
       for (const g of mats) {

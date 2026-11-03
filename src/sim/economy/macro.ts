@@ -93,7 +93,8 @@ export function settlementDay(E: Econ, s: Settlement, part = 0, parts = 1): void
     householdDay(E, s, ss, hh, tally, urban, lord?.household, PERIOD);
   }
   endTick(E);
-  if (part === 0 && dayNo % DAYS_PER_YEAR === s.id % DAYS_PER_YEAR) { livestockYear(E, s, hhs); homeUpkeep(E, s, hhs); }
+  if (part === 0 && dayNo % DAYS_PER_YEAR === s.id % DAYS_PER_YEAR) livestockYear(E, s, hhs);
+  if (part === 0) homeUpkeep(E, s, hhs);
   E.touchSave();
 }
 
@@ -454,7 +455,7 @@ export const RENT_PER_STRIP = 3;
 // ---------------------------------------------------------------------------------------------
 
 /** Once a year (on the settlement's own day): lambing and calving, the autumn cull, shearing, murrain and winter losses. */
-function livestockYear(E: Econ, s: Settlement, hhs: Household[]): void {
+export function livestockYear(E: Econ, s: Settlement, hhs: Household[]): void {
   const rng = E.rng('livestock');
   for (const hh of hhs) {
     const st = hh.stores;

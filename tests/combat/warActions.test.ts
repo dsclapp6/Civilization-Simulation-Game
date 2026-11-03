@@ -25,6 +25,9 @@ describe('the player at the ram', () => {
     expect(push).toBeTruthy();
     expect(push!.enabled).toBe(true);
     expect(push!.label).toBe('Push the ram');
+    // J3: the push is a counted job, the blows the gate still needs, one per bout
+    expect(push!.bouts).toBe(scene.ramBlowsLeft(ram));
+    expect(push!.bouts).toBeGreaterThan(1);
     const res = t.r.player!.perform(push!);
     expect(res.ok).toBe(true);
     t.r.sim.step(SIM_DT);
