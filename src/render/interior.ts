@@ -7,9 +7,9 @@
 import * as THREE from 'three';
 import type { AssetLibrary, BuildingAsset } from '../assets/types';
 import { archShape, F, Layer, MeshBuilder, shade, type V2 } from '../assets/core/builder';
-import { BUILDING_CUT, INDOOR_LIGHTS } from '../assets/core/materials';
+import { BUILDING_CUT, INDOOR_LIGHTS, withBuildingCut } from '../assets/core/materials';
 import { buildInterior } from '../assets/interiors/model';
-import type { InteriorPlan, PDoor } from '../assets/interiors/types';
+import type { InteriorPlan, PDoor, PRect } from '../assets/interiors/types';
 import type { BuildingSystem } from './buildings';
 
 export interface InteriorRoomView {
@@ -35,6 +35,8 @@ interface Placed {
   meshes: THREE.Mesh[];
   plan: InteriorPlan;
   used: number;
+  /** The building's model whose materials were swapped for this room's (given back when the room goes). */
+  model: THREE.Object3D | null;
 }
 
 interface CutParams {
@@ -49,6 +51,19 @@ interface CutParams {
 
 const MAX_HOLES = 6;
 const LEAF_T = 0.07;
+
+/** A building model's own materials back, when its inside is no longer drawn. */
+function giveBack(model: THREE.Object3D): void {
+  model.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.userData.mlCutBase) return;
+    mesh.material = mesh.userData.mlCutBase as THREE.Material;
+    delete mesh.userData.mlCutBase;
+    mesh.onBeforeRender = NOOP;
+    mesh.onAfterRender = NOOP;
+  });
+}
+const NOOP = (): void => {};
 
 function applyCut(p: CutParams | null): void {
   if (!p) { BUILDING_CUT.on.value = 0; return; }
@@ -156,7 +171,7 @@ export class InteriorLayer {
   private readonly opaque: THREE.Material;
   private readonly opaqueDS: THREE.Material;
   private readonly glow: THREE.Material;
-  readonly paneMat = new THREE.MeshBasicMaterial({ color: 0xcfe0f0, vertexColors: false, toneMapped: false });
+  readonly paneMat = withBuildingCut(new THREE.MeshBasicMaterial({ color: 0xcfe0f0, vertexColors: false, toneMapped: false }), 'ml-interior-pane');
   private readonly leavesOut: LeafPool;
   private readonly leavesIn: LeafPool;
   private readonly cuts = new Map<number, CutParams>();
@@ -208,12 +223,21 @@ export class InteriorLayer {
     this.time += dt;
     const rooms = view?.rooms ?? [];
     const open = new Set<number>(), inside = new Set<number>();
-    for (const r of rooms) { open.add(r.id); if (r.inside) inside.add(r.id); }
-    this.buildings.setInteriorFocus(open, inside);
+    const cutAt = new Map<number, { cut: number; rooms: readonly PRect[]; bounds: PRect }>();
+    for (const r of rooms) {
+      open.add(r.id);
+      if (!r.inside) continue;
+      inside.add(r.id);
+      const lv = Math.max(0, Math.min(r.plan.levels.length - 1, r.level));
+      cutAt.set(r.id, { cut: r.plan.levels[lv].cut, rooms: r.plan.rooms.filter((q) => q.level === lv), bounds: r.plan.bounds });
+    }
+    this.buildings.setInteriorFocus(open, inside, cutAt);
     // place the insides
+    let slot = 0;
     for (const r of rooms) {
       const at = this.buildings.placement(r.id);
       if (!at || !at.asset) continue;
+      const sl = slot++;
       let p = this.placed.get(r.id);
       if (p && p.key !== r.plan.key) { this.unplace(p); p = undefined; }
       if (!p) {
@@ -225,7 +249,7 @@ export class InteriorLayer {
         meshes[0].receiveShadow = true;
         for (const m of meshes) { m.frustumCulled = false; group.add(m); }
         this.root.add(group);
-        p = { id: r.id, key: r.plan.key, group, meshes, plan: r.plan, used: this.frame };
+        p = { id: r.id, key: r.plan.key, group, meshes, plan: r.plan, used: this.frame, model: null };
         this.placed.set(r.id, p);
       }
       p.used = this.frame;
@@ -235,12 +259,22 @@ export class InteriorLayer {
       // the cut: what of this building to take away
       const cut = this.cutFor(r, p.group.matrixWorld, camera, focus, view!);
       this.cuts.set(r.id, cut);
+      this.slotOf.set(r.id, sl);
       const hook = (m: THREE.Object3D): void => {
         m.onBeforeRender = () => applyCut(cut);
         m.onAfterRender = () => applyCut(null);
       };
-      for (const m of p.meshes) hook(m);
-      at.asset.object.traverse((o) => { if ((o as THREE.Mesh).isMesh) hook(o); });
+      const bases = [this.opaqueDS, this.glow, this.paneMat];
+      p.meshes.forEach((m, i) => { m.material = this.slotMat(bases[i], sl); hook(m); });
+      if (p.model && p.model !== at.asset.object) giveBack(p.model);
+      p.model = at.asset.object;
+      at.asset.object.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const base = (mesh.userData.mlCutBase ??= mesh.material) as THREE.Material | THREE.Material[];
+        mesh.material = Array.isArray(base) ? base.map((b) => this.slotMat(b, sl)) : this.slotMat(base, sl);
+        hook(mesh);
+      });
     }
     for (const p of [...this.placed.values()]) if (p.used !== this.frame) this.unplace(p);
     for (const id of [...this.cuts.keys()]) if (!open.has(id)) this.cuts.delete(id);
@@ -250,11 +284,33 @@ export class InteriorLayer {
     // the panes: the light of the day outside
     const k = Math.max(0.08, daylight);
     this.paneMat.color.setRGB(0.55 * k + 0.05, 0.62 * k + 0.07, 0.72 * k + 0.12);
+    for (const m of this.slotMats.get(this.paneMat) ?? []) (m as THREE.MeshBasicMaterial).color.copy(this.paneMat.color);
     this.leaves(view, inside);
   }
 
+  /**
+   * The materials of a cut building are copies kept for its slot (the n-th room drawn): three.js uploads a material's uniforms
+   * only when the material changes from one draw to the next, so the cut set before a draw reaches the shader only if the
+   * building's materials are its own.
+   */
+  private readonly slotMats = new Map<THREE.Material, THREE.Material[]>();
+  private readonly slotOf = new Map<number, number>();
+  private slotMat(base: THREE.Material, slot: number): THREE.Material {
+    let a = this.slotMats.get(base);
+    if (!a) { a = []; this.slotMats.set(base, a); }
+    let m = a[slot];
+    if (!m) {
+      m = base.clone();
+      m.onBeforeCompile = base.onBeforeCompile;
+      m.customProgramCacheKey = base.customProgramCacheKey;
+      a[slot] = m;
+    }
+    return m;
+  }
+
   private unplace(p: Placed): void {
-    this.root.remove(p.group);
+    if (p.model) giveBack(p.model);
+    this.slotOf.delete(p.id);
     this.release(p.key);
     this.placed.delete(p.id);
   }
@@ -349,8 +405,10 @@ export class InteriorLayer {
     }
     this.stats.leaves = this.leavesOut.end() + this.leavesIn.end();
     // the leaves of the building one is in are cut with it
-    const cut = [...inside].map((id) => this.cuts.get(id)).find((c) => !!c) ?? null;
-    this.leavesIn.forEachMesh((mesh) => { mesh.onBeforeRender = () => applyCut(cut); mesh.onAfterRender = () => applyCut(null); });
+    const inId = [...inside].find((id) => this.cuts.has(id));
+    const cut = inId !== undefined ? this.cuts.get(inId)! : null;
+    const mat = inId !== undefined ? this.slotMat(this.opaqueDS, this.slotOf.get(inId) ?? 0) : this.opaqueDS;
+    this.leavesIn.forEachMesh((mesh) => { mesh.material = mat; mesh.onBeforeRender = () => applyCut(cut); mesh.onAfterRender = () => applyCut(null); });
   }
 
   /** The matrix of one leaf: hung at the hinge jamb on the outer face, swung in by `a`. */
@@ -383,6 +441,8 @@ export class InteriorLayer {
     this.leavesOut.dispose();
     this.leavesIn.dispose();
     this.paneMat.dispose();
+    for (const a of this.slotMats.values()) for (const m of a) m.dispose();
+    this.slotMats.clear();
     applyCut(null);
     for (const p of INDOOR_LIGHTS.pos.value) p.w = 0;
   }

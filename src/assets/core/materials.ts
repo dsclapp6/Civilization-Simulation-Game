@@ -181,9 +181,46 @@ if (uCutOn > 0.5) {
     vec2 d = uCutFocus.xz - uCutEye.xz;
     float L = length(d);
     vec2 dir = d / max(L, 1e-3);
-    if (dot(lp.xz - uCutEye.xz, dir) < L - 0.75 && lp.y > uCutFocus.y + 0.85) discard;
+    if (dot(lp.xz - uCutEye.xz, dir) < L - 0.3 && lp.y > uCutFocus.y + 0.85) discard;
   }
 }`;
+
+function cutUniforms(s: THREE.WebGLProgramParametersWithUniforms): void {
+  s.uniforms.uCutOn = BUILDING_CUT.on;
+  s.uniforms.uCutInv = BUILDING_CUT.inv;
+  s.uniforms.uCutY = BUILDING_CUT.cutY;
+  s.uniforms.uCutB = BUILDING_CUT.bounds;
+  s.uniforms.uCutEye = BUILDING_CUT.eye;
+  s.uniforms.uCutFocus = BUILDING_CUT.focus;
+  s.uniforms.uCutHoleA = BUILDING_CUT.holeA;
+  s.uniforms.uCutHoleB = BUILDING_CUT.holeB;
+}
+
+/** A plain unlit material that the cut-away cuts like the walls (the panes of an inside's windows). */
+export function withBuildingCut<M extends THREE.Material>(m: M, key: string): M {
+  m.onBeforeCompile = (s) => {
+    cutUniforms(s);
+    s.vertexShader = s.vertexShader
+      .replace('#include <common>', `#include <common>
+varying vec3 vWPos;`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+{
+  vec4 mlW = vec4(transformed, 1.0);
+  #ifdef USE_INSTANCING
+  mlW = instanceMatrix * mlW;
+  #endif
+  vWPos = (modelMatrix * mlW).xyz;
+}`);
+    s.fragmentShader = s.fragmentShader
+      .replace('#include <common>', `#include <common>
+varying vec3 vWPos;
+${GLSL_CUT_PARS}`)
+      .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+${GLSL_CUT}`);
+  };
+  m.customProgramCacheKey = () => key;
+  return m;
+}
 
 /** Opaque vertex-coloured, flat-shaded surface for buildings and props. */
 export function createOpaqueMaterial(u: SharedUniforms, doubleSided: boolean): THREE.MeshStandardMaterial {
@@ -262,6 +299,7 @@ export function createGlowMaterial(u: SharedUniforms): THREE.MeshBasicMaterial {
   m.name = 'ml-glow';
   m.onBeforeCompile = (s) => {
     s.uniforms.uTime = u.uTime;
+    cutUniforms(s);
     s.vertexShader = s.vertexShader
       .replace('#include <common>', `#include <common>
 varying vec3 vGPos;`)
@@ -276,7 +314,11 @@ varying vec3 vGPos;`)
     s.fragmentShader = s.fragmentShader
       .replace('#include <common>', `#include <common>
 uniform float uTime;
-varying vec3 vGPos;`)
+varying vec3 vGPos;
+#define vWPos vGPos
+${GLSL_CUT_PARS}`)
+      .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+${GLSL_CUT}`)
       .replace('#include <color_fragment>', `#include <color_fragment>
 {
   float ph = dot(vGPos, vec3(1.7, 2.3, 1.3));

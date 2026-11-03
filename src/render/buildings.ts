@@ -5,6 +5,7 @@
 // 5-60 ms, so at most one uncached model is generated per frame (cached ones cost ~0.1 ms); the
 // loading screen (settle) warms everything in range. Animates moving parts, lights windows at
 // night and feeds the FX layer from the asset's smokePoints / emitters / firePoints.
+import type { PRect } from '../assets/interiors/types';
 import * as THREE from 'three';
 import { BUILDINGS, type BuildingKind } from '../content/types';
 import type { CultureId } from '../core/domain';
@@ -876,13 +877,14 @@ export class BuildingSystem {
 
   /** Buildings drawn by their own model (never instanced) because they are cut open; the camera's boom passes through these. */
   private readonly unbatched = new Set<number>();
-  private readonly rayPass = new Set<number>();
-  setInteriorFocus(open: ReadonlySet<number>, inside: ReadonlySet<number>): void {
+  /** The building one is inside, and the height (local) its cut-away takes off above: the boom stays in the room or leaves over the cut. */
+  private readonly rayPass = new Map<number, { cut: number; rooms: readonly PRect[]; bounds: PRect }>();
+  setInteriorFocus(open: ReadonlySet<number>, inside: ReadonlySet<number>, cutAt?: ReadonlyMap<number, { cut: number; rooms: readonly PRect[]; bounds: PRect }>): void {
     let changed = open.size !== this.unbatched.size;
     if (!changed) for (const id of open) if (!this.unbatched.has(id)) { changed = true; break; }
     if (changed) { this.unbatched.clear(); for (const id of open) this.unbatched.add(id); this.batchDirty = true; this.lastBatch = -100; }
     this.rayPass.clear();
-    for (const id of inside) this.rayPass.add(id);
+    for (const id of inside) { const c = cutAt?.get(id); if (c) this.rayPass.set(id, c); }
   }
 
   /** Where a building's model stands (world), and its detailed model when one is drawn. */
@@ -904,8 +906,24 @@ export class BuildingSystem {
     const near = this.nearValid && maxDist + 60 + ray.origin.distanceTo(this.evalPos) < NEAR_R;
     for (const e of near ? this.nearList : this.ordered) {
       if (e.dist > maxDist + 60) continue;
-      if (this.rayPass.has(e.id)) continue;
       const def = BUILDINGS[e.kind];
+      const pass = this.rayPass.get(e.id);
+      if (pass) {
+        // inside: the boom runs in the room (the one the head is in) until it leaves it — over the cut (free) or through a
+        // wall (stopped there)
+        inv.makeRotationY(e.rot).setPosition(e.x, e.y, e.z).invert();
+        local.copy(ray).applyMatrix4(inv);
+        const o = local.origin, d = local.direction, cutY = pass.cut;
+        const within = (m: number) => (q: PRect): boolean => o.x > q.x0 - m && o.x < q.x1 + m && o.z > q.z0 - m && o.z < q.z1 + m;
+        const rm = pass.rooms.find(within(0)) ?? pass.rooms.find(within(0.3)) ?? pass.bounds;
+        const ext = (p: number, v: number, lo: number, hi: number): number => (v > 1e-9 ? (hi - p) / v : v < -1e-9 ? (lo - p) / v : Infinity);
+        const tx = ext(o.x, d.x, rm.x0 - 0.3, rm.x1 + 0.3), tz = ext(o.z, d.z, rm.z0 - 0.3, rm.z1 + 0.3), ty = ext(o.y, d.y, -50, cutY);
+        const tw = Math.min(tx, tz);
+        // a room too small for the camera (a passage, the foot of a stair by the back wall): the boom goes out through the wall,
+        // which the cut-away takes away between the camera and the player
+        if (o.y < cutY && tw < ty && tw >= 2.6 && tw <= maxDist && (!best || tw < best.distance)) best = { id: e.id, distance: tw };
+        continue;
+      }
       const h = e.asset ? e.asset.height : proxyShape(e.kind, e.view.level).wall + 3;
       inv.makeRotationY(e.rot).setPosition(e.x, e.y, e.z).invert();
       local.copy(ray).applyMatrix4(inv);

@@ -72,9 +72,12 @@ async function load(time) {
         zone().doors.invite(st.run.playerId, id, S().sim.absDay + 1);
         const l = ix().placed(b);
         const d = l.plan.doors[door < 0 ? l.plan.main : door];
-        const loc = { x: d.x + d.nx * back, z: d.z + d.nz * back };
+        // from the door's standing place (clear of the plot), or further out along the door's face
+        const sd = Math.hypot(d.sx - d.x, d.sz - d.z);
+        const more = Math.max(0, back - sd);
+        const loc = { x: d.sx + d.nx * more, z: d.sz + d.nz * more };
         const w = ix().toWorld(l, loc.x, loc.z, { x: 0, z: 0 });
-        const yaw = Math.atan2(-d.nx, -d.nz) + l.rot;
+        const yaw = Math.atan2(d.x - loc.x, d.z - loc.z) + l.rot;
         S().services.player.placeAt(w.x, w.z, yaw, d.sy > 0.5 ? l.y + d.sy : undefined);
         window.__ix.camera(yaw);
         return { yaw };
@@ -94,10 +97,21 @@ async function load(time) {
         const r = S().renderer;
         const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
         r.orbit(wrap(yaw - r.getCameraYaw()), 0);
-        if (pitch !== undefined) r.orbit(0, pitch);
+        // pitch: an offset from the starting pitch (orbit adds to it), not accumulated from shot to shot
+        const want = pitch ?? 0;
+        r.orbit(0, want - (window.__ixPitch ?? 0));
+        window.__ixPitch = want;
       },
       plan(id) { const b = S().sim.state.buildings.get(id); const l = ix().placed(b); return l ? { levels: l.plan.levels, stairs: l.plan.stairs, rooms: l.plan.rooms.map((r) => ({ name: r.name, level: r.level, x0: r.x0, x1: r.x1, z0: r.z0, z1: r.z1 })), main: l.plan.main, doors: l.plan.doors.map((d) => ({ x: d.x, z: d.z, y: d.y, outer: d.outer, kind: d.kind })) } : null; },
-      where() { const b = S().services.player.body(); const id = zone().nav.interiorAt(b.x, b.z, b.y); return { x: b.x, y: b.y, z: b.z, inside: id }; },
+      where() { const b = S().services.player.body(); const id = zone().nav.interiorAt(b.x, b.z, b.y); const c = S().renderer.getCamera().position; const r = (v) => Math.round(v * 100) / 100; return { x: r(b.x), y: r(b.y), z: r(b.z), inside: id, cam: [r(c.x), r(c.y), r(c.z)] }; },
+      dbg(id) {
+        const b = S().sim.state.buildings.get(id); const l = ix().placed(b); const c = S().renderer.getCamera().position;
+        const dx = c.x - l.x, dz = c.z - l.z, co = Math.cos(l.rot), si = Math.sin(l.rot);
+        const p = S().services.player.body(); const px = p.x - l.x, pz = p.z - l.z;
+        return { kind: b.kind, level: b.level, bounds: l.plan.bounds, levels: l.plan.levels, blocks: l.plan.blocks?.map((k) => [k.x0, k.z0, k.x1, k.z1, k.y0, k.y1]),
+          camLocal: [dx * co - dz * si, c.y - l.y, dx * si + dz * co], playerLocal: [px * co - pz * si, p.y - l.y, px * si + pz * co],
+          drawn: zone().indoors.drawn.map((r) => [r.id, r.level, r.inside]), cutOn: window.__IXCUT };
+      },
       teleport(x, z) { S().services.player.placeAt(x, z, 0); },
       castle() {
         const w = S().sim.world;
@@ -126,13 +140,13 @@ try {
     if (want('door', `door-${tag}`)) {
       const b = await ev(() => window.__ix.find(['cottage', 'hovel', 'longhouse']));
       if (b) {
-        const st = await ev((id) => window.__ix.atDoor(id, 2.4), b.id);
-        await ev((y) => window.__ix.camera(y + 0.7, 0.25), st.yaw);
+        const st = await ev((id) => window.__ix.atDoor(id, 3.4), b.id);
+        await ev((y) => window.__ix.camera(y + 0.9, 0.12), st.yaw);
         await advance(0.6);
         // walk into the door: it opens before him
-        await advance(1.1, { forward: 1, cameraYaw: st.yaw });
+        await advance(0.75, { forward: 1, cameraYaw: st.yaw });
         await shot(`door-opening-${tag}`);
-        await advance(1.4, { forward: 1, cameraYaw: st.yaw });
+        await advance(1.2, { forward: 1, cameraYaw: st.yaw });
         await shot(`door-through-${tag}`);
       }
     }
@@ -158,6 +172,7 @@ try {
           const t = await ev(([id, x, z, yw]) => window.__ix.at(id, x, z, 0, yw), [b.id, footX, footZ, lyaw]);
           await advance(0.4);
           await shot(`townhouse-stair-${tag}`);
+          if (process.env.DBG) console.log(JSON.stringify(await ev((id) => { const o = window.__ix.dbg(id); o.rooms = window.__ix.plan(id).rooms; o.stairs = window.__ix.plan(id).stairs; return o; }, b.id)));
           await advance(3.2, { forward: 1, cameraYaw: t.yaw });
           await advance(0.5);
           await shot(`townhouse-upstairs-${tag}`);
@@ -171,15 +186,17 @@ try {
         await advance(3.0, { forward: 1, cameraYaw: st.yaw });
         await advance(0.5);
         await shot(`manor-hall-${tag}`);
+        if (process.env.DBG) console.log(JSON.stringify(await ev((id) => window.__ix.dbg(id), b.id)));
       }
     }
     if (want('church', `church-${tag}`)) {
       const b = await ev(() => window.__ix.find(['church', 'chapel', 'abbey_church', 'cathedral']));
       if (b) {
         const st = await ev((id) => window.__ix.atDoor(id, 1.2), b.id);
-        await advance(3.4, { forward: 1, cameraYaw: st.yaw });
+        await advance(2.6, { forward: 1, cameraYaw: st.yaw });
         await advance(0.5);
         await shot(`church-${tag}`);
+        if (process.env.DBG) console.log(JSON.stringify(await ev((id) => { const o = window.__ix.dbg(id); o.doors = window.__ix.plan(id).doors; return o; }, b.id)));
       }
     }
     if (want('workshop', `workshop-${tag}`)) {
