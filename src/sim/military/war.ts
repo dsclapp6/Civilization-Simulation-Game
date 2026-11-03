@@ -21,6 +21,11 @@ export interface SiegeSetup {
   mined?: boolean;
   /** Where the besiegers' camp lies (the gate they meet is the gatehouse nearest it, and their line forms up between the two). */
   camp?: { x: number; z: number };
+  /** The assault plan: the task of each attacker (a `TASK_CODE`: 1 loose, 2 ram, 3 ladders, 4 charge, 5 reserve) and the captain's company, by person. */
+  tasks?: Record<number, number>;
+  companies?: Record<number, number>;
+  /** The captain of each company (company id -> person): when he falls his men's hearts fail. */
+  captains?: Record<number, number>;
 }
 
 /** `engage`'s options as the war code uses them (the contract's, plus the storm and the command). */
@@ -66,6 +71,8 @@ export interface WarCombatApi extends CombatApi {
   siegeStatus(): SiegeStatus | null;
   /** The fight a person is in and his side's index (the war code needs it to put the command in the right place). */
   sideOf(person: PersonId): number;
+  /** The besiegers' tasks changed (the player re-tasked a company): the men of the storm in progress take them up. */
+  retask?(fight: number, tasks: Record<number, number>, companies?: Record<number, number>): void;
 }
 
 /** True when the object is a combat module that does groups (a fake may not). */

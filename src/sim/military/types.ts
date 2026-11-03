@@ -71,6 +71,10 @@ export interface Army {
   orderDay: number;
   /** Contingents of vassal Houses raised with this army (house ids). */
   vassals: HouseId[];
+  /** The place a campaign is against (kept through halts and camps, when `target` is cleared). */
+  objective?: number;
+  /** The plan for storming a place: companies, captains, tasks (src/sim/military/plan.ts). */
+  plan?: import('./plan').AssaultPlan;
   /** A raid in progress: the settlement, hours left, and what has been done so far. */
   raid?: { sid: number; hours: number; burned: number; stolen: number; captives: number; strips: number; loot: number; herd: number };
 }
@@ -325,6 +329,23 @@ export interface MilitaryRuntime extends MilitaryApi {
   recruitTests(person: PersonId): Array<{ role: 'archer' | 'man_at_arms' | 'sergeant'; label: string; met: boolean; lines: Array<{ label: string; met: boolean }> }>;
   /** Hires a mercenary company for a House; returns the number of men taken on. */
   hireMercenaries(house: HouseId, count: number, kind?: 'archer' | 'man_at_arms' | 'crossbow'): number;
+  // ---- additive: campaigns the player plans and rides with ----
+  /** Storms the place the army is before now (begins the siege first when it has only just arrived). */
+  stormNow?(army: number): Result;
+  /** Sound the retreat: break off the battle (an orderly withdrawal), lift the siege, turn the host for home. */
+  retreat?(army: number): Result & { lost?: number };
+  /** Brings an army up to strength with fresh men of these kinds (sworn to its House; a muster of hired swords and levies). */
+  reinforce?(army: number, counts: Partial<Record<UnitKind, number>>): number;
+  /** Puts a garrison of these kinds into a place for its lord (they live there and defend it). */
+  garrison?(settlement: number, counts: Partial<Record<UnitKind, number>>): number;
+  /** The army's plan for a storm (made from its men when none is set) and what it would do against the place it faces. */
+  assaultPlan?(army: number): { plan: import('./plan').AssaultPlan; note: string; defenders: number; walls: number; target: number } | null;
+  /** Gives a company its task. */
+  setCompanyTask?(army: number, company: number, task: import('./plan').CompanyTask): Result;
+  /** Moves men of a kind from one company to another. */
+  moveMen?(army: number, from: number, to: number, kind: UnitKind, count: number): Result;
+  /** Names the captain of a company (a knight or sergeant of the army, or the commander). */
+  setCaptain?(army: number, company: number, captain: PersonId): Result;
   /** Quality of a man's arms and armour, 0.4..1.5. */
   armsQuality(person: PersonId): number;
 
