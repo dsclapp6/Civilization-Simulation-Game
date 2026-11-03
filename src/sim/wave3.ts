@@ -133,6 +133,15 @@ export interface PlayerCombatPose {
   /** Armour and helmet the player's equipment shows (so the character looks as protected as they are). */
   armour: string | null;
   helmet: string | null;
+  // ---- additive: the duel's reading (for the HUD) ----
+  /** Where the player's guard is held ('high' | 'mid' | 'low'), or null when not guarding. */
+  guardLine?: string | null;
+  /** The line of the blow coming at the player (the foe's windup), or null. */
+  threat?: string | null;
+  /** Seconds left to riposte after a parry (0 = none). */
+  riposte?: number;
+  /** Breath 0..1 (a tired arm is slow and weak). */
+  breath?: number;
 }
 
 /** The camera ray the player aims along (world coordinates; direction is a unit vector). */
@@ -140,7 +149,8 @@ export interface PlayerAim { x: number; y: number; z: number; dx: number; dy: nu
 
 export interface PlayerCombatPort {
   /** Every frame, before the sim steps: held buttons and the camera. Edges are latched inside. */
-  input(attack: boolean, block: boolean, aim: PlayerAim | null, cameraYaw: number): void;
+  /** `stick`: the movement keys (forward −1..1, right −1..1): with a blow or the guard they choose its line. */
+  input(attack: boolean, block: boolean, aim: PlayerAim | null, cameraYaw: number, stick?: { forward: number; right: number }): void;
   /** Every sub-step. */
   step(f: PlayerCombatFrame, out: PlayerCombatPose): void;
   /** May the dodge roll begin (not staggered, enough breath)? Spends the stamina when it does. */

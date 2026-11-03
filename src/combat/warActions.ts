@@ -1,9 +1,9 @@
 // The player's verbs in a storm (civilization pass, wave B; docs/WAR.md): push the ram, climb a ladder, man a station on the
 // wall. They are actions on the player himself (the action wheel's "self" target, E when nothing else is in front), offered only
 // while he is in a storm and near the thing. They work through the scene: the ram feels his weight, a ladder carries him up, a
-// station is his. The wall-walk is above the ground: if the navigation can stand a body up there (the zone's wall stations),
-// he is placed on it; if it cannot, the climb ends inside the wall at the foot of the stairs, so the player is never left
-// standing in the stone.
+// station is his. The wall-walk is above the ground: the navigation stands a body up there (src/agents/nav/walls.ts), so he
+// is placed on it and walks and fights on the walk (src/combat/wallwalk.ts has the stairs); if no floor is there (a wall already
+// battered down), the climb ends inside the wall at the foot of the stairs, so the player is never left standing in the stone.
 import { dist } from '../core/math';
 import type { ActionOption, ActionOutcome, ActionProvider, TargetRef } from '../sim/actions';
 import type { SimContext } from '../sim/context';
@@ -149,7 +149,7 @@ function raiseTo(sv: Services, pf: Fighter, scene: SiegeScene, st: Station): boo
   const player = sv.player;
   if (!player) return false;
   const yawIn = Math.atan2(-Math.sin(st.yaw), -Math.cos(st.yaw));
-  player.placeAt(st.x, st.z, st.yaw);
+  player.placeAt(st.x, st.z, st.yaw, st.y);
   const b = player.body();
   if (b && Math.abs(b.y - st.y) < 1.4) {
     pf.onWall = true;

@@ -19,7 +19,7 @@ import { think } from './ai';
 import { commanderStep } from './commander';
 import { FightCommand } from './command';
 import { SiegeScene } from './scene';
-import { BEASTS, BEAST_KEY_BASE, Fighter, R, S, normAngle, turnTo } from './fighter';
+import { BEASTS, BEAST_KEY_BASE, Fighter, R, S, normAngle, turnTo, type Line } from './fighter';
 import { FxQueue } from './fx';
 import { gearOf, type Gear, type GearEnv } from './gear';
 import { Projectiles } from './projectiles';
@@ -72,7 +72,7 @@ export interface ArenaEnv {
   fx: FxQueue;
   proj: Projectiles;
   /** The player's body, if the player module is installed. */
-  playerBody(): { x: number; y: number; z: number; yaw: number } | null;
+  playerBody(): { x: number; y: number; z: number; yaw: number; walk?: boolean } | null;
   notify(kind: SimEvents['notify']['kind'], text: string, person?: PersonId): void;
   /** Wind at the player (m/s). */
   wind(): { x: number; z: number };
@@ -568,8 +568,17 @@ export class Arena {
     if (!b) return;
     f.px = f.x; f.pz = f.z;
     f.x = b.x; f.z = b.z; f.y = b.y; f.yaw = b.yaw;
-    // he has come down off the wall-walk
-    if (f.onWall && f.station && b.y < f.station.y - 2.5) {
+    if (b.walk !== undefined) {
+      // the navigation knows whether he stands on a wall-walk (the stairs, a ladder's top, a tower), and he may walk along it
+      if (b.walk && !f.onWall) f.onWall = true;
+      else if (!b.walk && f.onWall) {
+        if (f.station?.holder === f) f.station.holder = null;
+        f.onWall = false;
+        f.station = null;
+        if (f.role === R.Wall) f.role = R.None;
+      }
+    } else if (f.onWall && f.station && b.y < f.station.y - 2.5) {
+      // he has come down off the wall-walk
       if (f.station.holder === f) f.station.holder = null;
       f.onWall = false;
       f.station = null;
@@ -708,6 +717,8 @@ export class Arena {
   tickShared(f: Fighter, dt: number): void {
     f.t += dt;
     f.animT += dt;
+    if (f.riposteT > 0) f.riposteT = Math.max(0, f.riposteT - dt);
+    if (f.openT > 0) f.openT = Math.max(0, f.openT - dt);
     f.cooldown -= dt;
     f.dodgeI -= dt;
     f.dodgeCd -= dt;
@@ -810,7 +821,7 @@ export class Arena {
   }
 
   /** Starts a blow. Returns false if the fighter cannot (state, breath). */
-  startAttack(f: Fighter, key: 'slash' | 'overhead' | 'thrust', rangedSidearm = false): boolean {
+  startAttack(f: Fighter, key: 'slash' | 'overhead' | 'thrust', rangedSidearm = false, line?: Line): boolean {
     if (f.st !== S.Idle && f.st !== S.Block && f.st !== S.Recover) return false;
     void rangedSidearm;
     const w = f.gear.weapon;
@@ -824,7 +835,13 @@ export class Arena {
     f.heavy = key === 'overhead';
     f.impacted = false;
     f.serial++;
-    const sp = this.speedOf(f, true);
+    // the line: an overhead comes high, a thrust at the body, a cut at the body unless thrown low at the legs
+    f.line = line ?? (key === 'overhead' ? 'high' : 'mid');
+    // a tired arm is slow; a riposte off a parry is quick
+    // (a fresh arm swings at the table's pace; only below half its breath does it flag, down to a third slower)
+    const tired = 1 + 0.35 * clamp((0.5 - f.stamina / Math.max(1, f.staminaMax)) / 0.5, 0, 1);
+    const quick = f.riposteT > 0 ? 0.65 : 1;
+    const sp = this.speedOf(f, true) * tired * quick;
     f.set(S.Windup, a.anim, a.windup * sp);
     f.lunge = key === 'thrust' ? 1.7 : key === 'slash' ? 0.9 : 0.6;
     f.charge = 1;
@@ -1403,6 +1420,11 @@ export class Arena {
   }
 
   /** The storm near the player, for the HUD. */
+  /** The besiegers' tasks changed in the middle of a storm. */
+  retask(fight: number, tasks: Record<number, number>, companies?: Record<number, number>): void {
+    this.fights.get(fight)?.scene?.retask(tasks, companies);
+  }
+
   siegeStatus(): SiegeStatus | null {
     for (const f of this.fights.values()) if (f.scene && !f.ended) return f.scene.status();
     return null;

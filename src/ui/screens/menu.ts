@@ -108,6 +108,15 @@ export class MenuLayer {
     const card = h('section.mu-win.sm.mu-menu-card', null, corners(), h('div.mu-menu-card-body', null,
       this.saved ? button('Continue', { variant: 'primary', size: 'big', icon: 'play', class: 'mu-wide', onClick: () => this.deps.continueRun() }) : null,
       button('New run', { variant: this.saved ? '' : 'primary', size: 'big', icon: 'sparkle', class: 'mu-wide', onClick: () => { this.shop.setGold(this.gold()); this.go('difficulty'); } }),
+      this.deps.host.startScenario ? button(this.starting ? 'Making the world…' : 'Scenario: the march on the castle', {
+        size: 'big', icon: 'flag', class: 'mu-wide', disabled: this.starting,
+        tip: 'A practice run, never saved: you are a knight in a host of 250 marching on a castle held by 300; camp at nightfall, storm at dawn',
+        onClick: () => {
+          if (this.starting) return;
+          this.starting = true;
+          void this.deps.host.startScenario!('castle').catch((err: unknown) => { this.starting = false; this.error = String(err); this.go('main'); });
+        },
+      }) : null,
       button('Records', { size: 'big', icon: 'trend_up', class: 'mu-wide', onClick: () => this.go('records') }),
       button('Settings', { size: 'big', icon: 'cog', class: 'mu-wide', onClick: () => this.go('settings') }),
     ));

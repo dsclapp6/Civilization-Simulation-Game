@@ -2,6 +2,7 @@
 // Leadership, terrain, fortifications and morale decide; casualties fall on real people through `combat.harm`
 // (deaths, wounds, captures with ransom). When the player is in the line a detail battle of a representative
 // subset (≤ 60 a side) runs near him through `combat.engage`, while the rest resolves macro-style.
+import { applyPlan, assignCompanies, defaultPlan, TASK_CODE } from './plan';
 import { dist } from '../../core/math';
 import { skillLevel } from '../people';
 import { adjustOpinion, type HouseId, type Person, type PersonId } from '../state';
@@ -341,6 +342,8 @@ function fieldFighters(M: Mil, rec: BattleRec, a: Army, d: Army, exclude?: Reado
   const fa = fightersOf(M, [a], exclude), fd = fightersOf(M, [d], exclude);
   fa.stance = a.stance; fd.stance = d.stance;
   fd.bonus = rec.fort;
+  // a storm goes as its plan has it (the attacking army's companies and their tasks)
+  if (rec.siege >= 0) applyPlan(a.plan ?? defaultPlan(M, a), a, fa, fd);
   return [fa, fd];
 }
 
@@ -484,16 +487,16 @@ function beginDetail(M: Mil, rec: BattleRec, a: Army, d: Army, mine: Army): void
   const level = M.career.commandLevel();
   const span = commandSpan(level);
   if (span > 0) opts.command = { side: mine === a ? 0 : 1, span };
-  if (storm) opts.siege = siegeSetup(M, rec, a, detailMine.length);
+  if (storm) opts.siege = siegeSetup(M, rec, a, detailMine.length, detA);
   rec.fight = combat.engage(sides, opts);
   M.notify(`Battle is joined at ${M.placeName(rec.settlement)}! ${M.houseName(a.house)} against ${M.houseName(d.house)}.`, 'danger', pid);
   M.touch();
 }
 
 /** What the besiegers brought to this storm, from the siege record: rams, ladders, engines. */
-function siegeSetup(M: Mil, rec: BattleRec, a: Army, attackers: number): SiegeSetup {
+function siegeSetup(M: Mil, rec: BattleRec, a: Army, attackers: number, people: readonly Person[]): SiegeSetup {
   const siege = M.data.sieges.find((s) => s.settlement === rec.siege);
-  return {
+  const setup: SiegeSetup = {
     settlement: rec.siege, attackers: 0, defenders: 1,
     rams: Math.min(2, siege?.rams ?? 0),
     ladders: siege?.ladders ? Math.max(2, Math.min(4, Math.round(attackers / 12))) : 0,
@@ -501,6 +504,26 @@ function siegeSetup(M: Mil, rec: BattleRec, a: Army, attackers: number): SiegeSe
     mined: (siege?.mine ?? 0) >= 1,
     camp: { x: a.x, z: a.z },
   };
+  // the army's plan: who is in which company, and what the company is to do (the player's army or the enemy's, the same)
+  if (!a.plan) a.plan = defaultPlan(M, a);
+  Object.assign(setup, planTasks(a, people));
+  return setup;
+}
+
+/** The tasks, companies and captains of the plan for these men of an army (for the detail storm and for re-tasking it). */
+export function planTasks(a: Army, people: readonly { id: PersonId }[]): Pick<SiegeSetup, 'tasks' | 'companies' | 'captains' | 'present'> {
+  const plan = a.plan;
+  if (!plan) return {};
+  const who = assignCompanies(a, plan);
+  const tasks: Record<number, number> = {}, companies: Record<number, number> = {}, captains: Record<number, number> = {};
+  for (const p of people) {
+    const e = who.get(p.id);
+    if (!e) continue;
+    tasks[p.id] = TASK_CODE[e.task];
+    companies[p.id] = e.company;
+  }
+  for (const c of plan.companies) if (c.captain) captains[c.id] = c.captain;
+  return { tasks, companies, captains, present: plan.companies.filter((c) => Object.values(c.men).some((n) => (n ?? 0) > 0)).map((c) => TASK_CODE[c.task]) };
 }
 
 /** The combat module reports a finished fight: remember who won so the battle can conclude. */
@@ -607,3 +630,56 @@ export function battleInfo(M: Mil): Array<{ id: number; x: number; z: number; a:
 }
 
 export { addMan, countKinds, adjustOpinion };
+
+/** The plan of an army changed during its storm: the men fighting it in the zone take up the new tasks at once. */
+export function retaskStorm(M: Mil, a: Army): void {
+  const rec = M.data.battles.find((b) => b.a === a.id && b.siege >= 0 && b.result === '' && b.fight !== 0);
+  if (!rec || !a.plan || !isWarCombat(M.combat)) return;
+  const t = planTasks(a, rec.detailA.map((id) => ({ id })));
+  M.combat.retask?.(rec.fight, t.tasks ?? {}, t.companies);
+}
+
+// ---------------------------------------------------------------------------------------------
+// The retreat
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * The army sounds the retreat: from a battle (the field is lost, but an orderly withdrawal costs far fewer men than a
+ * rout: the rearguard holds while the rest fall back), from a siege (it is lifted), or from the march (it turns home).
+ */
+export function soundRetreat(M: Mil, army: Army): { ok: boolean; reason?: string; lost?: number } {
+  const rec = M.data.battles.find((b) => (b.a === army.id || b.d === army.id) && b.result === '');
+  let lost = 0;
+  if (rec) {
+    const a = M.army(rec.a), d = M.army(rec.d);
+    if (!a || !d) { dropBattle(M, rec); }
+    else {
+      if (rec.fight && M.combat?.disperse) M.combat.disperse(rec.fight);
+      M.detailResults.delete(rec.id);
+      const ours = rec.a === army.id ? 'a' : 'd';
+      const before = army.men.length;
+      const [fa, fd] = fieldFighters(M, rec, a, d);
+      const res = resolve(M, fa, fd, { x: rec.x, z: rec.z });
+      res.attWon = ours === 'd';
+      // the rearguard holds: a fraction of what a rout would cost, the enemy's loss small (they did not press home)
+      if (ours === 'a') { res.attLoss = Math.min(res.attLoss, 0.03 + res.attLoss * 0.35); res.defLoss *= 0.4; }
+      else { res.defLoss = Math.min(res.defLoss, 0.03 + res.defLoss * 0.35); res.attLoss *= 0.4; }
+      res.routed = 'none';
+      res.margin = Math.min(res.margin, 0.2);
+      conclude(M, rec, a, d, fa, fd, res, undefined);
+      lost = Math.max(0, before - (M.army(army.id)?.men.length ?? 0));
+    }
+  }
+  const siege = M.data.sieges.find((s) => s.army === army.id);
+  if (siege) M.sieges.lift(siege, 'the besiegers sounded the retreat');
+  const still = M.army(army.id);
+  if (!still) return { ok: true, lost };
+  still.intent = 'return';
+  still.stance = 'hold';
+  still.objective = undefined;
+  still.plan = undefined;
+  giveOrder(M, still, { kind: 'return' });
+  M.touch();
+  if (M.concernsPlayer(still.house)) M.notify(`The trumpets sound the retreat: the host falls back${lost ? ` (${lost} men lost in the withdrawal)` : ''} and turns for home.`, 'warn');
+  return { ok: true, lost };
+}

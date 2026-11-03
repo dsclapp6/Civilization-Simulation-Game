@@ -13,6 +13,7 @@ import type { CombatApi, FightResult, FightSide, HarmResult, Wound } from '../si
 import type { WarCombatApi, WarEngageOpts } from '../sim/military/war';
 import { createCombatProvider, PROVIDER_ID } from './actions';
 import { createWarProvider } from './warActions';
+import { createWallWalkProvider } from './wallwalk';
 import { Arena, type ArenaEnv, type Fight, type KitOverride } from './arena';
 import { S, type Fighter } from './fighter';
 import { chainAnimals, chainCharacters, chainFx, chainProjectiles, FxQueue } from './fx';
@@ -249,6 +250,7 @@ export function installCombat(sim: Simulation, deps: Wave3Deps): CombatModule {
   const services: Services = { sim, arena, book, economy, social, zone, player, assault, challenge };
   sim.actions.register(createCombatProvider(services));
   sim.actions.register(createWarProvider(services));
+  sim.actions.register(createWallWalkProvider(services));
 
   // ---- the API ----
   const listeners = arena.endListeners;
@@ -258,6 +260,7 @@ export function installCombat(sim: Simulation, deps: Wave3Deps): CombatModule {
     groups: (side) => arena.groups(side),
     orderGroup: (group, order) => arena.orderGroup(group, order),
     siegeStatus: () => arena.siegeStatus(),
+    retask: (fight, tasks, companies) => arena.retask(fight, tasks, companies),
     sideOf: (person) => arena.fighterOf(person)?.side ?? -1,
     isFighting: (person) => arena.inFight(person),
     harm: (person, intensity, cause): HarmResult => {

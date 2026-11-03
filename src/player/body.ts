@@ -50,6 +50,10 @@ export interface BodyState {
   odometer: number;
   /** On a horse: seconds the sprint key has been held while moving (a canter becomes a gallop after a while). */
   rideHeld: number;
+  /** Standing on a wall-walk or a tower top (the nav's floors), not on the ground; set by `placeBody` with a height, cleared on a fall. */
+  onWalk: boolean;
+  /** Metres dropped when the walk gave way this step (0 = none): the controller makes it a fall. */
+  fell: number;
 }
 
 export interface BodyTraits {
@@ -82,22 +86,31 @@ export function createBody(x: number, z: number, yaw: number, y: number, enduran
   return {
     x, y, z, yaw, px: x, py: y, pz: z, pyaw: yaw, vx: 0, vz: 0, speed: 0, baseSpeed: 0, gait: 'idle',
     stamina: { value: max, max, exhausted: false }, sitting: false, mounted: null, lock: null,
-    dodgeT: 0, dodgeCd: 0, dodgeDx: 0, dodgeDz: 0, wading: false, blocked: false, odometer: 0, rideHeld: 0,
+    dodgeT: 0, dodgeCd: 0, dodgeDx: 0, dodgeDz: 0, wading: false, blocked: false, odometer: 0, rideHeld: 0, onWalk: false, fell: 0,
   };
 }
 
 /** Puts the body somewhere; the previous position follows so nothing is interpolated across the jump. */
-export function placeBody(b: BodyState, x: number, z: number, yaw: number, nav: NavApi): void {
+export function placeBody(b: BodyState, x: number, z: number, yaw: number, nav: NavApi, walkY?: number): void {
+  // on a wall-walk (a ladder's top, the stairs): the floor must be there; otherwise the body is on the ground, and a point inside a
+  // wall or a tower (a body saved on the walk) is set down beside it
+  const top = walkY !== undefined && nav.walkTopAt ? nav.walkTopAt(x, z, walkY) : NaN;
+  b.onWalk = top === top;
+  b.fell = 0;
+  if (!b.onWalk && nav.groundBeside) { const g = { x, z }; if (nav.groundBeside(x, z, g)) { x = g.x; z = g.z; } }
   b.x = b.px = x;
   b.z = b.pz = z;
   b.yaw = b.pyaw = yaw;
-  b.y = b.py = nav.groundY(x, z);
+  b.y = b.py = b.onWalk ? top : nav.groundY(x, z);
   b.vx = b.vz = 0;
   b.speed = 0;
   b.blocked = false;
 }
 
 const mr: MoveResult = { x: 0, z: 0, blocked: false, wading: false };
+const wm = { x: 0, z: 0, y: 0, blocked: false, fell: false };
+/** How fast a body climbs the stairs of a tower from the wall-walk (m/s). */
+const STAIR_SPEED = 3;
 
 /** Advances the body by one fixed sub-step. */
 export function stepBody(b: BodyState, input: Readonly<InputState>, env: BodyEnv, dt: number): void {
@@ -175,8 +188,8 @@ export function stepBody(b: BodyState, input: Readonly<InputState>, env: BodyEnv
     if (target > 0) {
       target *= agilityFactor(t.agility) * ageFactor(t.age) * loadFactor(t.weight, t.capacity) * clamp(nav.speedFactor(b.x, b.z), 0.3, 1.6);
       if (b.wading) target *= WADE_FACTOR;
-      // slope one metre ahead along the intended direction
-      const ahead = nav.groundY(b.x + dirX, b.z + dirZ) - b.y;
+      // slope one metre ahead along the intended direction (the floor of the wall-walk is level)
+      const ahead = b.onWalk ? 0 : nav.groundY(b.x + dirX, b.z + dirZ) - b.y;
       target *= slopeFactor(ahead);
     }
 
@@ -205,7 +218,20 @@ export function stepBody(b: BodyState, input: Readonly<InputState>, env: BodyEnv
 
   // ---- move against the world ----
   const intended = Math.hypot(moveX, moveZ) * dt;
-  if (intended > 1e-6) {
+  b.fell = 0;
+  if (intended > 1e-6 && b.onWalk && nav.walkMove) {
+    // on the wall-walk: held to the floors (the parapet is a wall), the height that of the floor
+    nav.walkMove(b.x, b.z, moveX * dt, moveZ * dt, b.y, wm);
+    const dx = wm.x - b.x, dz = wm.z - b.z;
+    b.x = wm.x; b.z = wm.z;
+    b.blocked = wm.blocked;
+    b.wading = false;
+    b.odometer += Math.hypot(dx, dz);
+    b.vx = dx / dt; b.vz = dz / dt;
+    if (wm.blocked) b.speed = Math.min(b.speed, Math.hypot(dx, dz) / dt);
+    if (wm.fell) { b.fell = b.y - nav.groundY(b.x, b.z); b.onWalk = false; }
+    else b.y += clamp(wm.y - b.y, -STAIR_SPEED * dt, STAIR_SPEED * dt);
+  } else if (intended > 1e-6) {
     nav.move(b.x, b.z, moveX * dt, moveZ * dt, mounted ? RIDE_RADIUS : FOOT_RADIUS, mr);
     const dx = mr.x - b.x, dz = mr.z - b.z;
     const moved = Math.hypot(dx, dz);
@@ -220,7 +246,12 @@ export function stepBody(b: BodyState, input: Readonly<InputState>, env: BodyEnv
     b.vx = b.vz = 0;
     b.blocked = false;
   }
-  b.y = nav.groundY(b.x, b.z);
+  if (b.onWalk && nav.walkTopAt) {
+    // standing still on the walk: the floor under the feet (or, if it was battered away, the ground)
+    const top = nav.walkTopAt(b.x, b.z, b.y);
+    if (top === top) b.y += clamp(top - b.y, -STAIR_SPEED * dt, STAIR_SPEED * dt);
+    else { b.fell = b.y - nav.groundY(b.x, b.z); b.onWalk = false; b.y = nav.groundY(b.x, b.z); }
+  } else if (!b.onWalk) b.y = nav.groundY(b.x, b.z);
 
   const moving = b.speed > 0.2;
   stepStamina(b.stamina, {

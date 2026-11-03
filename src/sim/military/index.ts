@@ -9,9 +9,11 @@ import type { ArmyView } from '../wave3';
 import type { Wave3Deps } from '../wave3deps';
 import type { Simulation } from '../sim';
 import {
-  armiesOf, detailOf, disband, giveOrder, nearestSettlementId, raise, removeMen, settlementPoint, upkeepDay, viewOf,
+  addMan, armiesOf, detailOf, disband, giveOrder, nearestSettlementId, raise, removeMen, settlementPoint, upkeepDay, viewOf,
 } from './armies';
-import { battleInfo, checkContacts, onFightEnded, stepBattles } from './battle';
+import { battleInfo, checkContacts, defendersOf, onFightEnded, retaskStorm, soundRetreat, stepBattles } from './battle';
+import { defaultPlan, planEffect } from './plan';
+import { fortBonus } from './siege';
 import { dailyCampaign, defendHour, hourlyArmies, queueHour, thinkHour } from './campaign';
 import { CareerSystem } from './career';
 import { CFG } from './config';
@@ -27,7 +29,7 @@ import { Realm } from './realm';
 import { SiegeSystem } from './siege';
 import { Mil } from './store';
 import { MusterView } from './musterview';
-import { UNIT_CHAR, CHAR_UNIT, type MilitaryRuntime } from './types';
+import { UNIT_CHAR, CHAR_UNIT, type MilitaryRuntime, type UnitKind } from './types';
 
 const contexts = new WeakMap<Simulation, Mil>();
 /** Offices that come with a title (politics `officeFor`): the others change nothing about who rules what. */
@@ -171,6 +173,76 @@ export function installMilitary(sim: Simulation, deps: Wave3Deps): MilitaryRunti
     },
     hireMercenaries(house, count, kind) {
       return hire(M, house, count, kind);
+    },
+    retreat(armyId) {
+      const a = M.army(armyId);
+      return a ? soundRetreat(M, a) : { ok: false, reason: 'No such army' };
+    },
+    stormNow(armyId) {
+      const a = M.army(armyId);
+      if (!a) return { ok: false, reason: 'No such army' };
+      let rec = M.data.sieges.find((s) => s.army === armyId);
+      if (!rec) {
+        // just arrived before the walls: the siege begins, and the storm at once
+        const sid = a.target?.settlement ?? a.objective ?? nearestSettlementId(M, a.x, a.z);
+        if (sid === undefined) return { ok: false, reason: 'There is nothing here to storm' };
+        rec = M.sieges.begin(a, sid) ?? undefined;
+        if (!rec) return { ok: false, reason: 'The place cannot be besieged' };
+      }
+      M.sieges.assault(rec, a);
+      return { ok: true };
+    },
+    assaultPlan(armyId) {
+      const a = M.army(armyId);
+      if (!a) return null;
+      if (!a.plan) a.plan = defaultPlan(M, a);
+      const sid = M.data.sieges.find((s) => s.army === armyId)?.settlement ?? a.target?.settlement ?? a.objective ?? nearestSettlementId(M, a.x, a.z);
+      if (sid === undefined) return { plan: a.plan, note: '', defenders: 0, walls: 1, target: -1 };
+      const def = defendersOf(M, sid, M.realm.holderOf(sid));
+      // in the storm the garrison stands as an army of its own in the battle
+      const fight = M.data.battles.find((b) => b.siege === sid && b.a === armyId && b.result === '');
+      const defenders = Math.max(def.people.length, fight ? M.army(fight.d)?.men.length ?? 0 : 0);
+      const walls = fortBonus(M, sid);
+      return { plan: a.plan, note: planEffect(a.plan, a, defenders, walls).note, defenders, walls, target: sid };
+    },
+    setCompanyTask(armyId, company, task) {
+      const a = M.army(armyId);
+      const c = a?.plan?.companies.find((x) => x.id === company);
+      if (!a || !c) return { ok: false, reason: 'No such company' };
+      c.task = task; retaskStorm(M, a); M.touch();
+      return { ok: true };
+    },
+    moveMen(armyId, from, to, kind, n) {
+      const a = M.army(armyId);
+      const f = a?.plan?.companies.find((x) => x.id === from), t = a?.plan?.companies.find((x) => x.id === to);
+      if (!a || !f || !t) return { ok: false, reason: 'No such company' };
+      const k = Math.min(n, f.men[kind] ?? 0);
+      if (k <= 0) return { ok: false, reason: 'None of them there' };
+      f.men[kind] = (f.men[kind] ?? 0) - k; t.men[kind] = (t.men[kind] ?? 0) + k; retaskStorm(M, a); M.touch();
+      return { ok: true };
+    },
+    setCaptain(armyId, company, captain) {
+      const a = M.army(armyId);
+      const c = a?.plan?.companies.find((x) => x.id === company);
+      if (!a || !c) return { ok: false, reason: 'No such company' };
+      if (captain !== a.commander && !a.men.includes(captain)) return { ok: false, reason: 'He is not with the army' };
+      c.captain = captain; retaskStorm(M, a); M.touch();
+      return { ok: true };
+    },
+    reinforce(armyId, counts) {
+      const a = M.army(armyId);
+      if (!a) return 0;
+      let n = 0;
+      for (const p of freshMen(M, a.house, a.home, counts)) { addMan(M, a, p.person, p.kind); n++; }
+      M.touch();
+      return n;
+    },
+    garrison(sid, counts) {
+      const house = M.realm.holderOf(sid);
+      if (!house) return 0;
+      const n = freshMen(M, house, sid, counts).length;
+      M.touch();
+      return n;
     },
     armsQuality: (person) => { const p = M.person(person); return p ? armsQuality(M, p) : 0; },
 

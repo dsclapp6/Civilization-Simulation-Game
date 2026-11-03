@@ -2,7 +2,8 @@
 // leaving a run, and the loading screen in between. It owns the current `Session` (simulation + modules +
 // renderer) and is the only thing that creates or destroys one.
 import { clamp } from '../core/math';
-import type { Profile } from '../sim/legacy';
+import { newProfile, type Profile } from '../sim/legacy';
+import { MemorySaveStore } from '../sim/save-memory';
 import { hasSavedRun, saveProfile, type SaveStore } from '../sim/save';
 import { Simulation } from '../sim/sim';
 import type { CameraPose, GameServices, GameUI, Settings, UiHost, UiRendererControls, UiScreen } from '../ui/types';
@@ -42,6 +43,10 @@ export class AppHost implements UiHost {
   private profileObj: Profile;
   private settingsObj: Settings;
   private busy = false;
+  /** The running session is a scenario's practice run: kept in memory, never saved over the real run. */
+  private practice = false;
+  /** Scenarios from the main menu (set by game.ts, which owns the UI they need). */
+  startScenario?: (id: string) => Promise<void>;
 
   constructor(private readonly env: HostEnv) {
     this.profileObj = env.profile;
@@ -96,7 +101,8 @@ export class AppHost implements UiHost {
     if (change.quality && this.session) this.session.renderer.setQuality(this.quality());
   }
 
-  async startNewRun(opts: Parameters<UiHost['startNewRun']>[0]): Promise<void> {
+  /** `practice`: a scenario's throwaway run, kept in memory only (the saved run and the records are untouched). */
+  async startNewRun(opts: Parameters<UiHost['startNewRun']>[0] & { practice?: boolean }): Promise<void> {
     if (this.busy) return;
     this.busy = true;
     try {
@@ -112,8 +118,9 @@ export class AppHost implements UiHost {
       const t2 = performance.now();
       const sim = Simulation.newGame({
         seed, difficulty: opts.difficulty, statUpgrades: opts.statUpgrades, start: opts.start, generateWorld: () => world,
-        store: this.env.store, profile: this.profileObj,
+        store: opts.practice ? new MemorySaveStore() : this.env.store, profile: opts.practice ? newProfile() : this.profileObj,
       });
+      this.practice = opts.practice === true;
       const t3 = performance.now();
       applyDevClock(sim, this.env.params);
       await this.begin(sim);
@@ -232,9 +239,11 @@ export class AppHost implements UiHost {
     await this.flush();
     this.session = null;
     for (const fn of this.listeners) fn(null);
+    s.dispose();
+    // a scenario's practice run leaves the real records alone
+    if (this.practice) { this.practice = false; return; }
     // carry the profile (Legacy gold earned in the run) forward
     this.profileObj = s.sim.profile;
-    s.dispose();
     void saveProfile(this.env.store, this.profileObj).catch(() => {});
   }
 }

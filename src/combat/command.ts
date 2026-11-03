@@ -45,6 +45,8 @@ export interface Group {
   cx: number; cz: number;
   count: number;
   engaged: boolean;
+  /** The fight's clock when the group last had steel crossed (the AI horse remembers its foot were locked). */
+  lockedT: number;
   /** Share of the men within reach of their slots. */
   cohesion: number;
   /** Average morale 0..1. */
@@ -124,7 +126,7 @@ export class FightCommand {
     this.span = span;
     const mk = (side: number, layer: 0 | 1, gk: 0 | 1 | 2): Group => ({
       side, layer, gk, order: 'hold', formation: gk === 1 ? 'loose' : 'line', at: null, target: 0, ax: 0, az: 0, yaw: 0, members: [],
-      cx: 0, cz: 0, count: 0, engaged: false, cohesion: 1, morale: 1, orderT: 0, byPlayer: false, formed: false,
+      cx: 0, cz: 0, count: 0, engaged: false, lockedT: -99, cohesion: 1, morale: 1, orderT: 0, byPlayer: false, formed: false,
     });
     for (let s = 0; s < this.fight.sides.length; s++) {
       for (const gk of [0, 1, 2] as const) {
@@ -182,6 +184,7 @@ export class FightCommand {
       g.count = m.length;
       if (m.length > 0) { g.cx = sx / m.length; g.cz = sz / m.length; g.morale = clamp(mor / m.length / 100, 0, 1); }
       g.engaged = eng;
+      if (eng) g.lockedT = this.fight.t;
       if (m.length > 0 && !g.formed) { g.ax = g.cx; g.az = g.cz; g.formed = true; if (g.yaw === 0) g.yaw = this.facingFor(g); }
     }
   }

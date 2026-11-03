@@ -239,3 +239,47 @@ describe('the whole storm', () => {
     expect(after).toBeGreaterThan(before);
   });
 });
+
+describe('the assault plan in the zone', () => {
+  const planned = (seed: string) => {
+    // the plan's tasks are filled in once we know who the attackers are: a first storm only to read their ids
+    const probe = storm(seed, { archers: 0, foot: 24 }, { archers: 4, foot: 6 });
+    const ids = probe.attackers;
+    const tasks: Record<number, number> = {}, companies: Record<number, number> = {};
+    ids.forEach((id, i) => { tasks[id] = i < 8 ? 2 : i < 18 ? 3 : i < 24 ? 5 : 4; companies[id] = i < 8 ? 2 : i < 18 ? 3 : 5; });
+    return storm(seed, { archers: 0, foot: 24 }, { archers: 4, foot: 6 }, { tasks, companies, present: [2, 3, 4, 5], captains: { 5: ids[20] } });
+  };
+
+  it('the ram is worked by the ram company, the ladders by the ladder company, and the reserve holds back until the way is open', () => {
+    const t = planned('st-plan');
+    const arena = t.r.combat.arena;
+    const scene = arena.fights.get(t.id)!.scene!;
+    const ram = scene.works.find((w) => w.kind === 'ram')!;
+    expect(ram.crew.length).toBeGreaterThan(0);
+    for (const m of ram.crew) expect(m.task).toBe(2);
+    for (const l of scene.works.filter((w) => w.kind === 'ladder')) for (const m of l.crew) expect(m.task).toBe(3);
+    stepFor(t.r.sim, 14);
+    const gate = { x: t.fort.gate.x, z: t.fort.gate.z };
+    const reserve = t.attackers.map((id) => arena.fighterOf(id)!).filter((f) => f.task === 5 && f.active);
+    expect(reserve.length).toBeGreaterThan(0);
+    for (const f of reserve) expect(Math.hypot(f.x - gate.x, f.z - gate.z)).toBeGreaterThan(40);
+    // the commander calls the reserve in: the company is re-tasked to the charge
+    const tasks: Record<number, number> = {};
+    for (const f of reserve) tasks[f.personId] = 4;
+    arena.retask(t.id, tasks);
+    for (const f of reserve) expect(f.task).toBe(4);
+  });
+
+  it('a captain who falls takes the heart out of his company', () => {
+    const t = planned('st-captain');
+    const arena = t.r.combat.arena;
+    const cap = arena.fighterOf(t.attackers[20])!;
+    const mate = arena.fighterOf(t.attackers[21])!;
+    const other = arena.fighterOf(t.attackers[12])!;
+    const gap0 = other.morale - mate.morale;
+    cap.fled = true;
+    stepFor(t.r.sim, 2);
+    // the man of another company is not touched; the captain's own lose heart
+    expect(other.morale - mate.morale).toBeGreaterThan(gap0 + 4);
+  });
+});

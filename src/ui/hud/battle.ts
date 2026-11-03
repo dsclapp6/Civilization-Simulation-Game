@@ -11,6 +11,10 @@ import {
   type OrderChoice,
 } from '../../sim/military/commandModel';
 import type { BattleGroupView, GroupKey, GroupOrder, MilitaryApi } from '../../sim/wave3';
+import type { CompanyTask } from '../../sim/military/plan';
+import type { MilitaryRuntime } from '../../sim/military/types';
+import { fullName } from '../../sim/state';
+import type { GameServices } from '../types';
 import { h } from '../core/dom';
 import { registerHotkey, registerHudPart, type HudPart, type HudPartCtx } from '../core/extHud';
 import { icon, type IconName } from '../core/icons';
@@ -133,6 +137,38 @@ const CSS = `
 .mu-bt-storm .gbar { width: 70px; height: 7px; border-radius: 4px; background: rgba(246, 234, 208, 0.25); overflow: hidden; }
 .mu-bt-storm .gbar i { display: block; height: 100%; background: #b0541c; }
 .mu-bt-storm .gbar.broken i { background: #6a3b1c; }
+.mu-cc { position: absolute; right: 14px; bottom: 112px; width: 292px; padding: 6px 8px 8px; border-radius: 6px; pointer-events: auto; background: rgba(26, 17, 9, 0.86); border: 1px solid #8c6b36;
+  color: #f6ead0; font-size: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); }
+.mu-cc.mu-hide { display: none; }
+.mu-cc-head { display: flex; align-items: center; gap: 6px; width: 100%; padding: 2px 2px 4px; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.mu-cc-head b { color: var(--gold-hi); }
+.mu-cc-head span { flex: 1; opacity: 0.85; font-size: 11px; }
+.mu-cc-note { font-size: 11px; font-style: italic; opacity: 0.85; margin: 0 2px 6px; }
+.mu-cc-co { border-left: 4px solid #6c7782; padding: 3px 6px; margin-bottom: 4px; background: rgba(246, 234, 208, 0.07); border-radius: 0 4px 4px 0; }
+.mu-cc-co .top { display: flex; justify-content: space-between; }
+.mu-cc-co .sel { display: flex; gap: 4px; margin-top: 2px; }
+.mu-cc-co select { flex: 1; min-width: 0; font: inherit; font-size: 11px; padding: 1px 2px; background: #f1e5c8; color: #2a1b0f; border: 1px solid #8c6b36; border-radius: 3px; }
+.mu-cc-co select.cap { flex: 0 0 38%; }
+.mu-cc-msg { font-size: 11px; font-style: italic; margin: 2px; color: var(--gold-hi); }
+.mu-cc-btns { display: flex; gap: 6px; margin-top: 4px; }
+.mu-cc-btns button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 5px 6px; border-radius: 5px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+  border: 1px solid var(--edge); background: linear-gradient(180deg, rgba(246, 234, 208, 0.96), rgba(221, 198, 144, 0.96)); color: var(--ink); }
+.mu-cc-btns button.go { background: linear-gradient(180deg, #e8a090, #c4382e); color: #fff; border-color: #6e1610; }
+.mu-cc-btns button.armed { background: linear-gradient(180deg, #e8a090, #c4382e); color: #fff; }
+.mu-duel { position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%); width: 300px; padding: 6px 10px 8px; pointer-events: none;
+  background: rgba(20, 13, 6, 0.72); color: #f6e7be; border-radius: 3px; font-size: 12.5px; text-align: center; }
+.mu-duel.mu-hide { display: none; }
+.mu-duel-lines { display: flex; gap: 6px; justify-content: center; margin-bottom: 4px; }
+.mu-duel-line { flex: 1; padding: 2px 0; border: 1px solid rgba(246, 231, 190, 0.35); border-radius: 2px; opacity: 0.75; }
+.mu-duel-line.guard { background: rgba(91, 154, 62, 0.55); border-color: #a8d48a; opacity: 1; }
+.mu-duel-line.threat { border-color: #ff6b5a; box-shadow: 0 0 8px rgba(255, 80, 60, 0.8); opacity: 1; font-weight: 700; }
+.mu-duel-note { min-height: 17px; }
+.mu-duel-note .warn { color: #ff9a8a; }
+.mu-duel-note .ok { color: #a8d48a; }
+.mu-duel-note .dim { opacity: 0.75; }
+.mu-duel-riposte { color: #f2d27a; text-shadow: 0 0 6px rgba(242, 210, 122, 0.9); }
+.mu-duel-breath { height: 4px; margin-top: 4px; background: rgba(246, 231, 190, 0.2); border-radius: 2px; overflow: hidden; }
+.mu-duel-breath i { display: block; height: 100%; background: linear-gradient(90deg, #5b9a3e, #c49a35); }
 `;
 
 let styled = false;
@@ -378,6 +414,160 @@ export class BattleHud implements HudPart {
     this.closeWheel();
   }
 }
+
+// ---------------------------------------------------------------------------------------------
+// The duel's reading (steel out): the guard's line, the line of the blow coming, the riposte, breath (src/combat/playerport.ts)
+// ---------------------------------------------------------------------------------------------
+
+export function duelNote(c: { guardLine?: string | null; threat?: string | null; riposte?: number }): { kind: 'riposte' | 'ok' | 'warn' | 'dim'; text: string } {
+  if ((c.riposte ?? 0) > 0) return { kind: 'riposte', text: 'Riposte! (J)' };
+  if (c.threat) {
+    if (c.guardLine === c.threat) return { kind: 'ok', text: `Guarded: ${c.threat}` };
+    const what = c.threat === 'low' ? 'Low cut' : c.threat === 'high' ? 'Blow from above' : 'Blow at the body';
+    return { kind: 'warn', text: `${what}: guard ${c.threat === 'high' ? 'W+K' : c.threat === 'low' ? 'S+K' : 'K'}` };
+  }
+  return { kind: 'dim', text: 'W+J over · S+J low · A/D+J thrust · K mid-swing feints' };
+}
+
+export class DuelHud implements HudPart {
+  readonly el = h('div.mu-duel.mu-hide');
+  private key = '-';
+  constructor(private readonly ctx: HudPartCtx) { ensureBattleStyle(); }
+  update(): void {
+    const game = this.ctx.game();
+    const hud = game?.player.hud();
+    const c = hud?.combat;
+    const on = !!c && c.engaged && !c.ranged && c.state !== 'down' && !!hud?.drawn;
+    const key = on ? `${c.guardLine ?? ''}|${c.threat ?? ''}|${(c.riposte ?? 0) > 0 ? 'r' : ''}|${Math.round((c.breath ?? 1) * 10)}` : '';
+    if (key === this.key) return;
+    this.key = key;
+    this.el.classList.toggle('mu-hide', !on);
+    if (!on || !c) return;
+    const cell = (l: string): HTMLElement => h('span', { class: `mu-duel-line ${c.guardLine === l ? 'guard' : ''} ${c.threat === l ? 'threat' : ''}` }, l === 'high' ? 'High' : l === 'mid' ? 'Mid' : 'Low');
+    const n = duelNote(c);
+    this.el.replaceChildren(
+      h('div.mu-duel-lines', null, cell('high'), cell('mid'), cell('low')),
+      h('div.mu-duel-note', null, h(n.kind === 'riposte' ? 'b.mu-duel-riposte' : `span.${n.kind}`, null, n.text)),
+      h('div.mu-duel-breath', null, h('i', { style: { width: `${Math.round((c.breath ?? 1) * 100)}%` } })),
+    );
+  }
+}
+registerHudPart('duel', (ctx) => new DuelHud(ctx));
+
+// ---------------------------------------------------------------------------------------------
+// The host's companies (the campaign): a card on the HUD and in the tactical view. Each company of the assault plan has a task
+// and a captain; the task can be changed on the march, in the camp and in the storm itself; the storm can be sent in early and the
+// retreat sounded (two clicks).
+// ---------------------------------------------------------------------------------------------
+
+const TASKS: ReadonlyArray<{ id: CompanyTask; label: string; tip: string }> = [
+  { id: 'loose', label: 'Bows on the walls', tip: 'Loose at the wall-walk: the defenders keep their heads down' },
+  { id: 'ram', label: 'The ram at the gate', tip: 'Batter the gate: twenty or more men, the heavier the better, break it' },
+  { id: 'ladders', label: 'Ladders to the walls', tip: 'Scale the walls: more men come to grips at once, at a heavy price' },
+  { id: 'charge', label: 'Charge the breach', tip: 'Go in through the gate when it breaks (costly against a whole one)' },
+  { id: 'reserve', label: 'Hold in reserve', tip: 'Stand back, ready: fewer in the first press, but steadier' },
+];
+const TASK_COLOR: Record<CompanyTask, string> = { loose: '#3f8f43', ram: '#a8631f', ladders: '#8a6ad8', charge: '#c4382e', reserve: '#6c7782' };
+const PHASE_WORD: Record<string, string> = { march: 'On the march', camp: 'In camp for the night', before: 'Camped before the walls', storm: 'The storm' };
+
+let cardOpen = true;
+
+type AssaultInfo = NonNullable<ReturnType<NonNullable<MilitaryRuntime['assaultPlan']>>>;
+
+export class CompanyCard {
+  readonly el = h('div.mu-cc.mu-hide');
+  private sig = '';
+  private armed = false;
+  private next = 0;
+  private message = '';
+
+  constructor(private readonly ctx: Pick<HudPartCtx, 'game' | 'say'>) { ensureBattleStyle(); }
+
+  /** The card was hidden by someone else: paint it afresh next time. */
+  forget(): void { this.sig = ''; this.next = 0; }
+
+  update(now: number): void {
+    const game = this.ctx.game();
+    const camp = game?.campaign;
+    const phase = camp?.phase() ?? null;
+    if (!game || !camp || !phase) { if (this.sig !== '-') { this.sig = '-'; this.el.classList.add('mu-hide'); } return; }
+    if (now < this.next) return;
+    this.next = now + 0.4;
+    const mil = game.sim.services.military as MilitaryRuntime | undefined;
+    const army = camp.army();
+    const info = mil?.assaultPlan?.(army);
+    if (!mil || !info) { this.el.classList.add('mu-hide'); return; }
+    const sig = JSON.stringify([phase, cardOpen, this.armed, this.message, info.defenders, info.note, info.plan.companies.map((c) => [c.id, c.task, c.captain, c.men])]);
+    if (sig === this.sig) return;
+    // a select the player is using is not rebuilt under his hand
+    if (this.el.contains(document.activeElement) && document.activeElement instanceof HTMLSelectElement) return;
+    this.sig = sig;
+    this.el.classList.remove('mu-hide');
+    this.paint(game, camp, mil, army, info, phase);
+  }
+
+  private act(r: { ok: boolean; reason?: string }, ok: string): void {
+    this.message = r.ok ? ok : r.reason ?? 'That cannot be done.';
+    this.ctx.say(r.ok ? 'info' : 'warn', this.message);
+    this.sig = '';
+    this.next = 0;
+  }
+
+  private paint(game: GameServices, camp: NonNullable<GameServices['campaign']>, mil: MilitaryRuntime, army: number, info: AssaultInfo, phase: string): void {
+    const st = game.sim.state;
+    const nameOf = (id: number): string => { const p = st.persons.get(id); return p ? fullName(p) : 'nobody'; };
+    const target = game.sim.world.settlements[info.target];
+    const A = mil.armyDetail(army);
+    const head = h('button.mu-cc-head', { type: 'button', title: cardOpen ? 'Fold the card away' : 'Open the host’s companies' },
+      icon('flag', 14), h('b', null, PHASE_WORD[phase] ?? 'The host'), h('span', null, `${A?.size ?? 0} men · ${target ? target.name : ''} (${info.defenders} within)`), h('i', null, cardOpen ? '–' : '+'));
+    head.addEventListener('click', () => { cardOpen = !cardOpen; this.sig = ''; this.next = 0; });
+    const kids: HTMLElement[] = [head];
+    if (cardOpen) {
+      const roster = mil.roster(army);
+      const captains = roster.filter((r) => r.kind === 'knight' || r.kind === 'sergeant').map((r) => r.person);
+      if (A && !captains.includes(A.commander)) captains.unshift(A.commander);
+      kids.push(h('div.mu-cc-note', null, info.note || 'The plan is set.'));
+      for (const c of info.plan.companies) {
+        const n = Object.values(c.men).reduce((s, v) => s + (v ?? 0), 0);
+        const sel = h<HTMLSelectElement>('select', { 'aria-label': `Task of ${c.name}` }, TASKS.map((x) => h('option', { value: x.id, selected: x.id === c.task, title: x.tip }, x.label)));
+        sel.addEventListener('change', () => this.act(mil.setCompanyTask!(army, c.id, sel.value as CompanyTask), `${c.name}: ${TASKS.find((x) => x.id === sel.value)?.label.toLowerCase()}.`));
+        const cap = h<HTMLSelectElement>('select.cap', { 'aria-label': `Captain of ${c.name}` }, captains.map((id) => h('option', { value: String(id), selected: id === c.captain }, nameOf(id))));
+        cap.addEventListener('change', () => this.act(mil.setCaptain!(army, c.id, Number(cap.value)), `${nameOf(Number(cap.value))} leads ${c.name.toLowerCase()}.`));
+        kids.push(h('div.mu-cc-co', { style: { borderLeftColor: TASK_COLOR[c.task] } },
+          h('div.top', null, h('b', null, c.name), h('span', null, `${n} men`)), h('div.sel', null, sel, cap)));
+      }
+      if (this.message) kids.push(h('div.mu-cc-msg', null, this.message));
+      const row = h('div.mu-cc-btns');
+      if (phase === 'before' || phase === 'march') {
+        row.append(h('button.go', { type: 'button', title: 'Before the walls in daylight: send the storm in at once', onClick: () => { const r = camp.stormNow(); this.act(r, 'The storm goes in!'); } }, icon('swords', 14), 'Storm now'));
+      }
+      if (camp.retreat) {
+        const b = h('button.retreat', { type: 'button', class: this.armed ? 'armed' : '', title: phase === 'storm' ? 'Break off the storm: the rearguard holds while the host falls back; the siege is lifted' : 'Give up the attack and march home' },
+          icon('flag', 14), this.armed ? 'Click again to sound the retreat' : phase === 'march' ? 'Turn back' : 'Sound the retreat');
+        b.addEventListener('click', () => {
+          if (!this.armed) { this.armed = true; this.sig = ''; this.next = 0; return; }
+          this.armed = false;
+          this.act(camp.retreat!(), 'The retreat is sounded.');
+        });
+        row.append(b);
+      }
+      kids.push(row);
+    }
+    this.el.replaceChildren(...kids);
+  }
+}
+
+class CampaignHud implements HudPart {
+  readonly el: HTMLElement;
+  private readonly card: CompanyCard;
+  constructor(ctx: HudPartCtx) { this.card = new CompanyCard(ctx); this.el = this.card.el; }
+  update(now: number): void {
+    // the tactical view has its own copy of the card
+    if (battleBus.tactical) { this.el.classList.add('mu-hide'); this.card.forget(); return; }
+    this.card.update(now);
+  }
+}
+registerHudPart('campaign', (ctx) => new CampaignHud(ctx));
 
 // ---------------------------------------------------------------------------------------------
 // Registration (at import)

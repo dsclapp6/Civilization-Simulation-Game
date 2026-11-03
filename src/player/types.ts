@@ -160,6 +160,11 @@ export interface PlayerCombatHud {
   ranged: boolean;
   /** Counts up while a blow lands or a hit is taken (so the HUD can flash on each). */
   hitSeq: number;
+  /** The duel's reading: the guard's line, the line of the blow coming, the riposte window (s), breath 0..1. */
+  guardLine?: string | null;
+  threat?: string | null;
+  riposte?: number;
+  breath?: number;
 }
 
 export interface Result { ok: boolean; reason?: string }
@@ -183,9 +188,9 @@ export interface PlayerApi {
   travel(): TravelState | null;
 
   /** Player body in the world (camera follow), or null while dead / choosing a successor. */
-  body(): { x: number; y: number; z: number; yaw: number } | null;
-  /** Put the body somewhere (after switching character, debug). */
-  placeAt(x: number, z: number, yaw?: number): void;
+  body(): { x: number; y: number; z: number; yaw: number; walk?: boolean } | null;
+  /** Put the body somewhere (after switching character, debug). With `walkY`, on the wall-walk floor at about that height (a ladder's top, the stairs). */
+  placeAt(x: number, z: number, yaw?: number, walkY?: number): void;
 
   // ---- additive (player module); all optional so UI mocks and tests need not implement them ----
   /** Every frame after `sim.step` and before the renderer: smooths the draw position between 20 Hz steps, advances animation clocks. */

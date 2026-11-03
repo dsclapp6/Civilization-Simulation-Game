@@ -3,7 +3,7 @@
 import { angleDiff, clamp, yawTo } from '../core/math';
 import type { HitLocation, WoundKind } from '../sim/wave3';
 import { gap, type Arena } from './arena';
-import { R, S, normAngle, type Fighter } from './fighter';
+import { R, S, guardCover, normAngle, type Fighter, type Line } from './fighter';
 import { ballisticPitch, type Shot } from './projectiles';
 import { absorb, rollLocation, shapeWound, type LocationOpts, type Shaped } from './wounds';
 import { ATTACK_KEYS, DAMAGE_QUALITY } from './weapons';
@@ -48,6 +48,8 @@ export interface Blow {
   heightDiff: number;
   /** Extra accuracy of the attacker (0 for arrows: geometry decides). */
   accuracy: number;
+  /** The line it comes on (melee): a guard on another line covers it only in part. */
+  line?: Line;
 }
 
 export interface BlowResult {
@@ -93,11 +95,16 @@ export function impact(a: Arena, f: Fighter): void {
   }
   // a rider's blow carries the horse's way: the faster the pace, the harder the stroke (a charge with the point is lanceStrike's)
   const ride = f.mounted ? 1 + clamp(f.speed * 0.05, 0, 0.3) : 1;
-  const dmg = baseDamage(f, atk.dmg, atk.kind === 'bite', a.rng.next());
+  // a tired arm hits softer; a riposte off a parry hits harder and surer; a guard drawn wide is easy to find
+  const breath = clamp(f.stamina / Math.max(1, f.staminaMax), 0, 1);
+  const riposte = f.riposteT > 0;
+  const dmg = baseDamage(f, atk.dmg, atk.kind === 'bite', a.rng.next()) * (0.72 + 0.28 * breath) * (riposte ? 1.15 : 1);
   const blow: Blow = {
-    kind: atk.kind, dmg: dmg * f.charge * ride, ap: atk.ap, how: f.attackKey, weapon: f.gear.weapon.id, fromX: f.x, fromZ: f.z, melee: true,
-    heightDiff: (f.charge > 1 ? 0.9 : f.mounted ? 0.7 : 0) - (best.mounted ? 0.7 : 0), accuracy: meleeAccuracy(f),
+    kind: atk.kind, dmg: dmg * f.charge * ride, ap: atk.ap, how: f.line === 'low' && f.attackKey === 'slash' ? 'low' : f.attackKey, weapon: f.gear.weapon.id, fromX: f.x, fromZ: f.z, melee: true,
+    heightDiff: (f.charge > 1 ? 0.9 : f.mounted ? 0.7 : 0) - (best.mounted ? 0.7 : 0),
+    accuracy: meleeAccuracy(f) + (riposte ? 0.12 : 0) + (best.openT > 0 ? 0.15 : 0) - (1 - breath) * 0.1, line: f.line,
   };
+  f.riposteT = 0;
   const r = applyBlow(a, f, best, blow);
   if (r.outcome === 'hit') { f.hitsLanded++; if (f.isPlayer) a.env.playerHit?.(f, best, false, r.killed); }
   if (r.outcome === 'parried') {
@@ -161,17 +168,22 @@ export function applyBlow(a: Arena, att: Fighter | null, v: Fighter, b0: Blow): 
     const arc = b.melee ? (side ? 1.35 : 0.85) : (side ? 0.9 : 0);
     const bearing = yawTo(v.x, v.z, b.fromX, b.fromZ);
     const off = Math.abs(angleDiff(v.yaw, bearing));
-    if (off <= arc) {
+    if (off <= arc && v.openT <= 0) {
       const base = side ? v.gear.shield!.block : v.gear.weapon.guard;
       const skill = 0.74 + 0.26 * Math.min(1, v.melee / 12);
-      const strength = clamp(base * skill, 0, 0.93) * (b.how === 'overhead' ? 0.82 : 1);
-      if (v.guardT < 0.24 && b.melee) {
+      // the guard must be on the blow's line: a high guard is no use against a cut at the legs
+      const cover = b.melee && b.line ? guardCover(v.guardLine, b.line, side) : 1;
+      const strength = clamp(base * skill, 0, 0.93) * (b.how === 'overhead' ? 0.82 : 1) * cover;
+      if (b.melee && cover < 0.6 && v.isPlayer) env.notify('warn', b.line === 'low' ? 'The cut comes under your guard!' : b.line === 'high' ? 'The blow comes over your guard!' : 'The blow slips past your guard!', v.personId);
+      if (v.guardT < 0.24 && b.melee && cover >= 0.99) {
         // met at the moment of the blow: turned aside
         fx.add('sparks', hx, v.y + 1.2, hz, 0.8);
         spend(v, 2);
-        if (v.isPlayer) env.notify('info', 'You turn the blow aside!', v.personId);
+        if (v.isPlayer) env.notify('info', 'You turn the blow aside! Riposte now (J)!', v.personId);
         v.morale += 3;
-        if (att) att.morale -= 2;
+        // the parry opens the way for the answer: a quick, sure blow
+        v.riposteT = 0.9;
+        if (att) { att.morale -= 2; att.openT = 0.5; }
         return { outcome: 'parried', location: null, damage: 0, killed: false, stagger: true };
       }
       const cost = b.dmg * 0.34;

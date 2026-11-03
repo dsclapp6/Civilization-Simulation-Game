@@ -8,6 +8,7 @@ import { createAssetLibrary, type MillenniaAssetLibrary } from '../assets/librar
 import { wrapAngle } from '../core/math';
 import { installPlayer } from '../player';
 import { InteriorMode } from './interior';
+import { CampaignMode, planAttack } from './campaign';
 import type { HoverMark, PickPort, PickRay } from '../player/types';
 import { createRenderer } from '../render/renderer';
 import type { GameRenderer } from '../render/types';
@@ -24,7 +25,7 @@ import { installConstruction } from '../sim/construction';
 import { installRealm } from '../sim/realm';
 import { installTerritory } from '../sim/territory';
 import { installLaw } from '../sim/law';
-import type { GameServices, QualitySetting, UiRendererControls } from '../ui/types';
+import type { CampaignApi, GameServices, QualitySetting, UiRendererControls } from '../ui/types';
 import { wrapWithDevZone } from './devZone';
 import { MockObjectives } from '../ui/dev/mockObjectives';
 
@@ -40,6 +41,8 @@ export interface Session {
   readonly controls: UiRendererControls;
   /** Inside a building (the room is drawn instead of the world). */
   readonly interior: InteriorMode;
+  /** Riding with the host: march, camp, storm. */
+  readonly campaign: CampaignMode;
   dispose(): void;
 }
 
@@ -120,9 +123,18 @@ export async function buildSession(sim: Simulation, o: SessionOptions): Promise<
     return { ...hud, prompt: interior.prompt() };
   };
 
-  const services: GameServices = { sim, economy, social, zone, player, objectives, territory, construction, realm, law };
+  const campaign = new CampaignMode(sim, zone, player);
+  const campaignApi: CampaignApi = {
+    phase: () => campaign.phase,
+    army: () => campaign.army,
+    target: () => campaign.target,
+    plan: (target, rideAs) => planAttack(sim, campaign, sim.state.run.playerId, target, rideAs ? { rideAs } : {}),
+    stormNow: () => campaign.stormEarly(),
+    retreat: () => campaign.retreat(),
+  };
+  const services: GameServices = { sim, economy, social, zone, player, objectives, territory, construction, realm, law, campaign: campaignApi };
   return {
-    interior,
+    interior, campaign,
     loadMs: { assets: t1 - t0, renderer: t2 - t1, modules: t3 - t2, settle: t5 - t4 },
     sim, services, renderer, assets, controls: makeControls(renderer),
     dispose() {

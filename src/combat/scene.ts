@@ -20,7 +20,7 @@ import { breachOf, GATE_BROKEN_AT } from '../sim/military/alert';
 import type { SiegeSetup, SiegeStatus } from '../sim/military/war';
 import type { BuildingState } from '../sim/state';
 import { gap, type Arena, type Fight } from './arena';
-import { R, S, type Fighter } from './fighter';
+import { R, S, T, type Fighter } from './fighter';
 import { ballisticPitch } from './projectiles';
 import { RANGED } from './weapons';
 
@@ -283,6 +283,7 @@ export class SiegeScene {
       const b = this.gateBack(4 + r * 1.6);
       set(f, b.x + bw.x * (k - (per - 1) / 2) * sp, b.z + bw.z * (k - (per - 1) / 2) * sp, gyaw);
     });
+    this.applyTasks(setupTasks(this.setup), this.setup.companies);
     this.makeWorks(order);
   }
 
@@ -337,21 +338,39 @@ export class SiegeScene {
     const toward = Math.atan2((g?.x ?? this.cx) - this.campX, (g?.z ?? this.cz) - this.campZ);
     const right = { x: Math.cos(toward), z: -Math.sin(toward) };
     const foot = att.filter((f) => f.person && !f.mounted && !(f.gear.ranged && f.preferRanged));
-    let take = 0;
-    const crew = (n: number): Fighter[] => { const out = foot.slice(take, take + n); take += n; return out; };
+    // the assault plan: the ram's crew are the men of the ram company, the ladders' the ladder company; the reserve and the
+    // bowmen's company do not carry (they hold back); without a plan any foot soldier will do
+    const planned = foot.some((f) => f.task !== T.None);
+    const used = new Set<Fighter>();
+    const pool = (task: number, n: number): Fighter[] => {
+      if (!planned) return foot.filter((f) => !used.has(f)).slice(0, n).map((f) => { used.add(f); return f; });
+      const mine = foot.filter((f) => !used.has(f) && f.task === task);
+      // the company's men may not be in this part of the field: the main body lends a few
+      const lent = mine.length >= Math.min(n, 3) ? [] : foot.filter((f) => !used.has(f) && f.task === T.Charge).slice(0, Math.min(n, 3) - mine.length);
+      const out = [...mine, ...lent].slice(0, n);
+      for (const f of out) used.add(f);
+      return out;
+    };
+    const crew = (n: number): Fighter[] => pool(this.crewTask, n);
+    this.crewTask = T.Ram;
     // rams: roofed, pushed by a crew of six to the gate
-    const rams = g ? Math.min(this.setup.rams, 2) : 0;
+    const ramMen = planned ? foot.filter((f) => f.task === T.Ram).length : 6;
+    const rams = g && (!planned || this.planHas(T.Ram)) ? Math.min(this.setup.rams, 2, planned ? Math.max(1, Math.ceil(ramMen / 4)) : 2) : 0;
+    const ramCrew = planned ? clamp(Math.round(Math.max(ramMen, 3) / Math.max(1, rams)), 3, 6) : 6;
     for (let i = 0; i < rams; i++) {
       const ox = this.campX + right.x * (i === 0 ? -5 : 5), oz = this.campZ + right.z * (i === 0 ? -5 : 5);
       const f = this.stage(3);
       const w = this.newWork('ram', ox, oz, toward);
       w.goalX = f.x + right.x * (i === 0 ? -1.2 : 1.2); w.goalZ = f.z + right.z * (i === 0 ? -1.2 : 1.2);
       w.phase = 'march';
-      w.crew = crew(6);
+      w.crew = crew(ramCrew);
       for (const m of w.crew) { m.role = R.Ram; m.work = w; }
     }
     // ladders: planted on the wall segments nearest the camp, away from the gate
-    const sites = this.ladderSitesNearCamp(Math.min(this.setup.ladders, 4));
+    this.crewTask = T.Ladders;
+    const ladMen = planned ? foot.filter((f) => f.task === T.Ladders).length : 20;
+    const ladders = !planned || this.planHas(T.Ladders) ? Math.min(this.setup.ladders, 4, planned ? Math.max(1, Math.ceil(ladMen / 4)) : 4) : 0;
+    const sites = this.ladderSitesNearCamp(ladders);
     for (let i = 0; i < sites.length; i++) {
       const st = sites[i];
       const out = { x: Math.sin(st.yaw), z: Math.cos(st.yaw) };
@@ -362,7 +381,7 @@ export class SiegeScene {
       const gy = this.arena.groundY(w.footX, w.footZ);
       w.length = Math.max(4, st.y - gy + 1.1);
       w.phase = 'carry';
-      w.crew = crew(5);
+      w.crew = crew(planned ? clamp(Math.round(Math.max(ladMen, 4) / Math.max(1, sites.length)), 3, 5) : 5);
       for (const m of w.crew) { m.role = R.Ladder; m.work = w; }
     }
     // engines: out behind the camp, throwing at the walls
@@ -373,6 +392,67 @@ export class SiegeScene {
       const w = this.newWork(i % 2 === 0 ? 'trebuchet' : 'mangonel', bx, bz, toward);
       w.phase = 'idle';
       w.cool = 6 + i * 3;
+    }
+  }
+
+  /** The task of the crew being picked in `makeWorks` (a `T`). */
+  private crewTask: number = T.Ram;
+  /** Captains whose fall has been felt. */
+  private readonly fallen = new Set<number>();
+
+  /** Does the plan have a company with this task (men of it in the whole army, whether or not they are in this part of the field)? */
+  private planHas(task: number): boolean {
+    const p = this.setup.present;
+    return !p || p.includes(task);
+  }
+
+  /** The assault plan's tasks for the besiegers (by person): the storm in progress takes them up when they change. */
+  applyTasks(tasks: Record<number, number> | undefined, companies: Record<number, number> | undefined): void {
+    if (!tasks) return;
+    for (const f of this.fight.sides[this.attackerSide].members) {
+      f.task = tasks[f.personId] ?? 0;
+      f.company = companies?.[f.personId] ?? 0;
+    }
+  }
+
+  /** The player re-tasked a company in the middle of the storm. */
+  retask(tasks: Record<number, number>, companies?: Record<number, number>): void {
+    this.setup.tasks = tasks;
+    this.setup.present = undefined;
+    if (companies) this.setup.companies = companies;
+    this.applyTasks(tasks, companies);
+  }
+
+  /** The men of the reserve and the bowmen's company hold back out of bowshot until the way is open; true when he is handled. */
+  private holdBack(a: Arena, f: Fighter, fight: Fight): boolean {
+    if (f.isPlayer || f.side !== this.attackerSide || f.onWall || f.mounted) return false;
+    const hold = f.task === T.Reserve ? 58 : f.task === T.Loose && !(f.gear.ranged && f.preferRanged) ? 44 : 0;
+    if (!hold || this.gateOpen() || this.breached()) return false;
+    const e = a.nearestEnemy(f, fight);
+    if (e && !e.onWall && gap(f, e) < 2.4) { f.target = e; return false; }
+    const p = this.stage(hold);
+    const k = f.key % 11;
+    const tx = p.x + (k - 5) * 1.8 * Math.cos(this.faceYaw()), tz = p.z - (k - 5) * 1.8 * Math.sin(this.faceYaw());
+    const dx = tx - f.x, dz = tz - f.z, d = Math.hypot(dx, dz);
+    if (d > 1.2) { f.wantX = dx / d; f.wantZ = dz / d; f.wantSpeed = clamp(d * 1.5, 0.6, 2.6); f.wantYaw = Math.atan2(dx, dz); f.anim = 'walk'; }
+    else { f.wantSpeed = 0; f.wantYaw = this.faceYaw(); f.anim = 'idle'; }
+    return true;
+  }
+
+  private faceYaw(): number { return Math.atan2((this.gate?.x ?? this.cx) - this.campX, (this.gate?.z ?? this.cz) - this.campZ); }
+
+  /** A captain who falls takes the heart out of his company. */
+  private captainsFall(): void {
+    const caps = this.setup.captains;
+    if (!caps) return;
+    for (const cid in caps) {
+      const id = Number(cid);
+      if (this.fallen.has(id)) continue;
+      const cap = this.arena.fighterOf(caps[cid]);
+      if (!cap || cap.active || cap.side !== this.attackerSide) continue;
+      this.fallen.add(id);
+      for (const f of this.fight.sides[this.attackerSide].members) if (f.active && f.company === id) f.morale -= 8;
+      if (this.fight.sides[this.attackerSide].members.some((f) => f.isPlayer)) this.arena.env.notify('warn', 'A captain has fallen: his company wavers.');
     }
   }
 
@@ -435,6 +515,7 @@ export class SiegeScene {
         for (const f of att) {
           if (w.crew.length >= want) break;
           if (f.isPlayer || !f.active || f.role !== R.None || f.mounted || f.onWall || (f.gear.ranged && f.preferRanged)) continue;
+          if (f.task === T.Reserve || f.task === T.Loose) continue;
           if (dist(f.x, f.z, w.x, w.z) > 30) continue;
           f.role = w.kind === 'ram' ? R.Ram : R.Ladder; f.work = w; w.crew.push(f);
         }
@@ -458,6 +539,7 @@ export class SiegeScene {
         guards++;
       }
     }
+    this.captainsFall();
     // a dead man's station is free for the next
     for (const st of this.stations) if (st.holder && !st.holder.active) st.holder = null;
     // the way is open: attackers inside the walls go up the stairs after the men still shooting from the wall-walk
@@ -753,7 +835,7 @@ export class SiegeScene {
       case R.Climb: f.wantSpeed = 0; return true;
       case R.Wall: return this.wallmanStep(a, f, fight);
       case R.Stairs: return this.stairsStep(a, f, fight);
-      default: return false;
+      default: return f.task !== T.None && this.holdBack(a, f, fight);
     }
   }
 
@@ -1064,3 +1146,5 @@ export function segmentBox(ax: number, az: number, bx: number, bz: number, hw: n
   if (!slab(ax, dx, hw) || !slab(az, dz, hd)) return -1;
   return t0;
 }
+
+function setupTasks(setup: SiegeSetup): Record<number, number> | undefined { return setup.tasks; }
