@@ -135,9 +135,18 @@ export function incapable(p: Person): string | null {
 
 let optionCounter = 0;
 
+/**
+ * A work option. One action is one job (docs/WORK.md): a one-bout job unless the listing says how many bouts the job
+ * still needs (`bouts`, e.g. a bed is dug in two) or offers it as open-ended work (`open`, "Keep working the strip").
+ */
 export function option(o: Partial<ActionOption> & Pick<ActionOption, 'id' | 'label' | 'target' | 'seconds'>): ActionOption {
   optionCounter++;
-  return { provider: '', category: 'work', enabled: true, range: 8, priority: 20, repeat: true, ...o };
+  return { provider: '', category: 'work', enabled: true, range: 8, priority: 20, repeat: true, bouts: 1, ...o };
+}
+
+/** Bouts left of a task of `need` bouts that is `done` (0..1) done. */
+export function boutsLeft(need: number, done: number): number {
+  return Math.max(1, Math.ceil(need * (1 - Math.max(0, Math.min(1, done))) - 1e-3));
 }
 
 export function disabled(o: Partial<ActionOption> & Pick<ActionOption, 'id' | 'label' | 'target'>, reason: string): ActionOption {
@@ -165,6 +174,17 @@ export function giveOutput(E: Econ, p: Person, key: string, qty: number): 'pack'
   bagAdd(hh.stores, key, qty);
   E.state.touchHousehold(hh);
   return 'stores';
+}
+
+/**
+ * The fresh result of the player's work lies where it was done for a while, more of it bout by bout (drawn only, by the
+ * prop feed: docs/WORK.md): loaves at the oven, a blade on the anvil, ore at the mine, flour at the mill, joints of meat.
+ */
+export function noteMade(E: Econ, p: Person, building: number, good: string): void {
+  if (!E.isPlayer(p.id) || building < 0 || !E.state.buildings.has(building)) return;
+  const was = E.notes.made.get(building);
+  E.notes.made.set(building, { good, batches: (was && was.good === good && E.day - was.day < 1 ? was.batches : 0) + 1, day: E.day });
+  E.notes.rev++;
 }
 
 /** Care a piece of work puts into a crop or product: skill, tool and how rested the worker is (0.4..1). */

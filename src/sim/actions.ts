@@ -52,8 +52,19 @@ export interface ActionOption {
   range: number;
   /** The highest-priority enabled option is the interact-key default. */
   priority: number;
-  /** Start again automatically after completing while still enabled (work bouts). */
+  /**
+   * Start again automatically after completing while still enabled (work bouts) — but only as long as the job lasts:
+   * `bouts` bouts, or until stopped when the job is `open` (docs/WORK.md). Without either it is open-ended (the older
+   * modules' practice and building work), and the action bar says so.
+   */
   repeat?: boolean;
+  /**
+   * Work pass (docs/WORK.md): bouts the job still needs, this one included ("Dig the bed": 2). The runner starts the next
+   * bout (re-listed, so it reflects the new state) until they are done, then stops — one action is one job.
+   */
+  bouts?: number;
+  /** Open-ended work the player chose as such ("Keep working the strip"): bout after bout until stopped (Q) or no longer possible. */
+  open?: boolean;
   /** Opaque provider payload. */
   data?: unknown;
   /**
@@ -144,11 +155,55 @@ export interface ActiveAction {
   perf: number;
   /** Strokes played in the mini-game. */
   hits: number;
+  /** The job this bout belongs to (one action the player chose; docs/WORK.md). */
+  readonly job: JobState;
+  /** Counts every bout started (a new bout = a new number: the mini-game resets on it). */
+  readonly serial: number;
+}
+
+/** The job a running bout belongs to: which bout it is and how many the job has (null = open-ended, until stopped). */
+export interface JobState {
+  bout: number;
+  bouts: number | null;
+  /** The job's label: the label of its first bout ("Dig a garden bed"). */
+  readonly label: string;
+}
+
+/** What the action bar shows of the job: its label, its bout, the time left for the whole job and how far it is. */
+export interface JobView {
+  label: string;
+  bout: number;
+  bouts: number | null;
+  /** Simulated seconds left for the whole job (the bout in hand when open-ended). */
+  secondsLeft: number;
+  /** 0..1 of the whole job (of the bout when open-ended). */
+  progress: number;
+}
+
+/** The job view of a running bout (pure: the action bar and the tests). */
+export function jobViewOf(a: Pick<ActiveAction, 'option' | 'elapsed' | 'progress' | 'job'>): JobView {
+  const s = Math.max(0, a.option.seconds);
+  const left = Math.max(0, s - a.elapsed);
+  const n = a.job.bouts;
+  if (n === null) return { label: a.job.label, bout: a.job.bout, bouts: null, secondsLeft: left, progress: Math.max(0, Math.min(1, a.progress)) };
+  const more = Math.max(0, n - a.job.bout);
+  return {
+    label: a.job.label, bout: a.job.bout, bouts: n, secondsLeft: left + more * s,
+    progress: Math.max(0, Math.min(1, (a.job.bout - 1 + Math.max(0, Math.min(1, a.progress))) / Math.max(1, n))),
+  };
+}
+
+/** Bouts a job of `option` has when started fresh: 1 for a one-off, its `bouts` for a counted job, null when open-ended. */
+export function jobBouts(option: ActionOption): number | null {
+  if (!option.repeat || option.seconds <= 0) return 1;
+  if (option.open) return null;
+  return option.bouts === undefined ? null : Math.max(1, Math.round(option.bouts));
 }
 
 export type ActionEvent =
   | { type: 'started'; actor: PersonId; option: ActionOption }
-  | { type: 'completed'; actor: PersonId; option: ActionOption; outcome: ActionOutcome; perf?: number }
+  /** `jobDone`: the bout was the job's last (the runner stops here). */
+  | { type: 'completed'; actor: PersonId; option: ActionOption; outcome: ActionOutcome; perf?: number; jobDone?: boolean }
   | { type: 'cancelled'; actor: PersonId; option: ActionOption; reason: string };
 
 const CHECK_INTERVAL = 1;
@@ -161,6 +216,7 @@ export class ActionRegistry {
   private readonly scratch: ActionOption[] = [];
   /** The bout being completed and the hand it was done with (read by providers through `performance`). */
   private finishing: { actor: PersonId; perf: number } | null = null;
+  private serials = 0;
 
   constructor(private readonly ctx: SimContext) {}
 
@@ -216,8 +272,18 @@ export class ActionRegistry {
 
   active(actor: PersonId): ActiveAction | null { return this.running.get(actor) ?? null; }
 
-  /** Starts `option` (from `list`). Instant actions complete immediately. Replaces a running action. */
+  /** The job of the bout `actor` is running (the action bar), or null. */
+  job(actor: PersonId): JobView | null {
+    const a = this.running.get(actor);
+    return a ? jobViewOf(a) : null;
+  }
+
+  /** Starts `option` (from `list`): a new job. Instant actions complete immediately. Replaces a running action. */
   start(actor: PersonId, option: ActionOption): ActionOutcome {
+    return this.begin(actor, option, { bout: 1, bouts: jobBouts(option), label: option.label });
+  }
+
+  private begin(actor: PersonId, option: ActionOption, job: JobState): ActionOutcome {
     const p = this.provider(option.provider);
     if (!p) return { ok: false, message: 'That can no longer be done.' };
     if (!option.enabled) return { ok: false, message: option.reason ?? 'You cannot do that now.' };
@@ -226,8 +292,8 @@ export class ActionRegistry {
     if (this.running.has(actor)) this.cancel(actor, 'replaced');
     p.start?.(this.ctx, actor, option);
     this.emit({ type: 'started', actor, option });
-    if (option.seconds <= 0) return this.finish(actor, option, p, 1);
-    this.running.set(actor, { actor, option, elapsed: 0, progress: 0, startedDay: this.ctx.absDay, sinceCheck: 0, perf: -1, hits: 0 });
+    if (option.seconds <= 0) return this.finish(actor, option, p, 1, -1, job);
+    this.running.set(actor, { actor, option, elapsed: 0, progress: 0, startedDay: this.ctx.absDay, sinceCheck: 0, perf: -1, hits: 0, job, serial: ++this.serials });
     return { ok: true };
   }
 
@@ -284,21 +350,29 @@ export class ActionRegistry {
       }
       if (a.progress >= 1) {
         this.running.delete(a.actor);
-        this.finish(a.actor, a.option, p, 1, a.perf);
+        this.finish(a.actor, a.option, p, 1, a.perf, a.job);
       }
     }
   }
 
-  private finish(actor: PersonId, option: ActionOption, p: ActionProvider, fraction: number, perf = -1): ActionOutcome {
+  private finish(actor: PersonId, option: ActionOption, p: ActionProvider, fraction: number, perf: number, job: JobState): ActionOutcome {
     this.finishing = { actor, perf };
     let outcome: ActionOutcome;
     try { outcome = this.safeComplete(p, actor, option, fraction); } finally { this.finishing = null; }
     if (perf >= 0 && outcome.ok && outcome.message) outcome.message = `${outcome.message} ${perf >= 0.85 ? '(Masterly work.)' : perf >= 0.6 ? '(Good work.)' : perf >= 0.35 ? '' : '(Clumsy work.)'}`.trim();
-    this.emit(perf >= 0 ? { type: 'completed', actor, option, outcome, perf } : { type: 'completed', actor, option, outcome });
-    if (outcome.ok && option.repeat && option.seconds > 0) {
-      // re-list so the next bout reflects the new state (strip progress, tool wear…)
-      const next = this.list(actor, option.target).find((o) => o.id === option.id && o.provider === option.provider);
-      if (next && next.enabled && next.repeat) this.start(actor, next);
+    // one action is one job (docs/WORK.md): the next bout starts only while the job lasts — its counted bouts, or until
+    // stopped when it is open-ended — and is re-listed so it reflects the new state (strip progress, tool wear…)
+    let next: ActionOption | undefined;
+    if (outcome.ok && option.repeat && option.seconds > 0 && (job.bouts === null || job.bout < job.bouts)) {
+      next = this.list(actor, option.target).find((o) => o.id === option.id && o.provider === option.provider);
+      if (next && !(next.enabled && next.repeat && next.seconds > 0 && (next.bouts === undefined || next.bouts > 0))) next = undefined;
+    }
+    const jobDone = !next && option.seconds > 0;
+    this.emit(perf >= 0 ? { type: 'completed', actor, option, outcome, perf, jobDone } : { type: 'completed', actor, option, outcome, jobDone });
+    if (next) {
+      // the job's bouts follow the state: a bout that did more than expected shortens it, never lengthens it
+      const bouts = job.bouts === null ? null : Math.min(job.bouts, job.bout + (next.bouts ?? job.bouts - job.bout));
+      this.begin(actor, next, { bout: job.bout + 1, bouts, label: job.label });
     }
     return outcome;
   }

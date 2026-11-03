@@ -5,7 +5,10 @@ import type { PropKind } from '../types';
 import { F, Layer, Mat, MeshBuilder, prng, shade, type V2, type V3 } from '../core/builder';
 import { COL } from '../buildings/style';
 import { CIV_PILE_KINDS, CIV_PROPS } from './civProps';
+import { WORK_PILE_KINDS, WORK_PROPS } from './workProps';
 
+type WorkPropKind = 'garden_bed' | 'bed_cabbage' | 'bed_onions' | 'bed_leeks' | 'bed_turnips' | 'veg_basket' | 'bread_board' | 'cheese_board'
+  | 'cloth_bolts' | 'anvil_work' | 'dish_pot' | 'pot_rows' | 'leather_rail';
 type CivPropKind = 'carcass_hook' | 'carcass_hanging' | 'carcass_block' | 'hide_frame' | 'meat_joints' | 'tallow_pot'
   | 'brick_stack' | 'clay_heap' | 'salt_heap' | 'log_pile' | 'timber_stack' | 'straw_bundles';
 
@@ -18,10 +21,12 @@ export const PROP_KINDS: PropKind[] = [
   'stook', 'sheaf', 'hay_cock', 'stump', 'logs',
   'carcass_hook', 'carcass_hanging', 'carcass_block', 'hide_frame', 'meat_joints', 'tallow_pot',
   'brick_stack', 'clay_heap', 'salt_heap', 'log_pile', 'timber_stack', 'straw_bundles',
+  // work pass (docs/WORK.md): garden beds and the fresh results of crafts (assets/props/workProps.ts)
+  ...(Object.keys(WORK_PROPS) as PropKind[]),
 ];
 
 /** Kinds whose model grows with a pile size (WorldPropView.count, 1 = small … 8 = full). */
-export const PILE_KINDS: ReadonlySet<PropKind> = new Set<PropKind>(['woodpile', 'sack_pile', 'stone_pile', 'logs', 'plank_pile', ...CIV_PILE_KINDS as PropKind[]]);
+export const PILE_KINDS: ReadonlySet<PropKind> = new Set<PropKind>(['woodpile', 'sack_pile', 'stone_pile', 'logs', 'plank_pile', ...CIV_PILE_KINDS as PropKind[], ...WORK_PILE_KINDS as PropKind[]]);
 
 export interface PropMeta {
   /** Local-space emitter points for continuous FX (campfire smoke, etc.). */
@@ -778,6 +783,8 @@ const P: Record<PropKind, PropFn> = {
   },
   // civilization pass: carcasses, hide frames, joints, the tallow pot; brick, clay, salt, logs, timber and straw piles
   ...(CIV_PROPS as Record<CivPropKind, PropFn>),
+  // work pass: garden beds, baskets, loaves, cheeses, cloth, the anvil's fresh blade, a dish, pots, leather
+  ...(WORK_PROPS as Record<WorkPropKind, PropFn>),
 };
 
 function pick<T>(r: () => number, arr: readonly T[]): T { return arr[Math.floor(r() * arr.length) % arr.length]; }

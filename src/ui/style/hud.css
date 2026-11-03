@@ -293,7 +293,8 @@
 
 /* ---- work mini-games (above the action bar) ---- */
 .mu-mini {
-  position: absolute; left: 50%; bottom: 142px; transform: translateX(-50%); width: 340px; padding: 8px 14px 10px;
+  /* work pass: beside the action bar (left of it), clear of the worker and the work in the middle of the view */
+  position: absolute; right: calc(50% + 172px); bottom: 88px; width: 300px; padding: 8px 14px 10px;
   background: var(--paper); border-radius: 3px; border: 1px solid #1f1309; pointer-events: auto; user-select: none; cursor: pointer;
   box-shadow: 0 0 0 2px rgba(172, 130, 58, 0.9), 0 0 0 3px #1f1309, 0 6px 18px rgba(0, 0, 0, 0.45);
 }
@@ -315,6 +316,14 @@
 .mu-mini-word.good { color: #2f7d32; }
 .mu-mini-word.miss { color: #b3261e; }
 .mu-mini-help { font-size: 12px; opacity: 0.8; text-align: center; }
+/* work pass (docs/WORK.md): what the hand has given so far, and a paused game */
+.mu-mini-sum { min-height: 15px; margin-bottom: 3px; text-align: center; font-size: 12px; font-weight: 700; color: #5a4320; }
+.mu-mini-sum.good { color: #2f7d32; }
+.mu-mini-sum.miss { color: #b3261e; }
+.mu-mini.paused { opacity: 0.6; }
+.mu-mini.paused .mu-mini-title::after { content: ' — paused'; font-weight: 400; }
+.mu-hud-action-bout { margin-top: 4px; font-size: 12px; opacity: 0.85; text-align: center; }
+.mu-hud-action-bout:empty { display: none; }
 
 /* ---- the lord's agenda in the tracker (a ruler manages: the matters of the realm stand under the tracked steps) ---- */
 .mu-tracker-agenda { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--rule); }

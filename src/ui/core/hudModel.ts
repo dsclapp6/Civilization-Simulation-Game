@@ -3,6 +3,7 @@
 import { daylight, type Season } from '../../core/time';
 import { dayOfWeek, HOLY_DAY_OF_WEEK, isHolyDay, isMarketDay } from '../../sim/calendar';
 import type { PlayerHud, TravelState } from '../../player/types';
+import type { JobView } from '../../sim/actions';
 import { clamp01, plural, trim } from './format';
 
 export type NeedId = 'hunger' | 'rest' | 'warmth' | 'mood';
@@ -132,6 +133,20 @@ export interface ActionView { label: string; progress: number; secondsLeft: numb
 export function actionView(a: NonNullable<PlayerHud['action']>): ActionView {
   const progress = clamp01(a.progress);
   return { label: a.label, progress, secondsLeft: Math.max(0, Math.ceil(a.seconds * (1 - progress) - 1e-6)) };
+}
+
+/**
+ * The action bar of a job (docs/WORK.md): its label, the bout it is on ("Bout 1 of 2"), the time left for the whole job in
+ * the seconds the player waits at the current speed (3× and 8× shorten it), and how far the whole job is. An open-ended
+ * job says it goes on until stopped.
+ */
+export interface JobBarView { label: string; progress: number; secondsLeft: number; bout: string; open: boolean; bouts: number }
+
+export function jobBarView(j: JobView, speed: number): JobBarView {
+  const k = Math.max(1, speed);
+  const open = j.bouts === null;
+  const bout = open ? `Bout ${j.bout} · on until you stop (Q)` : j.bouts! > 1 ? `Bout ${j.bout} of ${j.bouts} · Q stops` : 'Q stops';
+  return { label: j.label, progress: clamp01(j.progress), secondsLeft: Math.max(0, Math.ceil(j.secondsLeft / k - 1e-6)), bout, open, bouts: j.bouts ?? 1 };
 }
 
 export function secondsText(s: number): string {

@@ -15,7 +15,7 @@ import type { WorldPropView } from '../../core/view';
 import type { SiteView } from '../construction/types';
 import { BUILDINGS } from '../../content/types';
 import type { ScatterItem } from '../../world/types';
-import { peekExtra } from '../farming';
+import { gardenProgress, peekExtra } from '../farming';
 import type { BuildingState, Household, StripState } from '../state';
 import type { Econ } from './core';
 import { STAPLE_GRAINS } from './diet';
@@ -31,7 +31,7 @@ const BARN_KINDS: ReadonlySet<string> = new Set(['barn', 'tithe_barn', 'granary'
 const TREES: ReadonlySet<string> = new Set(['oak', 'beech', 'birch', 'ash', 'willow', 'pine', 'spruce', 'apple']);
 
 /** Where each kind of prop lives in the id space (a prop's id is `base + n`, so ids never collide and stay stable). */
-const BASE = { stook: 1e9, hay: 2e9, wood: 3e9, sack: 4e9, stone: 5e9, stump: 6e9, site: 7e9, works: 8e9, larder: 9e9 };
+const BASE = { stook: 1e9, hay: 2e9, wood: 3e9, sack: 4e9, stone: 5e9, stump: 6e9, site: 7e9, works: 8e9, larder: 9e9, garden: 1e10, made: 1.1e10 };
 
 /** What lies at a site for each material, and the stock a full pile (size 8) stands for. */
 const SITE_GOODS: readonly { good: string; kind: string; steps: readonly number[] }[] = [
@@ -111,7 +111,7 @@ export class PropFeed {
     const focus = E.sim.view.focus();
     const now = E.sim.absDay;
     const key = [
-      Math.floor(now * 24), E.farmRev, st.stripRevision, st.householdRevision, st.buildingRevision, E.sim.view.felledVersion(),
+      Math.floor(now * 24), E.farmRev, this.liveKey(), st.stripRevision, st.householdRevision, st.buildingRevision, E.sim.view.felledVersion(),
       Math.round(focus.x / 40), Math.round(focus.z / 40), E.notes.rev, E.notes.felled.length, E.sim.services.construction?.version?.() ?? 0,
     ].join(':');
     if (key === this.lastKey) return;
@@ -237,6 +237,75 @@ export class PropFeed {
     }
     // the stooks the household farm left on a harvested strip are gone by the next day (carried in)
     for (const [id, until] of this.stookUntil) if (now > until) { this.stookUntil.delete(id); this.seen.delete(id); }
+
+    // ---- work pass (docs/WORK.md): the player's garden beds, and the fresh results of crafts at the bench ----
+    if (pp) {
+      const hh = E.hhOf(pp);
+      const home = hh ? E.state.buildings.get(hh.home) : undefined;
+      if (hh && home && near(home.x, home.z, 40)) this.gardenProps(out, hh.id, home, now);
+    }
+    for (const [bid, m] of E.notes.made) {
+      if (now - m.day > 1) { E.notes.made.delete(bid); continue; }
+      const b = E.state.buildings.get(bid);
+      if (!b || !near(b.x, b.z)) continue;
+      const kind = MADE_PROP[m.good] ?? (/^(cook_|roast|stew|pottage|porridge|fish_dish)/.test(m.good) || DISHES.has(m.good) ? 'dish_pot' : 'crate');
+      const def = SITE_FOOTPRINT[b.kind] ?? { w: 8, d: 6 };
+      pushAt(out, BASE.made + bid * 4, kind, b, -def.w / 2 + 0.9, def.d / 2 + 1.3, 0, Math.min(8, m.batches));
+    }
+  }
+
+  /** Quantised progress of the player's garden bout, so a bed being dug changes as the spade goes (not only bout by bout). */
+  private liveKey(): string {
+    const a = this.E.sim.actions.active(this.E.playerId);
+    if (!a || !a.option.id.startsWith('garden.')) return '';
+    return `${a.option.id}:${Math.floor(a.progress * 4)}`;
+  }
+
+  /**
+   * The beds of the player's household, in front of the house. Each shows its state — marked out and partly dug (live, as the spade goes), dug, sown, the crop growing
+   * (weedy if not weeded) and ripe, a basket of the vegetables by a bed just gathered.
+   */
+  private gardenProps(out: WorldPropView[], hhId: number, home: BuildingState, now: number): void {
+    const E = this.E;
+    const beds = E.farm.g[String(hhId)];
+    const live = E.sim.actions.active(E.playerId);
+    const ld = live && live.option.id.startsWith('garden.') ? (live.option.data as { step?: string; bed?: number } | undefined) : undefined;
+    const gathered = E.notes.gathered.get(hhId);
+    const n = Math.max(beds?.length ?? 0, ld?.bed !== undefined ? ld.bed + 1 : 0);
+    if (n === 0) return;
+    const spots = bedSpots(home, n);
+    for (let i = 0; i < n; i++) {
+      const bed = beds?.[i];
+      const sp = spots[i];
+      const id = BASE.garden + hhId * 32 + i * 2;
+      const liveHere = ld && ld.bed === i ? live!.progress : 0;
+      const step = ld && ld.bed === i ? ld.step : undefined;
+      let kind = 'garden_bed', size = 0;
+      if (!bed || (!bed.c && !bed.d)) {
+        const dug = (bed?.p ?? 0) + (step === 'dig' ? liveHere / 2 : 0);
+        if (dug > 0.02) { kind = 'garden_bed'; size = dug >= 0.985 ? 4 : Math.max(1, Math.min(3, Math.floor(dug * 4) || 1)); }
+      } else if (!bed.c) {
+        size = gathered?.has(i) && now - gathered.get(i)!.day < 1 ? 6 : 4;
+      } else {
+        const g = gardenProgress(bed.c, bed.s, now);
+        if (g < 0.12) size = 5;
+        else {
+          kind = `bed_${GARDEN_PROP[bed.c] ?? 'cabbage'}`;
+          const stage = g >= 1 ? 4 : g >= 0.7 ? 3 : g >= 0.4 ? 2 : 1;
+          size = stage + (!bed.w && g > 0.25 ? 4 : 0);
+        }
+      }
+      if (size > 0) out.push({ id, kind, x: sp.x, z: sp.z, rot: sp.rot, scale: 1, count: size });
+      // a basket by the bed: filling while the gathering goes on, full for a while after
+      const gat = gathered?.get(i);
+      const filling = step === 'harvest' ? Math.max(0.1, (bed?.p ?? 0) + liveHere / 2) : 0;
+      if (gat && now - gat.day > 1) gathered!.delete(i);
+      else if (filling > 0 || gat) {
+        const c = Math.cos(sp.rot), s2 = Math.sin(sp.rot);
+        const lx = 1.05, lz = -0.9;
+        out.push({ id: id + 1, kind: 'veg_basket', x: sp.x + lx * c + lz * s2, z: sp.z - lx * s2 + lz * c, rot: sp.rot, scale: 1, count: gat ? Math.max(3, Math.min(8, Math.round(gat.lb / 2))) : Math.max(1, Math.round(filling * 8)) });
+      }
+    }
   }
 
   private treeAt(id: number): ScatterItem | null {
@@ -284,6 +353,39 @@ export class PropFeed {
       out.push({ id: BASE.stook + id * 64 + i, kind: isStook ? 'stook' : 'sheaf', x, z, rot: hash01(id, i, 9) * Math.PI * 2, scale: 0.95 + 0.15 * hash01(id, i, 5) });
     }
   }
+}
+
+/** Garden crops → their bed's prop (bed_<crop>). */
+const GARDEN_PROP: Record<string, string> = { cabbage: 'cabbage', onions: 'onions', leeks: 'leeks', turnips: 'turnips' };
+/** What a craft's fresh result looks like lying at the bench. */
+const MADE_PROP: Record<string, string> = {
+  bread: 'bread_board', cheese: 'cheese_board', candle: 'cheese_board', malt: 'sack_pile', charcoal: 'sack_pile', ale: 'barrel', salt_meat: 'barrel',
+  barrel: 'barrel', bucket: 'barrel', yarn: 'cloth_bolts', cloth: 'cloth_bolts', linen: 'cloth_bolts', clothes: 'cloth_bolts', cloak: 'cloth_bolts',
+  padded_armour: 'cloth_bolts', leather: 'leather_rail', vellum: 'leather_rail', planks: 'plank_pile', stone: 'stone_pile', pot: 'pot_rows', brick: 'brick_stack',
+  salt: 'salt_heap', iron: 'anvil_work', nails: 'anvil_work', sickle: 'anvil_work', hoe: 'anvil_work', spade: 'anvil_work', pitchfork: 'anvil_work', axe: 'anvil_work',
+  pick: 'anvil_work', hammer: 'anvil_work', tongs: 'anvil_work', chisel: 'anvil_work', shears: 'anvil_work', saw: 'anvil_work', scythe: 'anvil_work', dagger: 'anvil_work',
+  bill: 'anvil_work', mace: 'anvil_work', war_axe: 'anvil_work', sword: 'anvil_work', crossbow: 'anvil_work', bolt: 'anvil_work', cap_helmet: 'anvil_work',
+  kettle_hat: 'anvil_work', mail_hauberk: 'anvil_work', coat_of_plates: 'anvil_work', plough: 'anvil_work', spear: 'anvil_work',
+  // the works of the land, the mill, the byre and the block
+  iron_ore: 'stone_pile', silver_ore: 'stone_pile', gold_ore: 'stone_pile', clay: 'clay_heap', timber: 'log_pile', flour: 'sack_pile',
+  meat: 'meat_joints', wool: 'sack_pile', milk: 'barrel', manure: 'dung_heap',
+};
+const DISHES: ReadonlySet<string> = new Set(['roast_meat', 'roast_fowl', 'stew', 'salt_stew', 'fish_dish', 'pottage', 'porridge']);
+
+/**
+ * Where the beds of a household lie (centre and rotation; a bed's long side is its local z): a cottage garden in front of
+ * the house, to the right of the door, in a row along the facade — where one stands to work at the house, so the spade's
+ * work is seen as it is done (a croft behind the house hid it).
+ */
+function bedSpots(home: BuildingState, n: number): { x: number; z: number; rot: number }[] {
+  const out: { x: number; z: number; rot: number }[] = [];
+  const def = SITE_FOOTPRINT[home.kind] ?? { w: 8, d: 6 };
+  const c = Math.cos(home.rot), s = Math.sin(home.rot);
+  for (let i = 0; i < n; i++) {
+    const lx = 1.6 + i * 2.1, lz = def.d / 2 + 2.7;
+    out.push({ x: home.x + lx * c + lz * s, z: home.z - lx * s + lz * c, rot: home.rot });
+  }
+  return out;
 }
 
 function sizeOf(b: BuildingState): { w: number; d: number } {

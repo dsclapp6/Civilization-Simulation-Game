@@ -40,7 +40,8 @@ export const CONTROL_GROUPS: readonly ControlGroup[] = [
     rows: [
       { keys: [k(K.input.interact)], what: 'Tap: the default action on what you face (the prompt tells you which); the same as clicking it.' },
       { keys: ['Hold ' + k(K.input.interact)], what: 'The action wheel: every option on the target, with the reasons for the greyed ones.' },
-      { keys: [k(K.input.cancel)], what: 'Stop the work you are doing (walking away stops it too). At the forge, the butcher’s block or the kiln the bar under your name says which step the work is at.' },
+      { keys: [k(K.input.cancel)], what: 'Stop the work you are doing (walking away stops it too). One action is one job: the bar over the prompt names it, says which bout it is on (“Bout 1 of 2”) and the time left for the whole job at the present speed, and it stops when the job is done. Work that goes on until you stop (“Keep working the strip”) is its own choice in the wheel and says so. At the forge, the butcher’s block or the kiln the bar also says which step the bout is at.' },
+      { keys: ['J', 'K'], what: 'While a bout of hands-on work runs, its little game beside the bar: J strikes as the needle crosses the gold, holds a steady hand or draws the bow; K covers the seed when sowing. Good strokes finish the bout sooner and make better work and more skill (the card tells how much); leave it be and the work runs as before. Paused, it waits. With no bout, J is the ledger and K the realm. Settings → Work games switches it off.' },
       { keys: [k(K.ui.rest)], what: 'Sleep or wait until a time you choose.' },
       { keys: [k(K.ui.whatNow)], what: 'What now? The next step of your task and what else is worth doing; choose one to be shown the way.' },
       { keys: [k(K.ui.journal)], what: 'The journal: your tasks, who wants something of you (a gold ! over their head), what kind of day it is, the people you know (with Live as) and the places (each with Find).' },

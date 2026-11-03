@@ -16,7 +16,7 @@ import { employmentOf } from './jobs';
 import { perkSum } from './perks';
 import { stepsOfPlan } from './steps';
 import {
-  boutDone, disabled, giveOutput, giveXp, holyDayBlock, incapable, option, payBout, round2, secondsFor, speedOf, stoch, toolFor, wearOut,
+  boutDone, disabled, giveOutput, giveXp, holyDayBlock, incapable, option, payBout, round2, secondsFor, speedOf, stoch, toolFor, wearOut, noteMade,
 } from './workkit';
 
 export type DigWhat = 'stone' | 'iron' | 'silver' | 'gold' | 'clay' | 'timber';
@@ -119,6 +119,8 @@ export function listDig(E: Econ, p: Person, b: BuildingState, out: ActionOption[
   const block = holyDayBlock(E) ?? incapable(p);
   if (block) { o.enabled = false; o.reason = block; }
   out.push(o);
+  // long work as its own explicit choice (docs/WORK.md): bout after bout until stopped (Q), tired out or the pack is full
+  if (o.enabled) out.push({ ...o, id: `${spec.id}.keep`, label: `Keep at it: ${spec.label.toLowerCase()}`, open: true, bouts: undefined, priority: 3, preview: `Bout after bout until you stop (Q) · ${o.preview ?? ''}` });
 }
 
 /** One bout at a works of the land. */
@@ -159,6 +161,8 @@ export function digBout(E: Econ, p: Person, d: DigData): ActionOutcome {
     else giveOutput(E, p, 'firewood', wood);
     if (terms.mode !== 'hired') gains.push({ label: 'Firewood', amount: wood, ref: 'firewood' });
   }
+  // the fresh ore, clay or trunks lie at the works for a while (the quarry's stone has its own pile)
+  if (site.what !== 'stone') noteMade(E, p, b.id, spec.good);
   if (site.what === 'stone') { const was = E.notes.dug.get(b.id); E.notes.dug.set(b.id, { blocks: (was && E.day - was.day < 2 ? was.blocks : 0) + n, day: E.day }); E.notes.rev++; }
   boutDone(E, p, { skill: spec.skill, xp: 8, heavy: spec.heavy, bouts: spec.bouts });
   if (site.what === 'stone') giveXp(E, p, 'masonry', 3, 1);

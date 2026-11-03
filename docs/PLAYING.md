@@ -75,7 +75,8 @@ camera, left strikes, right guards, a click on the view takes the mouse) is the 
 - **On the screen edge**: an arrow for the tracked objective (or a pinned place) when it is out of sight, with its
   distance. **Under the cursor**: the tooltip (name, who or what, what a click does, how far) and, while you walk to a
   click, a ring on the destination.
-- **Bottom centre**: the prompt (`E  Reap · strip of barley`), the progress bar of work in progress and floating gains. A bout of
+- **Bottom centre**: the prompt (`E  Reap · strip of barley`), the bar of the job in progress (its bout, *Bout 1 of 2*, and the
+  time left for the whole job), the work game beside it (**J**/**K**) and floating gains. A bout of
   hands-on work (the forge, the butcher's block, the kiln, the digs, a building going up) shows **the step it is at** under the bar
   ("Heat the bar", "Draw it out", "Quench"), with a tick on the bar and a dot under it for each step; each step has its own sound.
   In a fight a small chip names your stance: *On guard*, *Striking*, *Drawing*, *Aiming*, *Staggered*…
@@ -159,9 +160,29 @@ strokes of the rhythmic ones while the step lasts. The
   real time at every speed; the speeds fast-forward the world, your work and your walking together.
   Conversations and standoffs slow the calendar twentyfold.
 - **Acting.** Walk up to something and the prompt names the default action (`E  Reap · strip of barley`).
-  Timed actions run in simulated seconds, show their animation on your body and a progress bar, repeat
-  as work bouts, and stop when you walk away or press **Q**. Heavy work drains **stamina** (Endurance
-  sets the pool); rest, sitting and standing still refill it.
+  Timed actions run in simulated seconds, show their animation on your body and a progress bar, and stop when you walk away
+  or press **Q**. **One action is one job** (docs/WORK.md): *Dig a garden bed* is two bouts, *Plough* the bouts the strip
+  still needs, a batch at the bench one; the bar names the job, says which bout it is on (*Bout 1 of 2 · Q stops*), counts
+  down the time left for the whole job at the present speed (3× and 8× shorten it) and fills over the whole job, and the
+  work stops when the job is done. Long work that goes on until you stop is its own choice in the wheel and says so:
+  *Keep working the strip* (task after task), *Keep at it: quarry stone*, *Keep shooting at the butts*. Heavy work drains
+  **stamina** (Endurance sets the pool); rest, sitting and standing still refill it.
+- **Work games.** While a bout of hands-on work runs, a small card beside the bar plays it (**J**, and **K** to cover the
+  seed): *Strike on the gold* (the spade, axe, pick, hammer, saw, hoe: strike as the needle crosses the gold band), *Seed
+  and cover* (press the key the furrow asks for, in time), *Keep a steady hand* (binding a wound, stirring, spinning: hold
+  J to keep the needle in the drifting band), *Draw, aim, loose* (the bow: hold J to draw, let go on the mark). Each stroke
+  says *Perfect / Good / Rough / Miss*; the card keeps a tally (*Hand good 72% · bout 18% quicker*): good strokes bring the
+  end of the bout nearer, and the bout's hand makes better work and more skill (*(Good work.)*, *(Masterly work.)*). Leave
+  it alone and nothing is lost: the work runs as before and nothing counts until your first key. A new bout is a new game.
+  Paused, it waits (keys do nothing). J and K are the ledger and the realm whenever no bout is running (and K stays the
+  realm during any game but the sowing); with steel drawn they are the weapon's. **Settings → Work games** turns it off.
+- **What the work leaves.** Work shows where it was done, as it is done: a garden bed before your door marked out with
+  pegs and line and turned spit by spit as you dig, then dark turned soil, drills with seed, rows of seedlings, growing
+  cabbages, onions, leeks or turnips (weedy until weeded), ripe vegetables, and a basket filling as you gather; sheaves
+  and stooks on a reaped strip, the ridges of a ploughed one; a stump and logs where a tree fell; stone at the quarry; and
+  at the bench for a day the fresh results, more batch by batch: loaves on a board, cheeses, bolts of cloth and hanks of
+  yarn, a blade on the anvil, a dish steaming on a trestle, pots, leather on a rail, planks, bricks, salt, ore, clay,
+  trunks, flour at the mill, wool, milk, manure, joints of meat.
 - **Riding.** Stand near a horse your household owns and press **F**: walk 1.7, trot 4 (default), gallop
   11 m/s. A horse cannot strafe and turns on a wide circle. Crossing the continent takes about 25 minutes
   at 1× gallop.

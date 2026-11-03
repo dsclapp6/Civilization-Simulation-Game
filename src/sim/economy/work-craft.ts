@@ -23,7 +23,7 @@ import { stepsFor } from './steps';
 import { DIG_BUILDINGS, digBout, listDig, type DigData } from './work-dig';
 import {
   BOUT, BOUT_DAYS, boutDone, careOf, disabled, giveOutput, giveXp, haveOf, holyDayBlock, incapable, option, payBout, round1, round2, secondsFor, speedOf, stoch,
-  toolFor, wearOut, type ToolRef,
+  toolFor, wearOut, type ToolRef, noteMade,
 } from './workkit';
 import type { SkillId } from '../../core/domain';
 import type { Quality } from './types';
@@ -397,6 +397,8 @@ function craftBatch(E: Econ, p: Person, d: CraftData): ActionOutcome {
     if (pay > 0) gains.push({ label: 'Wages', amount: round2(pay), ref: 'money' });
   }
   gains.push({ label: r.skill, ref: r.skill });
+  // the fresh work lies at the bench for a while, more of it batch by batch (drawn only: docs/WORK.md)
+  noteMade(E, p, b.id, Object.keys(r.outputs)[0])
   const first = made[0];
   return { ok: true, message: `${r.name}: ${first.amount} ${first.label.toLowerCase()}.`, gains };
 }

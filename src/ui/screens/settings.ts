@@ -33,6 +33,8 @@ export function settingsBody(host: UiHost, onChange: () => void): HTMLElement {
       h('h4.mu-field-head', null, 'Interface'),
       field('Names and labels', toggle(s.labels, (v) => set({ labels: v }), 'Names and labels'), undefined, 'Names over people and place names on the map'),
       field('Minimap', toggle(s.minimap ?? true, (v) => set({ minimap: v }), 'Minimap'), undefined, 'The little chart of the ground around you, in the corner (N shows or hides it)'),
+      // work pass (docs/WORK.md): the hands-on games can be switched off
+      field('Work games', toggle(s.workGames ?? true, (v) => set({ workGames: v }), 'Work games'), undefined, 'Play each bout of hands-on work with J and K (a good hand works quicker and better). Off, the work simply runs'),
       field('Interface size', slider(0.8, 1.4, 0.05, s.uiScale, (v) => { scale.textContent = `${Math.round(v * 100)}%`; set({ uiScale: v }); }), scale),
       field('Compact HUD', toggle(s.compactHud ?? false, (v) => set({ compactHud: v }), 'Compact HUD'), undefined, 'Flat soft cards, narrower columns and a slim button bar: more of the world, less of the frame'),
       h('h4.mu-field-head', null, 'Play'),
