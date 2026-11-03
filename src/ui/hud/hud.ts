@@ -916,6 +916,7 @@ function dockIcon(d: DockEntry): IconName {
     case 'map': return 'map';
     case 'chronicle': return 'scroll';
     case 'rest': return 'bed';
+    case 'goto': return 'boot'; // H1: the dock's "Go to…"
     case 'requests': return 'quill';
     case 'builder': return 'hammer';
     case 'ruler': return 'castle'; // the crown is the realm and politics page's

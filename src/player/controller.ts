@@ -1975,6 +1975,7 @@ export class PlayerController implements PlayerApi {
     t.ridingLevel = skillOf(p, 'riding');
     t.hunger = p.needs.hunger;
     t.rest = p.needs.rest;
+    t.hp = p.health.hp; // H1: wounds slow the breath's return
     const inv = this.economy.inventory(p.id);
     t.weight = inv.weight;
     t.capacity = inv.capacity;

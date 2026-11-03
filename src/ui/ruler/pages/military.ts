@@ -90,7 +90,7 @@ function knightsCard(env: RulerEnv): HTMLElement {
  * The army campaign's call (`game.campaign`, `CampaignApi` of src/ui/types.ts, wired by the war builder; absent in a base without it,
  * so it is declared loosely here and everything is guarded).
  */
-export type CampaignCall = { plan(target: number, rideAs?: number): { ok: boolean; reason?: string } };
+export type CampaignCall = { plan(target: number, rideAs?: number): { ok: boolean; reason?: string }; rideWith?(army: number): { ok: boolean; reason?: string } };
 export function campaignOf(env: Pick<RulerEnv, 'ctx'>): CampaignCall | undefined { return (env.ctx.game as unknown as { campaign?: CampaignCall }).campaign; }
 
 /** "Plan an attack": the lord raises his host against a hostile neighbour's seat and rides with it (the campaign mode of the war builder). */
@@ -202,6 +202,8 @@ function armiesCard(env: RulerEnv, mil: MilitaryRuntime | undefined, levyPool: n
       chip(`morale ${Math.round(a.morale * 100)}%`, a.morale > 0.55 ? 'green' : a.morale > 0.3 ? 'gold' : 'vermilion', 'heart')),
     h('div.mu-row.mu-gap-6.mu-wrap', { style: { marginTop: '8px' } },
       button('Orders…', { size: 'small', icon: 'flag', onClick: () => ctx.open({ panel: 'ext', name: 'army' }) }),
-      button('Take the field', { size: 'small', icon: 'swords', tip: 'Join this army and fight in it yourself', onClick: () => env.done(mil.joinArmy(a.id), 'You take your place in the ranks.') }))))) : line('No army of yours is in the field. Call the levy to muster one, then give it orders in the command panel — or ride with it yourself.'));
+      a.task === 'march' && campaignOf(env)?.rideWith
+        ? button('Ride with the host', { size: 'small', icon: 'swords', tip: 'The march is skipped: the days pass and you take over at its camp before the walls', onClick: () => { const r = campaignOf(env)!.rideWith!(a.id); env.done(r, 'You ride with the host.'); if (r.ok) ctx.close(); } })
+        : button('Take the field', { size: 'small', icon: 'swords', tip: 'Join this army and fight in it yourself', onClick: () => env.done(mil.joinArmy(a.id), 'You take your place in the ranks.') }))))) : line('No army of yours is in the field. Call the levy to muster one, then give it orders in the command panel — or ride with it yourself.'));
   return wrap;
 }

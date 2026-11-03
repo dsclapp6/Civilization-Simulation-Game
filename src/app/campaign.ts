@@ -218,7 +218,36 @@ export class CampaignMode {
     const t = this.sim.world.settlements[s.target];
     this.say(beforeWalls
       ? `Night has fallen before the walls of ${t?.name ?? 'the enemy'}. The host camps out of bowshot; we storm at first light. Sleep (Z) to wait for the dawn; the tactical view (C) sets the companies.`
-      : `Night falls before we reach ${t?.name ?? 'the enemy'}: the host makes camp. Sleep (Z) and at first light we march on.`, 'info');
+      : `Night falls before we reach ${t?.name ?? 'the enemy'}: the host makes camp and sleeps; at first light we march on.`, 'info');
+    // riding with the host (H1): a night on the road is slept through — the days pass with the march; only the camp before the walls
+    // is the player's to take over (the tactical view, sleep to the dawn)
+    if (!beforeWalls) this.sim.dispatch({ type: 'sleep' });
+  }
+
+  /**
+   * "Ride with the host" (H1): the player joins an army marching against a place — his lord's host, or any friendly army with its
+   * orders — and the march is skipped: the days pass as the macro march says (supplies, attrition, the nights in camp), and the
+   * player takes over at the camp before the walls (night camp / dawn storm as in `planAttack`). Not in a map journey, nor with a
+   * fight about; one campaign at a time.
+   */
+  rideWith(armyId: number): { ok: boolean; reason?: string } {
+    const mil = this.mil();
+    if (!mil) return { ok: false, reason: 'There is no war in this world' };
+    if (this.phase) return { ok: false, reason: 'A campaign is already under way' };
+    if (this.player.travel?.()) return { ok: false, reason: 'You are on a journey: finish it first' };
+    const view = mil.armies().find((a) => a.id === armyId);
+    const target = view?.target?.settlement;
+    if (!view || (view.task !== 'march' && view.task !== 'muster') || target === undefined) return { ok: false, reason: 'That host is not marching against a place' };
+    const M = militaryContext(this.sim);
+    const a = M.army(armyId);
+    if (!a) return { ok: false, reason: 'No such army' };
+    const pid = this.sim.state.run.playerId;
+    if (!a.men.includes(pid)) {
+      const j = mil.joinArmy(armyId);
+      if (!j.ok && !a.men.includes(pid)) return { ok: false, reason: j.reason };
+    }
+    this.begin(armyId, target);
+    return { ok: true };
   }
 
   private strikeCamp(): void {

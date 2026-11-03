@@ -90,6 +90,37 @@ export interface StaminaInput {
   hunger: number;
   /** Rest need 0..1 (1 = rested). */
   rest: number;
+  // ---- additive (breath after a sprint): absent = an average, fit, unburdened grown man at a standstill-or-jog as before ----
+  /** Ground speed (m/s): at a walk or standing the breath comes back fast, at a jog it comes slowly. Absent: `moving` decides (a jog). */
+  speed?: number;
+  endurance?: number;
+  age?: number;
+  /** Carried weight over capacity (0..); a heavy load slows the breath too. */
+  load?: number;
+  /** Health 0..1 (1 = whole): the hurt get their wind back slowly. */
+  hp?: number;
+}
+
+/** Breath that comes back per second, as a share of the pool: sitting, standing, at a walk, at a jog. A few seconds of rest and you can sprint again. */
+export const REGEN_SIT = 0.2;
+export const REGEN_STAND = 0.16;
+export const REGEN_WALK = 0.12;
+export const REGEN_JOG = 0.04;
+/** At or below this speed (m/s) you are "walking": the slow walk (1.4) and the ride's walk (1.7) are under it, the jog (3.2) over. */
+export const WALK_BREATH_SPEED = 2.2;
+
+/** Breath regained per second as a share of the pool (before the pool is multiplied in). */
+export function breathRate(i: StaminaInput): number {
+  const moving = i.speed !== undefined ? i.speed > 0.2 : i.moving;
+  const walking = i.speed !== undefined ? i.speed <= WALK_BREATH_SPEED : false;
+  let r = i.sitting ? REGEN_SIT : !moving ? REGEN_STAND : walking ? REGEN_WALK : REGEN_JOG;
+  if (i.endurance !== undefined) r *= clamp(0.6 + 0.04 * i.endurance, 0.7, 1.4);
+  if (i.age !== undefined && i.age > 45) r *= clamp(1 - 0.012 * (i.age - 45), 0.55, 1);
+  if (i.load !== undefined && i.load > 0.6) r *= clamp(1 - (i.load - 0.6) * 1.25, 0.5, 1);
+  if (i.hp !== undefined && i.hp < 1) r *= clamp(0.5 + 0.5 * i.hp, 0.5, 1);
+  if (i.hunger < 0.2) r *= 0.5; else if (i.hunger < 0.5) r *= 0.8;
+  if (i.rest < 0.2) r *= 0.7;
+  return r;
 }
 
 export function stepStamina(s: StaminaState, i: StaminaInput): void {
@@ -98,12 +129,7 @@ export function stepStamina(s: StaminaState, i: StaminaInput): void {
   else if (i.galloping) delta -= GALLOP_DRAIN;
   else if (i.cantering) delta -= CANTER_DRAIN;
   if (i.effort > 0) delta -= i.effort;
-  if (delta === 0) {
-    let regen = i.sitting ? 11 : i.moving ? 4.5 : 8;
-    if (i.hunger < 0.2) regen *= 0.5;
-    if (i.rest < 0.2) regen *= 0.7;
-    delta = regen;
-  }
+  if (delta === 0) delta = breathRate(i) * s.max;
   s.value = clamp(s.value + delta * i.dt, 0, s.max);
   if (s.value <= 0) s.exhausted = true;
   else if (s.exhausted && s.value >= s.max * RECOVER_FRACTION) s.exhausted = false;

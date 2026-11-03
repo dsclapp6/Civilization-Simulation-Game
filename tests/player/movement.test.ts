@@ -3,7 +3,7 @@ import { SIM_DT } from '../../src/core/time';
 import { createBody, stepBody, type BodyEnv, type BodyState, type BodyTraits } from '../../src/player/body';
 import {
   RIDE_GALLOP, RIDE_TROT, RIDE_WALK, RUN_SPEED, SPRINT_SPEED, WALK_SPEED, ageFactor, agilityFactor, footAnim, loadFactor, maxStamina, rideAnim,
-  slopeFactor, stepStamina, workEffort,
+  slopeFactor, stepStamina, workEffort, breathRate,
 } from '../../src/player/movement';
 import { EMPTY_INPUT, type InputState } from '../../src/player/types';
 import { FakeZone, input } from './fakes';
@@ -240,5 +240,28 @@ describe('dodge and animation choice', () => {
     expect(rideAnim(1.7).horse).toBe('walk');
     expect(rideAnim(4).horse).toBe('trot');
     expect(rideAnim(11).horse).toBe('gallop');
+  });
+});
+
+describe('breath after a sprint (H1)', () => {
+  const rest = { dt: 1, sprinting: false, galloping: false, moving: false, sitting: false, effort: 0, hunger: 1, rest: 1 };
+  const secondsTo = (frac: number, extra: Partial<Parameters<typeof stepStamina>[1]>): number => {
+    const s = { value: 0, max: 100, exhausted: true };
+    let t = 0;
+    while (s.value < 100 * frac && t < 200) { stepStamina(s, { ...rest, dt: 0.1, ...extra }); t += 0.1; }
+    return t;
+  };
+  it('a few seconds standing or walking and you can sprint again; jogging is slow', () => {
+    expect(secondsTo(0.25, {})).toBeLessThan(2.5);
+    expect(secondsTo(0.25, { moving: true, speed: 1.4 })).toBeLessThan(3);
+    expect(secondsTo(0.9, { moving: true, speed: 1.4 })).toBeLessThan(9);
+    expect(secondsTo(0.25, { moving: true, speed: 3.2 })).toBeGreaterThan(5);
+  });
+  it('is slower when hungry, hurt, old, weak or heavily laden', () => {
+    const base = breathRate({ ...rest, endurance: 10, age: 30, load: 0.2, hp: 1 });
+    for (const worse of [{ hunger: 0.1 }, { hp: 0.3 }, { age: 70 }, { endurance: 4 }, { load: 1 }]) {
+      expect(breathRate({ ...rest, endurance: 10, age: 30, load: 0.2, hp: 1, ...worse })).toBeLessThan(base);
+    }
+    expect(breathRate({ ...rest, endurance: 16, age: 30 })).toBeGreaterThan(base);
   });
 });

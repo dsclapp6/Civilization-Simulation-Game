@@ -203,13 +203,15 @@ export function armyPanel(ctx: PanelCtx, startTab: Tab = 'command'): UiPanel {
 
   const joinList = (): HTMLElement => {
     const p = me();
-    const list = mil.armies().filter((a) => a.task === 'muster' || a.task === 'garrison').filter((a) => !p || !mil.hostile(p.house, a.house));
+    const list = mil.armies().filter((a) => a.task === 'muster' || a.task === 'garrison' || (a.task === 'march' && a.target?.settlement !== undefined && !!ctx.game.campaign?.rideWith)).filter((a) => !p || !mil.hostile(p.house, a.house));
     if (!list.length) return empty('No army is mustering that would have you.');
     return h('div.mu-col.mu-gap-8', null, list.slice(0, 8).map((a) => {
       const d = mil.armyDetail(a.id);
       return h('div.mu-card', null, h('div.mu-row.mu-between', null,
         h('div', null, h('b', null, `Army of ${d?.houseName ?? 'a lord'}`), h('div.mu-small.mu-dim', null, `${d ? plural(d.size, 'man', 'men') : ''} · ${TASK_TEXT[a.task] ?? a.task}`)),
-        button('Take service', { icon: 'check', onClick: () => act(mil.joinArmy(a.id), 'You take your place in the ranks.') })));
+        // H1: a host on the march against a place — ride with it: the march is skipped, you take over at its camp before the walls
+        a.task === 'march' ? button('Ride with the host', { icon: 'swords', tip: 'The days of the march pass; you take over at the camp before the walls', onClick: () => { const r = ctx.game.campaign!.rideWith!(a.id); act(r, 'You ride with the host.'); if (r.ok) ctx.close(); } })
+          : button('Take service', { icon: 'check', onClick: () => act(mil.joinArmy(a.id), 'You take your place in the ranks.') })));
     }));
   };
 

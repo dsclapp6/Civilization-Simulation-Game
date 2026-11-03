@@ -17,6 +17,7 @@ import {
 } from '../core/objectiveModel';
 import type { JournalTab } from '../core/requests';
 import { tabKeys } from '../core/tabkeys';
+import { spanText } from '../../app/goto';
 import { bar, button, empty, tabs } from '../components/widgets';
 import { createWindow } from '../components/window';
 import type { Objective, ObjectiveTarget } from '../../sim/objectives/types';
@@ -229,6 +230,16 @@ export function journalPanel(ctx: PanelCtx, start: JournalTab | undefined): UiPa
     return h('div.mu-journal-people.mu-scroll', null, out);
   };
 
+  /** H1: "Go now" beside Find on a place of your lands: the walk is skipped (src/app/goto.ts); refused places say why. */
+  const goNow = (r: { x: number; z: number; target?: ObjectiveTarget }): HTMLElement | null => {
+    const g = game.goto;
+    const place = g?.find({ kind: r.target?.kind, id: r.target?.id, x: r.x, z: r.z });
+    if (!g || !place) return null;
+    const c = g.check(place);
+    return button('Go now', { size: 'small', icon: 'boot', disabled: !c.ok, tip: c.ok ? `Skip the walk there (${spanText(c.seconds)})` : c.reason,
+      onClick: () => { const res = g.go(place); if (res.ok) ctx.close(); else ctx.say('warn', res.reason ?? 'You cannot go there now.'); } });
+  };
+
   const placesView = (): HTMLElement => {
     const rows = placeRows(game, me());
     const fs = findState(game, ctx.pins);
@@ -243,7 +254,8 @@ export function journalPanel(ctx: PanelCtx, start: JournalTab | undefined): UiPa
           h('span.mu-prow-ico', null, icon(r.icon, 18)),
           h('div.mu-prow-main', null, h('div.mu-prow-name', null, h('b', null, r.name)), h('div.mu-prow-sub', null, [r.sub, dist(r.x, r.z)].filter(Boolean).join(' · '))),
           on ? button('Stop', { size: 'small', icon: 'cross', onClick: stop })
-            : button('Find', { size: 'small', icon: 'pin', onClick: () => find({ x: r.x, z: r.z, label: r.name, kind: r.target?.kind, id: r.target?.id }) })));
+            : button('Find', { size: 'small', icon: 'pin', onClick: () => find({ x: r.x, z: r.z, label: r.name, kind: r.target?.kind, id: r.target?.id }) }),
+          goNow(r)));
       }
     };
     section('Yours', rows.filter((r) => r.group === 'yours'));
