@@ -179,6 +179,7 @@ export function createAssetLibrary(): MillenniaAssetLibrary {
       d: built.d,
       height: built.height,
       doors: built.doors.map((p) => ({ x: p.x, z: p.z })),
+      doorways: built.doorways,
       smokePoints: built.smoke.map((p) => new THREE.Vector3(p[0], p[1], p[2])),
       emitters: built.emitters.map((e) => ({ kind: e.kind as FxEvent['kind'], position: new THREE.Vector3(e.pos[0], e.pos[1], e.pos[2]), rate: e.rate })),
       firePoints: built.fire.map((p) => new THREE.Vector3(p[0], p[1], p[2])),

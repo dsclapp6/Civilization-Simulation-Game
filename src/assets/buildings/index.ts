@@ -4,7 +4,7 @@ import { BUILDINGS, type BuildingDef, type BuildingKind } from '../../content/ty
 import type { CultureId } from '../../core/domain';
 import type { P2 } from '../../core/math';
 import { F, Layer, MAT_COUNT, Mat, MeshBuilder, prng, type V3 } from '../core/builder';
-import { newOut, type AnimPart, type Ctx, type EmitterSpec, type FlagSpec } from './parts';
+import { newOut, type AnimPart, type Ctx, type DoorwayRec, type EmitterSpec, type FlagSpec } from './parts';
 import { applyBreach, applyConstruction, applyDamage, CONSTRUCTION_BREAKS, constructionOfStep, constructionStep } from './states';
 import { STYLES } from './style';
 import { RECIPES } from './recipes';
@@ -24,6 +24,8 @@ export interface NormalizedRequest {
   gate: 'open' | 'shut' | 'broken';
   /** Quantised breach of a wall or palisade (0, 0.25 … 1). */
   breach: number;
+  /** Baked door leaves (true) or the dark doorway only, the renderer drawing the hinged leaves itself (false; docs/INTERIORS.md). */
+  leaves: boolean;
 }
 
 export interface BuiltAnim {
@@ -45,6 +47,8 @@ export interface BuiltBuilding {
   smoke: V3[];
   emitters: EmitterSpec[];
   fire: V3[];
+  /** Doorways of the model (local): where the renderer hangs real leaves (docs/INTERIORS.md). */
+  doorways: DoorwayRec[];
   w: number;
   d: number;
   height: number;
@@ -61,7 +65,7 @@ export const SEED_BUCKETS = 4;
 export const BREACH_KINDS: ReadonlySet<BuildingKind> = new Set<BuildingKind>(['wall', 'palisade']);
 export const GATE_KINDS: ReadonlySet<BuildingKind> = new Set<BuildingKind>(['gatehouse']);
 
-export function normalizeRequest(req: { kind: BuildingKind; level: number; culture: CultureId; seed: number; construction?: number; damage?: number; ownerColor?: number; lod?: 0 | 1 | 2; gate?: 'open' | 'shut' | 'broken'; breach?: number }): NormalizedRequest {
+export function normalizeRequest(req: { kind: BuildingKind; level: number; culture: CultureId; seed: number; construction?: number; damage?: number; ownerColor?: number; lod?: 0 | 1 | 2; gate?: 'open' | 'shut' | 'broken'; breach?: number; doorLeaves?: boolean }): NormalizedRequest {
   const def = BUILDINGS[req.kind];
   const level = Math.max(1, Math.min(def.maxLevel, Math.round(req.level || 1)));
   const c = req.construction ?? 1;
@@ -74,18 +78,20 @@ export function normalizeRequest(req: { kind: BuildingKind; level: number; cultu
     construction, damage, owner: req.ownerColor ?? 0xa8302a, lod: req.lod ?? 0,
     gate: GATE_KINDS.has(req.kind) && (req.gate === 'shut' || req.gate === 'broken') ? req.gate : 'open',
     breach: BREACH_KINDS.has(req.kind) ? Math.round(Math.max(0, Math.min(1, req.breach ?? 0)) * 4) / 4 : 0,
+    leaves: req.doorLeaves !== false || (req.lod ?? 0) > 0,
   };
 }
 
 export function requestKey(n: NormalizedRequest): string {
-  return `${n.kind}|${n.level}|${n.culture}|${n.seedBucket}|${constructionStep(n.construction)}|${n.damage.toFixed(2)}|${n.owner.toString(16)}|${n.lod}|${n.gate}|${n.breach}`;
+  return `${n.kind}|${n.level}|${n.culture}|${n.seedBucket}|${constructionStep(n.construction)}|${n.damage.toFixed(2)}|${n.owner.toString(16)}|${n.lod}|${n.gate}|${n.breach}${n.leaves ? '' : '|nl'}`;
 }
 
 /** Run a recipe and produce the raw builder (before states), for tests and tools. */
-export function runRecipe(n: NormalizedRequest): { b: MeshBuilder; ctx: Ctx; def: BuildingDef } {
+export function runRecipe(n: NormalizedRequest, dry = false): { b: MeshBuilder; ctx: Ctx; def: BuildingDef } {
   const def = BUILDINGS[n.kind];
   const seed = hashSeed(n.kind, n.culture, n.seedBucket);
   const b = new MeshBuilder(seed);
+  b.dry = dry;
   const ctx: Ctx = { b, s: STYLES[n.culture], level: n.level, lod: n.lod, r: prng(seed ^ 0x5bd1e995), seed, owner: n.owner, out: newOut(), gate: n.gate };
   const recipe = RECIPES[n.kind];
   recipe(ctx, def);
@@ -99,6 +105,9 @@ export function generateBuilding(n: NormalizedRequest): BuiltBuilding {
   const { b, ctx, def } = runRecipe(n);
   let src = b;
   const seed = ctx.seed;
+  // the leaves hang apart (the renderer swings them) or are baked in; the dark of the doorway goes with the first
+  const LR = F.Leaf | F.Recess;
+  src = src.filter((t) => (src.tFlags[t] & LR) === 0 || (n.leaves ? (src.tFlags[t] & F.Leaf) !== 0 : (src.tFlags[t] & F.Recess) !== 0));
   const info = { w: def.w, d: def.d, earthwork: EARTHWORKS.has(n.kind) };
   // Coarser LODs drop yard clutter (LOD1+) and small details except lit window panes (LOD2).
   if (n.lod >= 1) src = src.filter((t) => src.tLayer[t] !== Layer.Decor && !(n.lod === 2 && src.tLayer[t] === Layer.Detail && src.tMat[t] !== Mat.Window));
@@ -151,6 +160,7 @@ export function generateBuilding(n: NormalizedRequest): BuiltBuilding {
     smoke: n.construction >= 1 && n.damage < 0.5 ? ctx.out.smoke : [],
     emitters: n.construction >= 1 && n.damage < 0.5 ? ctx.out.emitters : [],
     fire: firePoints(src, def, ctx.out.fire),
+    doorways: n.construction >= 1 ? (ctx.out.doorways ?? []) : [],
     w: def.w,
     d: def.d,
     height,

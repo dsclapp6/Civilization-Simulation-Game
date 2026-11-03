@@ -24,8 +24,51 @@ export interface AnimPart {
 export interface FlagSpec { pos: V3; w: number; h: number; color: number; color2?: number; kind: 'banner' | 'pennant' | 'standard'; }
 export interface EmitterSpec { kind: 'sparks' | 'smoke' | 'splash' | 'fire' | 'hearth_smoke' | 'dust' | 'steam'; pos: V3; rate: number; }
 
+/**
+ * Interiors (docs/INTERIORS.md): what a recipe says of the inside of its building, recorded as it builds — the blocks the
+ * house kit raised, the doorways with their leaves, the chimney stacks and the solid things of the yard — so the plan of the
+ * inside is made from the very walls and openings of the outside. Coordinates are the building's (local), y up from its base.
+ */
+export interface ShellRec {
+  /** Builder translation of the block (the block is never turned). */
+  ox: number; oy: number; oz: number;
+  /** Turned by the recipe: no plan is made of it. */
+  turned: boolean;
+  role: string;
+  rects: Rect[];
+  /** Storey bases (relative to oy) and heights. */
+  bases: number[];
+  hs: number[];
+  walls: WallKind[];
+  openings: Opening[][];
+  open: Side[][];
+  plinth: number;
+  noFloor: boolean;
+  eaveY: number;
+  roof: { type: string; axis: 'x' | 'z'; ridgeY: number; under(x: number, z: number): number } | null;
+}
+export interface DoorwayRec {
+  /** Centre of the threshold on the outer wall plane, and the outward normal. */
+  x: number; y: number; z: number; nx: number; nz: number;
+  w: number; h: number;
+  shape: 'flat' | 'round' | 'pointed' | 'tudor';
+  kind: 'door' | 'wide';
+  /** Drawn open with no leaf (a porch arch, a barn's back doors). */
+  open: boolean;
+  color: number;
+  stone: boolean;
+}
+export interface ChimneyRec { x: number; z: number; y0: number; y1: number; w: number; d: number; outside: boolean }
+/** Recipe hints the plan needs (a stair the recipe models itself, a block's purpose). */
+export interface InteriorHint { kind: string; x: number; y: number; z: number; x1?: number; y1?: number; z1?: number; w?: number; tag?: string }
+
 export interface RecipeOut {
   doors: P2[];
+  shells?: ShellRec[];
+  doorways?: DoorwayRec[];
+  chimneys?: ChimneyRec[];
+  yard?: Rect[];
+  hints?: InteriorHint[];
   smoke: V3[];
   anims: AnimPart[];
   flags: FlagSpec[];
@@ -48,7 +91,21 @@ export interface Ctx {
 }
 
 export function newOut(): RecipeOut {
-  return { doors: [], smoke: [], anims: [], flags: [], emitters: [], fire: [] };
+  return { doors: [], smoke: [], anims: [], flags: [], emitters: [], fire: [], shells: [], doorways: [], chimneys: [], yard: [], hints: [] };
+}
+
+/** Record a solid yard thing (a woodpile, a porch post) at the builder's current frame. */
+export function yardSolid(ctx: Ctx, x0: number, z0: number, x1: number, z1: number): void {
+  const a = ctx.b.xf([x0, 0, z0]), c = ctx.b.xf([x1, 0, z1]);
+  ctx.out.yard?.push({ x0: Math.min(a[0], c[0]), x1: Math.max(a[0], c[0]), z0: Math.min(a[2], c[2]), z1: Math.max(a[2], c[2]) });
+}
+
+/** Record an interior hint at a point of the builder's current frame. */
+export function hint(ctx: Ctx, h: InteriorHint): void {
+  const a = ctx.b.xf([h.x, h.y, h.z]);
+  const o: InteriorHint = { ...h, x: a[0], y: a[1], z: a[2] };
+  if (h.x1 !== undefined && h.y1 !== undefined && h.z1 !== undefined) { const c = ctx.b.xf([h.x1, h.y1, h.z1]); o.x1 = c[0]; o.y1 = c[1]; o.z1 = c[2]; }
+  ctx.out.hints?.push(o);
 }
 
 export function pick<T>(r: () => number, arr: readonly T[]): T { return arr[Math.floor(r() * arr.length) % arr.length]; }
@@ -234,11 +291,18 @@ export function opening(ctx: Ctx, o: Opening): void {
 
   if (isDoor) {
     const leafCol = o.color ?? pick(r, s.doors);
+    {
+      const p0 = b.xf([u, o.y, 0]), p1 = b.xf([u, o.y, 1]);
+      ctx.out.doorways?.push({
+        x: p0[0], y: p0[1], z: p0[2], nx: p1[0] - p0[0], nz: p1[2] - p0[2], w: o.w, h: o.h, shape, kind: o.kind === 'wide' ? 'wide' : 'door',
+        open: !!o.open, color: leafCol, stone: stoneFrame,
+      });
+    }
     if (o.open || o.kind === 'wide') {
       b.state({ layer: Layer.Detail, flags: F.NoAO }, () => b.flat(outline, 0.02, DARK));
       if (o.kind === 'wide' && lod === 0 && !o.open) {
         // A half-open leaf swung outwards.
-        b.state({ layer: Layer.Detail, flags: F.Burn | F.Snow }, () => {
+        b.state({ layer: Layer.Detail, flags: F.Burn | F.Snow | F.Leaf }, () => {
           b.push();
           b.translate(u + hw, o.y, 0.03);
           b.rotY(-0.5);
@@ -247,7 +311,9 @@ export function opening(ctx: Ctx, o: Opening): void {
         });
       }
     } else {
-      b.state({ layer: Layer.Detail, flags: F.Burn | F.Snow }, () => {
+      // the dark of the doorway behind the leaf, for when the leaf is drawn apart and swings (docs/INTERIORS.md)
+      b.state({ layer: Layer.Detail, flags: F.NoAO | F.Recess }, () => b.flat(outline, 0.02, DARK));
+      b.state({ layer: Layer.Detail, flags: F.Burn | F.Snow | F.Leaf }, () => {
         if (shape === 'flat') planks(b, u - hw, u + hw, o.y, o.y + o.h, 0.03, leafCol, lod);
         else {
           b.flat(outline, 0.03, leafCol);
@@ -521,6 +587,11 @@ export interface ChimneyOpts {
 export function chimney(ctx: Ctx, o: ChimneyOpts): void {
   const { b, lod } = ctx;
   const w = o.w ?? 0.75, d = o.d ?? 0.65;
+  {
+    const a = b.xf([o.x, o.baseY, o.z]), t = b.xf([o.x, o.topY, o.z]);
+    const bw = o.shoulderY !== undefined ? (o.baseW ?? w * 1.25) : w, bd = o.shoulderY !== undefined ? (o.baseD ?? d * 1.6) : d;
+    ctx.out.chimneys?.push({ x: a[0], z: a[2], y0: a[1], y1: t[1], w: bw, d: bd, outside: o.shoulderY !== undefined });
+  }
   const col = o.color ?? ctx.s.stone;
   b.state({ layer: Layer.Wall, flags: F.Snow }, () => {
     if (o.shoulderY !== undefined) {
@@ -592,6 +663,8 @@ export interface HouseOpts {
   noFloor?: boolean;
   /** Gael roped thatch. */
   roped?: boolean;
+  /** What the block is for inside (docs/INTERIORS.md): 'porch', 'lean', 'tower', 'chancel', 'aisle', 'forebuilding', 'solar'… */
+  role?: string;
 }
 
 export interface HouseResult {
@@ -683,12 +756,21 @@ export function house(ctx: Ctx, o: HouseOpts): HouseResult {
   const top = rc;
   const eaveY = y;
   const r = o.roof;
+  const origin = b.xf([0, 0, 0]), ax = b.xf([1, 0, 0]);
+  const shell: ShellRec = {
+    ox: origin[0], oy: origin[1], oz: origin[2], turned: Math.abs(ax[0] - origin[0] - 1) > 1e-3 || Math.abs(ax[2] - origin[2]) > 1e-3,
+    role: o.role ?? '', rects: rects.map((q) => ({ ...q })), bases: [...bases], hs: o.storeys.map((q) => q.h), walls: o.storeys.map((q) => q.wall),
+    openings: o.storeys.map((q) => (q.openings ?? []).map((p) => ({ ...p }))), open: o.storeys.map((q) => [...(q.open ?? [])]),
+    plinth: ph, noFloor: !!o.noFloor, eaveY, roof: null,
+  };
+  ctx.out.shells?.push(shell);
   if (!r) {
     const flat: RoofResult = { ridgeY: eaveY, topY: eaveY, eaveY, axis: 'x', underAt: () => eaveY, topAt: () => eaveY, gables: [] };
     return { roof: flat, top, eaveY, rects, bases };
   }
   const look = roofLook(r.mat, r.tint ?? roofTint(r.mat, s));
   const roof = buildRoof(b, { ...r, x0: top.x0, x1: top.x1, z0: top.z0, z1: top.z1, eaveY }, look, lod);
+  shell.roof = { type: r.type, axis: roof.axis, ridgeY: roof.ridgeY, under: (x, z) => roof.underAt(x, z) };
   const topSt = o.storeys[o.storeys.length - 1];
   const gw = o.gableWall ?? topSt.wall;
   const gcol = gw === topSt.wall ? (topSt.color ?? wallColor(topSt.wall, s)) : wallColor(gw, s);
