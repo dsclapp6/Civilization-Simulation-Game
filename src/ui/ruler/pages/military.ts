@@ -5,7 +5,7 @@ import type { RealmTroop, RecruitOption } from '../../../sim/realm/types';
 import { button, chip, empty, heading } from '../../components/widgets';
 import { h } from '../../core/dom';
 import { goodLine } from '../../builder/landsUi';
-import { dubbable, kindName, recruitMax, recruitPreview, RESERVE_DAYS, troopCounts } from '../rulerModel';
+import { dubbable, kindName, knightsOf, recruitMax, recruitPreview, RESERVE_DAYS, troopCounts } from '../rulerModel';
 import { line, money, statCard, type RulerEnv } from '../rulerUi';
 
 interface Bag { settlement: number; counts: Record<string, number> }
@@ -32,6 +32,9 @@ export function buildMilitary(env: RulerEnv): HTMLElement {
       statCard('Hired', f.mercenaries, 'free swords on contract', '', 'coin'), statCard('In the field', f.afield, 'with the armies', f.afield ? 'gold' : '', 'flag'), statCard('Strength', Math.round(f.strength), 'the House’s weight', '', 'swords')));
   }
 
+  // ---- your knights: take one's place and fight on your behalf
+  wrap.append(knightsCard(env));
+
   // ---- recruiting
   wrap.append(heading('Raise and train', 'swords'));
   const places = v.settlements;
@@ -50,9 +53,89 @@ export function buildMilitary(env: RulerEnv): HTMLElement {
     h('div.mu-row.mu-wrap.mu-gap-6', null, counts.map((c) => chip(`${c.n} ${kindName(c.kind, c.n)} · ${money(c.wage)} a day`, 'gold'))),
     h('div.mu-list.mu-rul-troops.mu-scroll', null, troops.slice(0, 80).map((t) => troopRow(env, t)))) : line('No man is on your pay. Raise some above.'));
 
+  // ---- the host against a hostile neighbour
+  wrap.append(attackCard(env));
+
+  // ---- any man of yours fit for the accolade
+  wrap.append(dubCard(env));
+
   // ---- armies
   wrap.append(heading('Armies', 'flag'));
   wrap.append(armiesCard(env, mil, f?.levyPool ?? 0));
+  return wrap;
+}
+
+/** "Your knights": the knights of the House, vassals and men in pay, each with Fight as him (the sim's `fightAs`). */
+function knightsCard(env: RulerEnv): HTMLElement {
+  const { ctx, realm } = env;
+  const me = env.me();
+  const paid = (realm.troops?.(me) ?? []).map((t) => t.person);
+  const combat = ctx.sim.services.combat as unknown as { wounds?(p: number): unknown[] } | undefined;
+  const knights = knightsOf(ctx.sim.state, me, paid, (id) => (combat?.wounds?.(id)?.length ?? 0) > 0);
+  const wrap = h('div.mu-rul-knights');
+  wrap.append(heading(`Your knights · ${knights.length}`, 'helm'));
+  wrap.append(h('p.mu-small.mu-dim', { style: { margin: '0 0 6px' } }, 'Take a knight’s place and fight on your behalf: you play him, with his sword, his skill and his wounds, while your lord carries on. Press U as the knight (or the button at the top of the screen) to return to your lord.'));
+  if (!knights.length) { wrap.append(empty('No knight serves you yet. Knight a man below, or win a knight’s fealty.')); return wrap; }
+  wrap.append(h('div.mu-list.mu-scroll', null, knights.slice(0, 24).map((k) => h('div.mu-li', null,
+    h('div.mu-grow', null, h('b', null, ctx.nameOf(k.id)), h('div.mu-tiny.mu-dim', null, `${k.why}${k.hurt ? ' · hurt' : ''} · at ${ctx.placeName(ctx.sim.state.persons.get(k.id)?.settlement ?? 0)}`)),
+    button('Fight as him', { size: 'small', variant: 'primary', icon: 'swords', disabled: k.hurt, tip: k.hurt ? 'He is hurt and cannot fight' : `Take ${ctx.nameOf(k.id)}’s place`,
+      onClick: () => {
+        const r = ctx.dispatch({ type: 'fightAs', personId: k.id });
+        if (r.ok) { ctx.say('quest', `You are ${ctx.nameOf(k.id)}, your lord’s knight. Press U to return to your lord.`); ctx.close(); } else env.done(r, '');
+      } })))));
+  return wrap;
+}
+
+/**
+ * The army campaign's call (`game.campaign`, `CampaignApi` of src/ui/types.ts, wired by the war builder; absent in a base without it,
+ * so it is declared loosely here and everything is guarded).
+ */
+export type CampaignCall = { plan(target: number, rideAs?: number): { ok: boolean; reason?: string } };
+export function campaignOf(env: Pick<RulerEnv, 'ctx'>): CampaignCall | undefined { return (env.ctx.game as unknown as { campaign?: CampaignCall }).campaign; }
+
+/** "Plan an attack": the lord raises his host against a hostile neighbour's seat and rides with it (the campaign mode of the war builder). */
+export function planAttackButton(env: RulerEnv, target: number, house: string): HTMLElement | null {
+  const c = campaignOf(env);
+  if (!c) return null;
+  return button('Plan an attack', { icon: 'swords', variant: 'danger', disabled: !env.may().realm,
+    tip: env.may().realm ? `Raise your host against ${house} and ride with it` : 'Only the holder, or a steward while the lord cannot act, raises the host',
+    onClick: () => env.ctx.confirm({
+      title: `Plan an attack on ${env.ctx.placeName(target)}?`, text: `Your banners are raised and an army musters to march on ${house}'s seat. You ride with it.`,
+      confirmLabel: 'Raise the host', cancelLabel: 'Not yet', danger: true,
+      onConfirm: () => { const r = c.plan(target); if (r.ok) { env.ctx.say('info', `Your host marches on ${env.ctx.placeName(target)}.`); env.ctx.close(); } else env.done(r, ''); },
+    }) });
+}
+
+/** Hostile Houses near, each with Plan an attack. */
+function attackCard(env: RulerEnv): HTMLElement {
+  const { ctx, realm } = env;
+  const wrap = h('div.mu-rul-attack');
+  if (!campaignOf(env)) return wrap;
+  const foes = realm.rivals(env.me()).filter((r) => (r.stance === 'hostile' || r.stance === 'war') && r.seat !== undefined);
+  wrap.append(heading(`Hostile neighbours · ${foes.length}`, 'swords'));
+  if (!foes.length) { wrap.append(line('No House near you stands against you.')); return wrap; }
+  wrap.append(h('div.mu-list', null, foes.map((r) => h('div.mu-li', null,
+    h('div.mu-grow', null, h('b', null, `House ${r.name}`), h('div.mu-tiny.mu-dim', null, `${r.stance === 'war' ? 'At war' : 'Hostile'} · seat ${ctx.placeName(r.seat as number)} · ${Math.round(r.distance / 100) / 10} km · strength ${Math.round(r.strength)}`)),
+    planAttackButton(env, r.seat as number, `House ${r.name}`)))));
+  return wrap;
+}
+
+/** "Dub a knight" for any man of the House, its oath or its lands who is fit for it, however he came to your service. */
+function dubCard(env: RulerEnv): HTMLElement {
+  const { ctx, realm } = env;
+  const me = env.me();
+  const may = env.may();
+  const wrap = h('div.mu-rul-dub');
+  const list = may.realm ? realm.dubCandidates?.(me, 24) ?? [] : [];
+  wrap.append(heading(`Men fit for the accolade · ${list.length}`, 'sparkle'));
+  if (!may.realm) { wrap.append(line('Only the holder, or a steward while the lord cannot act, knights a man.')); return wrap; }
+  if (!list.length) { wrap.append(empty('No man of your House, your oath or your lands is ready for the accolade.')); return wrap; }
+  wrap.append(h('div.mu-list.mu-scroll', null, list.map((c) => h('div.mu-li', null,
+    h('div.mu-grow', null, h('b', null, ctx.nameOf(c.person)), h('div.mu-tiny.mu-dim', null, `${c.career}, ${c.age} · ${c.why}${c.melee > 0 ? ` · melee ${c.melee}` : ''}`)),
+    button('Dub a knight', { size: 'small', icon: 'sparkle', tip: 'The accolade: a vigil, a feast and the gift of a horse and arms', onClick: () => ctx.confirm({
+      title: `Knight ${ctx.nameOf(c.person)}?`, text: 'He keeps a vigil in the church and is dubbed. His horse and armour come from his own stores, then yours, else are bought, and the vigil and the feast cost 5s. He becomes a knight of your House for life.',
+      confirmLabel: 'Dub him', cancelLabel: 'Not yet', onConfirm: () => env.done(realm.dub(me, c.person), `${ctx.nameOf(c.person)} is knighted.`),
+    }) })))));
   return wrap;
 }
 

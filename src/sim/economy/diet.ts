@@ -8,6 +8,20 @@ export const RATION: Readonly<Record<string, number>> = {
   bread: 0.7, vegetables: 0.25, eggs: 0.5, cheese: 0.8, meat: 0.9, fish: 0.7,
 };
 
+/**
+ * Rations per portion of a cooked dish (cooking: a hearth turns meat, salt meat, fish, grain and pulses into dishes that feed better
+ * than what went into them, and keep a day or two). In the order a table eats them, the richest first.
+ */
+export const MEAL_RATION: Readonly<Record<string, number>> = {
+  roast_fowl: 1.5, roast_meat: 1.1, stew: 1.0, salt_stew: 1.0, fish_dish: 0.9, pottage: 0.6, porridge: 0.45,
+};
+export const MEALS: readonly string[] = Object.keys(MEAL_RATION);
+
+/** Raw foods a hearth cooks as they are, 1:1, into a dish (the macro households' cooking; the player's recipes are in recipes.json). */
+export const COOKED_AS: Readonly<Record<string, string>> = { meat: 'roast_meat', fish: 'fish_dish' };
+/** Bundles of firewood a cook burns for one portion. */
+export const FIREWOOD_PER_PORTION = 0.04;
+
 /** Grains and legumes a household keeps in its stores, as staple. */
 export const STAPLE_GRAINS: readonly string[] = ['wheat', 'rye', 'barley', 'oats', 'peas', 'beans'];
 

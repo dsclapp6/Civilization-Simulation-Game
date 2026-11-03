@@ -94,3 +94,12 @@
 }
 
 /* the banner's "Rule this town" (hud/banner.ts) and the map's lands layers and people lists share lands.css */
+
+/* Fight as him: the ribbon shown while you play one of your knights in your lord's stead */
+.mu-hud > .mu-liege-bar {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 30;
+  display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-radius: 8px;
+  background: var(--paper, #f3ead6); color: var(--ink, #2a2118); border: 1px solid var(--gold, #b8902f);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); font-size: 13px; pointer-events: auto;
+}
+.mu-hud > .mu-liege-bar.mu-hide { display: none; }

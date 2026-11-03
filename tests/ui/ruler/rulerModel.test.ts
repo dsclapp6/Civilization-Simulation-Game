@@ -6,8 +6,8 @@ import type { NewsItem, RecruitOption, ResearchOption, ResearchProject, RivalVie
 import type { Deposit } from '../../../src/world/types';
 import {
   BATCH, BRANCHES, DAYS_PER_YEAR, NEWS_ICON, PAGES, RESERVE_DAYS, TOAST_THREAT, YIELD_GOODS, amountText, boxOf, cropOptions, cropName, dubbable, fieldRoleWords, fitBox,
-  groupResearch, growthWords, isPage, kindName, kmText, lackHints, newsFor, newsToastKey, newsToastWorthy, orderFormProblem, orderWords, polyPath, projectWords,
-  prosperityWord, recruitMax, recruitPreview, researchCostLines, roleMay, roleWords, sortRivals, splitBooks, stanceTone, startChoice, storeRows, threatWords, tradeProfile,
+  groupResearch, growthWords, isPage, kindName, kmText, knightsOf, lackHints, newsFor, newsToastKey, newsToastWorthy, orderFormProblem, orderWords, polyPath, projectWords,
+  prosperityWord, roadPath, recruitMax, recruitPreview, researchCostLines, roleMay, roleWords, sortRivals, splitBooks, stanceTone, startChoice, storeRows, threatWords, tradeProfile,
   troopCounts, worksShareWords, yearWords,
 } from '../../../src/ui/ruler/rulerModel';
 import { realmSim } from '../../sim/realm/helpers';
@@ -295,5 +295,48 @@ describe('against the real realm', () => {
     }
     const rivals = realm.rivals(ruler);
     for (const r of sortRivals(rivals)) { expect(threatWords(r.threat).word.length).toBeGreaterThan(3); expect(kmText(r.distance).length).toBeGreaterThan(1); }
+  });
+});
+
+describe('your knights', () => {
+  const person = (id: number, o: Record<string, unknown> = {}): never => ({ id, career: 'knight', death: null, flags: {}, health: { hp: 1 }, house: 1, ...o } as never);
+  const st = (people: unknown[], titles: Record<number, Array<{ id: number; liege: number }>> = {}) => ({
+    persons: { get: (id: number) => (people as Array<{ id: number }>).find((p) => p.id === id) as never, values: () => people as never },
+    titlesHeldBy: (id: number) => new Set(titles[id] ?? []) as never,
+  });
+
+  it('lists the knights of the House, his vassals and the men in his pay, the paid first, the hurt after', () => {
+    const people = [person(1, { career: 'lord' }), person(2), person(3, { house: 2 }), person(4, { house: 3 }), person(5, { house: 3, health: { hp: 0.3 } }), person(6, { house: 3, flags: { captive: true } }), person(7, { house: 3, career: 'squire' })];
+    const rows = knightsOf(st(people, { 1: [{ id: 10, liege: 99 }], 3: [{ id: 11, liege: 10 }] }) as never, 1, [4]);
+    expect(rows.map((r) => [r.id, r.why, r.hurt])).toEqual([[4, 'in your pay', false], [3, 'your vassal', false], [2, 'of your House', false]]);
+    const hurt = knightsOf(st(people) as never, 1, [5], (id) => id === 2);
+    expect(hurt.find((r) => r.id === 5)).toMatchObject({ why: 'in your pay', hurt: true });
+    expect(hurt.find((r) => r.id === 2)!.hurt).toBe(true);
+  });
+});
+
+describe('roads on the overview map', () => {
+  const box = { minX: 0, minZ: 0, maxX: 1000, maxZ: 1000 };
+  const fit = { x: (wx: number) => wx / 10, y: (wz: number) => wz / 10 };
+
+  it('draws the stretches inside the picture and runs off its edge instead of stopping short', () => {
+    const d = roadPath([{ x: -5000, z: 500 }, { x: -200, z: 500 }, { x: 100, z: 500 }, { x: 900, z: 500 }, { x: 1300, z: 500 }, { x: 9000, z: 500 }], box, fit);
+    expect(d.startsWith('M-20.0,50.0L10.0,50.0')).toBe(true);
+    expect(d).toContain('L130.0,50.0');
+    expect(d).not.toContain('900.0');
+    expect(d.match(/M/g)).toHaveLength(1);
+  });
+
+  it('leaves out a road that is not in the picture, and splits one that leaves and comes back', () => {
+    expect(roadPath([{ x: 5000, z: 5000 }, { x: 6000, z: 6000 }], box, fit)).toBe('');
+    const d = roadPath([{ x: 100, z: 100 }, { x: 5000, z: 100 }, { x: 9000, z: 100 }, { x: 5000, z: 900 }, { x: 100, z: 900 }], box, fit);
+    expect(d.match(/M/g)).toHaveLength(2);
+  });
+
+  it('drops points that crowd each other on the page', () => {
+    const pts = Array.from({ length: 200 }, (_, i) => ({ x: 100 + i * 0.5, z: 500 }));
+    const d = roadPath(pts, box, fit);
+    expect((d.match(/L/g) ?? []).length).toBeLessThan(10);
+    expect(d.endsWith('199.5,50.0') || d.endsWith('19.9,50.0') || d.endsWith('20.0,50.0')).toBe(true);
   });
 });

@@ -14,6 +14,7 @@ import { catalogue } from './catalogue';
 import { constructionProvider } from './actions';
 import { Construction } from './core';
 import { levelCost } from './data';
+import { cancelLine, lineSites, placeLine, planLine } from './line';
 import { PLAN_SHARDS, hourly, planNow } from './progress';
 import { noScopeReason, scopeInfo } from './scope';
 import {
@@ -143,6 +144,10 @@ export function installConstruction(sim: Simulation, deps: Wave3Deps): Construct
     setHired: (person, site, hired) => setHired(C, person, site, hired),
     quote: (person, work, building) => quoteWork(C, person, work, building),
     buildArea: (person) => buildArea(C, person),
+    planLine: (person, kind, from, to, opts) => planLine(C, person, kind, from, to, opts),
+    placeLine: (person, kind, from, to, opts) => { memoKey = ''; return placeLine(C, person, kind, from, to, opts); },
+    lineSites: (line) => lineSites(C, line),
+    cancelLine: (person, line) => { memoKey = ''; return cancelLine(C, person, line); },
     canManage: (person, site) => { const rec = C.sitesById.get(site); return !!rec && canManageSite(C, person, rec); },
   };
 

@@ -288,6 +288,27 @@ describe('knighting', () => {
     expect(realm.dub(lord.id, priest.id).ok).toBe(false);
   });
 
+  it('puts forward any man of the House, the oath or the lands who is fit for the accolade, not only those raised by recruit', () => {
+    const { sim, realm, lord, settlement } = scene();
+    const squire = aMan(sim, settlement, { age: 22, career: 'squire' });
+    sim.state.setHouse(squire, lord.house);
+    const boy = aMan(sim, settlement, { age: 15 });
+    sim.state.setHouse(boy, lord.house);
+    const stranger = aMan(sim, titlesOfKind(sim, 'manor').find((t) => t.holder !== lord.id)!.place, { age: 22, career: 'squire' });
+    const list = realm.dubCandidates!(lord.id);
+    const ids = list.map((c) => c.person);
+    expect(ids).toContain(squire.id);
+    expect(ids).not.toContain(boy.id);
+    expect(ids).not.toContain(stranger.id);
+    expect(ids).not.toContain(lord.id);
+    expect(list.find((c) => c.person === squire.id)).toMatchObject({ career: 'a squire', why: 'of your House' });
+    // a man he puts forward can be knighted by `dub`; nobody is put forward to a man who rules nothing
+    const farmer = [...sim.state.persons.values()].find((p) => !p.death && p.career === 'farmer' && p.settlement === settlement)!;
+    expect(realm.dubCandidates!(farmer.id)).toEqual([]);
+    expect(realm.dub(lord.id, squire.id).ok).toBe(true);
+    expect(realm.dubCandidates!(lord.id).map((c) => c.person)).not.toContain(squire.id);
+  });
+
   it('lets a ruler be knighted by his liege, if the liege thinks well of him', () => {
     const { sim, realm } = scene();
     // a count under the king, made a plain lord (not yet a knight) for the test

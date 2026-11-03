@@ -40,6 +40,8 @@ export interface GoodDef {
   spoilDays?: number;
   /** Hunger restored per unit eaten (0..1 of a full day's need). */
   food?: number;
+  /** A cooked dish (cooking at a hearth): it feeds better than the raw food it was made of, warms and cheers, and keeps a day or two. */
+  meal?: boolean;
   slot?: EquipSlot;
   /** How it looks in hand (tools and weapons). */
   held?: HeldItem;

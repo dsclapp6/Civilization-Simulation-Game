@@ -186,6 +186,15 @@ person **governs** (`mayCommand 'realm'`):
   whose opinion of him is not below −10. (The military module's own knighting for valour is private to it, so this repeats its few
   lines rather than calling it.)
 
+### Who can be knighted (`dubCandidates`)
+
+`RealmApi.dubCandidates?(person, max)` lists every man of the ruler's House, those sworn to it and those of the places held directly who
+could be given the accolade - a grown man (18 to 55), whole, not of the Church, not a knight yet, not a prisoner or outlaw, and with
+some standing in arms (a squire, sergeant, man-at-arms, archer, soldier or sell-sword, or skill in melee, or gentle rank) - not only the
+men raised through `recruit`. Best first; each with a `why` ("in your pay", "sworn to you", "of your House", "of Dromore"), his career in
+words, age and melee. `dub` itself is unchanged and decides whether the treasury can pay the vigil. The ruler's Military page shows the
+list as "Men fit for the accolade" with *Dub a knight*, beside "Your knights" (*Fight as him*: `docs/ui/LANDS.md` §2).
+
 ## The field plan and the works share (`plans.ts`)
 
 * **Field plan.** A field has two sowings in the three-field rotation: winter corn in the autumn of its fallow year and a spring crop

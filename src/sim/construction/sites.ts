@@ -9,7 +9,7 @@ import { evaluate, depositAt, nearestHeld, OUTPOST_REACH, type Standing } from '
 import type { Construction } from './core';
 import { footprintCorners } from './geometry';
 import {
-  CANCEL_REFUND, DEMOLISH_LABOUR, REPAIR, SALVAGE, costValue, goodsValue, levelCost, maxCrew, maxLevelOf, priceOf, rulesOf, totalCost,
+  CANCEL_REFUND, DEMOLISH_LABOUR, REPAIR, SALVAGE, costValue, goodsValue, levelCost, maxCrew, maxLevelOf, priceOf, rulesOf, stockPence, totalCost,
 } from './data';
 import type { OutpostRec, SiteRec, WorkKind } from './save';
 import { noScopeReason, rankFolk, scopeInfo, type Auth } from './scope';
@@ -114,8 +114,12 @@ function stockValue(C: Construction, payer: Household, settlement: number, goods
   return v;
 }
 
-function affordReason(C: Construction, payer: Household, kind: BuildingKind, cost: BuildCost, settlement: number): string | null {
-  const open = C.save.sites.filter((s) => s.closed === 0 && s.household === payer.id).length;
+function affordReason(C: Construction, payer: Household, kind: BuildingKind, cost: BuildCost, settlement: number, line = 0): string | null {
+  // the lengths of one laid line count as one work
+  const keys = new Set<number>();
+  for (const s of C.save.sites) if (s.closed === 0 && s.household === payer.id) keys.add(s.line ? -s.line : s.id);
+  if (line) keys.add(-line);
+  const open = keys.size;
   if (open >= MAX_OPEN_PER_PAYER) return 'Too many works are under way: finish some first';
   const value = costValue(kind, cost);
   const have = C.funds(payer) + stockValue(C, payer, settlement, cost.goods);
@@ -132,7 +136,7 @@ function newRec(C: Construction, o: {
     id: C.save.nextSite++, building: b.id, kind: b.kind, work: o.work, level: o.level, settlement: b.settlement, outpost: o.outpost ?? 0,
     household: o.payer.id, house: o.house, builder: o.builder, priority: o.priority ?? (C.save.nextSite - 1) * 10, placed: C.absDay,
     occupant: o.occupant, hired: o.hired ?? 'auto',
-    need: {}, have: {}, transit: {}, labour: Math.max(0.25, r2(o.cost.labour)), done: 0, pence: o.cost.pence, paid: 0, damage0: o.damage0 ?? 0,
+    need: {}, have: {}, transit: {}, labour: Math.max(0.25, r2(o.cost.labour)), done: 0, pence: o.cost.pence - (o.work === 'build' && o.level === 1 ? stockPence(b.kind) : 0), paid: 0, damage0: o.damage0 ?? 0,
     perDay: 0, crew: [], from: [0, 0, 0], planned: -1, status: 'waiting', note: 'Staked out: waiting for materials and hands',
     started: false, told: 0, idle: 0, shown: 0, closed: 0,
   };
@@ -166,7 +170,7 @@ export function placeSite(C: Construction, personId: PersonId, kind: BuildingKin
   if (!payer) return { ok: false, reason: 'You have no household to build for' };
   const cost = levelCost(kind, 1);
   const parent = st.mode === 'found' ? nearestHeld(C, si, x, z) : st.settlement;
-  const poor = affordReason(C, payer, kind, cost, parent);
+  const poor = affordReason(C, payer, kind, cost, parent, opts.line ?? 0);
   if (poor) return { ok: false, reason: poor };
   const house = st.auth ? st.auth.house : si.house;
 
@@ -196,8 +200,9 @@ export function placeSite(C: Construction, personId: PersonId, kind: BuildingKin
     building: b, work: 'build', level: 1, payer, house, builder: personId, cost, outpost: outpost?.id,
     occupant: opts.occupant ?? defaultOccupant(st.mode, kind), priority: opts.priority, hired: opts.hired,
   });
+  if (opts.line) rec.line = opts.line;
   emitSite(C, 'placed', rec);
-  tellPlayer(C, rec, 'info', `You stake out ${aOrAn(def.name)} at ${C.settlementName(sid)}.`);
+  if (!opts.line) tellPlayer(C, rec, 'info', `You stake out ${aOrAn(def.name)} at ${C.settlementName(sid)}.`);
   C.planNow?.(rec);
   return { ok: true, site: rec.id };
 }
@@ -477,9 +482,10 @@ export function viewOf(C: Construction, rec: SiteRec): SiteView {
     x: b?.x ?? 0, z: b?.z ?? 0, rot: b?.rot ?? 0, household: rec.household, house: rec.house, progress, missing, labourLeft, workers,
     status: rec.status, note: rec.note || undefined, eta: open ? eta : 0, priority: rec.priority,
     level: rec.level, builder: rec.builder, stage: stageOf(progress), hired: rec.from[2], materials: materialFraction(rec),
-    cost: { goods: rec.need, labour: rec.labour, pence: rec.pence },
+    cost: { goods: rec.need, labour: rec.labour, pence: rec.pence + (rec.work === 'build' && rec.level === 1 ? stockPence(rec.kind) : 0) },
   };
   if (rec.outpost) { const o = C.outpost(rec.outpost); if (o) v.outpost = o.name; }
+  if (rec.line) v.line = rec.line;
   return v;
 }
 

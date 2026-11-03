@@ -7,6 +7,7 @@ import { dateText } from '../../core/format';
 import { ruleOffer } from '../ruleTown';
 import { growthWords, kmText, newsFor, NEWS_ICON, sortRivals, STANCE_WORDS, stanceTone, threatWords } from '../rulerModel';
 import { line, type RulerEnv } from '../rulerUi';
+import { planAttackButton } from './military';
 
 interface Bag { selected: number }
 
@@ -50,6 +51,7 @@ export function buildRivals(env: RulerEnv): HTMLElement {
     h('div.mu-row.mu-gap-6.mu-wrap', null,
       button('Treat with them', { icon: 'hand', variant: 'primary', onClick: () => ctx.open({ panel: 'ext', name: 'politics', data: { tab: 'houses' } }) }),
       r.seat !== undefined ? button('Show their seat', { icon: 'pin', onClick: () => { const s = sim.world.settlements.find((x) => x.id === r.seat); if (s) { ctx.pins.set({ x: s.x, z: s.z, label: ctx.placeName(s.id) }); ctx.say('info', `${ctx.placeName(s.id)} is marked on your compass.`); } } }) : null,
+      (r.stance === 'hostile' || r.stance === 'war') && r.seat !== undefined ? planAttackButton(env, r.seat, `House ${r.name}`) : null,
       offer ? button(offer.label, { icon: 'crown', tip: offer.tip, onClick: () => { ctx.close(); ctx.open(offer.request); } }) : null),
     heading('What they have been doing', 'scroll'),
     theirs.length ? h('div.mu-col.mu-gap-6', null, theirs.map((n) => h('div.mu-rul-news', { class: n.threat >= 0.5 ? 'hot' : '' }, icon(NEWS_ICON[n.kind] ?? 'scroll', 15),

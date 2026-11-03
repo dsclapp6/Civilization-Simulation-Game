@@ -8,6 +8,7 @@ import type {
   AccountLine, CropPlanLine, NewsItem, NewsKind, RealmRole, RealmTroop, RecruitOption, ResearchOption, ResearchProject, RivalView, TradeOrder,
 } from '../../sim/realm/types';
 import { formatMoney } from '../../sim/money';
+import type { Person, PersonId } from '../../sim/state';
 import type { Deposit, ResourceKind } from '../../world/types';
 import type { IconName } from '../core/icons';
 
@@ -234,6 +235,32 @@ export function troopCounts(troops: readonly Pick<RealmTroop, 'kind' | 'wage'>[]
   return [...by.entries()].map(([kind, v]) => ({ kind, ...v })).sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind));
 }
 
+/** A knight who fights for a ruler: of his House, his vassal, or in his pay. */
+export interface KnightRow { id: PersonId; why: 'in your pay' | 'your vassal' | 'of your House'; hurt: boolean }
+
+/**
+ * The knights the ruler may take the place of (`fightAs`): men of the House, those holding a title under one of his, and those on
+ * his roll. `wounded` says whether a man carries wounds; a man under half his health is hurt as well. Vassals and the paid first.
+ */
+export function knightsOf(
+  st: { persons: { get(id: PersonId): Person | undefined; values(): Iterable<Person> }; titlesHeldBy(id: PersonId): ReadonlySet<{ id: number; liege: number }> },
+  me: PersonId, paid: readonly PersonId[], wounded: (id: PersonId) => boolean = () => false,
+): KnightRow[] {
+  const mine = new Set([...st.titlesHeldBy(me)].map((t) => t.id));
+  const pay = new Set(paid);
+  const house = st.persons.get(me)?.house ?? 0;
+  const out: KnightRow[] = [];
+  for (const p of st.persons.values()) {
+    if (p.death || p.career !== 'knight' || p.id === me || p.flags.captive) continue;
+    const vassal = [...st.titlesHeldBy(p.id)].some((t) => mine.has(t.liege));
+    const why = pay.has(p.id) ? 'in your pay' : vassal ? 'your vassal' : house && p.house === house ? 'of your House' : null;
+    if (!why) continue;
+    out.push({ id: p.id, why, hurt: p.health.hp < 0.5 || wounded(p.id) });
+  }
+  const rank = { 'in your pay': 0, 'your vassal': 1, 'of your House': 2 } as const;
+  return out.sort((a, b) => rank[a.why] - rank[b.why] || Number(a.hurt) - Number(b.hurt) || a.id - b.id);
+}
+
 /** May this man be knighted? Not already a knight, and the module's own checks do the rest. */
 export function dubbable(t: Pick<RealmTroop, 'kind'>): boolean {
   return t.kind !== 'knight' && t.kind !== 'mercenary';
@@ -428,6 +455,30 @@ export function fitBox(box: MapBox, w: number, h: number): { scale: number; x: (
   const scale = Math.min(w / bw, h / bh);
   const ox = (w - bw * scale) / 2, oy = (h - bh * scale) / 2;
   return { scale, x: (wx) => ox + (wx - box.minX) * scale, y: (wz) => oy + (wz - box.minZ) * scale };
+}
+
+/**
+ * The stretches of a road that lie inside the map's box (widened by `margin` of its size), as one path through a fit; points less than
+ * `minPx` apart on the page are dropped (a long road has thousands). Empty when none of it is in the picture.
+ */
+export function roadPath(points: readonly P2[], box: MapBox, fit: { x(wx: number): number; y(wz: number): number }, margin = 0.04, minPx = 2.5): string {
+  const mx = (box.maxX - box.minX) * margin, mz = (box.maxZ - box.minZ) * margin;
+  const inside = (p: P2): boolean => p.x >= box.minX - mx && p.x <= box.maxX + mx && p.z >= box.minZ - mz && p.z <= box.maxZ + mz;
+  let d = '';
+  let pen = false;
+  let lx = Infinity, ly = Infinity;
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    // a point outside still joins its inside neighbours, so a road runs off the edge instead of stopping short of it
+    const near = inside(p) || (i > 0 && inside(points[i - 1])) || (i + 1 < points.length && inside(points[i + 1]));
+    if (!near) { pen = false; continue; }
+    const x = fit.x(p.x), y = fit.y(p.z);
+    const last = i === points.length - 1 || !inside(points[i + 1]);
+    if (pen && !last && Math.abs(x - lx) < minPx && Math.abs(y - ly) < minPx) continue;
+    d += `${pen ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`;
+    pen = true; lx = x; ly = y;
+  }
+  return d;
 }
 
 /** An SVG path for a closed polygon, through a fit. */

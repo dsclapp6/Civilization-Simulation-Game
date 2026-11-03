@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const PORT = 5182;
+const PORT = Number(process.env.LANDS_PORT) || 5182;
 const args = process.argv.slice(2);
 const opt = (name, def) => { const a = args.find((x) => x.startsWith(`--${name}=`)); return a ? a.slice(name.length + 3) : def; };
 const seed = opt('seed', 'flow');
@@ -447,6 +447,73 @@ try {
   await frames(6);
   check('and B leaves it', (await ui()).panels.length === 0 && (await sim(() => window.__game.session.renderer.getCameraMode())) === 'follow');
 
+  // ---- a wall laid in a line: two clicks, priced and checked as one plan, staked as linked sites
+  console.log('-- a wall laid in a line');
+  // a clear run of ground on the king's lands (found with the module's own plan), and builder mode opened over it with the palisade in hand
+  const wall = await sim(() => {
+    const s = window.__game.session; const cons = s.services.construction; const sm = s.sim; const me = sm.state.run.playerId;
+    const st = sm.world.settlements.find((x) => x.id === sm.state.persons.get(me).settlement);
+    for (let r = 40; r <= 420; r += 20) {
+      for (let k = 0; k < 16; k++) {
+        const a = (k / 16) * Math.PI * 2;
+        const from = { x: st.x + Math.cos(a) * r, z: st.z + Math.sin(a) * r };
+        for (const ang of [0, Math.PI / 4, Math.PI / 2, (3 * Math.PI) / 4]) {
+          const to = { x: from.x + Math.cos(ang) * 60, z: from.z + Math.sin(ang) * 60 };
+          const plan = cons.planLine(me, 'palisade', from, to);
+          if (plan.ok && plan.parts.length >= 10) return { from, to, n: plan.parts.length };
+        }
+      }
+    }
+    return null;
+  });
+  check('there is a clear run of ground for a palisade on the king\'s lands', !!wall);
+  if (wall) {
+    await sim((w) => window.__ui.openPanel({ panel: 'ext', name: 'builder', data: { at: { x: (w.from.x + w.to.x) / 2, z: (w.from.z + w.to.z) / 2 }, kind: 'palisade' } }), wall);
+    await lift();
+    await page.evaluate(() => { window.__game.settle(); window.__game.draw(); });
+    await frames(10);
+    d = await dataset();
+    check('a palisade is in hand, with Towers to ask for along the run', d && d.selected === 'palisade' && (await page.locator('.mu-bld-tool').getByRole('button', { name: 'Towers' }).count()) === 1, JSON.stringify(d));
+    check('and the card says to click where the run starts, then where it ends', /where the run starts/.test(await text('.mu-bld-tool')), await text('.mu-bld-tool'));
+    const px = await sim((w) => { const c = window.__game.session.controls; const h = window.__game.session.sim.world; return { a: c.project(w.from.x, h.heightAt(w.from.x, w.from.z), w.from.z), b: c.project(w.to.x, h.heightAt(w.to.x, w.to.z), w.to.z) }; }, wall);
+    const onScreen = (p) => p && p.x > 360 && p.x < 1240 && p.y > 80 && p.y < 560;
+    check('both ends of the run are on the screen', onScreen(px.a) && onScreen(px.b), JSON.stringify(px));
+    if (onScreen(px.a) && onScreen(px.b)) {
+      await page.mouse.move(px.a.x, px.a.y);
+      await frames(3);
+      await page.mouse.click(px.a.x, px.a.y);
+      await frames(3);
+      check('the first click only sets where the run starts: nothing is staked yet', (await sim(() => window.__game.session.services.construction.sites().length)) === 0);
+      await page.mouse.move(px.b.x, px.b.y, { steps: 4 });
+      await frames(4);
+      const tip = await text('.mu-bld-cursor').catch(() => '');
+      check('the cursor prices the whole run: its length and its pieces', /Click to lay \d+ m: \d+ palisades?/.test(tip), tip);
+      const area = await sim(() => window.__calls.area.filter((n) => n !== null).slice(-1)[0]);
+      check('and the run is tinted on the ground, one footprint to a piece', area >= 8, String(area));
+      await page.mouse.click(px.b.x, px.b.y);
+      await frames(5);
+      const laid = await sim(() => window.__game.session.services.construction.sites().map((x) => ({ kind: x.kind, line: x.line })));
+      check('the second click stakes the run: one site to each length, all of one line', laid.length >= 8 && laid.every((x) => x.kind === 'palisade' && !!x.line && x.line === laid[0].line), JSON.stringify(laid.slice(0, 3)));
+      await page.keyboard.press('Escape');
+      await frames(2);
+      await page.waitForTimeout(130);
+      await page.getByRole('tab', { name: /Works/ }).click();
+      await frames(3);
+      check('the Works tab shows the run as a single row', (await page.locator('.mu-bld-qrow').count()) === 1 && /run of palisade/.test(await text('.mu-bld-qrow')), await text('.mu-bld-qrow').catch(() => ''));
+      await page.locator('.mu-bld-qrow').first().click();
+      await frames(3);
+      await page.getByRole('button', { name: 'Cancel the whole run' }).click();
+      await frames(3);
+      await page.getByRole('button', { name: 'Cancel the run' }).click();
+      await frames(4);
+      check('cancelling the run calls off every length at once', (await sim(() => window.__game.session.services.construction.sites().length)) === 0);
+    }
+    await esc();
+    s = await ui();
+    if (s.panels.includes('builder')) await esc();
+    await frames(4);
+  }
+
   // ---- an outpost in the wild: the baron names it
   console.log('-- an outpost');
   const dep = await sim(() => {
@@ -516,6 +583,7 @@ try {
   await page.getByRole('tab', { name: 'Overview', exact: true }).click();
   await frames(3);
   check('Overview: the map of your lands, the books, the stores, the works, research, forces, threats, news', (await page.locator('.mu-rul-map path').count()) >= 2 && (await page.locator('.mu-rul-sec').count()) >= 7);
+  check('Overview: the roads that cross the picture are drawn', (await page.locator('.mu-rul-map path.mu-rul-road').count()) >= 1, String(await page.locator('.mu-rul-map path').count()));
   // lands
   await page.getByRole('tab', { name: 'Lands & works', exact: true }).click();
   await frames(3);
@@ -560,6 +628,27 @@ try {
   const after = await sim(() => window.__game.session.services.realm.troops(window.__game.session.sim.state.run.playerId).length);
   check('Military: raising archers puts them on your pay', after === before + 3, `${before} -> ${after}`);
   check('and they are on the roll with Discharge and Dub a knight', (await page.getByRole('button', { name: 'Discharge' }).count()) >= 3 && (await page.getByRole('button', { name: 'Dub a knight' }).count()) >= 3);
+  // your knights: Fight as him, and back to the lord
+  check('Military: Your knights, and the men fit for the accolade, are listed', (await page.locator('.mu-rul-knights').count()) === 1 && (await page.locator('.mu-rul-dub').count()) === 1);
+  const fightAs = page.locator('.mu-rul-knights').getByRole('button', { name: 'Fight as him' });
+  if (await fightAs.count()) {
+    await fightAs.first().click();
+    await frames(5);
+    const as = await sim(() => { const s = window.__game.session.sim; return { me: s.state.run.playerId, liege: s.state.run.liege }; });
+    check('Fight as him: you take the knight\'s place and your lord is kept', as.liege === king.id && as.me !== king.id, JSON.stringify(as));
+    check('a ribbon says whose knight you are, with a way back', (await page.locator('.mu-liege-bar:not(.mu-hide)').count()) === 1 && /Return to your lord/.test(await text('.mu-liege-bar')), await text('.mu-liege-bar').catch(() => ''));
+    await page.keyboard.press('KeyU');
+    await frames(5);
+    const back = await sim(() => { const s = window.__game.session.sim; return { me: s.state.run.playerId, liege: s.state.run.liege }; });
+    check('U returns you to your lord', back.me === king.id && back.liege === 0, JSON.stringify(back));
+    check('and the ribbon goes', (await page.locator('.mu-liege-bar:not(.mu-hide)').count()) === 0);
+    await stillCamera();
+    await page.waitForTimeout(130);
+    await page.keyboard.press('KeyU');
+    await frames(6);
+    await page.getByRole('tab', { name: 'Military', exact: true }).click();
+    await frames(3);
+  } else console.log('note  no knight serves the king in this seed: Fight as him not exercised');
   // trade
   await page.getByRole('tab', { name: 'Trade', exact: true }).click();
   await frames(3);

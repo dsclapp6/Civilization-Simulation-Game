@@ -10,7 +10,7 @@ import { closeBooks, yearOf } from './books';
 import { HOURS } from './config';
 import { installNews, newsDaily, newsList, newsYearly, outpostsDaily, rivalsOf } from './news';
 import { cropPlan, cropPlanView, setCropPlan, setWorksShare, worksShare } from './plans';
-import { discharge, dub, recruit, recruitOptions, troopsDaily, troopsOf } from './recruit';
+import { discharge, dub, dubCandidates, recruit, recruitOptions, troopsDaily, troopsOf } from './recruit';
 import { projectsOf, researchDaily, researchOptions, startResearch, stopResearch } from './research';
 import { canRule, rulerOf, rulesOf, scopeOf, viewOf } from './rule';
 import { Rlm } from './store';
@@ -96,6 +96,7 @@ export function installRealm(sim: Simulation, deps: Wave3Deps, opts: RealmOption
     recruitOptions: (person, settlement) => recruitOptions(R, person, settlement),
     recruit: (person, settlement, kind, count) => recruit(R, person, settlement, kind, count),
     dub: (person, candidate) => dub(R, person, candidate),
+    dubCandidates: (person, max) => dubCandidates(R, person, max),
     troops: (person, settlement) => troopsOf(R, person, settlement),
     discharge: (person, man) => discharge(R, person, man),
 

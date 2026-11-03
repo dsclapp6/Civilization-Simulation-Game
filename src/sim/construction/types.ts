@@ -80,6 +80,32 @@ export interface PlaceOptions {
   occupant?: 'builder' | 'vacant';
   /** Paid labourers to hire for the site (a number, or 'auto' for as many as the job and the purse allow). */
   hired?: number | 'auto';
+  /** Staked as one length of a laid line (`placeLine`): the line's id; open lengths count once towards the payer's open works. */
+  line?: number;
+}
+
+/** What a line of wall (or palisade, with towers and a gate) would be, before anything is staked. */
+export interface LinePart { kind: BuildingKind; x: number; z: number; rot: number; ok: boolean; reason?: string; footprint: P2[] }
+export interface LineOptions {
+  /** A tower at each end and one about every 36 m (as many as the place may keep). */
+  towers?: boolean;
+  /** A gatehouse at the middle of the run (a wall only; one a place may keep). */
+  gate?: boolean;
+}
+export interface LinePlan {
+  ok: boolean;
+  /** Why the run cannot be laid (the first part that fails, or the purse). */
+  reason?: string;
+  parts: LinePart[];
+  /** Parts that fail their check. */
+  bad: number;
+  /** Where the run really ends: whole lengths from the start, at most a length short of the point clicked. */
+  end: P2;
+  length: number;
+  /** The whole run priced as one plan. */
+  cost: BuildCost;
+  /** Count by kind ("wall": 12, "tower": 3). */
+  byKind: Record<string, number>;
 }
 
 export interface PlacementCheck {
@@ -143,6 +169,8 @@ export interface SiteView {
   cost?: BuildCost;
   /** Additive: 0..1 share of the materials that have come in. */
   materials?: number;
+  /** Additive: the line of wall this length belongs to (laid with `placeLine`), if any. */
+  line?: number;
 }
 
 export interface OutpostView {
@@ -196,4 +224,13 @@ export interface ConstructionApi {
    * household's own plots. Cached: the same array comes back until the territory, the sites, the day or their holdings change.
    */
   buildArea?(person: PersonId): ReadonlyArray<readonly P2[]>;
+  // ---- additive: walls laid in a line ----
+  /** A run of wall or palisade (with towers and a gate if asked) from one point to another, priced and checked as one plan. No side effects. */
+  planLine?(person: PersonId, kind: BuildingKind, from: P2, to: P2, opts?: LineOptions): LinePlan;
+  /** Stakes the planned run out as linked sites, all or none. `sites` are the ids in order along the run, `line` the shared id. */
+  placeLine?(person: PersonId, kind: BuildingKind, from: P2, to: P2, opts?: LineOptions): Result & { line?: number; sites?: number[]; plan?: LinePlan };
+  /** The open sites of a laid line, in order. */
+  lineSites?(line: number): readonly SiteView[];
+  /** Calls off every open length of a line. */
+  cancelLine?(person: PersonId, line: number): Result & { cancelled?: number };
 }

@@ -2,13 +2,13 @@
 // economy's `procure`, which carts them in), and the day's labour is set — household members on the 'build' task, paid labourers,
 // the manor's week-work share — then each working hour that labour is put in, up to what the materials in hand allow. The
 // player's own bouts (actions.ts) add to the same site. A finished site makes the building work (or improves, mends, removes it).
-import { BUILDINGS } from '../../content/types';
+import { BUILDINGS, type BuildingKind } from '../../content/types';
 import { hash01 } from '../../core/math';
 import { isHolyDay } from '../calendar';
 import type { HourInfo } from '../clock';
 import { ageYears, type BuildingState, type Household, type Person, type PersonId } from '../state';
 import type { Construction } from './core';
-import { HORIZON_DAYS, WORK_END, WORK_HOURS, WORK_START, levelCost, maxCrew, priceOf, rulesOf, wageFor } from './data';
+import { HORIZON_DAYS, WORK_END, WORK_HOURS, WORK_START, levelCost, maxCrew, priceOf, rulesOf, stockOf, wageFor } from './data';
 import { lordTitleAt } from './scope';
 import type { SiteRec } from './save';
 import { closeSite, emitSite, materialFraction, progressOf, removeBuilding, salvageOf, tellPlayer } from './sites';
@@ -513,6 +513,32 @@ export function moveIn(C: Construction, hh: Household, b: BuildingState): void {
   else C.state.setHome(hh, b.id);
 }
 
+const HEADS: Readonly<Record<string, [string, string]>> = {
+  horse: ['horse', 'horses'], cow: ['cow', 'cows'], ox: ['ox', 'oxen'], sheep: ['sheep', 'sheep'], pig: ['pig', 'pigs'], chicken: ['hen', 'hens'],
+};
+
+/** A stable, byre, fold, sty or henhouse comes stocked: its beasts join the payer's stores and are told to the player. */
+function deliverStock(C: Construction, payer: Household, kind: BuildingKind): void {
+  const words: string[] = [];
+  let short = false;
+  for (const [key, n] of Object.entries(stockOf(kind))) {
+    // bought at the going price out of the payer's purse: as many as can be paid for
+    const each = priceOf(key.split('#')[0]);
+    const can = each > 0 ? Math.min(n, Math.floor(C.funds(payer) / each)) : n;
+    if (can < n) short = true;
+    if (can <= 0) continue;
+    C.spend(payer, can * each);
+    C.addStock(payer, key, can);
+    const h = HEADS[key.split('#')[0]];
+    words.push(`${can} ${h ? (can === 1 ? h[0] : h[1]) : key}`);
+  }
+  const head = C.headOf(payer);
+  if (!head || head.id !== C.state.run.playerId) return;
+  const named = BUILDINGS[kind].name.toLowerCase();
+  if (words.length) C.sim.events.emit('notify', { kind: short ? 'info' : 'gain', text: `${words.join(' and ')} come with the ${named} and join your stores${short ? ' (the purse would not buy the rest)' : ''}.`, person: head.id });
+  else C.sim.events.emit('notify', { kind: 'warn', text: `The ${named} is finished, but the purse could not buy the beasts that go with it.`, person: head.id });
+}
+
 function finish(C: Construction, rec: SiteRec): void {
   const b = C.state.buildings.get(rec.building);
   const payer = C.household(rec.household);
@@ -533,6 +559,8 @@ function finish(C: Construction, rec: SiteRec): void {
         }
       }
       C.state.touchBuilding(b);
+      // the beasts that came with it are led into the payer's yard
+      if (payer) deliverStock(C, payer, rec.kind);
       break;
     }
     case 'upgrade':

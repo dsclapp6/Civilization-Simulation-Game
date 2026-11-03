@@ -5,7 +5,7 @@ import type { PlacementCheck, SiteView, BuildOption, BuildCost } from '../../../
 import {
   CATEGORY_ORDER, ROTATE_STEP, categoryCounts, cleanOutpostName, conditionWords, costLines, costSummary, cursorTip, defaultOutpostName, depositWords,
   etaWords, filterCatalogue, ghostFrom, groupCatalogue, manageOptions, materialLines, nearestOf, noBuildCard, overviewPlan, ownerWords, priorityFor,
-  queueRows, rankWord, requirementLines, rotate, shortfall, siteCard, siteTitle, whereOptions, workerDays,
+  lineAreas, lineGhostPart, lineTip, queueRows, rankWord, requirementLines, rotate, shortfall, siteCard, siteTitle, whereOptions, workerDays,
 } from '../../../src/ui/builder/builderModel';
 
 const describe1 = (g: string, q: number): string => `${q} ${g}`;
@@ -289,5 +289,44 @@ describe('where the camera looks and what places the catalogue can be asked abou
     expect(whereOptions({ settlements: [9, 3], outposts: false, role: 'lord' }, 5, name).map((o) => o.id)).toEqual([9, 3]);
     expect(whereOptions({ settlements: [], outposts: false, role: 'head' }, 3, name)).toEqual([{ id: 3, label: 'Dromore', hint: 'your plot' }]);
     expect(whereOptions({ settlements: [], outposts: false, role: 'none' }, 3, name)).toEqual([]);
+  });
+});
+
+describe('a laid run of wall', () => {
+  const plan = {
+    ok: true, bad: 0, end: { x: 60, z: 0 }, length: 59.8, cost: { goods: { stone: 800 }, labour: 400, pence: 120 }, byKind: { wall: 8, tower: 2, gatehouse: 1 },
+    parts: [
+      { kind: 'tower', x: 3, z: 0, rot: 0, ok: true, footprint: [{ x: 0, z: -3 }, { x: 6, z: -3 }, { x: 6, z: 3 }, { x: 0, z: 3 }] },
+      { kind: 'wall', x: 9, z: 0, rot: 0, ok: true, footprint: [{ x: 6, z: -1 }, { x: 12, z: -1 }, { x: 12, z: 1 }, { x: 6, z: 1 }] },
+    ],
+  } as unknown as Parameters<typeof lineTip>[0];
+
+  it('says its length, its pieces and its price by the cursor, or why it cannot be laid', () => {
+    const tip = lineTip(plan, '£3 · 800 stone');
+    expect(tip.tone).toBe('ok');
+    expect(tip.text).toMatch(/60 m: 8 curtain walls, 2 wall towers, 1 gatehouse/);
+    expect(tip.sub).toBe('£3 · 800 stone');
+    expect(lineTip({ ...plan, ok: false, reason: 'On the road' }, '')).toEqual({ tone: 'bad', text: 'On the road' });
+  });
+
+  it('tints every piece and shows the first piece that fails, else the far end', () => {
+    expect(lineAreas(plan)).toHaveLength(2);
+    expect(lineGhostPart(plan)!.kind).toBe('wall');
+    const bad = { ...plan, ok: false, parts: [plan.parts[0], { ...plan.parts[1], ok: false }, { ...plan.parts[0], ok: true }] };
+    expect(lineGhostPart(bad)!.ok).toBe(false);
+    expect(lineGhostPart({ ...plan, parts: [] })).toBeNull();
+  });
+
+  it('shows a laid run as one row of the queue', () => {
+    const site = (id: number, progress: number, line?: number): SiteView => ({
+      id, building: id, kind: 'wall', work: 'build', settlement: 1, x: id, z: 0, rot: 0, household: 1, house: 1, progress, missing: {}, labourLeft: 1, workers: 0,
+      status: 'working', eta: 100, priority: id, line,
+    });
+    const rows = queueRows([site(1, 0.2, 7), site(2, 0.4, 7), site(3, 0.6, 7), site(4, 0.5)], () => true, 0, () => 'Dromore');
+    expect(rows).toHaveLength(2);
+    const run = rows.find((r) => r.pieces)!;
+    expect(run.pieces).toBe(3);
+    expect(run.progress).toBeCloseTo(0.4, 6);
+    expect(run.title).toMatch(/run of curtain wall \(3 pieces\)/);
   });
 });

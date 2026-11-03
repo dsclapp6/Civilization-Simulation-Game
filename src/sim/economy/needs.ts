@@ -10,7 +10,7 @@ import { killPerson } from '../succession';
 import type { Person } from '../state';
 import type { Econ } from './core';
 import { GOODS, qualityOf } from './data';
-import { RATION } from './diet';
+import { MEALS, RATION } from './diet';
 import { bagEntries, bagGet, bagTake } from './items';
 import { parseItemKey, type ItemKey, type Result } from './types';
 
@@ -71,7 +71,11 @@ export function consume(E: Econ, p: Person, key: ItemKey, qty = 1): Result {
   if (bagGet(p.inventory, key) + 1e-6 < qty) return { ok: false, reason: `You do not have ${qty} ${g.unit}` };
   bagTake(p.inventory, key, qty);
   p.needs.hunger = r2(clamp01(p.needs.hunger + g.food * qty));
-  if (g.category === 'drink') adjustMood(E, p, 0.03 * qty);
+  if (g.meal) {
+    // a hot dish cheers and warms
+    adjustMood(E, p, 0.05 * qty);
+    p.needs.warmth = r2(clamp01(p.needs.warmth + 0.04 * qty));
+  } else if (g.category === 'drink') adjustMood(E, p, 0.03 * qty);
   else if (g.id === 'cheese' || g.id === 'meat' || g.id === 'honey') adjustMood(E, p, 0.02 * qty);
   E.state.touch(p);
   return { ok: true };
@@ -168,7 +172,7 @@ export function eatAtHome(E: Econ, p: Person): { ok: boolean; message: string } 
   if (!hh) return { ok: false, message: 'You have no household.' };
   const foods = bagEntries(hh.stores).filter(([k]) => GOODS[parseItemKey(k).good]?.food && GOODS[parseItemKey(k).good].category !== 'livestock');
   // bread or flat cakes first, then cheese, vegetables and a little ale
-  const order = ['bread', 'cheese', 'eggs', 'vegetables', 'meat', 'fish', 'salt_meat', 'ale', 'honey'];
+  const order = [...MEALS, 'bread', 'cheese', 'eggs', 'vegetables', 'meat', 'fish', 'salt_meat', 'ale', 'honey'];
   foods.sort((a, b) => order.indexOf(parseItemKey(a[0]).good) - order.indexOf(parseItemKey(b[0]).good));
   let ate = 0;
   for (const [k, have] of foods) {
@@ -179,6 +183,7 @@ export function eatAtHome(E: Econ, p: Person): { ok: boolean; message: string } 
     const qty = Math.min(have, Math.max(unit, Math.ceil(need / unit) * unit), g.category === 'drink' ? 0.5 : 3);
     bagTake(hh.stores, k, qty);
     p.needs.hunger = Math.min(1, Math.round((p.needs.hunger + (g.food ?? 0.2) * qty) * 1000) / 1000);
+    if (g.meal) { adjustMood(E, p, 0.05 * qty); p.needs.warmth = r2(clamp01(p.needs.warmth + 0.04 * qty)); }
     ate++;
     if (ate >= 3) break;
   }
@@ -212,7 +217,7 @@ function autoEat(E: Econ, p: Person): void {
     return;
   }
   // bread and cheese before ale and vegetables
-  const order = ['bread', 'cheese', 'meat', 'fish', 'salt_meat', 'eggs', 'vegetables', 'honey', 'ale'];
+  const order = [...MEALS, 'bread', 'cheese', 'meat', 'fish', 'salt_meat', 'eggs', 'vegetables', 'honey', 'ale'];
   foods.sort((a, b) => order.indexOf(parseItemKey(a).good) - order.indexOf(parseItemKey(b).good));
   let ate = 0;
   for (const k of foods) {

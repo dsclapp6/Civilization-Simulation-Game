@@ -9,7 +9,7 @@ import {
 } from './work';
 import { alehouse, guildhall, marketCross, marketHall, marketStall, tavern, warehouse } from './social';
 import { abbeyChurch, cathedral, chapel, church, cloister, infirmary } from './church';
-import { gallows, school, stocks, well } from './civic';
+import { gallows, library, school, stocks, well } from './civic';
 import { clayPit, gaol, lumberCamp, saltPan, slaughterhouse } from './civ';
 import { archeryButts, barracks, curtainWall, gatehouse, greatHall, keepStone, motte, palisade, tent, trainingYard, wallTower } from './defence';
 
@@ -28,6 +28,6 @@ export const RECIPES: Record<BuildingKind, Recipe> = {
   great_hall: greatHall, barracks, archery_butts: archeryButts, training_yard: trainingYard, tent,
   // civilization pass (docs/CIV.md §5, §7, §8): the new works and the lock-up
   slaughterhouse, clay_pit: clayPit, salt_pan: saltPan, lumber_camp: lumberCamp, gaol,
-  // the library (from the collaborator's branch): a stone hall of books, the guildhall's frame until it has a model of its own
-  library: (c, d) => guildhall(c, d),
+  // the library: a stone hall of books with a reading room built on
+  library,
 };

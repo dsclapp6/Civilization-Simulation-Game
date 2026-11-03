@@ -5,7 +5,7 @@ import { settlementName } from '../../sim/api';
 import type { PanelCtx } from '../app/panel';
 import { svgEl } from '../core/dom';
 import { DEPOSIT_COLOR, DEPOSIT_NAME, cssColor, richnessWords, type DepositKind } from '../core/mapModel';
-import { boxOf, fitBox, polyPath } from './rulerModel';
+import { boxOf, fitBox, polyPath, roadPath } from './rulerModel';
 
 export interface LandsMapOptions {
   width: number;
@@ -60,6 +60,18 @@ export function landsMap(ctx: PanelCtx, o: LandsMapOptions): SVGElement {
   for (const poly of vassalPolys) svg.appendChild(svgEl('path', { d: polyPath(poly, fit), fill: 'rgba(29, 65, 143, 0.14)', stroke: 'rgba(29, 65, 143, 0.65)', 'stroke-width': 1.2, 'stroke-dasharray': '4 3' }));
   for (const poly of directPolys) svg.appendChild(svgEl('path', { d: polyPath(poly, fit), fill: 'rgba(214, 170, 70, 0.3)', stroke: '#946a0b', 'stroke-width': 1.8 }));
   for (const c of claims) svg.appendChild(svgEl('path', { d: polyPath(c.poly, fit), fill: 'rgba(210, 110, 50, 0.22)', stroke: '#b4561c', 'stroke-width': 1.3, 'stroke-dasharray': '2 2' }));
+  // the roads and tracks that cross the picture, over the borders and under the places
+  const ROAD_STYLE: Record<string, { w: number; c: string; dash?: string }> = {
+    path: { w: 0.8, c: 'rgba(120, 90, 50, 0.55)', dash: '1.5 2' }, track: { w: 1, c: 'rgba(120, 90, 50, 0.7)', dash: '4 2' },
+    road: { w: 1.5, c: 'rgba(110, 78, 40, 0.85)' }, highway: { w: 2.2, c: 'rgba(96, 64, 30, 0.95)' },
+  };
+  for (const kind of ['path', 'track', 'road', 'highway']) {
+    let d = '';
+    for (const r of world.roads ?? []) if (r.kind === kind) d += roadPath(r.points, box, fit);
+    if (!d) continue;
+    const st = ROAD_STYLE[kind];
+    svg.appendChild(svgEl('path', { d, class: 'mu-rul-road', 'data-road': kind, fill: 'none', stroke: st.c, 'stroke-width': st.w, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', ...(st.dash ? { 'stroke-dasharray': st.dash } : {}) }));
+  }
   // deposits
   for (const d of world.deposits ?? []) {
     if (!inBox(d.x, d.z)) continue;

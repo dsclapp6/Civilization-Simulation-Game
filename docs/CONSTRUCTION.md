@@ -70,6 +70,27 @@ would belong to (−1 = a new outpost), the cost, and for the wild the outpost's
 door, working buildings out at the edge of the place, resource buildings at the deposits nearest to the point) with the door turned
 toward the nearest street, and returns the first valid check, or null.
 
+## 3b. Walls laid in a line, and buildings bought stocked (`line.ts`, `data.ts`)
+
+**Lines** (`planLine`, `placeLine`, `lineSites`, `cancelLine` of the `ConstructionApi`). A run of palisade or curtain wall from one point
+to another is laid out as pieces set end to end along the ground, each turned along the run: a length is the kind's `w` (+ 2 cm so
+rounding never overlaps two), a tower (6 m) stands at each end and about every 36 m when asked (`towers`, as many as the place may still
+keep: the tower's `max`), and a gatehouse (10 m, its door across the run) at the middle (`gate`, a wall only; the place's one). The run
+ends in whole pieces, at most a piece short of the point clicked (`LinePlan.end`); it is at most 400 m. `planLine` has no side effects:
+it checks every piece (`evaluate`, the same checks as a single site), prices the run as one plan (`cost`, `byKind`) and returns the
+footprints for the tint. `placeLine` is all or none: the plan must pass whole, the sites are staked with one shared `line` id
+(`SiteRec.line`, `SiteView.line`, `PlaceOptions.line`) and one notice, and a piece that fails after the plan passed calls the rest off
+again. The lengths of one line count as **one** work against the payer's sixteen open works (`affordReason`), and `cancelLine` calls
+them all off. `check.ts` lets the pieces of a line - lengths, towers, a gatehouse (flanked by towers) - touch (0 m, like length to length; other buildings keep
+their 0.8 m).
+
+**Stocked** (`construction.json` `stock`, `data.ts` `stockOf` / `stockPence`). A stable comes with three horses (`horse#1`, common), a
+byre with four cows and two oxen, a fold with twenty sheep, a sty with five pigs, a henhouse with twelve hens. The beasts are a part of
+the **price** the player and the planners see (`levelCost(kind, 1).pence` includes them at the reference prices; upgrades, mending and
+`totalCost` do not), but not of the cash fees paid as the work goes: when the building is finished the payer buys them out of the purse
+at the going price, as many as it can pay for (a poor payer's stable comes with fewer horses, and is told so), and they join the
+household's stores (`hh.stores`, which the zone draws as the herd). Tests: `tests/sim/construction/line.test.ts`, `stock.test.ts`.
+
 ## 4. A site's life (`sites.ts`, `progress.ts`)
 
 `place` checks, then creates a **real `BuildingState`** — `plot −1`, an id from `state.nextBuildingId` (so beyond every plot id),

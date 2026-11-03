@@ -35,6 +35,13 @@
     "boil_salt":     { "name": "Boil salt", "building": ["salt_pan"], "skill": "brewing", "level": 0, "stage": -1, "inputs": { "firewood": 5 }, "outputs": { "salt": 10 }, "work": 3, "xp": 6, "anim": "work_stir", "held": "ladle", "deposit": "salt", "plan": "saltern" },
     "make_vellum":   { "name": "Prepare vellum", "building": ["tannery"], "skill": "tailoring", "level": 3, "stage": -1, "inputs": { "hide": 1 }, "outputs": { "vellum": 10 }, "work": 4, "xp": 9, "anim": "work_lift", "held": "none", "plan": "tannery" },
     "salt_meat":     { "name": "Salt meat", "building": ["slaughterhouse", "home", "tavern"], "skill": "brewing", "level": 0, "stage": -1, "inputs": { "meat": 12, "salt": 2 }, "outputs": { "salt_meat": 11 }, "work": 2, "xp": 5, "anim": "work_knead", "held": "none", "plan": "salting" },
+    "cook_roast": { "name": "Roast a joint", "building": ["home", "tavern", "alehouse", "great_hall", "keep_stone"], "skill": "brewing", "level": 0, "stage": -1, "inputs": { "meat": 4, "firewood": 0.5, "salt": 0.1 }, "outputs": { "roast_meat": 4 }, "work": 2.5, "xp": 6, "anim": "work_stir", "held": "none", "plan": "roasting" },
+    "cook_fowl": { "name": "Roast a fowl", "building": ["home", "tavern", "alehouse", "great_hall", "keep_stone"], "skill": "brewing", "level": 1, "stage": -1, "inputs": { "meat": 1.4, "firewood": 0.3, "salt": 0.05 }, "outputs": { "roast_fowl": 1 }, "work": 1.5, "xp": 7, "anim": "work_stir", "held": "none", "plan": "roasting" },
+    "cook_stew": { "name": "Stew meat with roots", "building": ["home", "tavern", "alehouse", "great_hall", "keep_stone"], "skill": "brewing", "level": 0, "stage": -1, "inputs": { "meat": 2, "vegetables": 3, "peas": 0.2, "firewood": 0.5 }, "outputs": { "stew": 6 }, "work": 3, "xp": 7, "anim": "work_stir", "held": "ladle", "plan": "stewing" },
+    "cook_salt_stew": { "name": "Boil salt meat with peas", "building": ["home", "tavern", "alehouse", "great_hall", "keep_stone"], "skill": "brewing", "level": 0, "stage": -1, "inputs": { "salt_meat": 3, "peas": 0.4, "firewood": 0.5 }, "outputs": { "salt_stew": 5 }, "work": 3, "xp": 6, "anim": "work_stir", "held": "ladle", "plan": "boiling" },
+    "cook_fish": { "name": "Grill fish", "building": ["home", "tavern", "alehouse", "great_hall", "keep_stone"], "skill": "brewing", "level": 0, "stage": -1, "inputs": { "fish": 4, "firewood": 0.4, "salt": 0.05 }, "outputs": { "fish_dish": 4 }, "work": 2, "xp": 6, "anim": "work_stir", "held": "none", "plan": "grilling" },
+    "cook_pottage": { "name": "Boil a pottage", "building": ["home", "tavern", "alehouse", "great_hall", "keep_stone"], "skill": "brewing", "level": 0, "stage": -1, "inputs": { "peas": 0.3, "vegetables": 2, "oats": 0.2, "firewood": 0.4 }, "outputs": { "pottage": 6 }, "work": 2.5, "xp": 5, "anim": "work_stir", "held": "ladle", "plan": "potting" },
+    "cook_porridge": { "name": "Boil porridge", "building": ["home", "tavern", "alehouse", "great_hall", "keep_stone"], "skill": "brewing", "level": 0, "stage": -1, "inputs": { "oats": 0.4, "firewood": 0.3 }, "outputs": { "porridge": 4 }, "work": 1.5, "xp": 4, "anim": "work_stir", "held": "ladle", "plan": "potting" },
 
     "forge_nails":    { "name": "Forge nails", "building": ["smithy"], "skill": "smithing", "level": 1, "stage": 1, "tool": "hammer", "inputs": { "iron": 1, "charcoal": 0.2 }, "outputs": { "nails": 10 }, "work": 2, "xp": 6, "anim": "work_hammer", "held": "hammer" },
     "forge_sickle":   { "name": "Forge sickles", "building": ["smithy"], "skill": "smithing", "level": 1, "stage": 1, "tool": "hammer", "inputs": { "iron": 1, "charcoal": 0.3 }, "outputs": { "sickle": 3 }, "work": 3, "quality": true, "xp": 8, "anim": "work_hammer", "held": "hammer" },
@@ -147,6 +154,36 @@
       { "share": 0.25, "label": "Let in the brine", "anim": "work_lift", "held": "bucket" },
       { "share": 0.5, "label": "Boil it down", "anim": "work_stir", "held": "ladle", "sfx": "fire" },
       { "share": 0.25, "label": "Rake the salt", "anim": "work_lift", "held": "staff", "sfx": "scrape" }
+    ],
+    "roasting": [
+      { "share": 0.25, "label": "Trim, salt and skewer the meat", "anim": "work_knead", "held": "dagger", "sfx": "cut" },
+      { "share": 0.2, "label": "Build up the fire", "anim": "work_lift", "held": "none", "sfx": "fire" },
+      { "share": 0.35, "label": "Turn the spit over the embers", "anim": "work_stir", "held": "none", "sfx": "fire" },
+      { "share": 0.2, "label": "Carve and serve", "anim": "work_saw", "held": "dagger", "sfx": "cut" }
+    ],
+    "stewing": [
+      { "share": 0.25, "label": "Scrub and chop the roots", "anim": "work_saw", "held": "dagger", "sfx": "cut" },
+      { "share": 0.15, "label": "Fill the pot and hang it", "anim": "work_lift", "held": "bucket" },
+      { "share": 0.4, "label": "Simmer and stir", "anim": "work_stir", "held": "ladle", "sfx": "stir" },
+      { "share": 0.2, "label": "Ladle it into bowls", "anim": "work_stir", "held": "ladle" }
+    ],
+    "boiling": [
+      { "share": 0.25, "label": "Soak the salt out of the meat", "anim": "work_lift", "held": "bucket" },
+      { "share": 0.2, "label": "Rinse and pick over the peas", "anim": "work_lift", "held": "basket" },
+      { "share": 0.4, "label": "Boil it slowly, skimming the pot", "anim": "work_stir", "held": "ladle", "sfx": "stir" },
+      { "share": 0.15, "label": "Carve and serve", "anim": "work_saw", "held": "dagger", "sfx": "cut" }
+    ],
+    "grilling": [
+      { "share": 0.35, "label": "Gut and scale the fish", "anim": "work_saw", "held": "dagger", "sfx": "cut" },
+      { "share": 0.2, "label": "Rake out the embers", "anim": "work_lift", "held": "none", "sfx": "fire" },
+      { "share": 0.3, "label": "Grill over the coals", "anim": "work_stir", "held": "none", "sfx": "fire" },
+      { "share": 0.15, "label": "Serve it hot", "anim": "work_lift", "held": "none" }
+    ],
+    "potting": [
+      { "share": 0.25, "label": "Measure the grain and pulses", "anim": "work_lift", "held": "basket" },
+      { "share": 0.2, "label": "Chop the vegetables", "anim": "work_saw", "held": "dagger", "sfx": "cut" },
+      { "share": 0.4, "label": "Stir the pot", "anim": "work_stir", "held": "ladle", "sfx": "stir" },
+      { "share": 0.15, "label": "Season and serve", "anim": "work_stir", "held": "ladle" }
     ],
     "salting": [
       { "share": 0.4, "label": "Rub in the salt", "anim": "work_knead", "held": "none", "sfx": "knead" },
