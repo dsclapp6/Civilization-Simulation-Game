@@ -16,7 +16,7 @@ import type { WorldModel } from '../world/types';
 import { adoptObject } from './sky/atmospherePatch';
 import { BUILDING_FADE } from '../assets/core/materials';
 import { constructionStep } from '../assets/buildings/states';
-import { placedRot, placedY } from '../assets/buildings/placement';
+import { placedRot, placedY, WALL_PIECES, type WallPiece } from '../assets/buildings/placement';
 
 /** Seconds a building takes to cross-fade from one detail level (lod) to the next. */
 const LOD_FADE_S = 0.6;
@@ -302,12 +302,15 @@ export class BuildingSystem {
   }
 
   /** Water buildings face their door away from the water; models sit on their lower corners (assets/buildings/placement.ts). */
-  private orient(b: BuildingView): number { return placedRot(this.placeWorld, b); }
+  private orient(b: BuildingView, pieces?: Iterable<WallPiece>): number { return placedRot(this.placeWorld, b, pieces); }
   private groundY(b: BuildingView, rot: number): number { return placedY(this.placeWorld, b, rot); }
   private get placeWorld(): import('../assets/buildings/placement').PlacementWorld { return this.world as unknown as import('../assets/buildings/placement').PlacementWorld; }
 
   private sync(list: readonly BuildingView[]): void {
     const seen = new Set<number>();
+    // the lengths of wall a tower stands against: its door is not turned into one (placement.ts towerTurn)
+    let pieces: WallPiece[] | undefined;
+    if (list.some((q) => q.kind === 'tower')) pieces = list.filter((q) => WALL_PIECES.has(q.kind));
     for (const b of list) {
       seen.add(b.id);
       const key = this.requestKey(b);
@@ -323,10 +326,10 @@ export class BuildingSystem {
         };
         this.entries.set(b.id, e);
         moved = true;
-      } else if (e.x !== b.x || e.z !== b.z || e.view.rot !== b.rot) moved = true;
+      } else if (e.x !== b.x || e.z !== b.z || e.view.rot !== b.rot || (b.kind === 'tower' && this.orient(b, pieces) !== e.rot)) moved = true;
       if (moved) {
         e.x = b.x; e.z = b.z;
-        e.rot = this.orient(b);
+        e.rot = this.orient(b, pieces);
         e.y = this.groundY(b, e.rot);
         if (e.asset) this.place(e);
       }

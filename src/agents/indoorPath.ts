@@ -15,6 +15,30 @@ interface Grid {
 
 const grids = new WeakMap<InteriorPlan, Grid>();
 
+/** A waypoint of a path through a plan; `st` when the way to it is up or down that flight. */
+export interface PathPt { x: number; y: number; z: number; st?: PStair }
+
+/** The height of a flight's surface under (x, z): from the floor at its foot to the floor at its head. */
+export function flightY(s: PStair, x: number, z: number): number {
+  const len = s.axis === 'x' ? s.x1 - s.x0 : s.z1 - s.z0;
+  const lo = s.axis === 'x' ? s.x0 : s.z0;
+  const footA = s.dir > 0 ? lo : lo + len;
+  const a = s.axis === 'x' ? x : z;
+  const u = Math.max(0, Math.min(1, ((a - footA) * s.dir) / Math.max(0.05, len)));
+  return s.y0 + (s.y1 - s.y0) * u;
+}
+
+const reach = new WeakMap<InteriorPlan, Map<string, boolean>>();
+/** Can a person walk from one point of a plan to another (up and down the flights)? Cached by the rounded points. */
+export function pathExists(plan: InteriorPlan, from: { x: number; y: number; z: number }, to: { x: number; y: number; z: number }): boolean {
+  let m = reach.get(plan);
+  if (!m) { m = new Map(); reach.set(plan, m); }
+  const key = `${from.x.toFixed(1)},${from.y.toFixed(1)},${from.z.toFixed(1)}>${to.x.toFixed(1)},${to.y.toFixed(1)},${to.z.toFixed(1)}`;
+  let v = m.get(key);
+  if (v === undefined) { v = searchPath(plan, from, to) !== null; m.set(key, v); }
+  return v;
+}
+
 function stairEnd(s: PStair, end: 0 | 1, d: number): { x: number; z: number } {
   const len = s.axis === 'x' ? s.x1 - s.x0 : s.z1 - s.z0;
   const lo = s.axis === 'x' ? s.x0 : s.z0;
@@ -70,7 +94,12 @@ function levelOf(plan: InteriorPlan, y: number): number {
 }
 
 /** A way from one point of a plan to another (local, with heights), as waypoints after the start; [] when there is none. */
-export function planPath(plan: InteriorPlan, from: { x: number; y: number; z: number }, to: { x: number; y: number; z: number }): Array<{ x: number; y: number; z: number }> {
+export function planPath(plan: InteriorPlan, from: { x: number; y: number; z: number }, to: { x: number; y: number; z: number }): PathPt[] {
+  return searchPath(plan, from, to) ?? [{ ...to }];
+}
+
+/** The path, or null when the grid has no way (or either end is off it). */
+function searchPath(plan: InteriorPlan, from: { x: number; y: number; z: number }, to: { x: number; y: number; z: number }): PathPt[] | null {
   const g = gridOf(plan);
   const { nx, nz, x0, z0 } = g;
   const N = nx * nz;
@@ -87,7 +116,7 @@ export function planPath(plan: InteriorPlan, from: { x: number; y: number; z: nu
   };
   const la = levelOf(plan, from.y), lb = levelOf(plan, to.y);
   const a = near(la, from.x, from.z), b = near(lb, to.x, to.z);
-  if (a < 0 || b < 0) return [{ ...to }];
+  if (a < 0 || b < 0) return null;
   const prev = new Int32Array(N * L).fill(-1);
   const start = la * N + a, goal = lb * N + b;
   prev[start] = start;
@@ -112,11 +141,11 @@ export function planPath(plan: InteriorPlan, from: { x: number; y: number; z: nu
       else if (lk.lb === l && lk.b === c) tryN(lk.la, lk.a);
     }
   }
-  if (prev[goal] < 0) return [{ ...to }];
+  if (prev[goal] < 0) return null;
   const cells: number[] = [];
   for (let k = goal; ; k = prev[k]) { cells.push(k); if (k === start) break; }
   cells.reverse();
-  const out: Array<{ x: number; y: number; z: number }> = [];
+  const out: PathPt[] = [];
   let lastDir = -1;
   for (let k = 1; k < cells.length; k++) {
     const l = Math.floor(cells[k] / N), c = cells[k] % N;
@@ -125,7 +154,8 @@ export function planPath(plan: InteriorPlan, from: { x: number; y: number; z: nu
     if (l !== pl) {
       // up or down a flight: the foot, the head
       const px = x0 + ((pc % nx) + 0.5) * CELL, pz = z0 + (Math.floor(pc / nx) + 0.5) * CELL;
-      out.push({ x: px, y: plan.levels[pl].y, z: pz }, { x, y: plan.levels[l].y, z });
+      const lk = g.links.find((k) => (k.la === pl && k.a === pc && k.lb === l && k.b === c) || (k.lb === pl && k.b === pc && k.la === l && k.a === c));
+      out.push({ x: px, y: plan.levels[pl].y, z: pz }, { x, y: plan.levels[l].y, z, st: lk?.st });
       lastDir = -1;
       continue;
     }

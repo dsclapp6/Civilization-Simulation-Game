@@ -466,7 +466,12 @@ export function furnish(pc: PlanCtx): void {
         }
         case 'motte': add(r, k === 0 ? 'store' : 'guard', k === 0 ? 'the keep' : 'the fighting floor'); break;
         case 'tower': add(r, top && k > 0 ? 'roof' : 'guard', top && k > 0 ? 'the tower top' : k === 0 ? 'the guardroom' : 'the upper chamber'); break;
-        case 'gatehouse': add(r, b.ys[k] > 3 && (b.rects[0].x1 - b.rects[0].x0) < 4 ? 'winch' : top && k > 0 ? 'roof' : 'guard', b.ys[k] > 3 && (b.rects[0].x1 - b.rects[0].x0) < 4 ? 'the winch room' : 'the guardroom'); break;
+        case 'gatehouse': {
+          // the room over the passage (no floor of its own in the recipe, between the towers) is the winch room
+          const winch = b.shell.noFloor && b.role !== 'tower' && b.ys[k] > 3;
+          add(r, winch ? 'winch' : top && k > 0 ? 'roof' : 'guard', winch ? 'the winch room' : top && k > 0 ? 'the gatehouse top' : k === 0 ? 'the guardroom' : 'the upper chamber');
+          break;
+        }
         default: add(r, up ? 'store' : 'store', 'the inside');
       }
     }

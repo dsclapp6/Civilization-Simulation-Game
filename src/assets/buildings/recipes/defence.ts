@@ -259,7 +259,7 @@ export function gatehouse(ctx: Ctx, def: BuildingDef): void {
     for (const sd of [-1, 1]) {
       const rc: Rect = { x0: sd < 0 ? -W / 2 + 0.6 : pw / 2, x1: sd < 0 ? -pw / 2 : W / 2 - 0.6, z0: -D / 2 + 1.2, z1: D / 2 - 1.2 };
       // the left tower is the way up: a door from the passage near the back, ladders inside to the top (docs/INTERIORS.md)
-      const ops: Opening[] = [{ side: 'pz', u: 0, w: 0.4, h: 0.5, y: 4.4, kind: 'slit', frame: 'timber' }];
+      const ops: Opening[] = [{ side: 'pz', u: 0, w: 0.4, h: 0.5, y: 5.4, kind: 'slit', frame: 'timber' }];
       if (sd < 0) ops.push({ side: 'px', u: (rc.z1 - rc.z0) / 2 - 1.0, w: 0.85, h: 1.9, y: 0, kind: 'door', frame: 'timber' });
       house(ctx, { rect: rc, plinthH: 0.2, role: sd < 0 ? 'tower' : '', storeys: [{ h: 6.4, wall: 'planks', frame: 'none', openings: ops }], roof: null });
       void tw;

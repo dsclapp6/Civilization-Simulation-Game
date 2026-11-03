@@ -6,7 +6,7 @@ import type { ActionOption, ActionProvider } from '../sim/actions';
 import type { Simulation } from '../sim/sim';
 import { fullName, type BuildingState, type PersonId } from '../sim/state';
 import { interiorPlan } from '../assets/interiors/plan';
-import { placedRot, placedY } from '../assets/buildings/placement';
+import { placedRot, placedY, WALL_PIECES, type WallPiece } from '../assets/buildings/placement';
 import type { InteriorSource, Loaded } from '../agents/nav/interiors';
 import { INSIDE_RADIUS } from '../agents/nav/interiors';
 import type { Zone } from '../agents/zone';
@@ -15,10 +15,15 @@ import type { GameRenderer, InteriorsView } from '../render/types';
 import { BUILDINGS } from '../content/types';
 
 /** The plans and the placement of models, for the navigation (a pure function of the world and the buildings). */
-export function interiorSource(world: Simulation['world']): InteriorSource {
+export function interiorSource(world: Simulation['world'], buildings?: () => Iterable<WallPiece>): InteriorSource {
   return {
     plan: (kind, level, culture, seed) => interiorPlan(kind, level, culture, seed),
-    place: (b) => { const rot = placedRot(world, b); return { rot, y: placedY(world, b, rot) }; },
+    place: (b) => {
+      // a tower's door is not turned into a length of wall (placement.ts towerTurn): the renderer reads the same pieces
+      const pieces = b.kind === 'tower' && buildings ? [...buildings()].filter((q) => WALL_PIECES.has(q.kind)) : undefined;
+      const rot = placedRot(world, b, pieces);
+      return { rot, y: placedY(world, b, rot) };
+    },
   };
 }
 
@@ -28,7 +33,7 @@ export class InteriorMode {
   private readonly view: InteriorsView;
 
   constructor(private readonly sim: Simulation, private readonly renderer: GameRenderer, private readonly player: PlayerApi, private readonly zone: Zone) {
-    zone.nav.setInteriorSource(interiorSource(sim.world));
+    zone.nav.setInteriorSource(interiorSource(sim.world, () => sim.state.buildings.values()));
     const rooms: Array<{ id: number; plan: Loaded['plan']; inside: boolean; level: number }> = [];
     this.view = {
       rooms,

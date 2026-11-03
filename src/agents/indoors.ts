@@ -11,11 +11,14 @@ import type { InteriorPlan, PFurn, PSpot, SpotUse } from '../assets/interiors/ty
 import type { Loaded } from './nav/interiors';
 import type { Intent } from './schedule';
 import type { Zone } from './zone';
-import { planPath } from './indoorPath';
+import { flightY, pathExists, planPath, type PathPt } from './indoorPath';
 
 const MAX_ROOMS = 3;
 const MAX_PEOPLE = 14;
 const WALK = 1.25;
+/** Climbing: metres of height a second up a flight of stairs and up a ladder. */
+const STAIR_CLIMB = 0.85;
+const LADDER_CLIMB = 0.5;
 /** A near building with its door open has its inside drawn within this distance (m). */
 const OPEN_DRAW_R = 16;
 
@@ -26,8 +29,12 @@ interface Occ {
   building: number;
   spot: number;
   x: number; y: number; z: number; yaw: number;
-  path: Array<{ x: number; y: number; z: number }>;
+  path: PathPt[];
   pi: number;
+  /** Where the leg being walked began (a flight is climbed at a pace by its rise, not its run). */
+  sx: number; sz: number;
+  /** What the day was when the place was picked: a change sends them to another (up or down the stairs). */
+  act: string;
   leaving: boolean;
   anim: AnimState;
   seat?: number;
@@ -148,7 +155,7 @@ export class Indoors {
     // out: those whose day has taken them elsewhere walk to the door (if anyone can see) and go
     for (const o of [...this.occ.values()]) {
       const w = want.get(o.person);
-      if (w && w.room.id === o.building) continue;
+      if (w && w.room.id === o.building) { this.regoTo(o, w.room, w.act); continue; }
       const room = this.rooms.find((r) => r.id === o.building);
       if (!room || o.leaving) { if (!room) this.occ.delete(o.person); continue; }
       this.leave(o, room);
@@ -161,8 +168,30 @@ export class Indoors {
       const q = st.persons.get(id)!;
       const spot = this.pickSpot(w.room, q, w.act, taken);
       if (spot >= 0) taken.add(`${w.room.id}:${spot}`);
-      this.enter(q, w.room, spot, fresh || !this.cameFromDoor(id));
+      this.enter(q, w.room, spot, fresh || !this.cameFromDoor(id), w.act);
     }
+  }
+
+  /**
+   * The day moved on inside the room they are in (from bed to the table, from the table to the loom upstairs): they get up and walk
+   * to the new place, by the stairs and ladders as the player would. Not while still on the way somewhere.
+   */
+  private regoTo(o: Occ, room: IndoorRoom, act: string): void {
+    if (o.leaving || o.act === act || o.pi < o.path.length) return;
+    const q = this.zone.state.persons.get(o.person);
+    if (!q) return;
+    o.act = act;
+    const taken = new Set<string>();
+    for (const p of this.occ.values()) if (p !== o && p.spot >= 0) taken.add(`${p.building}:${p.spot}`);
+    const spot = this.pickSpot(room, q, act, taken);
+    if (spot < 0 || spot === o.spot) return;
+    const plan = room.loaded.plan;
+    const s = plan.spots[spot];
+    o.spot = spot;
+    o.seat = undefined;
+    o.path = planPath(plan, { x: o.x, y: o.y, z: o.z }, { x: s.x, y: s.y, z: s.z });
+    o.pi = 0; o.sx = o.x; o.sz = o.z;
+    o.anim = 'walk';
   }
 
   /** Someone the zone just let in at the door (behaviour.ts ghost): they walk to their place from it. */
@@ -180,10 +209,14 @@ export class Indoors {
     const uses = usesFor(activity, q.career);
     const head = this.isHead(room, q);
     let best = -1, bestScore = Infinity;
+    const door = plan.main >= 0 ? plan.doors[plan.main] : null;
+    const from = door ? { x: door.x - door.nx * (door.t + 0.3), y: door.y, z: door.z - door.nz * (door.t + 0.3) } : null;
     plan.spots.forEach((s, i) => {
       if (taken.has(`${room.id}:${i}`)) return;
       const k = uses.indexOf(s.use);
       if (k < 0) return;
+      // nobody is put on a floor they could not walk to from the door (up the stairs and ladders)
+      if (from && s.y > from.y + 0.5 && !pathExists(plan, from, s)) return;
       // the head of the house takes the best place; children and servants never do
       const score = k * 10 + (s.head ? (head ? -5 : 4) : 0) + hash01(q.id, i) * 2;
       if (score < bestScore) { bestScore = score; best = i; }
@@ -204,7 +237,7 @@ export class Indoors {
     return { x: w.x, y: l.y + y, z: w.z };
   }
 
-  private enter(q: Person, room: IndoorRoom, spot: number, atPlace: boolean): void {
+  private enter(q: Person, room: IndoorRoom, spot: number, atPlace: boolean, act: string): void {
     const l = room.loaded;
     const plan = l.plan;
     const s: PSpot | null = spot >= 0 ? plan.spots[spot] : null;
@@ -215,12 +248,12 @@ export class Indoors {
       anim: 'idle', animTime: hash01(q.id, 6) * 5, moveSpeed: 0, highlight: 0,
     };
     const target = s ? { x: s.x, y: s.y, z: s.z } : this.standPlace(plan, q.id);
-    const o: Occ = { person: q.id, building: l.id, spot, x: 0, y: 0, z: 0, yaw: 0, path: [], pi: 0, leaving: false, anim: 'idle', draw, seen: this.t };
+    const o: Occ = { person: q.id, building: l.id, spot, x: 0, y: 0, z: 0, yaw: 0, path: [], pi: 0, sx: 0, sz: 0, act, leaving: false, anim: 'idle', draw, seen: this.t };
     const door = plan.main >= 0 ? plan.doors[plan.main] : null;
     if (!atPlace && door) {
       const from = { x: door.x - door.nx * (door.t + 0.3), y: door.y, z: door.z - door.nz * (door.t + 0.3) };
       o.path = planPath(plan, from, target);
-      o.x = from.x; o.y = from.y; o.z = from.z;
+      o.x = from.x; o.y = from.y; o.z = from.z; o.sx = o.x; o.sz = o.z;
       o.yaw = Math.atan2(-door.nx, -door.nz);
     } else {
       o.x = target.x; o.y = target.y; o.z = target.z;
@@ -245,7 +278,7 @@ export class Indoors {
     if (!door || o.anim === 'sleep' || !room.inside && !this.zone.player) { this.occ.delete(o.person); return; }
     o.leaving = true;
     o.path = planPath(plan, { x: o.x, y: o.y, z: o.z }, { x: door.x - door.nx * (door.t * 0.5), y: door.y, z: door.z - door.nz * (door.t * 0.5) });
-    o.pi = 0;
+    o.pi = 0; o.sx = o.x; o.sz = o.z;
     o.spot = -1;
     o.seat = undefined;
     // the street must not have them twice: the zone leaves them be until they are out
@@ -270,10 +303,16 @@ export class Indoors {
       const w = o.path[o.pi];
       const dx = w.x - o.x, dz = w.z - o.z;
       const d = Math.hypot(dx, dz);
-      const step = WALK * dt;
-      o.anim = 'walk';
+      // up or down a flight: the pace is by the height climbed (stairs 0.85 m/s, a ladder 0.5), the feet on the flight's surface
+      const fl = w.st;
+      let step = WALK * dt;
+      if (fl) {
+        const rise = Math.max(0.3, Math.abs(fl.y1 - fl.y0));
+        step = (Math.hypot(w.x - o.sx, w.z - o.sz) * (fl.kind === 'ladder' ? LADDER_CLIMB : STAIR_CLIMB) / rise) * dt;
+        o.anim = fl.kind === 'ladder' ? 'climb' : 'walk';
+      } else o.anim = 'walk';
       if (d <= step) {
-        o.x = w.x; o.z = w.z; o.y = w.y; o.pi++;
+        o.x = w.x; o.z = w.z; o.y = w.y; o.pi++; o.sx = w.x; o.sz = w.z;
         if (o.pi >= o.path.length) {
           if (o.leaving) {
             // at the door: it opens, and they are out (the zone takes them in the street)
@@ -286,7 +325,7 @@ export class Indoors {
         }
       } else {
         o.x += (dx / d) * step; o.z += (dz / d) * step;
-        o.y += (w.y - o.y) * Math.min(1, step / Math.max(0.05, d));
+        o.y = fl ? flightY(fl, o.x, o.z) : w.y;
         o.yaw = Math.atan2(dx, dz);
         // passing an inner door opens it
         for (let i = 0; i < plan.doors.length; i++) {
@@ -307,7 +346,7 @@ export class Indoors {
       d.x = w.x; d.y = w.y; d.z = w.z;
       d.yaw = o.yaw + room.loaded.rot;
       if (d.anim !== o.anim) { d.anim = o.anim; d.animTime = 0; }
-      d.moveSpeed = o.anim === 'walk' && live ? WALK : 0;
+      d.moveSpeed = live ? (o.anim === 'walk' ? WALK : o.anim === 'climb' ? 0.7 : 0) : 0;
       if (o.seat !== undefined) d.seatHeight = o.seat; else delete d.seatHeight;
       out.push(d);
     }
