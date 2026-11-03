@@ -146,6 +146,7 @@ export class WallWalk {
     this.refresh();
     for (let i = 0; i < this.rects.length; i++) {
       const q = this.rects[i];
+      if (q.kind === 'gatehouse') continue; // its passage is open ground
       const def = BUILDINGS[q.kind];
       const dx = x - q.cx, dz = z - q.cz;
       const lx = dx * q.c - dz * q.s, lz = dx * q.s + dz * q.c;

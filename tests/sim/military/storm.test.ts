@@ -107,3 +107,40 @@ describe('a storm with the player in the line', () => {
     expect(t.mil.battleGroups('enemy').length).toBeGreaterThanOrEqual(0);
   }, 120_000);
 });
+
+describe('a save in the middle of a storm', () => {
+  it('loads cleanly: the detail fight is not saved, the macro model settles the battle, the plan and the siege survive', async () => {
+    const { MemorySaveStore } = await import('../../../src/sim/save-memory');
+    const { Simulation } = await import('../../../src/sim/sim');
+    const { installEconomy } = await import('../../../src/sim/economy');
+    const { installMilitary } = await import('../../../src/sim/military');
+    const { installSocial } = await import('../../../src/sim/social');
+    const { mockGenerator, settle, autoSuccessor } = await import('../helpers');
+    const store = new MemorySaveStore();
+    const t = stormRig('mstorm-save', { store });
+    const { M, battle } = beginStorm(t);
+    expect(battle.fight).toBeGreaterThan(0);
+    // the plan the storm goes by is part of the army (saved with it)
+    const plan = t.mil.assaultPlan!(t.armyId)!.plan;
+    expect(plan.companies.length).toBeGreaterThan(0);
+    for (let i = 0; i < 40; i++) t.sim.step(SIM_DT);
+    await settle();
+    t.sim.requestSave('test');
+    await t.sim.flush();
+    const loaded = (await Simulation.load(store, mockGenerator('small')))!;
+    expect(loaded).not.toBeNull();
+    const social = installSocial(loaded);
+    const eco = installEconomy(loaded, { social });
+    const mil = installMilitary(loaded, { economy: eco, social });
+    autoSuccessor(loaded);
+    const M2 = militaryContext(loaded);
+    // the same battle and siege, the same army with its plan; no fight in the zone any more
+    expect(M2.data.battles.find((b) => b.id === battle.id)).toBeTruthy();
+    expect(M2.data.sieges.some((s) => s.settlement === t.castleId)).toBe(true);
+    expect(JSON.stringify(M2.army(t.armyId)!.plan)).toBe(JSON.stringify(M.army(t.armyId)!.plan));
+    expect(mil.assaultPlan!(t.armyId)!.plan.companies.length).toBe(plan.companies.length);
+    // the battle is settled by the macro model within a step or two
+    for (let i = 0; i < 400 && M2.data.battles.length > 0; i++) loaded.step(SIM_DT);
+    expect(M2.data.battles.find((b) => b.id === battle.id)).toBeUndefined();
+  }, 120_000);
+});

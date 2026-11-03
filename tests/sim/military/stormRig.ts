@@ -28,8 +28,8 @@ export interface StormRig {
 }
 
 /** A siege of a fortified castle of House `kb` by an army of `ka` that the player has joined (or leads). */
-export function stormRig(seed: string, opts: { asDefender?: boolean; asCommander?: boolean } = {}): StormRig {
-  const sim = newSim({ preset: 'small', seed });
+export function stormRig(seed: string, opts: { asDefender?: boolean; asCommander?: boolean; store?: import('../../../src/sim/save-memory').MemorySaveStore } = {}): StormRig {
+  const sim = newSim({ preset: 'small', seed, store: opts.store, autosave: opts.store ? { intervalMs: 0 } : undefined });
   const zone = new FakeZone();
   zone.enableSummons();
   const social = installSocial(sim);

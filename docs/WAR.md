@@ -21,6 +21,8 @@ Files:
 | `src/combat/{arena,ai,fighter,strike,projectiles,weapons}.ts` | the fight itself: orders obeyed, saddle cuts, the couched spear, horses hit and falling, subdue |
 | `src/ui/hud/battle.ts` | the group bar, banners, order wheel, storm card, the keys |
 | `src/ui/panels/battle.ts` | the tactical view (C in battle) |
+| `src/sim/military/plan.ts`, `src/app/campaign.ts`, `src/app/scenarios.ts` | the assault plan, the army campaign, the castle scenario (§12) |
+| `src/agents/nav/walls.ts`, `src/combat/wallwalk.ts` | the wall-walk: floors, stairs, the jump (§13) |
 | `tools/war-shots.mjs` | the screenshots below |
 
 ## 1. Alert and forts
@@ -252,8 +254,7 @@ projectile; `setOverview` and `setOrderMarks` (the tactical view drives both; wi
 orders are not drawn on the ground).
 
 **For B3 (law, watch, player body):** `ZoneApi.wallStations(settlement)` is consumed by the storm scene when present (the fallback
-heights are in §2); for a player on the wall-walk the navigation must be able to stand a body at the station's height (until it can,
-the climb ends inside the wall at the foot of the stairs). The zone reads `military.alertOf` (watch doubled, militia to the walls,
+heights are in §2); the navigation now stands a body on the wall-walk (§13). The zone reads `military.alertOf` (watch doubled, militia to the walls,
 bells) and `military.fortState` (a shut gate is solid; the navigation does not block the gatehouse, so a shut gate is the zone's to
 enforce; a breach ≥ 0.5 is a way in). `combat.engage(sides, { intent: 'subdue' })` takes the side without the player as the one that
 strikes to wound (else side 0, or `subdueSide`); `FightResult.captured` lists those it took alive; `military.takeCaptive(captive, captor,
@@ -267,3 +268,108 @@ the HUD part is `registerHudPart('battle')` and the tactical view the ext panel 
 **Not done:** the wall-walk is not a place the player can stand until the zone's navigation has heights; ranged garrisons are
 the macro model's (a garrison with no archers is given bows from its armoury, §2); the macro kinds `archer` and `crossbow` that are not
 careers are not turned into bows in the detail fight; a detail fight is not saved (a load settles it by the macro model, as before).
+
+## 11. Deeper fighting: lines, guards, feints, ripostes, breath
+
+Completion pass, wave D, builder D1 (from the collaborator's 05dc0df, reworked onto our arena). `src/combat/fighter.ts` (`Line`, `guardCover`),
+`arena.ts` (`startAttack`), `strike.ts` (`impact`, `applyBlow`), `ai.ts` (`answer`, `feint`), `playerport.ts`, `src/ui/hud/battle.ts` (`DuelHud`).
+
+- **Lines.** A blow comes on a line: `high` (the overhead, at the head), `mid` (the cut at the body, the thrust), `low` (a cut at the legs). The
+  player chooses with the movement keys held with the blow: **W + J** over the top, **S + J** low, **A/D + J** the point (good against
+  armour), **J** alone at the body. A low cut uses the `low` table of `wounds.ts` (legs); a leg wound is less deadly (×0.7) but slows the man.
+- **Guards.** A guard is held on a line (**W + K** high, **K** mid, **S + K** low; the AI reads the blow). `guardCover(guard, blow, shield)`: its
+  own line 1, the next 0.7, the far one 0.25; a shield covers the body (0.85) and the legs (0.55) whatever the guard. The cover multiplies the
+  strength of the block, so a guard on the wrong line lets most of the blow through ("The cut comes under your guard!").
+- **Parry and riposte.** A guard raised just as the blow lands (< 0.24 s) on the right line turns it aside, the attacker's guard is thrown wide
+  (`openT` 0.5 s: his next blow finds more surely) and the parrier has 0.9 s of **riposte** (`riposteT`): his next blow starts 35 % quicker,
+  hits 15 % harder and +0.12 surer.
+- **Feints.** **K** in the first 70 % of one's own swing checks it (`feint`, 4 breath): a foe whose guard is up against it is drawn wide
+  (`openT` 0.6 s). Practised AI fighters (melee ≥ 6) feint now and then at a foe who has put a guard against the line; the AI reads a habitual
+  feinter less surely (`read` falls 0.04 a feint).
+- **Breath.** A tired arm is slow and soft: below half its breath the windup lengthens up to a third, the blow's damage is 0.72–1.0 of full and
+  its accuracy falls by up to 0.1. A fresh arm swings at the weapon table's pace.
+- **The reading on the HUD** while steel is out (`DuelHud`, bottom centre): the three lines (High / Mid / Low) with the guard held lit green and
+  the line of the blow coming ringed red, a line of advice ("Blow from above: guard W+K", "Guarded: mid", "Riposte! (J)") and a breath bar.
+  The numbers come from `PlayerCombatPose.guardLine / threat / riposte / breath` through `PlayerCombatHud`.
+
+**What was reworked from his version.** Merged as he wrote it, three of our tests failed. (1) The foot went down a second after contact and the
+general's horse never saw them locked: the AI's choices (a low cut, a read of the blow, a feint) used the shared random stream and changed
+every fight; they are now keyed hashes of the man and his blow (`hash01`), the AI reads the line surely enough (0.5 + 0.05 × melee) that a
+guard on the wrong line is the exception, and the horse remembers its foot were locked for ten seconds (`Group.lockedT`), so it rides in
+even if the foot are cut down between two thoughts of the general. (2) Armour helped less: the cover table was too stingy. (3) The
+sword's cadence dropped: tiredness acted from a full breath; it now acts below half. `tests/combat/{command,fight,foot}.test.ts` pass unchanged.
+
+## 12. The army campaign
+
+Wave D, D1 (from d2fe1c9, f1409bf, e64497c). `src/sim/military/plan.ts`, `src/app/campaign.ts`, `src/app/scenarios.ts`,
+`src/ui/hud/battle.ts` (`CompanyCard`).
+
+**The assault plan.** An army storming a place goes by a plan: companies under captains (`Army.plan`, saved with the army), each with a task:
+**bows on the walls** (`loose`), **the ram at the gate** (`ram`), **ladders to the walls** (`ladders`), **charge the breach** (`charge`, the main
+body), **hold in reserve** (`reserve`). `defaultPlan` makes one from what the army is made of (archers to the walls, a ram crew of men-at-arms
+and levy, ladders, the main body, a reserve), and the AI's armies storm with one made the same way.
+
+- *The macro siege* (`planEffect`, `applyPlan` in `fieldFighters`): bows keep the defenders' heads down (their walls count for less), a manned
+  ram (24 men, the heavy ones count most) breaks the gate, ladders bring more men to grips at once at a price, a charge fares by the breach,
+  a reserve steadies the rest.
+- *The storm in the zone* (`assignCompanies`, `SiegeSetup.tasks / companies / captains / present`, `Fighter.task`): the men of an army are
+  dealt to its companies by kind in the army's roll; the detail storm takes the **ram's crew from the ram company and the ladders' squads
+  from the ladder company**, the **reserve and the bowmen's company without bows hold back** (58 and 44 m before the gate) until the way is
+  open, and a **captain who falls takes the heart out of his company** (−8 morale for each man of it). Re-tasking a company in the middle of a storm
+  (`military.setCompanyTask / moveMen / setCaptain`) reaches the men at once (`combat.retask`).
+- *The verbs* of `MilitaryRuntime`: `assaultPlan(army)` (the plan and what it will do, one line), `setCompanyTask`, `moveMen`, `setCaptain`,
+  `stormNow(army)` (begins the siege when just arrived, then the storm), `reinforce(army, counts)`, `garrison(settlement, counts)`
+  (`freshMen`: drilled men of a House in a garrison household of their own), `retreat(army)` (`soundRetreat`: the rearguard holds while the host
+  falls back, a fraction of the losses of a rout; the siege is lifted and the host turns home).
+
+**The campaign** (`CampaignMode`, `state.ext['campaign']`). The player rides with the host of his lord against a place: **march** (the days pass on
+the road, a wait that ends at nightfall or at the walls), **camp** (at nightfall short of the enemy: tents round three fires, the men sitting, the
+player among them; sleep (Z) and at first light the camp is struck), **before the walls** (by day the storm goes in at once; by night the host
+camps before them and storms at dawn), **storm** (the military module's battle is fought round the player in the zone; the campaign ends with
+the storm: "X is ours!" or "The storm is over"). `planAttack(sim, camp, lord, target, opts)` is the one step both the ruler's seat and the
+scenario use (`CampaignApi.plan(target, rideAs?)` for the ruler page).
+
+**The companies card** (`CompanyCard`, `src/ui/hud/battle.ts`): the HUD part `campaign` shows, while a campaign is on, the phase, the plan's
+one line and each company with its task and its captain (selects), **Storm now** (before the walls, by day) and **Sound the retreat** (two clicks;
+"Turn back" on the march). In the tactical view (C) the same card is in the panel. It is the same card, not a second command screen.
+
+**The castle scenario** (main menu: *Scenario: the march on the castle*; `?scenario=castle`): a practice run kept in memory (never saved over the
+real run, the records untouched): you take the place of a lord with a castle, the afternoon of the first day, and march as a knight in his host of
+**250** on the nearest castle of a rival line held by **300** (`castleScenario`); the host camps before the walls, the storm goes in at dawn.
+
+## 13. The wall-walk
+
+Wave D, D1. `src/agents/nav/walls.ts` (`WallWalk`), `src/combat/wallwalk.ts` (the verbs), `src/player/body.ts`.
+
+The tops of **walls** (7 m, 9 at level 2), **towers** (11/14), **gatehouses** (6.6/11.5) and the platform of a level 2 **palisade** (1.95 m) are
+**floors**, at the heights of the building recipes (`agents/stations.ts walkHeight`). `Nav.walls` keeps them (rebuilt when a building changes: a
+wall battered to a breach has no floor left). A body that is *on the walk* (`BodyState.onWalk`) is held to the union of the floors within a
+stair's rise (4.8 m) of its own height: the parapet is a wall, it slides along it, it goes from the curtain to a tower and up (3 m/s), and its
+height is that of the floor (`NavApi.walkMove / walkTopAt / groundBeside`, additive). The ground navigation is untouched.
+
+- **Up:** *Climb the stairs* near the foot of a flight (a door in every tower and gatehouse, about every third segment of curtain; the foot is
+  1.5 m inside the face), or *Climb the ladder* in a storm (the ladder's top is now the real walk); *Man the wall* (a defender's verb) too.
+- **On the walk:** he walks, shoots and fights as anywhere; the arena counts him among the men on the walk (`followPlayerBody` reads
+  `body().walk`): only they can strike him in melee and he them. Enemy archers shoot up at him from the ground and he down at them.
+- **Down:** *Go down the stairs* at a landing; *Jump down from the wall* anywhere (the nearest ground, a wound by the height, `harm`); and if the
+  floor is battered away from under him he falls the same way ("The wall gives way under you").
+- A game saved on the walk loads with the body set down beside the wall (`placeBody` pushes a body out of a footprint).
+
+## 14. A save in the middle of a storm
+
+Detail fights are not saved; the military module's record of the battle is (`rec.fight` is a number that means nothing in a new session). A load
+puts the game back with the battle, the siege and the army with its plan, and no fight in the zone: `detailOver` finds no one fighting and
+`concludeDetail` settles the battle by the macro model at the next step. `tests/sim/military/storm.test.ts` saves in the middle of a storm, loads
+into a session with no combat module and runs the battle out.
+
+## 15. Tests of wave D1
+
+| File | What it pins down |
+| --- | --- |
+| `tests/combat/player.test.ts` (+5) | the cover table, the movement keys choose the line, a guard on the wrong line, the feint, the tired arm |
+| `tests/combat/storm.test.ts` (+2) | the ram and ladder crews come from their companies, the reserve holds back and can be called in, a captain's fall |
+| `tests/combat/wallwalk.test.ts` (4) | the stairs up and down, walking the walk, the jump, a ladder landing on the real walk |
+| `tests/agents/nav-walk.test.ts` (6) | the floors and their heights, the parapet, wall to tower, the stairs, a wall battered away, a body inside a wall |
+| `tests/sim/military/siege.test.ts` (+2) | 250 against 300 and the plan's worth, the retreat |
+| `tests/sim/military/storm.test.ts` (+1) | a save in the middle of a storm |
+| `tests/app/campaign.test.ts` (3) | the castle scenario, the camp and the dawn storm, the retreat |
