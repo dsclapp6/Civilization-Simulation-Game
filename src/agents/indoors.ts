@@ -277,8 +277,9 @@ export class Indoors {
   private leave(o: Occ, room: IndoorRoom): void {
     const plan = room.loaded.plan;
     const door = plan.main >= 0 ? plan.doors[plan.main] : null;
-    // asleep, or nobody near enough to see: just gone
-    if (!door || o.anim === 'sleep' || !room.inside && !this.zone.player) { this.occ.delete(o.person); return; }
+    // nobody near enough to see (or asleep in a room the player is not in): just gone; the player in the room sees them get up and go
+    // out, down the stairs if the bed is upstairs
+    if (!door || (o.anim === 'sleep' && !room.inside) || !room.inside && !this.zone.player) { this.occ.delete(o.person); return; }
     o.leaving = true;
     o.path = findPath(plan, { x: o.x, y: o.y, z: o.z }, { x: door.x - door.nx * (door.t * 0.5), y: door.y, z: door.z - door.nz * (door.t * 0.5) }) ?? [];
     o.pi = 0; o.sx = o.x; o.sz = o.z;
