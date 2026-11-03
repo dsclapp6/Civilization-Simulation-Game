@@ -480,14 +480,15 @@ export class Hud {
     this.updatePlayer(hud);
     this.updatePrompt(hud);
     this.updateAction(game, hud);
-    const dt = this.lastFrame ? Math.min(0.1, Math.max(0, (now - this.lastFrame) / 1000)) : 0;
+    // `now` is the UI's clock in seconds (work pass: it was read as milliseconds, so the games' needles barely moved)
+    const dt = this.lastFrame ? Math.min(0.1, Math.max(0, now - this.lastFrame)) : 0;
     this.lastFrame = now;
     // the game runs with the clock: paused, it waits
-    // (work pass) a new bout is a new game; the bout's own kind of work picks the game, not the step's pose; with steel
-    // drawn J and K are the weapon's, and Settings can switch the games off
+    // (work pass) a new bout is a new game, and so is a step of it that plays another (the cheese's stirring, then its
+    // pressing); with steel drawn J and K are the weapon's, and Settings can switch the games off
     const run = hud?.action ? sim.actions.active(sim.state.run.playerId) : null;
     const games = this.deps.host.settings().workGames !== false && !hud?.drawn;
-    this.mini.update(run && games ? { id: run.option.id, anim: run.option.anim ?? '', label: run.option.label, step: hud?.action?.step, serial: run.serial, seconds: run.option.seconds } : null, sim.clock.paused ? 0 : dt, sim.clock.paused);
+    this.mini.update(run && games ? { id: run.option.id, anim: hud?.action?.anim ?? run.option.anim ?? '', label: run.option.label, step: hud?.action?.step, serial: run.serial, seconds: run.option.seconds } : null, sim.clock.paused ? 0 : dt, sim.clock.paused);
     this.updateTravel(hud);
     this.updateCombat(game, hud);
     this.updateOverlays(clock, hud);

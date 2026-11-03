@@ -262,8 +262,7 @@ export class PropFeed {
   }
 
   /**
-   * The beds of the player's household: in the croft garden by the home when there is one, else in a row behind the
-   * house. Each shows its state — marked out and partly dug (live, as the spade goes), dug, sown, the crop growing
+   * The beds of the player's household, in front of the house. Each shows its state — marked out and partly dug (live, as the spade goes), dug, sown, the crop growing
    * (weedy if not weeded) and ripe, a basket of the vegetables by a bed just gathered.
    */
   private gardenProps(out: WorldPropView[], hhId: number, home: BuildingState, now: number): void {
@@ -274,7 +273,7 @@ export class PropFeed {
     const gathered = E.notes.gathered.get(hhId);
     const n = Math.max(beds?.length ?? 0, ld?.bed !== undefined ? ld.bed + 1 : 0);
     if (n === 0) return;
-    const spots = bedSpots(E, home, n);
+    const spots = bedSpots(home, n);
     for (let i = 0; i < n; i++) {
       const bed = beds?.[i];
       const sp = spots[i];
@@ -370,48 +369,20 @@ const MADE_PROP: Record<string, string> = {
 };
 const DISHES: ReadonlySet<string> = new Set(['roast_meat', 'roast_fowl', 'stew', 'salt_stew', 'fish_dish', 'pottage', 'porridge']);
 
-/** Where the beds of a household lie (centre and rotation; a bed's long side is its local z). */
-function bedSpots(E: Econ, home: BuildingState, n: number): { x: number; z: number; rot: number }[] {
+/**
+ * Where the beds of a household lie (centre and rotation; a bed's long side is its local z): a cottage garden in front of
+ * the house, to the right of the door, in a row along the facade — where one stands to work at the house, so the spade's
+ * work is seen as it is done (a croft behind the house hid it).
+ */
+function bedSpots(home: BuildingState, n: number): { x: number; z: number; rot: number }[] {
   const out: { x: number; z: number; rot: number }[] = [];
-  // the croft garden by the home, if one lies within a few strides
-  let best: readonly P2[] | null = null, bd = 32;
-  for (const q of E.world.parcels) {
-    if (q.use !== 'garden' || q.poly.length !== 4) continue;
-    let cx = 0, cz = 0;
-    for (const p of q.poly) { cx += p.x; cz += p.z; }
-    const d = Math.hypot(cx / 4 - home.x, cz / 4 - home.z);
-    if (d < bd) { bd = d; best = q.poly; }
-  }
-  // (the beds are worked from the house: they lie within a few strides of it, so the spade is seen from where one stands)
-  if (best && bedsInReach(best, home, n)) {
-    const f = stripFrame(best, { sx: 0, sz: 0, ux: 0, uz: 1, len: 1, vx: 1, vz: 0, width: 1 });
-    // beds across the plot, side by side along it, from the end nearer the house
-    const nearStart = Math.hypot(f.sx - home.x, f.sz - home.z) <= Math.hypot(f.sx + f.ux * f.len - home.x, f.sz + f.uz * f.len - home.z);
-    const along = f.width >= 3.6 ? 0 : 1;
-    for (let i = 0; i < n; i++) {
-      const t = Math.min(f.len - 1.2, 1.6 + i * 2.3);
-      const tt = nearStart ? t : f.len - t;
-      out.push({ x: f.sx + f.ux * tt, z: f.sz + f.uz * tt, rot: along ? Math.atan2(f.ux, f.uz) : Math.atan2(f.vx, f.vz) });
-    }
-    return out;
-  }
-  // else behind the house, a row along its back wall
   const def = SITE_FOOTPRINT[home.kind] ?? { w: 8, d: 6 };
   const c = Math.cos(home.rot), s = Math.sin(home.rot);
   for (let i = 0; i < n; i++) {
-    const lx = (i - (n - 1) / 2) * 2.2, lz = -def.d / 2 - 2.6;
+    const lx = 1.6 + i * 2.1, lz = def.d / 2 + 2.7;
     out.push({ x: home.x + lx * c + lz * s, z: home.z - lx * s + lz * c, rot: home.rot });
   }
   return out;
-}
-
-/** Do the first beds of a croft garden lie within reach of the house (≈ 12 m from its middle)? */
-function bedsInReach(poly: readonly P2[], home: BuildingState, n: number): boolean {
-  const f = stripFrame(poly, { sx: 0, sz: 0, ux: 0, uz: 1, len: 1, vx: 1, vz: 0, width: 1 });
-  const nearStart = Math.hypot(f.sx - home.x, f.sz - home.z) <= Math.hypot(f.sx + f.ux * f.len - home.x, f.sz + f.uz * f.len - home.z);
-  const t = Math.min(f.len - 1.2, 1.6 + Math.max(0, Math.min(n, 3) - 1) * 2.3);
-  const tt = nearStart ? t : f.len - t;
-  return Math.hypot(f.sx + f.ux * tt - home.x, f.sz + f.uz * tt - home.z) <= 12;
 }
 
 function sizeOf(b: BuildingState): { w: number; d: number } {

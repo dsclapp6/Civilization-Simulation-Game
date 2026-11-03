@@ -182,6 +182,7 @@ export class MiniGameView {
   private logic: MiniLogic | null = null;
   private key = '';
   private paused = false;
+  private serial = -1;
   /** Share of the bout the strokes have saved (the runner's 4.5% of the bout per perfect stroke). */
   private saved = 0;
   private sumText = '';
@@ -219,9 +220,9 @@ export class MiniGameView {
       this.key = key;
       this.logic = kind ? new MiniLogic(kind, hashStr(key) + Math.floor(performance.now()), 1) : null;
       this.el.classList.toggle('mu-hide', !kind);
-      this.saved = 0;
-      this.sumText = '';
-      this.sum.textContent = '';
+      // a new bout starts the tally afresh; a step of the same bout that plays another game keeps it
+      const serial = action?.serial ?? -1;
+      if (serial !== this.serial || !kind) { this.serial = serial; this.saved = 0; this.sumText = ''; this.sum.textContent = ''; }
       if (kind) this.build(kind);
     }
     const L = this.logic;

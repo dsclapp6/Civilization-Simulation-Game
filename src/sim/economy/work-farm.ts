@@ -798,7 +798,7 @@ function listGardenOptions(E: Econ, p: Person, hhId: number, buildingId: number,
     push(option({
       id: 'garden.dig', label: bed && (bed.p ?? 0) > 0 ? 'Finish digging the bed' : 'Dig a garden bed', seconds: secondsFor(1, speed), anim: 'work_dig', mainHand: 'spade', priority: 40, ...base,
       bouts: boutsLeft(2, bed?.p ?? 0),
-      preview: 'Two bouts of digging make a bed ready for sowing · Farming', data: { act: 'garden', step, bed: idx } as GardenData,
+      preview: 'Two bouts of digging make a bed ready for sowing (the beds lie before your door) · Farming', data: { act: 'garden', step, bed: idx } as GardenData,
     }));
   } else if (step === 'sow') {
     if (sea === 3) { out.push(disabled({ id: 'garden.sow', label: 'Sow the bed', ...base }, 'Nothing grows in winter')); return; }
