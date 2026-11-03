@@ -1,5 +1,4 @@
-import type { InteriorSpec } from './interior';
-import type { CharacterDrawItem as InteriorChar } from '../core/view';
+import type { InteriorsView } from './interior';
 // Public types of the render module (re-exported from renderer.ts).
 import type * as THREE from 'three';
 import type { SimView } from '../core/view';
@@ -74,12 +73,7 @@ export interface RenderStats {
 export interface GroundPoint { x: number; y: number; z: number }
 
 /** The builder's ghost building (civilization pass). */
-export type { InteriorSpec };
-export interface InteriorFrame {
-  chars: readonly InteriorChar[];
-  eye: { x: number; y: number; z: number };
-  at: { x: number; y: number; z: number };
-}
+export type { InteriorsView };
 
 export interface BuildGhost {
   kind: BuildingKind;
@@ -178,12 +172,10 @@ export interface GameRenderer {
   /** Orders drawn on the ground in battle (tactical view and command HUD); null or [] clears. */
   setOrderMarks?(marks: readonly OrderMark[] | null): void;
   /**
-   * Interiors: while set, the renderer draws this room instead of the world, with the people `view()` gives, seen from
-   * its eye towards its target (room-local metres, the floor at y 0). null goes back outside.
+   * Interiors (docs/INTERIORS.md): each frame the renderer asks `view()` which buildings have their inside drawn (the one the
+   * player is in — cut away round him — and near ones with a door open) and how far each door stands open. null stops it.
    */
-  setInterior?(spec: InteriorSpec | null, view?: () => InteriorFrame): void;
-  /** The person under a screen point inside the room (−1 none). */
-  pickInterior?(x: number, y: number): number;
+  setInteriors?(view: (() => InteriorsView | null) | null): void;
 
   // ---- lifecycle ----
   setQuality(q: QualityLevel): void;

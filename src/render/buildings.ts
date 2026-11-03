@@ -15,6 +15,7 @@ import type { WorldModel } from '../world/types';
 import { adoptObject } from './sky/atmospherePatch';
 import { BUILDING_FADE } from '../assets/core/materials';
 import { constructionStep } from '../assets/buildings/states';
+import { placedRot, placedY } from '../assets/buildings/placement';
 
 /** Seconds a building takes to cross-fade from one detail level (lod) to the next. */
 const LOD_FADE_S = 0.6;
@@ -64,7 +65,6 @@ interface Batch { meshes: THREE.InstancedMesh[] }
 const BATCH_MIN = 3;
 
 /** Kinds whose asset carries its mill race / quay on local -z (docs/ART.md section 8). */
-const WATER_KINDS = new Set<BuildingKind>(['watermill', 'fulling_mill', 'tannery', 'dock']);
 /** Distance thresholds for request.lod 0 and 1, with hysteresis on the way out. */
 const LOD_NEAR = 120;
 const LOD_MID = 400;
@@ -300,42 +300,10 @@ export class BuildingSystem {
     this.keySeen.set(key, this.frame);
   }
 
-  private waterAt(x: number, z: number): boolean {
-    const s = this.world.size;
-    return this.world.waterSurfaceAt(Math.min(s, Math.max(0, x)), Math.min(s, Math.max(0, z))) !== null;
-  }
-
-  /** Water buildings face their door away from the water: turn them round if the plot says otherwise. */
-  private orient(b: BuildingView): number {
-    if (!WATER_KINDS.has(b.kind)) return b.rot;
-    const def = BUILDINGS[b.kind];
-    const fx = Math.sin(b.rot), fz = Math.cos(b.rot);
-    let front = 0, back = 0;
-    for (const r of [def.d / 2 + 1.5, def.d / 2 + 4]) {
-      if (this.waterAt(b.x + fx * r, b.z + fz * r)) front++;
-      if (this.waterAt(b.x - fx * r, b.z - fz * r)) back++;
-    }
-    return front > back ? b.rot + Math.PI : b.rot;
-  }
-
-  private groundY(b: BuildingView, rot: number): number {
-    const def = BUILDINGS[b.kind];
-    const c = Math.cos(rot), s = Math.sin(rot);
-    const at = (lx: number, lz: number) => this.world.heightAt(b.x + lx * c + lz * s, b.z - lx * s + lz * c);
-    if (WATER_KINDS.has(b.kind)) {
-      // stand on the dry bank (door side); the race / quay at local -z reaches over the water
-      const hs = [at(0, 0), at(-def.w * 0.35, def.d * 0.3), at(def.w * 0.35, def.d * 0.3), at(0, def.d * 0.45)];
-      return Math.max(hs[0], (hs[1] + hs[2] + hs[3]) / 3) - 0.1;
-    }
-    let mn = at(0, 0), sum = mn;
-    for (const [lx, lz] of [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]]) {
-      const h = at(lx * def.w, lz * def.d);
-      mn = Math.min(mn, h);
-      sum += h;
-    }
-    // sit on the lower corners (the plinth reaches 0.8 m down), slightly sunk
-    return Math.min(mn + 0.15, sum / 5) - 0.05;
-  }
+  /** Water buildings face their door away from the water; models sit on their lower corners (assets/buildings/placement.ts). */
+  private orient(b: BuildingView): number { return placedRot(this.placeWorld, b); }
+  private groundY(b: BuildingView, rot: number): number { return placedY(this.placeWorld, b, rot); }
+  private get placeWorld(): { size: number; heightAt(x: number, z: number): number; waterSurfaceAt(x: number, z: number): number | null } { return this.world as unknown as { size: number; heightAt(x: number, z: number): number; waterSurfaceAt(x: number, z: number): number | null }; }
 
   private sync(list: readonly BuildingView[]): void {
     const seen = new Set<number>();
@@ -406,6 +374,8 @@ export class BuildingSystem {
     const asset = this.assets.building({
       kind: b.kind, level: b.level, culture: b.culture, seed: b.seed,
       construction: b.construction, damage: b.damage, ownerColor: b.ownerColor, lod, gate: f?.gate, breach: f?.breach,
+      // near models leave their doorways dark: the interiors layer hangs the leaves that swing (docs/INTERIORS.md)
+      doorLeaves: lod > 0,
     });
     const old = e.asset;
     const wasVisible = old ? old.object.visible : false;
@@ -719,7 +689,7 @@ export class BuildingSystem {
     const groups = new Map<string, Entry[]>();
     for (const e of this.ordered) {
       e.batched = false;
-      if (!e.detailed || !e.asset || !e.isStatic || e.fade) continue;
+      if (!e.detailed || !e.asset || !e.isStatic || e.fade || this.unbatched.has(e.id)) continue;
       const key = `${e.assetKey}|${e.lit}`;
       let list = groups.get(key);
       if (!list) { list = []; groups.set(key, list); }
@@ -902,6 +872,31 @@ export class BuildingSystem {
   private readonly rcHit = new THREE.Vector3();
 
   /** `pad` grows the box sideways and up (eaves overhang the footprint) for a camera boom; a start point inside only the padding counts as outside. */
+  // ---- interiors (docs/INTERIORS.md) ----
+
+  /** Buildings drawn by their own model (never instanced) because they are cut open; the camera's boom passes through these. */
+  private readonly unbatched = new Set<number>();
+  private readonly rayPass = new Set<number>();
+  setInteriorFocus(open: ReadonlySet<number>, inside: ReadonlySet<number>): void {
+    let changed = open.size !== this.unbatched.size;
+    if (!changed) for (const id of open) if (!this.unbatched.has(id)) { changed = true; break; }
+    if (changed) { this.unbatched.clear(); for (const id of open) this.unbatched.add(id); this.batchDirty = true; this.lastBatch = -100; }
+    this.rayPass.clear();
+    for (const id of inside) this.rayPass.add(id);
+  }
+
+  /** Where a building's model stands (world), and its detailed model when one is drawn. */
+  placement(id: number): { x: number; y: number; z: number; rot: number; asset: BuildingAsset | null; lod: number; visible: boolean } | null {
+    const e = this.entries.get(id);
+    if (!e) return null;
+    return { x: e.x, y: e.y, z: e.z, rot: e.rot, asset: e.asset, lod: e.assetLod, visible: !!e.asset && (e.asset.object.visible || e.batched) && e.detailed };
+  }
+
+  /** Every building drawn with its near model (lod 0): for the door leaves. */
+  forEachNear(fn: (id: number, x: number, y: number, z: number, rot: number, asset: BuildingAsset) => void): void {
+    for (const e of this.detailedList) if (e.asset && e.assetLod === 0 && e.detailed) fn(e.id, e.x, e.y, e.z, e.rot, e.asset);
+  }
+
   raycast(ray: THREE.Ray, maxDist: number, pad = 0): { id: number; distance: number } | null {
     let best: { id: number; distance: number } | null = null;
     const inv = this.rcInv, local = this.rcRay, box = this.rcBox, hit = this.rcHit;
@@ -909,6 +904,7 @@ export class BuildingSystem {
     const near = this.nearValid && maxDist + 60 + ray.origin.distanceTo(this.evalPos) < NEAR_R;
     for (const e of near ? this.nearList : this.ordered) {
       if (e.dist > maxDist + 60) continue;
+      if (this.rayPass.has(e.id)) continue;
       const def = BUILDINGS[e.kind];
       const h = e.asset ? e.asset.height : proxyShape(e.kind, e.view.level).wall + 3;
       inv.makeRotationY(e.rot).setPosition(e.x, e.y, e.z).invert();

@@ -799,6 +799,7 @@ export class PlayerController implements PlayerApi {
     } else if (!frozen) this.faceYaw = null;
     stepBody(b, driver, env, dt);
     if (b.fell > 0) this.fallFromWalk(b.fell);
+    if (b.blocked && !b.mounted && b.baseSpeed > 0.3) this.bumpDoor(b);
     if (combatPose !== null) {
       if (combatPose.faceYaw !== null && !b.mounted && b.dodgeT <= 0) b.yaw = turnToward(b.yaw, combatPose.faceYaw, 15, dt);
       if (combatPose.unhorse && b.mounted) this.throwRider();
@@ -1962,6 +1963,23 @@ export class PlayerController implements PlayerApi {
   // ===========================================================================================
 
   private person(): Person | undefined { return this.sim.state.persons.get(this.personId); }
+
+  /** Walking into a shut door opens it before him (it swings to behind him), unless it is locked — which is said, now and then. */
+  private doorSaid = -1e9;
+  private bumpDoor(b: BodyState): void {
+    const doors = this.zone.doorBook;
+    const hit = this.zone.nav.doorAgainst?.(b.x, b.z, b.y);
+    if (!doors || !hit) return;
+    const bs = this.sim.state.buildings.get(hit.building);
+    const me = this.sim.state.persons.get(this.personId);
+    if (!bs || !me) return;
+    const lock = doors.lockFor(me, bs, hit.door);
+    if (lock.locked) {
+      if (this.sim.absDay - this.doorSaid > 0.004) { this.doorSaid = this.sim.absDay; this.notify('info', `${lock.why} Knock, or force it (a crime).`); }
+      return;
+    }
+    doors.pass(hit.building, hit.door, 2.4);
+  }
 
   private notify(kind: SimEvents['notify']['kind'], text: string): void {
     this.sim.events.emit('notify', { kind, text, person: this.personId });

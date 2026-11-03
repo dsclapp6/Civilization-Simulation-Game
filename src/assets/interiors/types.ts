@@ -148,6 +148,9 @@ export interface InteriorPlan {
   lights: PLight[];
   /** Solid things outside the walls but within the building's plot (chimney stacks, the woodpile, porch posts). */
   outside: PBox[];
+  /** Partition walls (drawn as plastered timber screens) and the rails round the stairwells (drawn as balusters). */
+  partitions: PBox[];
+  rails: PBox[];
   /** Bounds of the rooms (a point outside them is outside the building). */
   bounds: PRect;
   /** The building's main door (index into `doors`), -1 when it has none a person can use. */

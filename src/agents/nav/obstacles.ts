@@ -306,6 +306,28 @@ export class Obstacles {
    * Pushes a circle at (pos.x, pos.z) with radius r out of every solid it overlaps. Returns the number of
    * contacts; pos is updated. Several passes let a body slide round a corner instead of sticking.
    */
+  /**
+   * Interiors (docs/INTERIORS.md): buildings whose inside is loaded are not boxes to a moving body — their walls, doors and
+   * furniture are (`bodyPush`, the inside's own collision at the body's height). Only moving bodies see this; the planner and
+   * the other tests keep the boxes.
+   */
+  readonly bodySkip = new Set<number>();
+  bodyPush: ((pos: { x: number; z: number }, r: number) => number) | null = null;
+  private bodyMode = false;
+
+  /** pushOut for a moving body: the loaded insides instead of their boxes. */
+  pushOutBody(pos: { x: number; z: number }, r: number): number {
+    this.bodyMode = this.bodySkip.size > 0;
+    try { return this.pushOut(pos, r); } finally { this.bodyMode = false; }
+  }
+
+  /** blocked() for a moving body (see pushOutBody). */
+  blockedBody(x: number, z: number, r: number): boolean {
+    if (this.bodySkip.size === 0) return this.blocked(x, z, r);
+    this.bodyMode = true;
+    try { return this.blocked(x, z, r); } finally { this.bodyMode = false; }
+  }
+
   pushOut(pos: { x: number; z: number }, r: number): number {
     let contacts = 0;
     const near = this.tmpNear;
@@ -320,6 +342,7 @@ export class Obstacles {
         if (arr) {
           for (let k = 0; k < arr.length; k++) {
             const i = arr[k];
+            if (this.bodyMode && this.bodySkip.has(this.bid[i])) continue;
             const d = obbNearest(pos.x, pos.z, this.bx[i], this.bz[i], this.bcos[i], this.bsin[i], this.bhw[i], this.bhd[i], near);
             if (d >= reach) continue;
             contacts++;
@@ -344,6 +367,7 @@ export class Obstacles {
       }
       const hits = this.pushSolids(pos, r);
       if (hits > 0) { contacts += hits; moved = true; }
+      if (this.bodyMode && this.bodyPush) { const ih = this.bodyPush(pos, r); if (ih > 0) { contacts += ih; moved = true; } }
       if (!moved) break;
     }
     return contacts;
@@ -358,6 +382,7 @@ export class Obstacles {
       if (arr) {
         for (let k = 0; k < arr.length; k++) {
           const i = arr[k];
+          if (this.bodyMode && this.bodySkip.has(this.bid[i])) continue;
           if (obbNearest(x, z, this.bx[i], this.bz[i], this.bcos[i], this.bsin[i], this.bhw[i], this.bhd[i], near) < r) return true;
         }
       }

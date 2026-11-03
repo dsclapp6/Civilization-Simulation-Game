@@ -292,12 +292,14 @@ function partition(pc: PlanCtx, b: Block, k: number, rect: PRect, axis: 'x' | 'z
   const lvl = b.lv[k];
   if (axis === 'x') {
     // a wall across x at x = at, running along z, with a doorway at z = door
+    pc.plan.partitions.push({ x0: at - t / 2, x1: at + t / 2, z0: rect.z0, z1: door - dw / 2, y0, y1 }, { x0: at - t / 2, x1: at + t / 2, z0: door + dw / 2, z1: rect.z1, y0, y1 }, { x0: at - t / 2, x1: at + t / 2, z0: door - dw / 2, z1: door + dw / 2, y0: y0 + 2.0, y1 });
     pc.plan.solids.push({ x0: at - t / 2, x1: at + t / 2, z0: rect.z0, z1: door - dw / 2, y0, y1 }, { x0: at - t / 2, x1: at + t / 2, z0: door + dw / 2, z1: rect.z1, y0, y1 });
     pc.plan.solids.push({ x0: at - t / 2, x1: at + t / 2, z0: door - dw / 2, z1: door + dw / 2, y0: y0 + 2.0, y1 });
     addInnerDoor(pc, at + t / 2, door, y0, 1, 0, t, lvl, open);
     pc.clear.push({ x0: at - 1.3, x1: at + 1.3, z0: door - 0.8, z1: door + 0.8, level: lvl });
     return [{ ...rect, x1: at - t / 2 }, { ...rect, x0: at + t / 2 }];
   }
+  pc.plan.partitions.push({ x0: rect.x0, x1: door - dw / 2, z0: at - t / 2, z1: at + t / 2, y0, y1 }, { x0: door + dw / 2, x1: rect.x1, z0: at - t / 2, z1: at + t / 2, y0, y1 }, { x0: door - dw / 2, x1: door + dw / 2, z0: at - t / 2, z1: at + t / 2, y0: y0 + 2.0, y1 });
   pc.plan.solids.push({ x0: rect.x0, x1: door - dw / 2, z0: at - t / 2, z1: at + t / 2, y0, y1 }, { x0: door + dw / 2, x1: rect.x1, z0: at - t / 2, z1: at + t / 2, y0, y1 });
   pc.plan.solids.push({ x0: door - dw / 2, x1: door + dw / 2, z0: at - t / 2, z1: at + t / 2, y0: y0 + 2.0, y1 });
   addInnerDoor(pc, door, at + t / 2, y0, 0, 1, t, lvl, open);

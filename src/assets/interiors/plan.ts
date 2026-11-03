@@ -126,7 +126,7 @@ export function makePlan(kind: BuildingKind, level: number, culture: CultureId, 
   if (!blocks.length) return null;
   const plan: InteriorPlan = {
     key, kind, level, culture, blocks: [], levels: [], rooms: [], floors: [], stairs: [], solids: [], doors: [], windows: [], furniture: [],
-    spots: [], lights: [], outside: [], bounds: { x0: 0, x1: 0, z0: 0, z1: 0 }, main: -1,
+    spots: [], lights: [], outside: [], partitions: [], rails: [], bounds: { x0: 0, x1: 0, z0: 0, z1: 0 }, main: -1,
   };
   const pc: PlanCtx = { kind, level, culture, plan, blocks, out, clear: [], seed };
   towerFloors(pc);
@@ -308,7 +308,7 @@ function placeDoors(pc: PlanCtx, doorways: DoorwayRec[], hints: InteriorHint[]):
     const intoOther = pc.blocks.some((q) => q !== b && q.inner.some((r, kk) => q.lv[kk] === level && contains(r, ox, oz)));
     const door: PDoor = {
       id: plan.doors.length, x: d.x, z: d.z, y: d.y, w: d.w, h: d.h, nx, nz, t: b.t, outer: !intoOther, kind,
-      open: d.open || (kind === 'wide' && d.open), hinge: hingeFor(b.rects[k], w.s, d.x, d.z), leaves: kind === 'wide' && d.w >= 1.6 ? 2 : 1,
+      open: d.open || (kind === 'wide' && d.open), hinge: hingeFor(b.rects[k], w.s, d.x, d.z, nx, nz), leaves: kind === 'wide' && d.w >= 1.6 ? 2 : 1,
       shape: d.shape, color: d.color, stone: d.stone, level, sx: d.x + nx * 1.25, sz: d.z + nz * 1.25, sy: 0,
     };
     void ix; void iz;
@@ -370,15 +370,9 @@ function placeDoors(pc: PlanCtx, doorways: DoorwayRec[], hints: InteriorHint[]):
   }
 }
 
-function hingeFor(r: PRect, s: Side, x: number, z: number): -1 | 1 {
-  // the leaf hangs on the side nearer the corner, so it opens back against the wall
-  const p = sidePlane(r, s);
-  const a = s === 'pz' || s === 'nz' ? x : z;
-  const mid = (p.a0 + p.a1) / 2;
-  const toward = a < mid ? -1 : 1;
-  // "left seen from outside": on pz, outside looks towards -z, so its left is -x… keep it in u (along the wall as seen from outside)
-  const flip = s === 'pz' || s === 'nx' ? 1 : -1;
-  return (toward * flip) as -1 | 1;
+function hingeFor(_r: PRect, _s: Side, x: number, z: number, nx: number, nz: number): -1 | 1 {
+  // the leaf hangs on the jamb nearer the building's end, so it opens back against the wall (the renderer's hingeOf)
+  return x * nz + z * -nx >= 0 ? 1 : -1;
 }
 
 /** Where two blocks meet with no doorway between them, one is made (an arch in a church, a door in a house). */
@@ -714,7 +708,7 @@ function makeFloors(pc: PlanCtx): void {
         const foot = stairEnd(st, 0, 0.05);
         rails.push({ ...foot, y0: y, y1: y + 0.95 });
         // keep only rails that are not against a wall
-        for (const rl of rails) if (contains(r, (rl.x0 + rl.x1) / 2, (rl.z0 + rl.z1) / 2, -0.08) && !overlaps(rl, head)) plan.solids.push({ ...rl, y0: y + 0.05 });
+        for (const rl of rails) if (contains(r, (rl.x0 + rl.x1) / 2, (rl.z0 + rl.z1) / 2, -0.08) && !overlaps(rl, head)) { plan.solids.push({ ...rl, y0: y + 0.05 }); plan.rails.push({ ...rl }); }
       }
       // a scrap of floor boxed in behind a stairwell is no room at all
       const heads = plan.stairs.filter((st) => st.to === b.lv[k]).map((st) => stairEnd(st, 1, 0.4));

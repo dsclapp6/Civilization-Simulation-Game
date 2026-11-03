@@ -123,6 +123,10 @@ export function installLaw(sim: Simulation, deps: Wave3Deps): LawRuntime {
     prisoners,
     version: () => L.store.rev,
     wanted: (person) => L.store.data.wanted.filter((w) => w.person === person && w.until > L.day).map((w) => ({ settlement: w.settlement, until: w.until })),
+    breakIn: (person, settlement, x, z, occupied) => {
+      const p = L.person(person);
+      return !!p && watch.breakIn(p, settlement, x, z, occupied);
+    },
     report: (person, x, z) => {
       const p = L.person(person);
       return !!p && watch.report(p, x, z);

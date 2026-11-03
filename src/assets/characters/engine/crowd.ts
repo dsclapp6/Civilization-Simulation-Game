@@ -4,6 +4,7 @@
 // plus a parameter texel. Vertices carry (slot, boneA, boneB, weight, material flag)
 // and are skinned in the vertex shader (patched MeshStandardMaterial + depth materials).
 // Geometry chunks are sub-allocated from the shared buffers (first-fit free lists).
+import { GLSL_INDOOR, INDOOR_LIGHTS } from '../../core/materials';
 import * as THREE from 'three';
 import type { GeometryData } from './builder';
 
@@ -200,14 +201,18 @@ export class SkinnedCrowd {
     const uniform = this.boneUniform;
     this.material.onBeforeCompile = (shader) => {
       shader.uniforms.crowdBones = uniform;
+      shader.uniforms.uILight = INDOOR_LIGHTS.pos;
+      shader.uniforms.uILightCol = INDOOR_LIGHTS.col;
       shader.vertexShader = patchVertex(shader.vertexShader, true);
       shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', `#include <common>\n${FRAG_PARS}`)
+        .replace('#include <common>', `#include <common>\n${FRAG_PARS}\n${GLSL_INDOOR}`)
+        // the hearth and the candles of the room one is in light the people too (docs/INTERIORS.md)
+        .replace('#include <opaque_fragment>', 'outgoingLight += mlIndoor(diffuseColor.rgb, normal, -vViewPosition);\n#include <opaque_fragment>')
         .replace('#include <roughnessmap_fragment>', FRAG_ROUGH)
         .replace('#include <metalnessmap_fragment>', FRAG_METAL)
         .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\n${FRAG_EMISSIVE}`);
     };
-    this.material.customProgramCacheKey = () => 'millennia-crowd-std-v1';
+    this.material.customProgramCacheKey = () => 'millennia-crowd-std-v2';
 
     this.depthMat = new THREE.MeshDepthMaterial();
     this.depthMat.onBeforeCompile = (shader) => {

@@ -672,6 +672,10 @@ function atDoor(z: Zone, a: Agent, dt: number): void {
   const free = z.doorNext.get(a.building) ?? 0;
   if (z.zoneT < free) return;
   z.doorNext.set(a.building, z.zoneT + 0.7);
+  // the door opens for them and swings to behind them (docs/INTERIORS.md)
+  const bs = z.state.buildings.get(a.building);
+  const pl = bs ? z.nav.interiors.placed(bs) : null;
+  if (pl && pl.plan.main >= 0) z.doors.pass(a.building, pl.plan.main);
   // step through the door: one metre towards the building, then gone
   a.st = St.Ghost;
   a.ghostX = a.x - Math.sin(a.tyaw) * 1.5; a.ghostZ = a.z - Math.cos(a.tyaw) * 1.5;
@@ -688,6 +692,8 @@ function ghost(z: Zone, a: Agent, dt: number): void {
     a.x = a.ghostX; a.z = a.ghostZ; a.dead = true;
     // up a stair takes a few seconds: he is seen on the top after that
     z.hide(a.personId, a.wantUp ? Math.max(a.arriveBy, z.now) + 0.011 : a.arriveBy + 0.001);
+    // in at the door of a room that is drawn: they walk on in to their place
+    if (a.building >= 0) z.indoors.arrive(a.personId);
     return;
   }
   a.x += (dx / d) * v; a.z += (dz / d) * v;

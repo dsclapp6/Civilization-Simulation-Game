@@ -388,7 +388,21 @@ export class CameraRig {
     return Number.isFinite(bestCost) ? bestOff : 0;
   }
 
+  /** In a building (docs/INTERIORS.md): the boom comes in and looks down into the cut-away room. Set each frame. */
+  inside = false;
+  private insideK = 0;
+
   private computeFollow(out: Pose, focus: THREE.Vector3, dt: number): void {
+    this.insideK += ((this.inside ? 1 : 0) - this.insideK) * (dt > 0 ? 1 - Math.exp(-dt * 3) : 1);
+    const userPitch = this.pitch, userDist = this.distance;
+    if (this.insideK > 1e-3) {
+      this.pitch = userPitch + (Math.max(userPitch, 0.72) - userPitch) * this.insideK;
+      this.distance = userDist + (Math.min(userDist, 7) - userDist) * this.insideK;
+    }
+    try { this.computeFollowInner(out, focus, dt); } finally { this.pitch = userPitch; this.distance = userDist; }
+  }
+
+  private computeFollowInner(out: Pose, focus: THREE.Vector3, dt: number): void {
     if (!this.targetValid) { this.target.copy(focus); this.targetValid = true; }
     const k = 1 - Math.exp(-dt * 14);
     this.target.lerp(focus, k);

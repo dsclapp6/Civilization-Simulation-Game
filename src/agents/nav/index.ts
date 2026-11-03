@@ -12,6 +12,7 @@ import { NavGrid } from './grid';
 import { Obstacles } from './obstacles';
 import { PathBuf, PathQueue, Pathfinder } from './path';
 import { WallWalk, type WalkMove } from './walls';
+import { Interiors, type InteriorSource } from './interiors';
 
 // ---------------------------------------------------------------------------------------------
 // Bridge decks (the renderer's deck profile, src/render/water/bridges.ts)
@@ -104,10 +105,53 @@ export class Nav implements NavApi {
     this.queue = new PathQueue(this.finder);
     this.decks = new BridgeDecks(world);
     this.walls = new WallWalk(world, state);
+    this.interiors = new Interiors(state);
+    this.obstacles.bodyPush = (pos, r) => this.interiors.push(pos, r, this.moveY);
+  }
+
+  // ---- interiors (docs/INTERIORS.md) ----
+
+  /** The insides near the focus: their floors, stairs, walls, doors and furniture. */
+  readonly interiors: Interiors;
+  /** The height of the body being moved (its feet), for the insides' collision. */
+  private moveY = 0;
+  private readonly fl = { building: -1, level: -1, inside: false };
+
+  /** The app gives the plans of insides (the building recipes) and where the models stand. */
+  setInteriorSource(src: InteriorSource | null): void {
+    this.interiors.setSource(src);
+    this.obstacles.bodySkip.clear();
+  }
+
+  private refreshInteriors(fx: number, fz: number): void {
+    this.interiors.refresh(fx, fz, (ids) => {
+      this.obstacles.bodySkip.clear();
+      for (const id of ids) this.obstacles.bodySkip.add(id);
+    });
+  }
+
+  /** The floor under a body whose feet are at y: inside a building its floor, stair or ladder; else the ground. */
+  floorY(x: number, z: number, y: number): number {
+    if (!this.interiors.enabled) return this.groundY(x, z);
+    const f = this.interiors.floorAt(x, z, y, this.fl);
+    const g = this.groundY(x, z);
+    if (f === f) return this.fl.inside ? f : Math.max(f, g);
+    return g;
+  }
+
+  /** The building whose rooms a body at (x, z, y) is in (−1 none), and the level of its plan. */
+  interiorAt(x: number, z: number, y: number, out?: { level: number }): number {
+    return this.interiors.enabled ? this.interiors.roomAt(x, z, y, out) : -1;
+  }
+
+  /** The shut door a body is pressed against (building, index in its plan), or null. */
+  doorAgainst(x: number, z: number, y: number): { building: number; door: number } | null {
+    return this.interiors.enabled ? this.interiors.doorAgainst(x, z, y) : null;
   }
 
   /** Per-frame upkeep: building changes, felled trees, incremental tile building around the focus. */
   update(fx: number, fz: number, budgetMs = NAV_BUILD_BUDGET_MS, checkBuildings = true): void {
+    this.refreshInteriors(fx, fz);
     if (checkBuildings && this.obstacles.refreshBuildings()) {
       const d = this.obstacles.dirty;
       for (let i = 0; i < d.length; i += 4) this.grid.invalidateRect(d[i], d[i + 1], d[i + 2], d[i + 3]);
@@ -171,7 +215,10 @@ export class Nav implements NavApi {
     return !blocked;
   }
 
-  move(x: number, z: number, dx: number, dz: number, radius: number, out: MoveResult): MoveResult {
+  move(x: number, z: number, dx: number, dz: number, radius: number, out: MoveResult, y?: number): MoveResult {
+    // a body whose height is known moves through the insides near it (their walls and doors, not their boxes)
+    const body = y !== undefined && this.interiors.enabled && this.interiors.all.length > 0;
+    let cy = y ?? 0;
     // large steps (a gallop, a dropped frame) are taken in pieces so a thin obstacle cannot be jumped
     const len = Math.sqrt(dx * dx + dz * dz);
     if (len > 0.16) {
@@ -179,14 +226,44 @@ export class Nav implements NavApi {
       const sx = dx / n, sz = dz / n;
       let blocked = false, cx = x, cz = z;
       for (let i = 0; i < n; i++) {
-        this.move1(cx, cz, sx, sz, radius, out);
+        if (body) this.move1Body(cx, cz, cy, sx, sz, radius, out); else this.move1(cx, cz, sx, sz, radius, out);
         if (out.blocked) blocked = true;
         cx = out.x; cz = out.z;
+        if (body) cy = this.floorY(cx, cz, cy);
       }
       out.blocked = blocked;
       return out;
     }
-    return this.move1(x, z, dx, dz, radius, out);
+    return body ? this.move1Body(x, z, cy, dx, dz, radius, out) : this.move1(x, z, dx, dz, radius, out);
+  }
+
+  /** One small step of a body near the insides: their collision at its height, and no drop down a stairwell. */
+  private move1Body(x: number, z: number, y: number, dx: number, dz: number, radius: number, out: MoveResult): MoveResult {
+    this.moveY = y;
+    const p = this.tmp;
+    const try1 = (tx: number, tz: number): boolean => {
+      p.x = tx; p.z = tz;
+      this.obstacles.pushOutBody(p, radius);
+      this.interiors.push(p, radius, y);
+      if (!this.terrainOk(p.x, p.z) && this.interiors.floorAt(p.x, p.z, y) !== this.interiors.floorAt(p.x, p.z, y)) return false;
+      const f = this.interiors.floorAt(p.x, p.z, y, this.fl);
+      const ny = f === f ? (this.fl.inside ? f : Math.max(f, this.groundY(p.x, p.z))) : this.groundY(p.x, p.z);
+      // within a building one does not drop down a stairwell; walking out of a door onto lower ground is a step
+      const wasInside = this.interiors.roomAt(x, z, y) >= 0;
+      if (!this.interiors.dropOk(y, ny, this.fl.inside || (wasInside && f === f))) return false;
+      return true;
+    };
+    let ok = try1(x + dx, z + dz);
+    let blocked = Math.abs(p.x - (x + dx)) + Math.abs(p.z - (z + dz)) > 1e-4;
+    if (!ok) {
+      blocked = true;
+      ok = (dx !== 0 && try1(x + dx, z)) || (dz !== 0 && try1(x, z + dz));
+    }
+    out.x = ok ? p.x : x;
+    out.z = ok ? p.z : z;
+    out.blocked = blocked;
+    out.wading = false;
+    return out;
   }
 
   private move1(x: number, z: number, dx: number, dz: number, radius: number, out: MoveResult): MoveResult {

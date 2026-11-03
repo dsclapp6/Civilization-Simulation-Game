@@ -55,9 +55,63 @@ float mlSnowMask(vec3 nView, vec3 wpos, float snow, float hold) {
  */
 export const BUILDING_FADE = { value: new THREE.Vector2(0, 0) };
 
+/**
+ * Interiors (docs/INTERIORS.md): the building the player is in, or looks into, is cut open. One shared set, set per draw
+ * (Mesh.onBeforeRender) on that building's meshes and its inside, cleared after. `on` 0 off, 1 the doorways only (a door open
+ * seen from outside), 2 the cut-away (inside: the roof and the storeys above the player gone, the walls between the camera and
+ * the player down to a sill). Positions in the building's own frame (`inv` takes world to it).
+ */
+export const BUILDING_CUT = {
+  on: { value: 0 },
+  inv: { value: new THREE.Matrix4() },
+  cutY: { value: 1e9 },
+  bounds: { value: new THREE.Vector4(0, 0, 0, 0) },
+  eye: { value: new THREE.Vector3() },
+  focus: { value: new THREE.Vector3() },
+  holeA: { value: Array.from({ length: 6 }, () => new THREE.Vector4(1, 1, 1, 0)) },
+  holeB: { value: Array.from({ length: 6 }, () => new THREE.Vector4(0, 0, 0, 0)) },
+};
+
+/**
+ * Hearths, forges, ovens and candles inside (world positions, radius in w; colour × intensity), shared by the buildings' and the
+ * people's shaders: a warm light that falls off within its radius. Up to four; a radius of 0 is off.
+ */
+export const INDOOR_LIGHTS = {
+  pos: { value: Array.from({ length: 4 }, () => new THREE.Vector4(0, 0, 0, 0)) },
+  col: { value: Array.from({ length: 4 }, () => new THREE.Vector3(0, 0, 0)) },
+};
+
+export const GLSL_INDOOR = /* glsl */ `
+uniform vec4 uILight[4];
+uniform vec3 uILightCol[4];
+vec3 mlIndoor(vec3 diffuse, vec3 nView, vec3 posView) {
+  vec3 acc = vec3(0.0);
+  for (int i = 0; i < 4; i++) {
+    if (uILight[i].w <= 0.0) continue;
+    vec3 lp = (viewMatrix * vec4(uILight[i].xyz, 1.0)).xyz;
+    vec3 L = lp - posView;
+    float d = length(L);
+    float att = clamp(1.0 - d / uILight[i].w, 0.0, 1.0);
+    att *= att;
+    float nl = max(dot(nView, L / max(d, 1e-3)), 0.0) * 0.75 + 0.25;
+    acc += diffuse * uILightCol[i] * att * nl;
+  }
+  return acc;
+}`;
+
 function patchBuildingShader(shader: THREE.WebGLProgramParametersWithUniforms, u: SharedUniforms): void {
   shader.uniforms.uSnow = u.uSnow;
   shader.uniforms.uBFade = BUILDING_FADE;
+  shader.uniforms.uCutOn = BUILDING_CUT.on;
+  shader.uniforms.uCutInv = BUILDING_CUT.inv;
+  shader.uniforms.uCutY = BUILDING_CUT.cutY;
+  shader.uniforms.uCutB = BUILDING_CUT.bounds;
+  shader.uniforms.uCutEye = BUILDING_CUT.eye;
+  shader.uniforms.uCutFocus = BUILDING_CUT.focus;
+  shader.uniforms.uCutHoleA = BUILDING_CUT.holeA;
+  shader.uniforms.uCutHoleB = BUILDING_CUT.holeB;
+  shader.uniforms.uILight = INDOOR_LIGHTS.pos;
+  shader.uniforms.uILightCol = INDOOR_LIGHTS.col;
   shader.uniforms.uGrassTint = u.uGrassTint;
   shader.uniforms.uSnowColor = u.uSnowColor;
   shader.vertexShader = shader.vertexShader
@@ -82,9 +136,12 @@ uniform vec3 uSnowColor;
 uniform vec2 uBFade;
 varying vec2 vSurf;
 varying vec3 vWPos;
+${GLSL_CUT_PARS}
+${GLSL_INDOOR}
 ${GLSL_NOISE}
 ${GLSL_SNOW}`)
     .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+${GLSL_CUT}
 if (uBFade.y > 0.5) {
   // screen-door LOD cross-fade: the incoming model takes the pattern cells below the progress,
   // the outgoing one keeps the rest, so the pair always covers the building exactly once
@@ -94,8 +151,39 @@ if (uBFade.y > 0.5) {
 }`)
     .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
 diffuseColor.rgb *= mix(vec3(1.0), uGrassTint, vSurf.y);
-diffuseColor.rgb = mix(diffuseColor.rgb, uSnowColor, mlSnowMask(normal, vWPos, uSnow, vSurf.x));`);
+diffuseColor.rgb = mix(diffuseColor.rgb, uSnowColor, mlSnowMask(normal, vWPos, uSnow, vSurf.x));
+// the inside of a cut wall reads as solid: its back faces dark
+if (uCutOn > 0.5 && !gl_FrontFacing) diffuseColor.rgb = vec3(0.07, 0.06, 0.05);`)
+    .replace('#include <opaque_fragment>', `if (uCutOn > 0.5) outgoingLight += mlIndoor(diffuseColor.rgb, normal, -vViewPosition);
+#include <opaque_fragment>`);
 }
+
+/** The cut-away: what of the building to leave out (see BUILDING_CUT). */
+const GLSL_CUT_PARS = /* glsl */ `
+uniform float uCutOn;
+uniform mat4 uCutInv;
+uniform float uCutY;
+uniform vec4 uCutB;
+uniform vec3 uCutEye;
+uniform vec3 uCutFocus;
+uniform vec4 uCutHoleA[6];
+uniform vec4 uCutHoleB[6];`;
+const GLSL_CUT = /* glsl */ `
+if (uCutOn > 0.5) {
+  vec3 lp = (uCutInv * vec4(vWPos, 1.0)).xyz;
+  bool inB = lp.x > uCutB.x && lp.x < uCutB.z && lp.z > uCutB.y && lp.z < uCutB.w;
+  for (int i = 0; i < 6; i++) {
+    if (uCutHoleA[i].w < 0.5) continue;
+    if (lp.x > uCutHoleA[i].x && lp.x < uCutHoleB[i].x && lp.y > uCutHoleA[i].y && lp.y < uCutHoleB[i].y && lp.z > uCutHoleA[i].z && lp.z < uCutHoleB[i].z) discard;
+  }
+  if (uCutOn > 1.5 && inB) {
+    if (lp.y > uCutY) discard;
+    vec2 d = uCutFocus.xz - uCutEye.xz;
+    float L = length(d);
+    vec2 dir = d / max(L, 1e-3);
+    if (dot(lp.xz - uCutEye.xz, dir) < L - 0.75 && lp.y > uCutFocus.y + 0.85) discard;
+  }
+}`;
 
 /** Opaque vertex-coloured, flat-shaded surface for buildings and props. */
 export function createOpaqueMaterial(u: SharedUniforms, doubleSided: boolean): THREE.MeshStandardMaterial {
@@ -126,11 +214,33 @@ export function createWindowMaterial(u: SharedUniforms, glow: { value: number })
     s.uniforms.uGlow = glow;
     s.uniforms.uSnow = u.uSnow;
     s.uniforms.uBFade = BUILDING_FADE;
+    s.uniforms.uCutOn = BUILDING_CUT.on;
+    s.uniforms.uCutInv = BUILDING_CUT.inv;
+    s.uniforms.uCutY = BUILDING_CUT.cutY;
+    s.uniforms.uCutB = BUILDING_CUT.bounds;
+    s.uniforms.uCutEye = BUILDING_CUT.eye;
+    s.uniforms.uCutFocus = BUILDING_CUT.focus;
+    s.uniforms.uCutHoleA = BUILDING_CUT.holeA;
+    s.uniforms.uCutHoleB = BUILDING_CUT.holeB;
+    s.vertexShader = s.vertexShader
+      .replace('#include <common>', `#include <common>
+varying vec3 vWPos;`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+{
+  vec4 mlW = vec4(transformed, 1.0);
+  #ifdef USE_INSTANCING
+  mlW = instanceMatrix * mlW;
+  #endif
+  vWPos = (modelMatrix * mlW).xyz;
+}`);
     s.fragmentShader = s.fragmentShader
       .replace('#include <common>', `#include <common>
 uniform float uGlow;
-uniform vec2 uBFade;`)
+uniform vec2 uBFade;
+varying vec3 vWPos;
+${GLSL_CUT_PARS}`)
       .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+${GLSL_CUT}
 if (uBFade.y > 0.5) {
   // screen-door LOD cross-fade: the incoming model takes the pattern cells below the progress,
   // the outgoing one keeps the rest, so the pair always covers the building exactly once
