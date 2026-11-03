@@ -102,14 +102,14 @@ export class MockHost implements UiHost {
   setSettings(change: Partial<Settings>): void { this.settingsState = { ...this.settingsState, ...change }; }
 
   /** Creates a run on the stub continent. `quick` skips the fake loading delays (screenshots). */
-  async create(difficulty: Difficulty, statUpgrades: StatUpgrades, quick = false): Promise<MockGame> {
+  async create(difficulty: Difficulty, statUpgrades: StatUpgrades, quick = false, start: 'birth' | 'lord' = 'birth'): Promise<MockGame> {
     const steps = ['Raising the hills…', 'Laying out the rivers and roads…', 'Settling villages and towns…', 'Choosing your family…'];
     for (let i = 0; i < steps.length; i++) {
       this.ui?.setScreen('loading', { progress: (i + 0.5) / steps.length, label: steps[i] });
       await sleep(quick ? 10 : 280);
     }
     const world = galleryWorld();
-    const sim = Simulation.newGame({ seed: GALLERY_SEED, difficulty, statUpgrades, generateWorld: () => world, profile: this.prof });
+    const sim = Simulation.newGame({ seed: GALLERY_SEED, difficulty, statUpgrades, start, generateWorld: () => world, profile: this.prof });
     // let a little time pass so the date reads as a living world
     sim.state.clock.absDay = 1.58;
     sim.state.clock.firedHour = Math.floor(1.58 * 24);
@@ -119,8 +119,8 @@ export class MockHost implements UiHost {
     return this.current;
   }
 
-  async startNewRun(opts: { difficulty: Difficulty; statUpgrades: StatUpgrades }): Promise<void> {
-    await this.create(opts.difficulty, opts.statUpgrades);
+  async startNewRun(opts: { difficulty: Difficulty; statUpgrades: StatUpgrades; start?: 'birth' | 'lord' }): Promise<void> {
+    await this.create(opts.difficulty, opts.statUpgrades, false, opts.start);
     this.ui?.setScreen('game');
   }
 

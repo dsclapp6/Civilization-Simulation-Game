@@ -79,6 +79,17 @@ describe('offering', () => {
     expect(per).toBeLessThan(13);
   });
 
+  it('never sends a lord on villagers\' errands by itself (their petitions are matters of the realm)', () => {
+    const a = advSim({ seed: 'req-lord' });
+    const title = [...a.sim.state.titles.values()].find((t) => t.kind === 'manor' && t.place === a.player.settlement) ?? [...a.sim.state.titles.values()].find((t) => t.kind === 'manor')!;
+    a.sim.state.setTitleHolder(title, a.player.id);
+    a.player.birthDay -= 16 * 20;
+    let n = 0;
+    a.sim.events.on('request', () => n++);
+    for (let d = 0; d < 24; d++) a.sim.advanceDays(1);
+    expect(n).toBe(0);
+  });
+
   it('lets the player ask a neighbour whether there is anything to do', () => {
     const a = advSim({ seed: 'req-ask' });
     const friend = mkPerson(a.sim, { career: 'farmer', age: 38, tier: 2, settlement: a.player.settlement });

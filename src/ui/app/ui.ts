@@ -90,6 +90,8 @@ export class UiApp implements GameUIExt {
   private clock = 0;
   private scale = 1;
   private pendingBirth = false;
+  /** A run that began as a lord: the seat of government opens once the reveal, the intro and the tour are done. */
+  private seatPending = false;
   private afterMenu: MenuView | null = null;
   private lastEscapeAt = -1000;
   private lastChronicle: ChronicleEntry | null = null;
@@ -341,12 +343,14 @@ export class UiApp implements GameUIExt {
     this.lastChronicle = g.sim.state.chronicle[g.sim.state.chronicle.length - 1] ?? null;
   }
 
-  private async startRun(opts: { difficulty: Difficulty; statUpgrades: StatUpgrades }): Promise<void> {
+  private async startRun(opts: { difficulty: Difficulty; statUpgrades: StatUpgrades; start?: 'birth' | 'lord' }): Promise<void> {
     this.pendingBirth = true;
+    this.seatPending = opts.start === 'lord';
     try {
       await this.host.startNewRun(opts);
     } catch (err) {
       this.pendingBirth = false;
+      this.seatPending = false;
       throw err;
     }
   }
@@ -700,6 +704,14 @@ export class UiApp implements GameUIExt {
     if (p.id === 'birth' && this.introPending && this.bound) {
       this.introPending = false;
       queueMicrotask(() => { if (this.bound && !this.stack.top()) this.openPanel({ panel: 'intro' }); });
+    }
+    // a lord's run: after the reveal, the intro and the tour, the seat of government opens (the first orders are given there)
+    if ((p.id === 'intro' || p.id === 'tour') && this.seatPending) {
+      queueMicrotask(() => {
+        if (!this.bound || this.stack.has('intro') || this.stack.has('tour') || this.stack.has('birth')) return;
+        this.seatPending = false;
+        this.openPanel({ panel: 'ext', name: 'ruler' });
+      });
     }
     const rec = this.records.get(p);
     this.records.delete(p);

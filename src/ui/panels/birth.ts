@@ -1,5 +1,6 @@
 // "You are born …": the reveal shown at the start of a run. Who you are, where, to whom, with what
-// stats, what life holds for your class, and what your points are multiplied by.
+// stats, what life holds for your class, and what your points are multiplied by. A run that starts as a lord
+// (a grown holder of a manor) gets "You are the lord of …": his lands and what ruling them means.
 import { STAT_CAP } from '../../core/domain';
 import { h } from '../core/dom';
 import { dateText, trim } from '../core/format';
@@ -22,7 +23,10 @@ function kinRow(k: KinLine): HTMLElement {
 
 export function birthPanel(ctx: PanelCtx): UiPanel {
   const m: BirthModel | null = birthModel(ctx.sim);
-  const win = createWindow({ title: 'You are born…', subtitle: m ? dateText(ctx.sim.absDay) : '', icon: 'crown', size: 'xl' });
+  // a lord (the run began as one): a grown holder of titles, not a child of the village
+  const held = m ? [...ctx.sim.state.titlesHeldBy(m.id)].sort((a, b) => b.kind.localeCompare(a.kind)) : [];
+  const lord = !!m && m.age >= 18 && held.length > 0;
+  const win = createWindow({ title: lord ? 'You are the lord…' : 'You are born…', subtitle: m ? dateText(ctx.sim.absDay) : '', icon: 'crown', size: 'xl' });
   if (!m) {
     win.body.append(h('p.mu-empty', null, 'No one is born yet.'));
     win.showFoot(h('div.mu-grow'), button('Close', { onClick: () => ctx.close() }));
@@ -46,11 +50,15 @@ export function birthPanel(ctx: PanelCtx): UiPanel {
 
   const left = h('div.mu-birth-left', null,
     h('div.mu-reveal', { style: { '--i': 0 } }, h('div.mu-birth-name', null, m.name),
-      h('div.mu-birth-headline', null, `${m.age === 12 ? 'A twelve-year-old' : `A ${m.age}-year-old`} ${m.sex === 'm' ? 'boy' : 'girl'}, ${m.headline}`)),
+      h('div.mu-birth-headline', null, lord
+        ? `A ${m.age}-year-old ${m.sex === 'm' ? 'man' : 'woman'}, ${m.sex === 'm' ? 'lord' : 'lady'} of ${held.map((t) => t.name).join(' and ')}`
+        : `${m.age === 12 ? 'A twelve-year-old' : `A ${m.age}-year-old`} ${m.sex === 'm' ? 'boy' : 'girl'}, ${m.headline}`)),
     h('div.mu-row.mu-wrap.mu-gap-6.mu-reveal', { style: { '--i': 1 } },
       chip(m.rank.name, 'gold', 'shield'), chip(`Aged ${m.age}`, '', 'calendar'), m.rank.career !== 'Child' ? chip(m.rank.career, '', 'hammer') : null,
       chip(m.settlement.kind, '', 'pin'), m.settlement.lord ? chip(`Lord: ${m.settlement.lord}`, '', 'crown') : null),
-    h('p.mu-prose.mu-dropcap.mu-birth-life.mu-reveal', { style: { '--i': 2 } }, m.life),
+    h('p.mu-prose.mu-dropcap.mu-birth-life.mu-reveal', { style: { '--i': 2 } }, lord
+      ? `The manor is yours: its fields, its purse and its men. Ruling means choosing what the fields will grow, how much of your people's week-work goes to building, what your scholars work out, whom you raise to arms and what your steward buys and sells. All of it is done from the seat of government (U), and the world goes on while you walk your lands as a man of flesh: you can drill, fight, trade and talk like anyone, and take up another life (V) whenever you wish.`
+      : m.life),
     h('div.mu-birth-mult.mu-reveal', { style: { '--i': 3 } },
       h('div.mu-birth-mult-big', null, icon('star_f', 18), `Points ×${trim(m.multiplier.total, 2)}`),
       h('div.mu-small.mu-ink2', null,
@@ -71,9 +79,9 @@ export function birthPanel(ctx: PanelCtx): UiPanel {
 
   win.body.append(h('div.mu-birth', null, left, right));
   win.showFoot(
-    h('span.mu-dim.mu-small.mu-ital', null, 'You begin at twelve, with your family, your hands and your name.'),
+    h('span.mu-dim.mu-small.mu-ital', null, lord ? 'You begin as the master of your own lands; the seat of government opens first.' : 'You begin at twelve, with your family, your hands and your name.'),
     h('div.mu-grow'),
-    button('Begin your life', { variant: 'primary', size: 'big', icon: 'play', onClick: () => ctx.close() }),
+    button(lord ? 'Take your seat' : 'Begin your life', { variant: 'primary', size: 'big', icon: 'play', onClick: () => ctx.close() }),
   );
   return panelOf({ id: 'birth', group: 'screen', pauses: 'always', escape: 'ignore', mode: 'screen', hidesHud: true }, win.el, {
     key: (intent) => { if (intent.type === 'enter') { ctx.close(); return true; } return false; },

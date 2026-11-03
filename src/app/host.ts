@@ -111,7 +111,7 @@ export class AppHost implements UiHost {
       await paint();
       const t2 = performance.now();
       const sim = Simulation.newGame({
-        seed, difficulty: opts.difficulty, statUpgrades: opts.statUpgrades, generateWorld: () => world,
+        seed, difficulty: opts.difficulty, statUpgrades: opts.statUpgrades, start: opts.start, generateWorld: () => world,
         store: this.env.store, profile: this.profileObj,
       });
       const t3 = performance.now();

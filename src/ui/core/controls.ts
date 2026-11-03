@@ -111,6 +111,20 @@ export const BASICS: readonly HelpSection[] = [
     ],
   },
   {
+    title: 'Starting as a lord',
+    paragraphs: [
+      'On the New run page you may begin as a lord instead of being born into a family: a grown holder of a manor, with its fields, purse and men to order from the seat of government (U) from the first morning, and a first day that teaches the ruling (hear your steward, set the fields, put your purse to work, drill at the yard). The birth lottery with the Legacy shop is the default.',
+      'A lord has no chores, duties or errands: he manages. Under the tracked steps the tracker lists the matters of the realm that want his decision (raiders on the lands, the host in the field, works standing idle, fields with no crop named, no research under way, a thin treasury, people in want, a petition), dangers first and glowing; click one to open the page where it is decided.',
+    ],
+  },
+  {
+    title: 'Duties of your station',
+    paragraphs: [
+      'Someone with no master to set the day still has the work of their station, one duty at a time through the working day: a knight rides the bounds, trains the men at the yard, sees to his arms at the forge or stands the watch; a soldier guards, patrols and drills; a priest keeps the church and visits the sick; a healer tends whoever is ailing; a master craftsman works at his own bench. A tradesman is not asked to choose his path again.',
+      'If the tracker is crowded, the Settings page (Interface) has a Compact HUD: flat soft cards, narrower columns and a slim button bar.',
+    ],
+  },
+  {
     title: 'Growing up',
     paragraphs: [
       'At fourteen you choose a field: the Career page (the Career paths button on the Character page, Tab, or Think about your career in the action wheel) lists the trades, the Church, the army and service that your birth allows. Each rewards different skills; practice at the work raises them, and every fifth level offers a perk.',

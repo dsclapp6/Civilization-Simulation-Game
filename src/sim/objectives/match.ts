@@ -7,6 +7,7 @@ import { dist } from '../../core/math';
 import { skillLevel } from '../people';
 import type { Person, PersonId } from '../state';
 import type { Match, Obj, ObjRec, StepRec } from './core';
+import { realmCount } from './duties';
 import { deadwoodNear, homeOf, onStrip, playerXZ } from './places';
 import { bagQty, requestById, round1 } from './sources';
 
@@ -145,6 +146,10 @@ export function evalStep(O: Obj, o: ObjRec, step: StepRec, ev: Ev | null): boole
     }
     case 'flag':
       if (ev?.t === 'flag' && ev.name === m.name) step.done = true;
+      break;
+    case 'realm':
+      if (fast) break;
+      if (realmCount(O, m.what) > m.base) step.done = true;
       break;
   }
   void o;

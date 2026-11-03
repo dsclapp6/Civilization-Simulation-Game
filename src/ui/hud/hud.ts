@@ -229,7 +229,7 @@ export class Hud {
     this.feedEl.append(this.feedList, this.feedBar);
     this.tracker = new Tracker({
       game: () => deps.game(), nav: this.nav, nameOf: (id) => deps.nameOf(id),
-      openJournal: () => deps.open({ panel: 'journal' }), whatNow: () => this.whatNow.toggle(),
+      openJournal: () => deps.open({ panel: 'journal' }), whatNow: () => this.whatNow.toggle(), open: (req) => deps.open(req),
     });
     this.whatNow = new WhatNow({
       game: () => deps.game(), nav: this.nav, show: (spot) => { showPlace(deps.game(), deps.pins, spot); }, say: (text) => deps.say('info', text),
@@ -359,6 +359,9 @@ export class Hud {
   private updateDock(game: GameServices): void {
     const sim = game.sim;
     const badges = dockBadges(sim, sim.state.run.playerId);
+    // dangers on the lands are marked on the ruler's button
+    const dangers = this.tracker.dangers();
+    if (dangers > 0) badges.set('ruler', { count: dangers, tone: 'vermilion' });
     let anyRealm = false;
     for (const [pid, b] of this.dockBtns) {
       const d = this.dockEntries.get(pid) as DockEntry;
@@ -511,6 +514,7 @@ export class Hud {
     const showGuides = nav.street && !!hud && !hud.travel;
     this.compass.setVisible(showGuides);
     if (showGuides) this.compass.update(nav);
+    this.el.classList.toggle('mu-compact', this.deps.host.settings().compactHud === true);
     const showMap = nav.street && !!hud && this.deps.host.settings().minimap !== false;
     this.minimap.setVisible(showMap);
     if (showMap) this.minimap.update(now);

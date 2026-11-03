@@ -43,9 +43,15 @@ export function birthClassOf(p: Person): BirthClass {
   }
 }
 
+/** How a run begins: 'birth' (the default: a twelve-year-old born into a random family, with the Legacy shop's ranks) or 'lord'
+ *  (a grown holder of a manor of his own from the first morning, ruling from the seat: no ranks are bought or spent). */
+export type RunStart = 'birth' | 'lord';
+
 export interface NewRunOptions {
   seed: string;
   difficulty: Difficulty;
+  /** How the run begins (default 'birth'). A world with no lord fit to rule falls back to the birth. */
+  start?: RunStart;
   /** Ranks bought in the Legacy shop (applied to the rolled potential, capped at 18). */
   statUpgrades?: StatUpgrades;
   /** Injected so tests can pass a mock (the real one is src/world/generate.ts). */
@@ -59,7 +65,9 @@ export interface NewRun { world: WorldModel; state: GameState }
 
 /** Creates a fresh world, population and the player's birth. */
 export function newRun(opts: NewRunOptions): NewRun {
-  const upgrades = clampUpgrades(opts.statUpgrades ?? {});
+  const lord = opts.start === 'lord';
+  // a lord starts as he is: the Legacy shop's ranks are neither applied nor paid for
+  const upgrades = clampUpgrades(lord ? {} : opts.statUpgrades ?? {});
   if (opts.profile) {
     const bought = purchaseUpgrades(opts.profile, upgrades);
     if (!bought) throw new Error('not enough Legacy gold for the chosen stat upgrades');
@@ -71,7 +79,7 @@ export function newRun(opts: NewRunOptions): NewRun {
   state.clock.absDay = START_DAY;
   state.clock.firedHour = Math.floor(START_DAY * 24);
   generatePopulation(state, world);
-  rollBirth(state, upgrades);
+  rollStart(state, upgrades, lord);
   state.markAllDirty();
   return { world, state };
 }
@@ -161,21 +169,63 @@ export function chooseBirth(state: GameState, rng: Rng): { household: Household;
   return drawBirth(birthPools(state), rng);
 }
 
-function rollBirth(state: GameState, upgrades: StatUpgrades): void {
+/** The lord you start as is a grown man or woman: young enough for a long reign, old enough to rule (docs/CIV.md §2). */
+export const LORD_AGE_MIN = 18;
+export const LORD_AGE_MAX = 45;
+
+/** Can this person rule their lands from the first day? Alive, of age, free, not a cleric. */
+function fitToRule(state: GameState, p: Person | undefined): p is Person {
+  if (!p || p.death || p.estate === 'clergy' || p.flags.captive || p.flags.outlaw) return false;
+  const a = ageYears(p, state.clock.absDay);
+  return a >= LORD_AGE_MIN && a <= LORD_AGE_MAX;
+}
+
+/** The lords a run may start as: holders of a manor (or, failing that, a town or barony) who can rule now. Younger lords weigh
+ *  more (a longer life to build in). Sorted by person id, so the draw is deterministic. */
+export function lordCandidates(state: GameState): { people: Person[]; weights: number[] } {
+  const day = state.clock.absDay;
+  for (const kinds of [['manor'], ['town', 'barony']] as const) {
+    const seen = new Set<PersonId>();
+    const people: Person[] = [];
+    for (const t of state.titles.values()) {
+      if (!(kinds as readonly string[]).includes(t.kind) || seen.has(t.holder)) continue;
+      const p = state.persons.get(t.holder);
+      if (!fitToRule(state, p)) continue;
+      seen.add(p.id);
+      people.push(p);
+    }
+    if (people.length) {
+      people.sort((a, b) => a.id - b.id);
+      return { people, weights: people.map((p) => 1 + Math.max(0, 40 - ageYears(p, day)) / 5) };
+    }
+  }
+  return { people: [], weights: [] };
+}
+
+/** Either the birth lottery (a twelve-year-old of a random family, the Legacy shop's ranks applied) or, for `lord`, the holder of a
+ *  manor ruling its fields, purse and men from the first morning. A world with no lord fit to rule falls back to the birth. */
+function rollStart(state: GameState, upgrades: StatUpgrades, lord: boolean): void {
   const rng = state.rng('birth');
   const day = state.clock.absDay;
-  const { household: hh, birthClass: cls } = chooseBirth(state, rng);
-
-  let player = twelveYearOldIn(state, hh);
-  if (!player) player = createTwelveYearOld(state, rng, hh);
-  else player.birthDay = Math.round(day - START_AGE * DAYS_PER_YEAR) + 0;
-
-  // stat upgrades are applied after the birth is rolled (SPEC §1)
-  for (const s of STATS) {
-    const r = upgrades[s] ?? 0;
-    if (r > 0) player.potential[s] = applyRanks(player.potential[s], r);
+  const lords = lord ? lordCandidates(state) : { people: [], weights: [] };
+  let player: Person;
+  let cls: BirthClass;
+  if (lords.people.length) {
+    player = rng.weighted(lords.people, lords.weights);
+    cls = birthClassOf(player);
+  } else {
+    const birth = chooseBirth(state, rng);
+    cls = birth.birthClass;
+    const found = twelveYearOldIn(state, birth.household);
+    player = found ?? createTwelveYearOld(state, rng, birth.household);
+    if (found) player.birthDay = Math.round(day - START_AGE * DAYS_PER_YEAR) + 0;
+    // stat upgrades are applied after the birth is rolled (SPEC §1)
+    for (const s of STATS) {
+      const r = upgrades[s] ?? 0;
+      if (r > 0) player.potential[s] = applyRanks(player.potential[s], r);
+    }
+    player.trained = trainedFor(player.potential, START_AGE, player.career);
   }
-  player.trained = trainedFor(player.potential, START_AGE, player.career);
   player.flags.player = true;
   state.touch(player);
 
@@ -190,7 +240,12 @@ function rollBirth(state: GameState, upgrades: StatUpgrades): void {
   run.statUpgrades = upgrades;
   run.maxTier = player.rankTier;
   run.startedDay = 0;
-  state.log(day, 'birth', `You are ${fullName(player)}, a ${CAREERS[player.career].label.toLowerCase()} of ${describeBirth(cls)}.`, [player.id]);
+  const titles = [...state.titlesHeldBy(player.id)].sort((a, b) => b.kind.localeCompare(a.kind));
+  if (lords.people.length && titles.length) {
+    state.log(day, 'birth', `You are ${fullName(player)}, lord of ${titles.map((t) => t.name).join(' and ')}, of ${describeBirth(cls)}.`, [player.id]);
+  } else {
+    state.log(day, 'birth', `You are ${fullName(player)}, a ${CAREERS[player.career].label.toLowerCase()} of ${describeBirth(cls)}.`, [player.id]);
+  }
 }
 
 function describeBirth(cls: BirthClass): string {
