@@ -14,6 +14,11 @@ import { shapeWound } from './wounds';
 
 export const PROVIDER_ID = 'combat';
 
+/** Training jobs are counted (docs/WORK.md): a drill is this many rounds, a sparring session this many bouts, then it stops. */
+export const PELL_ROUNDS = 6;
+export const SPAR_BOUTS = 4;
+export const TARGET_ROUNDS = 6;
+
 function opt(p: Pick<ActionOption, 'id' | 'label' | 'category' | 'target' | 'priority'> & Partial<ActionOption>): ActionOption {
   return { provider: PROVIDER_ID, enabled: true, seconds: 0, range: 3, ...p };
 }
@@ -112,7 +117,7 @@ export function createCombatProvider(sv: Services): ActionProvider {
           if (age >= 14 && (SOLDIER_CAREERS.has(q.career) || yardNear(me)) && q.id !== actor) {
             const o = opt({
               id: 'spar', label: `Spar with ${q.first}`, category: 'combat', target, priority: 6, range: 3.5, seconds: 14, anim: 'attack_slash',
-              mainHand: weaponHeld(actor), repeat: true, preview: 'Melee, Strength, Agility and Endurance grow',
+              mainHand: weaponHeld(actor), repeat: true, bouts: SPAR_BOUTS, preview: 'Melee, Strength, Agility and Endurance grow',
             });
             if (me.health.hp < 0.55 || sv.book.isHurt(actor)) { o.enabled = false; o.reason = 'You are too hurt to spar'; }
             else if (q.health.hp < 0.6 || sv.book.isHurt(q.id)) { o.enabled = false; o.reason = `${q.first} is hurt`; }
@@ -127,15 +132,17 @@ export function createCombatProvider(sv: Services): ActionProvider {
           if (!b || b.kind !== 'training_yard') break;
           const drill = opt({
             id: 'pell', label: 'Drill at the pell', category: 'learn', target, priority: 28, range: 22, seconds: 10, anim: 'attack_overhead',
-            mainHand: weaponHeld(actor), repeat: true, preview: 'Melee, Strength and Endurance grow with the practice',
+            mainHand: weaponHeld(actor), repeat: true, bouts: PELL_ROUNDS, preview: `${PELL_ROUNDS} rounds · Melee, Strength and Endurance grow with the practice`,
           });
           if (me.health.hp < 0.45 || sv.book.isHurt(actor)) { drill.enabled = false; drill.reason = 'You are too hurt to drill'; }
           else if (me.needs.hunger < 0.25) { drill.enabled = false; drill.reason = 'Too hungry to drill'; }
           out.push(drill);
+          // the same drill, offered openly: on until you stop it (or tire)
+          out.push({ ...drill, id: 'pell.keep', label: 'Keep drilling at the pell', priority: 20, bouts: undefined, open: true, preview: 'Round after round until you stop (Q) · Melee, Strength and Endurance grow' });
           const bow = bowOf(actor);
           const shoot = opt({
             id: 'target', label: 'Shoot at the yard target', category: 'learn', target, priority: 26, range: 22, seconds: 9, anim: 'shoot_bow',
-            mainHand: bow ? bow.held : 'longbow', repeat: true, preview: 'Archery, Perception and Strength grow with the practice',
+            mainHand: bow ? bow.held : 'longbow', repeat: true, bouts: TARGET_ROUNDS, preview: `${TARGET_ROUNDS} rounds · Archery, Perception and Strength grow with the practice`,
           });
           if (!bow) { shoot.enabled = false; shoot.reason = 'Needs a bow'; }
           else if (bow.arrows < 6) { shoot.enabled = false; shoot.reason = 'Needs at least six arrows'; }
@@ -196,7 +203,8 @@ export function createCombatProvider(sv: Services): ActionProvider {
           if (option.target.kind !== 'person') return { ok: false };
           return sv.challenge(actor, option.target.id);
         }
-        case 'pell': {
+        case 'pell':
+        case 'pell.keep': {
           gainSkill(sim, me, 'melee', 9 * XP_SCALE);
           trainStat(sim, me, 'str', 0.011 * TRAIN_SCALE);
           trainStat(sim, me, 'end', 0.007 * TRAIN_SCALE);

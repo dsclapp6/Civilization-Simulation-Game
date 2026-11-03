@@ -16,7 +16,7 @@ import { depositNear } from './deposits';
 interface MarketSupply { demand: Float64Array; made: Float64Array; target: Float64Array; factor: Float64Array }
 
 /** What a settlement has in reach of the goods that lie in the ground. */
-interface SourceInfo { stone: boolean; clay: boolean; iron: boolean; salt: boolean }
+interface SourceInfo { stone: boolean; clay: boolean; iron: boolean; salt: boolean; silver: boolean; gold: boolean }
 
 interface Census {
   /** The state it was counted at: the construction events seen, the number of buildings, the territory service (and its version). */
@@ -42,7 +42,7 @@ const LACK_PREMIUM = 1.2;
 /** How much of the price the works of a hinterland take off at best (when they make far more than it uses). */
 const MAX_DISCOUNT = 0.3;
 
-const DEPOSIT_OF: Readonly<Record<string, keyof SourceInfo>> = { stone: 'stone', brick: 'clay', iron: 'iron', salt: 'salt' };
+const DEPOSIT_OF: Readonly<Record<string, keyof SourceInfo>> = { stone: 'stone', brick: 'clay', iron: 'iron', salt: 'salt', silver_ore: 'silver', gold_ore: 'gold' };
 
 /** Which deposits lie in reach of each settlement, remembered per deposit list of the territory: the ground does not move. */
 const depCache = new WeakMap<readonly object[], Map<number, SourceInfo>>();
@@ -53,7 +53,7 @@ function depsAround(E: Econ, s: Settlement): SourceInfo {
   if (list && !m) { m = new Map(); depCache.set(list, m); }
   let v = m?.get(s.id);
   if (!v) {
-    v = { stone: depositNear(E, s.x, s.z, REACH, 'stone'), clay: depositNear(E, s.x, s.z, REACH, 'clay'), iron: depositNear(E, s.x, s.z, REACH, 'iron'), salt: depositNear(E, s.x, s.z, REACH, 'salt') };
+    v = { stone: depositNear(E, s.x, s.z, REACH, 'stone'), clay: depositNear(E, s.x, s.z, REACH, 'clay'), iron: depositNear(E, s.x, s.z, REACH, 'iron'), salt: depositNear(E, s.x, s.z, REACH, 'salt'), silver: depositNear(E, s.x, s.z, REACH, 'silver'), gold: depositNear(E, s.x, s.z, REACH, 'gold') };
     m?.set(s.id, v);
   }
   return v;
@@ -67,6 +67,9 @@ function sourcesOf(E: Econ, s: Settlement, by: Record<string, number>, own: read
     clay: has('clay_pit') || d.clay,
     iron: has('bloomery') || has('mine') || d.iron || (by.iron ?? 0) > 0,
     salt: has('salt_pan') || d.salt,
+    // ore: a seam known in reach (the mint's demand is the whole kingdom's; a market far from any seam pays a fifth more)
+    silver: d.silver,
+    gold: d.gold,
   };
 }
 

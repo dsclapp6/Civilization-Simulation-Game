@@ -46,7 +46,7 @@ const RELAX: Record<string, number> = {
 /** Goods merchants carry between neighbouring markets (storable and worth the cart). */
 const CARRIED_FOODS: readonly string[] = ['wheat', 'rye', 'barley', 'oats', 'peas', 'beans', 'cheese', 'fish', 'firewood'];
 /** Materials the carters take from market to market too (bulky ones lose more on the road); straw is not worth the cart. */
-const CARRIED_MATERIALS: readonly string[] = ['timber', 'planks', 'stone', 'brick', 'iron', 'nails', 'charcoal', 'salt', 'candle', 'vellum', 'tallow'];
+const CARRIED_MATERIALS: readonly string[] = ['timber', 'planks', 'stone', 'brick', 'iron', 'nails', 'charcoal', 'salt', 'candle', 'vellum', 'tallow', 'silver_ore', 'gold_ore'];
 const CARRIED: readonly string[] = [...CARRIED_FOODS, ...CARRIED_MATERIALS];
 /** Staples the long-distance grain merchants bring to a market in want. */
 const RELIEF: readonly string[] = ['wheat', 'rye', 'barley', 'oats', 'peas', 'beans'];

@@ -27,7 +27,7 @@ export function optionIcon(o: Pick<ActionOption, 'id' | 'category' | 'data'>): I
   const id = o.id;
   if (id === 'lead.start') return 'lead';
   if (id === 'lead.letgo' || id === 'lead.letgo.all') return 'letgo';
-  if (id === 'build.work') return (o.data as { skill?: string } | undefined)?.skill === 'masonry' ? 'masonry' : 'carpentry';
+  if (id === 'build.work' || id === 'build.keep') return (o.data as { skill?: string } | undefined)?.skill === 'masonry' ? 'masonry' : 'carpentry';
   if (id === 'live.as') return 'user';
   if (id.startsWith('stock.slaughter.')) return 'knife';
   if (id.startsWith('stock.butcher.')) return 'cleaver';

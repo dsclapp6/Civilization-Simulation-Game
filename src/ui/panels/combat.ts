@@ -39,6 +39,7 @@ const CSS = `
 .mu-wounds-fig { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .mu-wounds-fig svg { width: 130px; height: 250px; overflow: visible; }
 .mu-wounds-fig .part { stroke: var(--ink-2); stroke-width: 1.4; transition: fill 0.4s; }
+.mu-wounds-fig .part.bound { stroke: #8a7a52; stroke-width: 3; stroke-dasharray: 5 3; }
 .mu-wounds-fig .part.hot { stroke: var(--vermilion); stroke-width: 2; }
 .mu-wounds-list { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .mu-wound { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; padding: 7px 10px; border: 1px solid var(--rule-soft); border-radius: 4px; background: rgba(255, 250, 232, 0.35); }
@@ -59,7 +60,7 @@ function ensureStyle(): void {
 }
 
 /** A schematic figure: one shape per hit location, shaded by the worst wound there. */
-function figure(worst: Record<HitLocation, number>): { el: SVGElement; update(w: Record<HitLocation, number>): void } {
+function figure(worst: Record<HitLocation, number>): { el: SVGElement; update(w: Record<HitLocation, number>, bound?: Partial<Record<HitLocation, boolean>>): void } {
   const parts: Record<HitLocation, SVGElement> = {
     head: svgEl('ellipse', { cx: 65, cy: 26, rx: 17, ry: 20, class: 'part' }),
     torso: svgEl('path', { d: 'M42 52 Q65 44 88 52 L84 128 Q65 134 46 128 Z', class: 'part' }),
@@ -70,10 +71,11 @@ function figure(worst: Record<HitLocation, number>): { el: SVGElement; update(w:
   };
   const el = svgEl('svg', { viewBox: '0 0 130 250', 'aria-label': 'Wounds on the body' });
   for (const k of Object.keys(parts) as HitLocation[]) el.appendChild(parts[k]);
-  const update = (w: Record<HitLocation, number>): void => {
+  const update = (w: Record<HitLocation, number>, bound: Partial<Record<HitLocation, boolean>> = {}): void => {
     for (const k of Object.keys(parts) as HitLocation[]) {
       parts[k].setAttribute('fill', severityColour(w[k]));
       parts[k].classList.toggle('hot', w[k] > 0.3);
+      parts[k].classList.toggle('bound', !!bound[k]); // J3: linen on the body (dashed turns)
     }
   };
   update(worst);
@@ -139,7 +141,9 @@ export function woundsView(ctx: PanelCtx, id: number, onTitle?: (title: string, 
     onTitle?.(id === ctx.playerId() ? 'Your wounds' : `${fullName(p)}'s wounds`, `Age ${Math.floor(ageYears(p, sim.absDay))}`);
     const worst: Record<HitLocation, number> = { head: 0, torso: 0, arm_l: 0, arm_r: 0, leg_l: 0, leg_r: 0 };
     for (const w of wounds) worst[w.location] = Math.max(worst[w.location], w.severity);
-    fig.update(worst);
+    const bound: Partial<Record<HitLocation, boolean>> = {};
+    for (const w of wounds) if ((w.care ?? 0) >= 1) bound[w.location] = true;
+    fig.update(worst, bound);
     hpBar.set(p.health.hp, maxHp);
     hpNum.textContent = `${Math.round(p.health.hp * 100)}%`;
     bloodBar.set(blood, 1);
@@ -157,6 +161,12 @@ export function woundsView(ctx: PanelCtx, id: number, onTitle?: (title: string, 
     if (p.traits.includes('scarred')) marks.push('scars that will not fade');
     const bleeding = wounds.some((w) => w.bleeding && (w.care ?? 0) === 0);
     const lines: string[] = [];
+    const boundWhere = (Object.keys(bound) as HitLocation[]).map((k) => LOCATION_NAMES[k]);
+    if (boundWhere.length > 0) {
+      const all = wounds.every((w) => (w.care ?? 0) >= 1);
+      lines.push(all ? `${id === ctx.playerId() ? 'Your wounds are' : 'Their wounds are'} bound: linen shows on the ${boundWhere.join(', ')}.`
+        : `Bound so far: the ${boundWhere.join(', ')} (linen shows there); the others are still open.`);
+    }
     if (bleeding) lines.push('Bleeding wounds must be bound or the blood will run out. Pressure and a clean cloth help.');
     if (wounds.some((w) => w.infected)) lines.push('A festering wound needs a healer, rest and food.');
     if (wounds.length > 0) lines.push('Wounds mend over days with rest and food; a healer or the infirmary speeds it and lowers the risk of fever.');

@@ -218,7 +218,7 @@ export function stockProvider(E: Econ): ActionProvider {
 // Errands, odd jobs and practice
 // ---------------------------------------------------------------------------------------------
 
-interface WorkData { act: 'errand' | 'practise' | 'eat' | 'eat_home' | 'open' | 'become' | 'free' | 'flee'; [k: string]: unknown }
+interface WorkData { act: 'errand' | 'practise' | 'collect' | 'eat' | 'eat_home' | 'open' | 'become' | 'free' | 'flee'; [k: string]: unknown }
 
 function errandsToday(E: Econ, p: Person): number {
   const rec = E.save.ww[`e${p.id}`];
@@ -251,6 +251,7 @@ export function miscProvider(E: Econ): ActionProvider {
       switch (d.act) {
         case 'errand': return errand(E, p, d.person as number);
         case 'practise': return practise(E, p, d.building as number);
+        case 'collect': return collectArrows(E, p, d.building as number);
         case 'eat': return eatItem(E, p, d.key as string, d.qty as number);
         case 'eat_home': { const r = eatAtHome(E, p); return { ok: r.ok, message: r.message }; }
         case 'open': return { ok: true, ui: d.ui as never };
@@ -414,9 +415,17 @@ function listBuilding(E: Econ, p: Person, id: number, out: ActionOption[]): void
       category: 'learn', priority: holy ? 65 : 30, repeat: true, preview: `${holy ? 'The whole village shoots together: ' : ''}Archery, Strength and Perception grow with the practice`, target, range: 25,
       data: { act: 'practise', building: id } as WorkData,
     });
-    if (!bow) { o.enabled = false; o.reason = 'Needs a bow (the carpenter sells them)'; } else if (arrows < 6) { o.enabled = false; o.reason = 'Needs at least six arrows'; }
+    const stuck = arrowsInButts(E, id).n;
+    if (!bow) { o.enabled = false; o.reason = 'Needs a bow (the carpenter sells them)'; } else if (arrows < ARROWS_PER_ROUND) { o.enabled = false; o.reason = stuck > 0 ? 'Needs at least six arrows: pull the ones in the butts' : 'Needs at least six arrows'; }
     else { const w = incapable(p); if (w) { o.enabled = false; o.reason = w; } }
     out.push(o);
+    // the arrows shot stay in the straw until they are pulled out
+    if (stuck > 0) {
+      out.push(option({
+        id: 'arms.collect', label: `Pull your arrows from the butts (${stuck})`, seconds: 6 + Math.min(10, stuck * 0.25), anim: 'work_lift', mainHand: 'none', category: 'use', priority: stuck >= ARROWS_PER_ROUND ? 40 : 12,
+        repeat: false, preview: 'They are yours again, the broken ones thrown away', target, range: 25, data: { act: 'collect', building: id } as WorkData,
+      }));
+    }
     // a round of shooting is one bout; an afternoon at the butts is its own choice (docs/WORK.md)
     if (o.enabled) out.push({ ...o, id: 'arms.practise.keep', label: 'Keep shooting at the butts', open: true, bouts: undefined, priority: 2, preview: `Round after round until you stop (Q) or run short of arrows · ${o.preview ?? ''}` });
   }
@@ -439,6 +448,42 @@ function errand(E: Econ, p: Person, personId: number): ActionOutcome {
   return { ok: true, message: `${q ? q.first : 'They'} thanks you${pay > 0 ? ` and gives you ${pd(pay)}` : ''}.`, gains: pay > 0 ? [{ label: 'Coin', amount: pay, ref: 'money' }] : [] };
 }
 
+/** Arrows loosed in a round of practice. */
+const ARROWS_PER_ROUND = 6;
+
+/** The arrows standing in a butts' straw: how many, and their mean quality tier (saved: `ww['bt<id>']`). */
+export function arrowsInButts(E: Econ, buildingId: number): { n: number; q: number } {
+  const r = E.save.ww[`bt${buildingId}`];
+  return r ? { n: r[0], q: r[1] } : { n: 0, q: 1 };
+}
+
+function stickArrow(E: Econ, buildingId: number, quality: number): void {
+  const cur = arrowsInButts(E, buildingId);
+  E.save.ww[`bt${buildingId}`] = [cur.n + 1, round2((cur.q * cur.n + quality) / (cur.n + 1))];
+  E.notes.rev++;
+  E.touchSave();
+}
+
+/** Takes up to `n` arrows from the pack (the best-kept tiers first) and returns the quality tier of each. */
+function shootArrows(E: Econ, p: Person, n: number): number[] {
+  const out: number[] = [];
+  void E;
+  for (const q of [1, 2, 0, 3, 4] as const) {
+    while (out.length < n && bagTake(p.inventory, keyOf('arrow', q), 1)) out.push(q);
+  }
+  return out;
+}
+
+function collectArrows(E: Econ, p: Person, buildingId: number): ActionOutcome {
+  const { n, q } = arrowsInButts(E, buildingId);
+  if (n <= 0) return { ok: false, message: 'There are no arrows in the butts.' };
+  delete E.save.ww[`bt${buildingId}`];
+  bagAdd(p.inventory, keyOf('arrow', Math.max(0, Math.min(4, Math.round(q))) as 0 | 1 | 2 | 3 | 4), n);
+  E.notes.rev++;
+  E.touchSave();
+  return { ok: true, message: `You work ${n} arrows out of the straw and put them in your quiver.` };
+}
+
 function practise(E: Econ, p: Person, buildingId: number): ActionOutcome {
   const bow = toolFor(E, p, 'longbow') ?? toolFor(E, p, 'shortbow');
   if (!bow) return { ok: false, message: 'You need a bow.' };
@@ -448,9 +493,13 @@ function practise(E: Econ, p: Person, buildingId: number): ActionOutcome {
   boutDone(E, p, { skill: 'archery', xp: 0, heavy: 0.5, str: 0, end: 0.4, bouts: 1 });
   trainStat(E.sim, p, 'str', 0.012 * heavy * TRAIN_SCALE); // drawing a bow is full-effort strength work: a longbow bout builds as much as a bout at the plough
   trainStat(E.sim, p, 'per', 0.006 * (holy ? 1.2 : 1) * TRAIN_SCALE);
-  // arrows are mostly picked up again; now and then one splits
-  if (E.rng('arrows').next() < 0.18) bagTake(p.inventory, keyOf('arrow', 1), 1) || bagTake(p.inventory, keyOf('arrow', 0), 1) || bagTake(p.inventory, keyOf('arrow', 2), 1);
-  void buildingId;
+  // the round is six arrows from the quiver into the straw; one in thirty splits on the way. They stand in the butts (drawn there)
+  // until the shooter pulls them out (arms.collect)
+  const shot = shootArrows(E, p, ARROWS_PER_ROUND);
+  const lost = E.rng('arrows');
+  let kept = 0;
+  for (const q of shot) if (lost.next() >= 0.03) { kept++; stickArrow(E, buildingId, q); }
+  void kept;
   const lvl = skillLevel(p.skills.archery);
   return { ok: true, message: `Your arrows ${lvl < 3 ? 'wander about the target' : lvl < 8 ? 'cluster near the gold' : 'strike the gold'}.`, gains: [{ label: 'Archery', ref: 'archery' }, { label: 'Strength', ref: 'str' }] };
 }

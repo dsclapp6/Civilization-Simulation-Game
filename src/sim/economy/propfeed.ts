@@ -31,7 +31,7 @@ const BARN_KINDS: ReadonlySet<string> = new Set(['barn', 'tithe_barn', 'granary'
 const TREES: ReadonlySet<string> = new Set(['oak', 'beech', 'birch', 'ash', 'willow', 'pine', 'spruce', 'apple']);
 
 /** Where each kind of prop lives in the id space (a prop's id is `base + n`, so ids never collide and stay stable). */
-const BASE = { stook: 1e9, hay: 2e9, wood: 3e9, sack: 4e9, stone: 5e9, stump: 6e9, site: 7e9, works: 8e9, larder: 9e9, garden: 1e10, made: 1.1e10 };
+const BASE = { stook: 1e9, hay: 2e9, wood: 3e9, sack: 4e9, stone: 5e9, stump: 6e9, site: 7e9, works: 8e9, larder: 9e9, garden: 1e10, made: 1.1e10, butt: 1.2e10 };
 
 /** What lies at a site for each material, and the stock a full pile (size 8) stands for. */
 const SITE_GOODS: readonly { good: string; kind: string; steps: readonly number[] }[] = [
@@ -164,6 +164,8 @@ export class PropFeed {
           // a carcass hanging in the yard while the larder holds one (slaughtered at home, waiting to be jointed)
           const carc = carcassCount(hh.stores);
           if (carc > 0) pushAt(out, BASE.larder + b.id, 'carcass_hanging', b, def.w / 2 + 1.4, -def.d * 0.2, -0.4, 1);
+          // the beds by the door of a household the player does not keep (their garden is drawn as the season has it)
+          if (!stocked && hh.kind === 'family' && near(b.x, b.z, -150)) npcGarden(out, hh.id, b, season);
           // grain goes to the barn if the household has one, else it sits by the door
           if (!barnOf.has(hh.id)) {
             const sacks = Math.max(pileCount(grainOf(hh.stores), GRAIN_STEPS), stocked || !farms.has(hh.id) ? 0 : seasonalGrain(season, hh.id));
@@ -179,6 +181,16 @@ export class PropFeed {
         }
       } else if (WORKS.has(b.kind)) {
         worksProps(out, b, E.state.households.get(b.household) ?? null, now);
+      } else if (b.kind === 'archery_butts') {
+        // the arrows the player has shot stand in the two targets until they are pulled out (docs/WORK.md)
+        const stuck = E.save.ww[`bt${b.id}`]?.[0] ?? 0;
+        if (stuck > 0) {
+          const hw = def.w / 2 - 0.4, hd = def.d / 2 - 0.4;
+          for (let i = 0; i < 2; i++) {
+            const n = Math.floor(stuck / 2) + (i === 0 ? stuck % 2 : 0);
+            if (n > 0) pushAt(out, BASE.butt + b.id * 4 + i, 'target_arrows', b, (i === 0 ? -hw : hw) / 2, -hd + 2.6, 0, Math.min(8, Math.ceil(n / 3)));
+          }
+        }
       } else if (b.kind === 'quarry') {
         const dug = E.notes.dug.get(b.id);
         const fresh = dug && now - dug.day < 2 ? dug.blocks : 0;
@@ -356,6 +368,36 @@ export class PropFeed {
 }
 
 /** Garden crops → their bed's prop (bed_<crop>). */
+/**
+ * The garden of a household whose beds the economy does not keep (only the player's household digs and sows by hand): one to
+ * three beds by the house for most, each as the season has it — dug in spring or already green, growing and weedy in summer,
+ * ripe or lately cleared in autumn, turned soil in winter. Pure of the household id, the bed and the season: nothing is saved.
+ */
+export function npcBeds(hhId: number, season: number, homeKind: string): { kind: string; count: number }[] {
+  const h = hash01(hhId, 21, 5);
+  if (h < 0.18 || homeKind === 'manor_house') return []; // some keep no garden (they have a croft strip or buy at market)
+  const n = 1 + (h > 0.6 ? 1 : 0) + (h > 0.88 ? 1 : 0);
+  const crops = ['cabbage', 'onions', 'leeks', 'turnips'];
+  const out: { kind: string; count: number }[] = [];
+  for (let i = 0; i < n; i++) {
+    const r = hash01(hhId, 22 + i, 5);
+    const crop = `bed_${crops[Math.floor(hash01(hhId, 30 + i, 5) * crops.length)]}`;
+    const weedy = r > 0.75 ? 4 : 0;
+    if (season === 0) out.push(r < 0.4 ? { kind: 'garden_bed', count: 4 } : { kind: 'garden_bed', count: 5 }); // dug, or sown
+    else if (season === 1) out.push({ kind: crop, count: (r < 0.5 ? 2 : 3) + weedy });
+    else if (season === 2) out.push(r < 0.7 ? { kind: crop, count: 4 + weedy } : { kind: 'garden_bed', count: 6 });
+    else out.push({ kind: 'garden_bed', count: r < 0.5 ? 4 : 1 });
+  }
+  return out;
+}
+
+function npcGarden(out: WorldPropView[], hhId: number, home: BuildingState, season: number): void {
+  const beds = npcBeds(hhId, season, home.kind);
+  if (beds.length === 0) return;
+  const spots = bedSpots(home, beds.length);
+  for (let i = 0; i < beds.length; i++) out.push({ id: BASE.garden + hhId * 32 + i * 2, kind: beds[i].kind, x: spots[i].x, z: spots[i].z, rot: spots[i].rot, scale: 1, count: beds[i].count });
+}
+
 const GARDEN_PROP: Record<string, string> = { cabbage: 'cabbage', onions: 'onions', leeks: 'leeks', turnips: 'turnips' };
 /** What a craft's fresh result looks like lying at the bench. */
 const MADE_PROP: Record<string, string> = {
@@ -395,7 +437,7 @@ function sizeOf(b: BuildingState): { w: number; d: number } {
 const SIZES: Record<string, { w: number; d: number }> = {
   hovel: { w: 5, d: 4 }, cottage: { w: 8, d: 5 }, longhouse: { w: 14, d: 6 }, townhouse: { w: 6, d: 10 }, manor_house: { w: 18, d: 10 },
   barn: { w: 14, d: 8 }, tithe_barn: { w: 24, d: 10 }, granary: { w: 6, d: 6 }, quarry: { w: 16, d: 16 },
-  slaughterhouse: { w: 9, d: 6 }, kiln: { w: 4, d: 4 }, clay_pit: { w: 12, d: 12 }, salt_pan: { w: 14, d: 12 }, lumber_camp: { w: 10, d: 8 },
+  archery_butts: { w: 20, d: 10 }, slaughterhouse: { w: 9, d: 6 }, kiln: { w: 4, d: 4 }, clay_pit: { w: 12, d: 12 }, salt_pan: { w: 14, d: 12 }, lumber_camp: { w: 10, d: 8 },
 };
 
 /** Carcasses hanging in a household's larder (the `~h:` markers say since when; the count is the goods'). */
