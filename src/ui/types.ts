@@ -54,11 +54,13 @@ export interface Settings {
   minimap?: boolean;
   /** Civilization pass (CIV §2): ask for confirmation before living as someone else (V, the action wheel, the lists). Default true. */
   askBeforeLiveAs?: boolean;
+  /** The compact HUD (Settings → Interface): flat soft cards, narrower columns, a slim button bar. Default false. */
+  compactHud?: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   quality: 'medium', mouseSensitivity: 1, invertY: false, volume: 0.7, labels: true, uiScale: 1, pauseInMenus: true, hints: true,
-  alwaysLook: false, minimap: true, askBeforeLiveAs: true,
+  alwaysLook: false, minimap: true, askBeforeLiveAs: true, compactHud: false,
 };
 
 /** Renderer controls the UI may use (map panel, settings). */
@@ -97,8 +99,8 @@ export interface UiRendererControls {
 export interface UiHost {
   profile(): Profile;
   hasSavedRun(): Promise<boolean>;
-  /** New continent + new character with the chosen difficulty and bought stat ranks (gold is spent). */
-  startNewRun(opts: { difficulty: Difficulty; statUpgrades: StatUpgrades }): Promise<void>;
+  /** New continent + new character with the chosen difficulty and bought stat ranks (gold is spent), or (`start: 'lord'`) a manor of one's own. */
+  startNewRun(opts: { difficulty: Difficulty; statUpgrades: StatUpgrades; start?: 'birth' | 'lord' }): Promise<void>;
   continueRun(): Promise<void>;
   /** The running game, or null at the menu / while loading. */
   game(): GameServices | null;

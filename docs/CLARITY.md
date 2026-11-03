@@ -40,6 +40,15 @@ One module (`src/sim/objectives`, contract `types.ts`) owns what the player shou
 | request | (bridged from happenings) "Agnes asks for 4 bundles of firewood" | When villagers ask |
 | story | "Your father is gravely ill: fetch the healer" | Life events |
 
+Duties and the lord (`duties.ts`, `src/ui/core/agenda.ts`). Someone with no master to set their day has the **duty of their
+station** (a `job` objective, `roleDuty`): a knight rides the bounds, trains the men at the yard, sees to his arms or stands the
+watch; a soldier guards, patrols or drills; priests, healers and master craftsmen have their rounds; it is asked again every few game
+hours (`moreDuty`, beside the chore rounds). A grown tradesman is never asked to *choose a path*. A person who holds a title
+(`managesRealm`) **manages**: no chores, duties, goals or villagers' requests; the tracker's *Matters of the realm* (`realmAgenda`) sit
+under the tracked steps, dangers first, each opening the page where it is decided. A run may start as a lord
+(`newRun({ start: 'lord' })`): the tutorial chain `lord` (steward, fields, purse, yard, sleep) reads its ruling steps from the realm
+(match kind `realm`: a count of the player's plans or commands rises above what it was when the step was made).
+
 - Steps are **concrete and located**: each has a target (person, building, strip, tree, place) with a map
   position and a one-line *how* hint ("Stand on the strip and press E, or click it").
 - One objective is **tracked** (auto: today's first chore or the tutorial, until the player picks another).

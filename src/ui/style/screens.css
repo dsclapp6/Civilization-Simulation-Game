@@ -104,3 +104,7 @@
 .mu-loading-pct { color: #d9b866; font-size: 15px; min-height: 18px; letter-spacing: 0.1em; }
 .mu-loading-tipwrap { margin-top: 18px; max-width: 460px; color: #d8c79c; font-style: italic; font-size: 16px; line-height: 1.45; }
 .mu-tip-mark { display: block; font-style: normal; font-variant: small-caps; letter-spacing: 0.16em; font-size: 13px; color: #c99a2e; margin-bottom: 4px; font-weight: 700; }
+
+/* run start: the two ways to begin (a birth, or a lord of a manor) */
+.mu-start { min-height: 0; }
+.mu-field-head { margin: 12px 0 2px; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }

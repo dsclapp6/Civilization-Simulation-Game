@@ -13,7 +13,7 @@ npm run build && npm run preview   # production build
 ```
 
 The game is the default mode (`?mode=game`). The main menu offers **Continue** (if a run is saved), **New run**
-(difficulty → stat shop → birth) and the settings. A new run generates a continent from a random seed
+(difficulty and how to begin: *Be born into a family* → stat shop → birth, or *Start as a lord*) and the settings. A new run generates a continent from a random seed
 (about 4 s in a browser, with a loading screen), settles the people, builds the renderer and drops you at
 your home door at 06:00 on the first day of Spring.
 
@@ -58,7 +58,7 @@ camera, left strikes, right guards, a click on the view takes the mouse) is the 
 
 ## The screen
 
-- **Top left**: your plate: name, age and rank, purse, **health**, **blood** (appears when you bleed or have lost blood),
+- **Top left**: your plate (with the setting *Compact HUD*, Settings → Interface, every card is flat and soft, the columns narrower and the button bar one slim row): name, age and rank, purse, **health**, **blood** (appears when you bleed or have lost blood),
   **stamina** and four signs for hunger, rest, warmth and mood (gold = soon, red = now). A gold *Perk ready* badge
   appears when a skill level offers a choice. Under it the **objective tracker**: the task you follow, its next step and
   how to do it, how far and which way it is (the little arrow turns as you turn), and two buttons: the journal (**O**)
@@ -93,6 +93,33 @@ page: a villager asking a favour (the requests journal), a letter from another H
 realm page), a declared war (the wars tab), a siege, a raid or a plague at your own place, and the levy call (the
 command page). **Enter** takes the most pressing one. The levy call no longer seizes the screen: you may finish what
 you are doing first.
+
+### Starting as a lord
+
+The New run page offers two ways to begin beside the difficulty. **Be born into a family** (the default) is the birth lottery
+with the Legacy shop. **Start as a lord** skips the shop: you are a grown man or woman (18 to 45) who holds a manor (a town or barony if
+the world has no manor-lord fit to rule), from the first morning, with its fields, purse and men. The reveal reads "You are the lord of
+…" and says what ruling means; after the scene-setting card and the tour the **seat of government** (**U**) opens by itself. The
+first-day tutorial is the *lord chain*: meet your household, hear your steward, name a crop or set the labour sent to the works
+(*Set your fields and labour*), put your purse to work (research, men or a trade order: *Put your purse to work*), drill at the pell
+twice, sleep. Its steps are read from the realm, so any way of giving the order counts. For a test or a tool, `?autostart=1&start=lord`
+starts this way, and `newGame({ start: 'lord' })` in code (`'birth'` is the default). Nothing else changes: taking over anyone,
+death and succession, the score are the same.
+
+### Duties, not chores, for a station; the agenda for a lord
+
+Someone with no master to set the day has the **duty of their station**, one at a time through the working day (on the
+thirty-minute day it is asked again every few hours): a knight rides the bounds (three marks round the place), trains the men at the
+yard, sees to his arms at the forge or stands the watch; a soldier guards the gate, rides the bounds or drills; a priest keeps the
+church and visits the sick; a healer tends whoever is ailing or prepares remedies; a master craftsman works at his own bench. Chores
+and the *choose your path* goal go to the young and the landless; a grown tradesman is not asked to choose a path again.
+
+A **lord manages**: he gets no chores, duties, goals or villagers' requests. In their place the tracker card carries **Matters of the
+realm** under the tracked steps (and alone when no step is tracked): raiders on the lands and the host in the field (with a count of
+men, and a warning when yours are fewer), works standing idle, fields with no crop named when the sowing is at hand, no research
+under way, a thin treasury, people in want, a petition waiting. Dangers come first and glow red. Each is a button that opens the page
+where it is decided: the seat of government on its page, the build page, battle command, the petitions page of politics. Everyone else
+keeps the real-time pacing of requests (one every few minutes of play) and of chores.
 
 ### The first minutes
 
@@ -325,7 +352,7 @@ All optional, on the URL of the game page (`?mode=world|gallery|chars|village|ui
 | Parameter | Effect |
 |---|---|
 | `autostart=1` | skip the menus and start a new run (`autostart=continue` resumes the saved run) |
-| `seed=abc` `difficulty=squire\|knight\|lord\|king` | the continent and difficulty of an autostarted run |
+| `seed=abc` `difficulty=squire\|knight\|lord\|king` `start=lord` | the continent and difficulty of an autostarted run; `start=lord` begins as the holder of a manor instead of a birth |
 | `quality=low\|medium\|high` | override the saved quality setting |
 | `time=0..1` `day=0..3` `season=0..3` | start at this time of day / day of the season / season |
 | `debug=1` | overlay with frame timings, renderer and simulation statistics (and, with `profile=1`, the cost of the busiest systems) |

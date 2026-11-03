@@ -81,7 +81,7 @@ describe('offering', () => {
 
   it('never sends a lord on villagers\' errands by itself (their petitions are matters of the realm)', () => {
     const a = advSim({ seed: 'req-lord' });
-    const title = [...a.sim.state.titles.values()].find((t) => t.settlement === a.player.settlement) ?? [...a.sim.state.titles.values()][0];
+    const title = [...a.sim.state.titles.values()].find((t) => t.kind === 'manor' && t.place === a.player.settlement) ?? [...a.sim.state.titles.values()].find((t) => t.kind === 'manor')!;
     a.sim.state.setTitleHolder(title, a.player.id);
     a.player.birthDay -= 16 * 20;
     let n = 0;

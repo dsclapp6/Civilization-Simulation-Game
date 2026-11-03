@@ -44,11 +44,15 @@ export function introText(O: Obj): string {
   const place = O.settlementById.get(me.settlement)?.name ?? 'the village';
   const head = headOf(O, me);
   const rel = head ? O.deps.social.relationLabel(me.id, head.id) : '';
-  const owner = /^your (father|mother|uncle|aunt|grandfather|grandmother|brother|sister|lord|master)$/.test(rel) ? `${rel}'s` : 'your family\'s';
+  const own = head?.id === me.id;
+  const owner = own ? 'your own' : /^your (father|mother|uncle|aunt|grandfather|grandmother|brother|sister|lord|master)$/.test(rel) ? `${rel}'s` : 'your family\'s';
   const house = home ? BUILDINGS[home.kind].name.toLowerCase() : 'home';
   const noble = O.state.run.birthClass === 'gentry' || O.state.run.birthClass === 'knightly' || O.state.run.birthClass === 'baronial';
   const where = noble && home && (home.kind === 'keep_stone' || home.kind === 'manor_house' || home.kind === 'great_hall')
     ? `You wake in ${owner} ${house} at ${place}` : `You wake in ${owner} ${house} in ${place}`;
   const need = needClause(O);
-  return `${season}. ${where}${need ? `; ${need}` : ''}.`;
+  // a lord wakes as the master of his lands
+  const held = [...O.state.titlesHeldBy(me.id)].sort((x, y) => y.kind.localeCompare(x.kind));
+  const lordship = own && O.age(me) >= 18 && held.length ? `, lord of ${held.map((t) => t.name).join(' and ')}` : '';
+  return `${season}. ${where}${lordship}${need ? `; ${need}` : ''}.`;
 }

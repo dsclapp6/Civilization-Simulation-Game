@@ -1,5 +1,5 @@
-// The main menu and run start: title screen → difficulty → Legacy stat shop (→ loading → birth reveal,
-// which the controller shows). Also the records page and the settings page.
+// The main menu and run start: title screen → difficulty and how to begin (born into a family, with the Legacy stat shop, or as a
+// lord of a manor of one's own) (→ loading → birth reveal, which the controller shows). Also the records page and the settings page.
 import type { Difficulty } from '../../core/domain';
 import { STATS } from '../../core/domain';
 import { levelProfile } from '../../sim/legacy';
@@ -20,7 +20,7 @@ export type MenuView = 'main' | 'difficulty' | 'shop' | 'records' | 'settings';
 export interface MenuDeps {
   host: UiHost;
   /** Start a run (the controller shows loading and the birth reveal). */
-  startRun(opts: { difficulty: Difficulty; statUpgrades: StatUpgrades }): Promise<void>;
+  startRun(opts: { difficulty: Difficulty; statUpgrades: StatUpgrades; start?: 'birth' | 'lord' }): Promise<void>;
   continueRun(): void;
   onSettingsChanged(): void;
 }
@@ -33,6 +33,8 @@ export class MenuLayer {
   private readonly stage = h('div.mu-menu-stage');
   private view: MenuView = 'main';
   private difficulty: Difficulty = 'knight';
+  /** How the run begins: the birth lottery with the Legacy shop (the default), or a lord with a manor of his own. */
+  private startKind: 'birth' | 'lord' = 'birth';
   private shop: StatShop;
   private saved = false;
   private starting = false;
@@ -87,7 +89,7 @@ export class MenuLayer {
     this.stage.replaceChildren(this.build(view));
   }
 
-  setError(text: string): void { this.error = text; this.starting = false; if (this.view === 'shop') this.go('shop'); }
+  setError(text: string): void { this.error = text; this.starting = false; if (this.view === 'shop' || this.view === 'difficulty') this.go(this.view); }
 
   private build(view: MenuView): HTMLElement {
     switch (view) {
@@ -161,7 +163,7 @@ export class MenuLayer {
   // ---- run start: difficulty ----
 
   private stepper(active: number): HTMLElement {
-    const steps = ['Difficulty', 'Legacy shop', 'Your birth'];
+    const steps = this.startKind === 'lord' ? ['Difficulty', 'Your seat'] : ['Difficulty', 'Legacy shop', 'Your birth'];
     const el = h('ol.mu-stepper');
     steps.forEach((s, i) => el.appendChild(h('li', { class: i === active ? 'on' : i < active ? 'done' : '' }, h('b', null, String(i + 1)), s)));
     return el;
@@ -190,15 +192,40 @@ export class MenuLayer {
         heading('Choose your trial', 'swords'),
         h('div.mu-grid.c4.mu-tiers', { role: 'radiogroup' }, cards),
         h('p.mu-dim.mu-small.mu-ital', { style: { marginTop: '12px' } }, DIFFICULTY_NOTE),
-        h('p.mu-small.mu-ink2', { style: { marginTop: '4px' } }, 'You are born into a random family of the period, weighted like the real world: most are peasants, a few are gentry or noble. You start at twelve.'),
+        heading('How do you begin?', 'crown'),
+        h('div.mu-grid.c2.mu-starts', { role: 'radiogroup' }, [this.startCard('birth'), this.startCard('lord')]),
+        this.error ? h('p.mu-bad.mu-bold', { style: { marginTop: '10px' } }, this.error) : null,
       ),
       h('footer.mu-win-foot', null,
         button('Back', { icon: 'chev_left', onClick: () => this.go('main') }),
         h('div.mu-grow'),
-        button('Legacy shop', { variant: 'primary', size: 'big', icon: 'chev_right', onClick: () => this.go('shop') }),
+        this.startKind === 'lord'
+          ? button(this.starting ? 'Making the world…' : 'Begin as a lord', { variant: 'primary', size: 'big', icon: 'play', disabled: this.starting, onClick: () => this.begin() })
+          : button('Legacy shop', { variant: 'primary', size: 'big', icon: 'chev_right', onClick: () => this.go('shop') }),
       ),
     );
     return h('div.mu-menu-single', null, win);
+  }
+
+  /** One of the two ways to begin, as a card to pick. */
+  private startCard(kind: 'birth' | 'lord'): HTMLElement {
+    const sel = this.startKind === kind;
+    const lord = kind === 'lord';
+    const card = h('div.mu-card.click.mu-tier.mu-start', { class: sel ? 'sel' : '', role: 'radio', 'aria-checked': String(sel), tabindex: '0', 'data-start': kind },
+      h('div.mu-tier-top', null,
+        h('span.mu-tier-ico', null, icon(lord ? 'castle' : 'home', 24)),
+        h('div', null, h('h4', null, lord ? 'Start as a lord' : 'Be born into a family'), h('div.mu-dim.mu-ital.mu-small', null, lord ? 'A manor of your own from the first morning' : 'The birth lottery, and the Legacy shop'))),
+      h('ul.mu-bullets', null, (lord
+        ? ['You are a grown man or woman, the holder of a manor, with its fields, purse and men to order from the seat of government (U).',
+          'The first day teaches the ruling: hear your steward, set the fields, put your purse to work, drill at the yard.',
+          'No Legacy ranks are spent; you begin as you are.']
+        : ['You are born into a random family of the period, weighted like the real world: most are peasants, a few are gentry or noble. You start at twelve.',
+          'Your Legacy gold buys stat ranks for the birth.']).map((c) => h('li', null, c))),
+      sel ? h('span.mu-tier-check', null, icon('check', 16)) : null);
+    const pick = (): void => { this.startKind = kind; this.go('difficulty'); };
+    card.addEventListener('click', pick);
+    card.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
+    return card;
   }
 
   // ---- run start: stat shop ----
@@ -270,8 +297,9 @@ export class MenuLayer {
     if (this.starting) return;
     this.starting = true;
     this.error = '';
-    this.go('shop');
-    void this.deps.startRun({ difficulty: this.difficulty, statUpgrades: this.shop.selection() }).catch((err: unknown) => {
+    this.go(this.view === 'difficulty' ? 'difficulty' : 'shop');
+    const lord = this.startKind === 'lord';
+    void this.deps.startRun({ difficulty: this.difficulty, statUpgrades: lord ? {} : this.shop.selection(), start: this.startKind }).catch((err: unknown) => {
       this.setError(`The world could not be made: ${err instanceof Error ? err.message : String(err)}`);
     });
   }

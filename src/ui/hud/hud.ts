@@ -229,7 +229,7 @@ export class Hud {
     this.feedEl.append(this.feedList, this.feedBar);
     this.tracker = new Tracker({
       game: () => deps.game(), nav: this.nav, nameOf: (id) => deps.nameOf(id),
-      openJournal: () => deps.open({ panel: 'journal' }), whatNow: () => this.whatNow.toggle(),
+      openJournal: () => deps.open({ panel: 'journal' }), whatNow: () => this.whatNow.toggle(), open: (req) => deps.open(req),
     });
     this.whatNow = new WhatNow({
       game: () => deps.game(), nav: this.nav, show: (spot) => { showPlace(deps.game(), deps.pins, spot); }, say: (text) => deps.say('info', text),
@@ -511,6 +511,7 @@ export class Hud {
     const showGuides = nav.street && !!hud && !hud.travel;
     this.compass.setVisible(showGuides);
     if (showGuides) this.compass.update(nav);
+    this.el.classList.toggle('mu-compact', this.deps.host.settings().compactHud === true);
     const showMap = nav.street && !!hud && this.deps.host.settings().minimap !== false;
     this.minimap.setVisible(showMap);
     if (showMap) this.minimap.update(now);
