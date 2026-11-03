@@ -73,15 +73,15 @@ function plant(b: MeshBuilder, crop: string, x: number, z: number, g: number, lo
   switch (crop) {
     case 'cabbage': {
       const R = 0.06 + 0.2 * g;
-      b.blob(x, y + R * 0.6, z, R, R * (g > 0.7 ? 0.9 : 0.6), R, (nx, ny) => (ny > 0.4 ? CABBAGE : ny < -0.3 ? CABBAGE_D : LEAF), 0.25, lod === 0 && g > 0.5 ? 1 : 0, Math.floor(r() * 100));
-      if (g > 0.5 && lod === 0) for (let k = 0; k < 4; k++) {
-        const a = (k / 4) * Math.PI * 2 + r();
+      b.blob(x, y + R * 0.6, z, R, R * (g > 0.7 ? 0.9 : 0.6), R, (nx, ny) => (ny > 0.4 ? CABBAGE : ny < -0.3 ? CABBAGE_D : LEAF), 0.25, 0, Math.floor(r() * 100));
+      if (g > 0.5 && lod === 0) for (let k = 0; k < 3; k++) {
+        const a = (k / 3) * Math.PI * 2 + r();
         b.beam([x, y + 0.03, z], [x + Math.cos(a) * R * 1.5, y + 0.02 + R * 0.3, z + Math.sin(a) * R * 1.5], R * 0.9, 0.02, LEAF_D);
       }
       break;
     }
     case 'onions': {
-      const n = g < 0.3 ? 2 : 4;
+      const n = g < 0.3 || lod > 0 ? 1 : 2;
       for (let k = 0; k < n; k++) {
         const a = (k / n) * Math.PI * 2;
         const h = 0.08 + 0.3 * g;
@@ -99,7 +99,7 @@ function plant(b: MeshBuilder, crop: string, x: number, z: number, g: number, lo
     default: {
       // turnips: a rosette of rough leaves; the root's purple shoulder shows as it swells
       if (g > 0.55) b.blob(x, y + 0.02, z, 0.04 + 0.05 * g, 0.05 * g, 0.04 + 0.05 * g, (nx, ny) => (ny > 0.35 ? TURNIP_TOP : TURNIP), 0.12, 0, 5);
-      const n = g < 0.3 ? 2 : 5;
+      const n = g < 0.3 || lod > 0 ? 2 : 3;
       for (let k = 0; k < n; k++) {
         const a = (k / n) * Math.PI * 2 + 0.4;
         const L = 0.06 + 0.2 * g;
@@ -118,14 +118,14 @@ function cropBed(crop: string): Fn {
     const g = [0.15, 0.4, 0.72, 1][stage - 1];
     turned(b, -BED_L / 2, BED_L / 2, lod === 0 ? 1 : lod, r);
     drills(b, lod, false, r);
-    const per = crop === 'cabbage' ? 6 : crop === 'leeks' || crop === 'onions' ? 10 : 8;
+    const per = crop === 'cabbage' ? 5 : crop === 'leeks' || crop === 'onions' ? 7 : 5;
     const step = lod === 2 ? 2 : 1;
     const l = BED_L / 2 - 0.25;
     for (const x of [-0.45, 0, 0.45]) {
       for (let i = 0; i < per; i += step) plant(b, crop, x + (r() - 0.5) * 0.04, -l + ((i + 0.5) / per) * 2 * l, g * (0.9 + r() * 0.2), lod, r);
     }
     if (weedy && lod !== 2) {
-      for (let i = 0; i < 18; i++) {
+      for (let i = 0; i < 10; i++) {
         const x = (r() - 0.5) * (BED_W - 0.2), z = (r() - 0.5) * (BED_L - 0.2), h = 0.08 + r() * 0.16;
         b.beam([x, 0.12, z], [x + (r() - 0.5) * 0.1, 0.12 + h, z + (r() - 0.5) * 0.1], 0.03, 0.03, WEED);
       }
@@ -180,7 +180,7 @@ export const WORK_PROPS: Record<string, Fn> = {
     const n = Math.max(1, Math.min(8, size || 3)) * 2;
     for (let i = 0; i < n; i++) {
       const x = -0.45 + (i % 4) * 0.3, z = -0.12 + Math.floor(i / 4) * 0.22 - 0.2;
-      b.blob(x, 0.82, z, 0.12, 0.07, 0.09, (nx, ny) => (ny > 0.3 ? 0xb9773a : 0x9a5f2c), 0.12, lod === 0 ? 1 : 0, i);
+      b.blob(x, 0.82, z, 0.12, 0.07, 0.09, (nx, ny) => (ny > 0.3 ? 0xb9773a : 0x9a5f2c), 0.12, 0, i);
     }
     void r;
   },
@@ -241,8 +241,8 @@ export const WORK_PROPS: Record<string, Fn> = {
   /** Fired pots in rows (size: rows). */
   pot_rows(b, r, lod, _meta, size) {
     const n = Math.max(1, Math.min(8, size || 2));
-    const sides = lod === 0 ? 8 : 6;
-    for (let i = 0; i < n * 3; i++) {
+    const sides = lod === 0 ? 7 : 5;
+    for (let i = 0; i < Math.min(12, n * 2); i++) {
       const x = -0.5 + (i % 4) * 0.33, z = -0.4 + Math.floor(i / 4) * 0.33;
       b.push(); b.translate(x, 0, z);
       b.lathe([[0.08, 0], [0.13, 0.08], [0.12, 0.2], [0.08, 0.26], [0.09, 0.29]], sides, [0xa85c40, 0xb86c48, 0xb86c48, 0x9a5038, 0xa85c40], { capBottom: true });
