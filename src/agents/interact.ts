@@ -127,6 +127,17 @@ export function findInteractables(zone: Zone, x: number, z: number, yaw: number,
     const pl = a.plate;
     push({ kind: 'person', id: a.personId }, a.x, a.z, Math.sqrt(d2), pl ? (pl.sub ? `${pl.name} · ${pl.sub}` : pl.name) : fullName(p), -0.4);
   }
+  // the people inside the rooms drawn (docs/INTERIORS.md)
+  for (const o of zone.indoors.people()) {
+    const w = zone.indoors.positionOf(o.person);
+    if (!w) continue;
+    const dx = w.x - x, dz = w.z - z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 > r2) continue;
+    const p = st.persons.get(o.person);
+    if (!p) continue;
+    push({ kind: 'person', id: o.person }, w.x, w.z, Math.sqrt(d2), fullName(p), -0.4);
+  }
   // animals
   for (const an of zone.fauna.list()) {
     const dx = an.x - x, dz = an.z - z;
@@ -142,6 +153,23 @@ export function findInteractables(zone: Zone, x: number, z: number, yaw: number,
     const def = BUILDINGS[b.kind];
     if (def.segment) return;
     doorStand(b, door);
+    // a building whose inside is known: its nearest real doorway, outside or in (a chamber's door), is where it is used
+    const l = zone.nav.interiors.loaded.get(b.id);
+    if (l) {
+      const loc = { x: 0, z: 0 };
+      zone.nav.interiors.toLocal(l, x, z, loc);
+      let bd = Infinity, bi = -1;
+      l.plan.doors.forEach((d, i) => {
+        if (d.kind === 'small' || d.kind === 'arch') return;
+        const dd = Math.hypot(d.x - loc.x, d.z - loc.z);
+        if (dd < bd) { bd = dd; bi = i; }
+      });
+      if (bi >= 0) {
+        const d = l.plan.doors[bi];
+        const w = zone.nav.interiors.toWorld(l, d.x - d.nx * 0.05, d.z - d.nz * 0.05, { x: 0, z: 0 });
+        door.x = w.x; door.z = w.z;
+      }
+    }
     // distance to the door or to the footprint, whichever is nearer
     const dd = Math.hypot(door.x - x, door.z - z);
     const c = Math.cos(b.rot), s = Math.sin(b.rot);

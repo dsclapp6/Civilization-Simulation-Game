@@ -57,10 +57,7 @@ export function gallows(ctx: Ctx, def: BuildingDef): void {
     for (const sx of [-1, 1]) b.beam([sx * 1.0, 2.7, 0], [sx * 0.55, 3.45, 0], 0.1, 0.1, s.timber);
     b.beam([0.2, 3.45, 0], [0.2, 2.5, 0], 0.025, 0.025, COL.rope);
     b.cyl(0.2, 0, 2.3, 2.55, 0.11, 0.11, 6, COL.rope, { top: false, bottom: false });
-    // Ladder leaning on the beam.
-    b.beam([-0.55, 0.3, 0.9], [-0.55, 3.4, 0.15], 0.06, 0.06, COL.timberRaw);
-    b.beam([-0.15, 0.3, 0.9], [-0.15, 3.4, 0.15], 0.06, 0.06, COL.timberRaw);
-    for (let i = 1; i < 8; i++) { const t = i / 8; b.box(-0.55, 0.3 + 3.1 * t - 0.03, 0.9 - 0.75 * t - 0.03, -0.15, 0.3 + 3.1 * t + 0.03, 0.9 - 0.75 * t + 0.03, COL.timberRaw); }
+    // (the ladder leaning on the beam led nowhere one could stand: gone, docs/INTERIORS.md)
   });
   ctx.out.doors.push({ x: 0, z: 1.6 });
 }

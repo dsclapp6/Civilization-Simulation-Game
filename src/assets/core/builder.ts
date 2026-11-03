@@ -46,6 +46,10 @@ export const F = {
   Under: 16,
   /** Skip the ground-contact darkening. */
   NoAO: 32,
+  /** A door leaf baked into the model (dropped when the renderer draws the real, hinged leaf: docs/INTERIORS.md). */
+  Leaf: 64,
+  /** The dark recess behind a door leaf (kept only when the leaf is drawn apart). */
+  Recess: 128,
 } as const;
 
 export type Col = number;
@@ -139,6 +143,8 @@ export class MeshBuilder {
   /** When true, every face gets a fresh random foliage value in [0,1). */
   leafRandom = false;
   center: V3 = [0, 0, 0];
+  /** Record nothing (a recipe run only for what it says of the building: interior plans). */
+  dry = false;
 
   private m = new THREE.Matrix4();
   private stack: THREE.Matrix4[] = [];
@@ -237,6 +243,7 @@ export class MeshBuilder {
   }
 
   private emit(A: V3, B: V3, C: V3, ca: readonly number[], cb: readonly number[], cc: readonly number[]): void {
+    if (this.dry) return;
     this.pos.push(A[0], A[1], A[2], B[0], B[1], B[2], C[0], C[1], C[2]);
     this.col.push(ca[0], ca[1], ca[2], cb[0], cb[1], cb[2], cc[0], cc[1], cc[2]);
     const sf = this.swayFn;

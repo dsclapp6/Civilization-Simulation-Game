@@ -25,6 +25,8 @@ export interface BuildingRequest {
   gate?: 'open' | 'shut' | 'broken';
   /** Civilization pass (FortView): a wall or palisade breached 0..1 (≥ 0.5 a gap of rubble one can climb through). */
   breach?: number;
+  /** Interiors (additive): false = the doorways are left dark and the caller hangs the hinged leaves (`BuildingAsset.doorways`). */
+  doorLeaves?: boolean;
 }
 
 export interface BuildingAsset {
@@ -48,6 +50,8 @@ export interface BuildingAsset {
   firePoints?: THREE.Vector3[];
   /** Triangle count of this asset (all meshes). */
   triangles?: number;
+  /** Interiors (additive): the doorways (local; threshold centre on the outer wall plane, outward normal, size, leaf colour). */
+  doorways?: ReadonlyArray<{ x: number; y: number; z: number; nx: number; nz: number; w: number; h: number; shape: 'flat' | 'round' | 'pointed' | 'tudor'; kind: 'door' | 'wide'; open: boolean; color: number; stone: boolean }>;
 }
 
 /** Geometry + material for GPU instancing (vegetation, crops, props in bulk). */

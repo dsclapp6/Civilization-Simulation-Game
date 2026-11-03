@@ -3,7 +3,7 @@
 // main (south) door is on local +z, matching the contract's door side.
 import type { BuildingDef } from '../../../content/types';
 import { F, Layer, shade, type V3 } from '../../core/builder';
-import { chimney, crenelLine, enterSide, flagPole, house, opening, roundTower, windowRow, type Ctx, type Opening, type Rect, type Side } from '../parts';
+import { chimney, crenelLine, enterSide, flagPole, house, opening, roundTower, yardSolid, windowRow, type Ctx, type Opening, type Rect, type Side } from '../parts';
 import { buildCone, buildRoof, roofLook, type RoofMat } from '../roof';
 import { COL, roofTint, type CultureStyle, type WallKind } from '../style';
 
@@ -79,7 +79,7 @@ export function squareTower(ctx: Ctx, x: number, z: number, size: number, H: num
     { side: 'nx', u: 0, w: 0.8, h: 2.2, y: H * 0.3, kind: 'lancet', frame: fk, shape: 'pointed' },
     { side: 'pz', u: 0, w: 0.3, h: 0.9, y: H * 0.55, kind: 'slit', frame: fk },
   ];
-  if (o.door) lower.push({ side: 'nx', u: 0, w: 1.2, h: 2.4, y: 0, kind: 'door', frame: fk, shape: 'pointed' });
+  if (o.door) lower.push({ side: 'nx', u: 0, w: size < 3 ? 0.8 : 1.2, h: size < 3 ? 2.1 : 2.4, y: 0, kind: 'door', frame: fk, shape: 'pointed' });
   house(ctx, {
     rect: rc, plinthH: 0.5,
     storeys: [{ h: H - 0.5, wall, frame: 'none', quoins: wall === 'stone' && H < 12, openings: [...lower, ...belfry] }],
@@ -464,9 +464,11 @@ export function cloister(ctx: Ctx, def: BuildingDef): void {
   const rangeH = 3.6;
   const mk = (rc: Rect, ax: 'x' | 'z', outer: Side, inner: Side, door: boolean) => {
     const len = ax === 'x' ? rc.x1 - rc.x0 : rc.z1 - rc.z0;
+    // each range has its door from the cloister walk (docs/INTERIORS.md)
     const st = [{ h: rangeH, wall, frame: 'none' as const, quoins: wall === 'stone', openings: [
       ...lancets(outer, len, 4, 1.3, 1.6, 0.55, door ? [0] : []),
       ...(door ? [{ side: outer, u: 0, w: 2.2, h: 2.9, y: 0, kind: 'door' as const, frame: fk as 'stone', shape: 'pointed' as const, open: true }] : []),
+      { side: inner, u: len * 0.18, w: 1.1, h: 2.3, y: 0, kind: 'door' as const, frame: fk as 'stone', shape: 'pointed' as const },
     ] }];
     if (storeys > 1 || ax === 'z') st.push({ h: 2.8, wall, frame: 'none' as const, quoins: false, openings: [...windowRow(outer, len, 4, { w: 0.6, h: 0.8, y: 0.9, frame: fk, shutters: false }), ...windowRow(inner, len, 3, { w: 0.6, h: 0.8, y: 0.9, frame: fk, shutters: false })] } as never);
     return house(ctx, { rect: rc, plinthH: 0.35, storeys: st, roof: { type: 'gable', axis: ax, pitch, mat, ov: 0.3, gov: 0.12, ridge: 'plain' }, parapet: wall !== 'planks' ? (s.crowSteps ? 'crow' : 'coping') : undefined });
@@ -480,6 +482,7 @@ export function cloister(ctx: Ctx, def: BuildingDef): void {
     rect: south, plinthH: 0.35,
     storeys: [{ h: rangeH, wall, frame: 'none', quoins: wall === 'stone', openings: [
       { side: 'pz', u: 0, w: 2.4, h: 3.0, y: 0, kind: 'door', frame: fk, shape: 'pointed', open: true },
+      { side: 'nz', u: 0, w: 2.4, h: 3.0, y: 0, kind: 'door', frame: fk, shape: 'pointed', open: true },
       ...lancets('pz', south.x1 - south.x0, 6, 1.3, 1.5, 0.5, [0]),
     ] }],
     roof: { type: 'gable', pitch, mat, ov: 0.3, gov: 0.12, ridge: 'plain' },
@@ -494,6 +497,8 @@ export function cloister(ctx: Ctx, def: BuildingDef): void {
       const nb = Math.max(3, Math.round(len / 1.8));
       for (let i = 0; i <= nb; i++) b.box((len * i) / nb - 0.2, -0.3, -0.2, (len * i) / nb + 0.2, 2.3, 0.2, { side: col, top: col });
       b.box(-0.2, 0, -0.25, len + 0.2, 0.6, 0.25, { side: col, top: shade(col, 1.06) });
+      // the arcade's sill wall and piers keep one to the walks (the garth is looked at, not walked)
+      yardSolid(ctx, -0.2, -0.25, len + 0.2, 0.25);
       for (let i = 0; i < nb; i++) {
         const u0 = (len * i) / nb + 0.2, u1 = (len * (i + 1)) / nb - 0.2, um = (u0 + u1) / 2;
         b.flat([[u0, 1.9], [um, 2.3], [u1, 1.9], [u1, 2.55], [u0, 2.55]], 0.2, col);
@@ -529,7 +534,8 @@ export function cloister(ctx: Ctx, def: BuildingDef): void {
   });
   if (q >= 2) {
     // Bell turret on the north range and a lavatorium chimney.
-    squareTower(ctx, W / 2 - 3.2, -D / 2 + 3.2, 2.6, 11.5, { spire: 'pyramid', crenel: false, belfry: true, wall });
+    // its door opens from the range it stands in; ladders go up inside to the bells (docs/INTERIORS.md)
+    squareTower(ctx, W / 2 - 3.4, -D / 2 + 3.4, 3.3, 11.5, { spire: 'pyramid', crenel: false, belfry: true, wall, door: true });
   }
   chimney(ctx, { x: -W / 2 + 3.0, z: -D / 2 + 1.8, baseY: 5, topY: north.roof.topY + 0.6, w: 0.9, d: 0.9, color: col, pots: 1 });
   ctx.out.doors.length = 0;

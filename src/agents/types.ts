@@ -9,7 +9,7 @@ import type { P2 } from '../core/math';
 import type { AnimalKind } from '../core/domain';
 import type { AnimalDrawItem, AnimState, CarryLook, CharacterDrawItem, HeldItem } from '../core/view';
 import type { TargetRef } from '../sim/actions';
-import type { PersonId } from '../sim/state';
+import type { BuildingState, Person, PersonId } from '../sim/state';
 
 export const ZONE_RADIUS = 250;
 export const MAX_AGENTS = 300;
@@ -115,8 +115,20 @@ export interface NavApi {
   walkable(x: number, z: number): boolean;
   /** Speed multiplier at a point (roads faster, mud/marsh/shallows slower). */
   speedFactor(x: number, z: number): number;
-  /** Move a circle of `radius` by (dx, dz), sliding along buildings, trees, rocks, walls and water. */
-  move(x: number, z: number, dx: number, dz: number, radius: number, out: MoveResult): MoveResult;
+  /**
+   * Move a circle of `radius` by (dx, dz), sliding along buildings, trees, rocks, walls and water. Additive (interiors,
+   * docs/INTERIORS.md): with the height of its feet `y`, the body moves through the insides near it — their walls with the gaps
+   * of the open doors, their furniture, their stairs — instead of against the buildings' boxes.
+   */
+  move(x: number, z: number, dx: number, dz: number, radius: number, out: MoveResult, y?: number): MoveResult;
+  /** Additive (interiors): the floor under a body whose feet are at y — a building's floor, stair or ladder, else the ground. */
+  floorY?(x: number, z: number, y: number): number;
+  /** Additive (interiors): the building whose rooms a body at (x, z, y) is in (−1 none) and the level of its plan. */
+  interiorAt?(x: number, z: number, y: number, out?: { level: number }): number;
+  /** Additive (interiors): load the insides round a point now (a body is about to be set down there). */
+  prepareInteriors?(x: number, z: number): void;
+  /** Additive (interiors): the shut door a body at (x, z, y) is pressed against (the building, the door's index in its plan). */
+  doorAgainst?(x: number, z: number, y: number): { building: number; door: number } | null;
   /** Walking path (smoothed waypoints, ends at `to` or the nearest reachable point); null if none. */
   findPath(from: P2, to: P2, maxLength?: number): P2[] | null;
   /** Nearest walkable point to (x, z) within `maxDist` (writes `out`), or false. */
@@ -155,8 +167,21 @@ export interface MarkedPerson {
   indoors: boolean;
 }
 
+/** Doors of buildings (additive, docs/INTERIORS.md): a view of the zone, not saved. Door = index in the building's plan. */
+export interface DoorsApi {
+  /** Someone goes through: it opens and swings to behind them after `hold` seconds. */
+  pass(building: number, door: number, hold?: number): void;
+  /** Opened or shut by hand. */
+  set(building: number, door: number, open: boolean): void;
+  isOpen(building: number, door: number): boolean;
+  /** Is the door locked to this person now (night, a home not theirs, a place shut up), and the words for it. */
+  lockFor(person: Person, building: BuildingState, door: number): { locked: boolean; why: string };
+}
+
 export interface ZoneApi {
   readonly nav: NavApi;
+  /** Additive (interiors): the doors' leaves and locks. */
+  readonly doorBook?: DoorsApi;
   agents(): readonly ZoneAgent[];
   agent(person: PersonId): ZoneAgent | null;
   animals(): readonly ZoneAnimal[];

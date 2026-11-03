@@ -94,16 +94,20 @@ export function createBody(x: number, z: number, yaw: number, y: number, enduran
 
 /** Puts the body somewhere; the previous position follows so nothing is interpolated across the jump. */
 export function placeBody(b: BodyState, x: number, z: number, yaw: number, nav: NavApi, walkY?: number): void {
+  // the insides round the new place are known before the body is set down in one
+  nav.prepareInteriors?.(x, z);
   // on a wall-walk (a ladder's top, the stairs): the floor must be there; otherwise the body is on the ground, and a point inside a
   // wall or a tower (a body saved on the walk) is set down beside it
   const top = walkY !== undefined && nav.walkTopAt ? nav.walkTopAt(x, z, walkY) : NaN;
   b.onWalk = top === top;
   b.fell = 0;
-  if (!b.onWalk && nav.groundBeside) { const g = { x, z }; if (nav.groundBeside(x, z, g)) { x = g.x; z = g.z; } }
+  const indoors = walkY !== undefined && !!nav.interiorAt && nav.interiorAt(x, z, walkY) >= 0;
+  if (!b.onWalk && !indoors && nav.groundBeside) { const g = { x, z }; if (nav.groundBeside(x, z, g)) { x = g.x; z = g.z; } }
   b.x = b.px = x;
   b.z = b.pz = z;
   b.yaw = b.pyaw = yaw;
-  b.y = b.py = b.onWalk ? top : nav.groundY(x, z);
+  // inside a building (walkY given, no wall-walk there): its floor at that height
+  b.y = b.py = b.onWalk ? top : walkY !== undefined && nav.floorY ? nav.floorY(x, z, walkY) : nav.groundY(x, z);
   b.vx = b.vz = 0;
   b.speed = 0;
   b.blocked = false;
@@ -222,6 +226,13 @@ export function stepBody(b: BodyState, input: Readonly<InputState>, env: BodyEnv
   // ---- move against the world ----
   const intended = Math.hypot(moveX, moveZ) * dt;
   b.fell = 0;
+  if (intended > 1e-6 && b.onWalk && nav.floorY && nav.walkTopAt) {
+    // off the end of the walk onto the head of a flight of steps (or into a tower's top room): the body walks on, off the walk
+    const tx = b.x + moveX * dt * 2, tz = b.z + moveZ * dt * 2;
+    const top = nav.walkTopAt(tx, tz, b.y);
+    const fy = nav.floorY(tx, tz, b.y);
+    if (!(top === top) && Math.abs(fy - b.y) < 0.6) b.onWalk = false;
+  }
   if (intended > 1e-6 && b.onWalk && nav.walkMove) {
     // on the wall-walk: held to the floors (the parapet is a wall), the height that of the floor
     nav.walkMove(b.x, b.z, moveX * dt, moveZ * dt, b.y, wm);
@@ -235,7 +246,8 @@ export function stepBody(b: BodyState, input: Readonly<InputState>, env: BodyEnv
     if (wm.fell) { b.fell = b.y - nav.groundY(b.x, b.z); b.onWalk = false; }
     else b.y += clamp(wm.y - b.y, -STAIR_SPEED * dt, STAIR_SPEED * dt);
   } else if (intended > 1e-6) {
-    nav.move(b.x, b.z, moveX * dt, moveZ * dt, mounted ? RIDE_RADIUS : FOOT_RADIUS, mr);
+    // with its height the body walks through the insides of buildings near it (docs/INTERIORS.md)
+    nav.move(b.x, b.z, moveX * dt, moveZ * dt, mounted ? RIDE_RADIUS : FOOT_RADIUS, mr, nav.floorY ? b.y : undefined);
     const dx = mr.x - b.x, dz = mr.z - b.z;
     const moved = Math.hypot(dx, dz);
     b.x = mr.x; b.z = mr.z;
@@ -250,11 +262,25 @@ export function stepBody(b: BodyState, input: Readonly<InputState>, env: BodyEnv
     b.blocked = false;
   }
   if (b.onWalk && nav.walkTopAt) {
-    // standing still on the walk: the floor under the feet (or, if it was battered away, the ground)
-    const top = nav.walkTopAt(b.x, b.z, b.y);
-    if (top === top) b.y += clamp(top - b.y, -STAIR_SPEED * dt, STAIR_SPEED * dt);
-    else { b.fell = b.y - nav.groundY(b.x, b.z); b.onWalk = false; b.y = nav.groundY(b.x, b.z); }
-  } else if (!b.onWalk) b.y = nav.groundY(b.x, b.z);
+    // on the walk, at the head of a stair or on a tower top that is a building's floor: the body is in that building now
+    const room = nav.interiorAt ? nav.interiorAt(b.x, b.z, b.y) : -1;
+    const fy = room >= 0 && nav.floorY ? nav.floorY(b.x, b.z, b.y) : NaN;
+    if (fy === fy && Math.abs(fy - b.y) < 0.6) { b.onWalk = false; b.y = fy; }
+    else {
+      // standing still on the walk: the floor under the feet (or, if it was battered away, the ground)
+      const top = nav.walkTopAt(b.x, b.z, b.y);
+      if (top === top) b.y += clamp(top - b.y, -STAIR_SPEED * dt, STAIR_SPEED * dt);
+      else { b.fell = b.y - nav.groundY(b.x, b.z); b.onWalk = false; b.y = nav.groundY(b.x, b.z); }
+    }
+  } else if (!b.onWalk) {
+    if (nav.floorY) {
+      // the floor under the feet: a storey, a stair, a ladder, the ground; up a flight onto the wall-walk at its head
+      const fy = nav.floorY(b.x, b.z, b.y);
+      const top = nav.walkTopAt && b.y > nav.groundY(b.x, b.z) + 2 ? nav.walkTopAt(b.x, b.z, fy) : NaN;
+      if (top === top && Math.abs(top - fy) < 0.6 && (!nav.interiorAt || nav.interiorAt(b.x, b.z, fy) < 0)) { b.onWalk = true; b.y = top; }
+      else b.y = fy;
+    } else b.y = nav.groundY(b.x, b.z);
+  }
 
   const moving = b.speed > 0.2;
   stepStamina(b.stamina, {

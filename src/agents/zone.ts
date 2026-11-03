@@ -30,6 +30,8 @@ import type {
   Activity, AgentOrder, InteractCandidate, MarkedPerson, MoveResult, SummonOpts, WallStation, Whereabouts, ZoneAgent, ZoneAnimal,
 } from './types';
 import { MAX_AGENTS } from './types';
+import { DoorBook } from './doors';
+import { Indoors } from './indoors';
 
 export interface AgentsDeps { economy: EconomyApi; social: SocialApi }
 
@@ -138,6 +140,10 @@ export class Zone {
       posts: (settlement) => this.wallStations(settlement),
     });
     this.fauna = new AnimalSystem(this);
+    // interiors (docs/INTERIORS.md): the doors' leaves and the people inside the rooms drawn near the player
+    this.doors = new DoorBook(sim.state, this.nav.interiors);
+    this.nav.interiors.doorShut = (b, d) => this.doors.shut(b, d);
+    this.indoors = new Indoors(this, newIntent());
     this.plateCtx = { state: sim.state, world: sim.world, social: deps.social };
     // conversations refuse people the schedules have asleep indoors (SocialApi.setHooks merges into the current hooks)
     deps.social.setHooks?.({
@@ -153,6 +159,12 @@ export class Zone {
     sim.events.on('playerSwitched', () => { this.needResync = true; });
     sim.events.on('runStarted', () => { this.needResync = true; });
   }
+
+  /** Every door's leaf (docs/INTERIORS.md). */
+  readonly doors: DoorBook;
+  /** The people inside the rooms drawn near the player. */
+  readonly indoors: Indoors;
+  get doorBook(): DoorBook { return this.doors; }
 
   get state() { return this.sim.state; }
   get world() { return this.sim.world; }
@@ -205,6 +217,8 @@ export class Zone {
     const speedScale = 1 / Math.sqrt(Math.max(1, this.clockSpeed));
     this.nav.update(this.focusX, this.focusZ, NAV_BUILD_BUDGET_MS * speedScale, this.stepCount % 40 === 0);
     this.updatePlayer(dt);
+    this.doors.step(dt, this.now);
+    this.indoors.step(dt);
     if (this.stepCount % 20 === 3) this.refreshQuestFolk();
     if (this.stepCount % 20 === 9) this.syncAlerts();
     // bodies
@@ -325,6 +339,19 @@ export class Zone {
     this.stats.spawnMs = performance.now() - t0;
   }
 
+  /** Someone appears at a door (out of a building): the nearest door of a loaded inside within 2.5 m opens and swings to. */
+  private passDoorNear(x: number, z: number): void {
+    const loc = { x: 0, z: 0 };
+    for (const l of this.nav.interiors.all) {
+      if (Math.abs(l.x - x) > 25 || Math.abs(l.z - z) > 25) continue;
+      this.nav.interiors.toLocal(l, x, z, loc);
+      l.plan.doors.forEach((d, i) => {
+        if (!d.outer || d.kind === 'small') return;
+        if (Math.hypot(d.sx - loc.x, d.sz - loc.z) < 2.5) this.doors.pass(l.id, i);
+      });
+    }
+  }
+
   /** A person has gone indoors or away before the schedule says they have arrived: the scan must not put them back in the street. */
   hide(person: PersonId, until: number): void {
     this.hidden.set(person, until);
@@ -409,6 +436,8 @@ export class Zone {
     const post = I.travel >= 1 && I.elev > 0;
     if (post) { out.x = x; out.z = z; } else if (!this.nav.nearestWalkable(x, z, 8, out)) return false;
     this.add(p, out.x, out.z, d, post ? I.elev : 0);
+    // just out of a door: it opens behind them (docs/INTERIORS.md)
+    if (I.travel < 0.2) this.passDoorNear(out.x, out.z);
     return true;
   }
 
@@ -607,6 +636,7 @@ export class Zone {
     this.nav.queue.clear();
     this.doorNext.clear();
     this.fauna.clear();
+    this.indoors.clear();
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -655,6 +685,8 @@ export class Zone {
     if (a) { this.tmpP.x = a.x; this.tmpP.z = a.z; return this.tmpP; }
     const p = this.player;
     if (p && p.person === person) { this.tmpP.x = p.x; this.tmpP.z = p.z; return this.tmpP; }
+    const ins = this.indoors.positionOf(person);
+    if (ins) { this.tmpP.x = ins.x; this.tmpP.z = ins.z; return this.tmpP; }
     return null;
   }
 
@@ -721,6 +753,7 @@ export class Zone {
       if (!live) d.moveSpeed = 0;
       list.push(d);
     }
+    this.indoors.drawItems(list, live);
     return list;
   }
 

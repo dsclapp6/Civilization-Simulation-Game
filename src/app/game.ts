@@ -120,9 +120,9 @@ export async function start(root: AppRoot): Promise<void> {
       if (g && r && !r.ok) g.sim.events.emit('notify', { kind: 'warn', text: r.reason ?? 'There is no horse to call.' });
     },
     toggleWeapon: () => { const p = host.session?.services.player; p?.setDrawn?.(!p.drawn?.()); },
-    pointerMove: (x, y) => { if (!host.session?.interior.active) host.session?.services.player.pointerMove?.(x, y); },
+    pointerMove: (x, y) => { host.session?.services.player.pointerMove?.(x, y); },
     pointerLeave: () => host.session?.services.player.pointerLeave?.(),
-    pointerClick: (x, y) => { if (!host.session?.interior.active) host.session?.services.player.pointerClick?.(x, y); },
+    pointerClick: (x, y) => { host.session?.services.player.pointerClick?.(x, y); },
     cursor: () => {
       const hov = host.session?.services.player.hover?.();
       return hov ? cursorCss(hov.cursor) : '';
@@ -140,7 +140,7 @@ export async function start(root: AppRoot): Promise<void> {
   const steerCamera = (intent: InputState, dt: number, s: Session): InputState => {
     const moving = Math.abs(intent.forward) > 0.1 || Math.abs(intent.right) > 0.1;
     // turning the camera by hand (the mouse looking) steers as before
-    const fighting = !!s.services.player.drawn?.() || s.renderer.getCameraMode() !== 'follow' || s.interior.active || !!host.input?.pointerLocked || s.renderer.inFirstPerson(); // first person turns by hand only
+    const fighting = !!s.services.player.drawn?.() || s.renderer.getCameraMode() !== 'follow' || !!host.input?.pointerLocked || s.renderer.inFirstPerson(); // first person turns by hand only
     if (!moving || fighting) { walkFrame = null; walkKey = ''; walkFor = 0; return intent; }
     const key = `${Math.sign(intent.forward)}|${Math.sign(intent.right)}`;
     if (key !== walkKey || walkFrame === null) { walkKey = key; walkFrame = intent.cameraYaw; walkFor = 0; }
@@ -212,12 +212,11 @@ export async function start(root: AppRoot): Promise<void> {
       const t1 = performance.now();
       let t2 = t1, t3 = t1;
       if (step) {
-        // inside a building the room takes the keys; the body outside stands still at the door
-        if (s.interior.active) { s.interior.step(host.screen === 'game' ? intent : EMPTY_INPUT, dt); g.player.setInput(EMPTY_INPUT); }
-        else g.player.setInput(host.screen === 'game' ? intent : EMPTY_INPUT);
+        g.player.setInput(host.screen === 'game' ? intent : EMPTY_INPUT);
         s.sim.step(dt);
         t2 = performance.now();
         g.player.frame?.(dt);
+        s.interior.update();
         s.campaign.update(dt);
         const focus = g.player.mapFocus?.();
         if (focus) s.renderer.focusMap(focus.x, focus.z, focus.altitude);

@@ -109,6 +109,12 @@ export interface LawApi {
   // ---- additive (law module); optional so the UI's stand-ins and other modules' fakes need not implement them ----
   /** Lands where this person is wanted (an escaped prisoner, a killer of the lord's men) and until which absolute day. */
   wanted?(person: PersonId): ReadonlyArray<{ settlement: number; until: number }>;
+  /**
+   * Additive (interiors, docs/INTERIORS.md): the person forced a door at (x, z) in a settlement. If the house was occupied or
+   * someone of the place saw it, the hue and cry goes up and the lord's men come (a case of the watch, cause the break-in).
+   * Returns true when the law heard of it.
+   */
+  breakIn?(person: PersonId, settlement: number, x: number, z: number, occupied: boolean): boolean;
 }
 
 /** What `installLaw` returns: the API plus what tests and tools need. */

@@ -9,7 +9,7 @@ import type { CharacterDrawItem, AnimalDrawItem, BuildingView, FortView, SiegeWo
 import type { AssetLibrary } from '../assets/types';
 import type { WorldModel } from '../world/types';
 import { QUALITY, type QualitySettings } from './quality';
-import type { BuildGhost, CameraMode, InteriorFrame, GameRenderer, GroundPoint, HoverTarget, OrderMark, OverviewView, PickResult, QualityLevel, RenderStats, RendererOptions } from './types';
+import type { BuildGhost, CameraMode, InteriorsView, GameRenderer, GroundPoint, HoverTarget, OrderMark, OverviewView, PickResult, QualityLevel, RenderStats, RendererOptions } from './types';
 import { computeAtmosphere, createAtmosphereState } from './sky/atmosphere';
 import { atmoUniforms, installAtmospherePatch } from './sky/atmospherePatch';
 import { Sky } from './sky/sky';
@@ -38,7 +38,7 @@ import { BuildAreaOverlay } from './feedback/buildArea';
 import { OrderMarkLayer } from './feedback/orderMarks';
 import { DepositSystem } from './deposits';
 import { SiegeLayer } from './siege';
-import { InteriorScene } from './interior';
+import { InteriorLayer } from './interior';
 
 export type { CameraMode, GameRenderer, GroundPoint, HoverTarget, PickResult, QualityLevel, RenderStats, RendererOptions } from './types';
 
@@ -110,8 +110,8 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
   const worldProps = new WorldPropsLayer(assets, heightAt);
   const beacons = new BeaconLayer(heightAt, showLabels);
   const floaters = new FloaterLayer();
-  const interior = new InteriorScene(assets);
-  let interiorView: (() => InteriorFrame) | null = null;
+  const interiors = new InteriorLayer(assets, buildings);
+  let interiorView: (() => InteriorsView | null) | null = null;
   const plates = new Nameplates(showLabels);
   // civilization pass: quest marks over people, the builder's ghost, orders on the ground
   const marks = new QuestMarks();
@@ -154,7 +154,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
   lighting.configure(quality.shadows, quality.shadowMapSize, quality.shadowRadius);
 
   scene.add(sky.stars, sky.dome, terrain.root, water.root, roads.root, vegetation.root, buildings.root, fields.root, dynamic.root,
-    worldProps.root, hover.root, beacons.root, precip.rain, precip.snow, marks.root, ghost.root, orders.root, deposits.root, siege.root);
+    worldProps.root, hover.root, beacons.root, precip.rain, precip.snow, marks.root, ghost.root, orders.root, deposits.root, siege.root, interiors.root);
 
   let post: PostFx | null = null;
   const atmo = createAtmosphereState();
@@ -234,16 +234,6 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
   }
 
   function frame(view: SimView, dt: number, budgetScale: number, draw = true): void {
-    // inside a building: only the room is drawn
-    // the world's name plates and speech stay outside
-    labelRenderer.domElement.style.visibility = interior.active ? 'hidden' : '';
-    if (interior.active && interiorView) {
-      if (!draw) return;
-      const v = interiorView();
-      renderer.info.reset();
-      interior.render(renderer, v.chars, v.eye, v.at, dt);
-      return;
-    }
     const t0 = performance.now();
     dt = clamp(dt, 0, 0.25);
     time += dt;
@@ -361,6 +351,10 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     buildings.setForts(view.forts?.() ?? NO_FORTS, view.fortsVersion?.() ?? 0);
     const bfx = buildings.update(lastBuildings, view.buildingsVersion(), camera, time, dt, Math.max(1.5, budget * 0.6), budgetScale > 1);
     deposits.update(camera, lastBuildings, view.buildingsVersion(), time, atmo.day * (1 - atmo.overcast * 0.7), mapBlend < 0.9);
+    // insides of buildings and the leaves of their doors (docs/INTERIORS.md)
+    interiors.update(mapBlend < 0.5 ? (interiorView?.() ?? null) : null, camera, focusFor(view), dt, atmo.day * (1 - atmo.overcast * 0.5));
+    // (the camera rig, src/render/camera, is the first-person builder's: inside a building the boom passes through its walls —
+    // BuildingSystem.setInteriorFocus — and the cut-away keeps the room in view; a first-person eye sees the room whole)
     lastStrips = view.strips();
     const sv = view.stripsVersion();
     g += fields.update(lastStrips, sv, camera, Math.max(0.5 * budgetScale, budget - g), dt);
@@ -544,14 +538,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     setBuildArea(area: ReadonlyArray<ReadonlyArray<{ x: number; z: number }>> | null): void { buildArea.set(area); },
     setOverview(v: OverviewView | null): void { rig.setOverview(v); },
     setOrderMarks(m: readonly OrderMark[] | null): void { orders.set(m); },
-    setInterior(spec, view): void { interior.open(spec); interiorView = spec ? view ?? null : null; },
-    pickInterior(x: number, y: number): number {
-      if (!interior.active) return -1;
-      const rect = renderer.domElement.getBoundingClientRect();
-      ndc.set(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
-      raycaster.setFromCamera(ndc, interior.camera);
-      return interior.pick(raycaster);
-    },
+    setInteriors(view): void { interiorView = view; },
     setQuality,
     getQuality(): QualityLevel { return quality.level; },
     resize,
@@ -579,6 +566,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
       if (disposed) return;
       disposed = true;
       window.removeEventListener('resize', onResize);
+      interiors.dispose();
       post?.dispose();
       terrain.dispose();
       water.dispose();

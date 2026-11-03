@@ -155,6 +155,18 @@ export class Watch {
   }
 
   /** Reports the person as seen at once (tests, tools): starts the patrol without waiting for the report. False when nothing comes of it. */
+  /** A door forced (interiors): witnessed by the household inside or someone of the place, the patrol comes for a crime. */
+  breakIn(me: Person, settlement: number, x: number, z: number, occupied: boolean): boolean {
+    if (this.patrol.get(me.id)) return true;
+    const w = this.witnesses(me, settlement, x, z, false);
+    if (!w && !occupied) return false;
+    const c = this.cas = this.newCase(me, { settlement, level: 'private', reason: 'breaking into a house of the place' }, true);
+    c.attackOnSight = false;
+    this.L.sim.events.emit('trespass', { phase: 'seen', person: me.id, house: this.L.houseOf(settlement), settlement, level: 'private' });
+    this.dispatch(me, c, x, z);
+    return true;
+  }
+
   report(me: Person, x: number, z: number): boolean {
     if (this.patrol.get(me.id)) return false;
     const check = this.patrol.effective(me, x, z);

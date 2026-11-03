@@ -2,7 +2,7 @@
 import type { BuildingDef } from '../../../content/types';
 import { F, Layer, Mat, shade, type V2 } from '../../core/builder';
 import { clothQuad, decorInto } from '../../props/props';
-import { chimney, cupola, enterSide, flagPole, house, opening, pick, windowRow, type Ctx, type Opening, type Rect } from '../parts';
+import { chimney, cupola, enterSide, flagPole, hint, house, opening, pick, windowRow, yardSolid, type Ctx, type Opening, type Rect } from '../parts';
 import { buildRoof, roofLook, type RoofMat } from '../roof';
 import { COL, roofTint, type FrameKind, type WallKind } from '../style';
 import { ovFor, vernacular } from '../vernacular';
@@ -184,6 +184,7 @@ export function marketHall(ctx: Ctx, def: BuildingDef): void {
         for (let i = 0; i <= bays; i++) {
           const u = -len / 2 + (len * i) / bays;
           b.box(u - 0.28, -0.3, -0.5, u + 0.28, H0, 0.0, { side: s.stone, top: s.stone });
+          yardSolid(ctx, u - 0.28, -0.5, u + 0.28, 0);
         }
         for (let i = 0; i < bays; i++) {
           const u0 = -len / 2 + (len * i) / bays + 0.28, u1 = -len / 2 + (len * (i + 1)) / bays - 0.28;
@@ -201,6 +202,7 @@ export function marketHall(ctx: Ctx, def: BuildingDef): void {
         if (i !== 0 && i !== nx && k !== 0 && k !== nz) continue;
         const x = rect.x0 + 0.15 + ((L - 0.3) * i) / nx, z = rect.z0 + 0.15 + ((Dp - 0.3) * k) / nz;
         b.box(x - 0.15, -0.3, z - 0.15, x + 0.15, H0, z + 0.15, s.timber);
+        yardSolid(ctx, x - 0.15, z - 0.15, x + 0.15, z + 0.15);
         b.box(x - 0.25, -0.3, z - 0.25, x + 0.25, 0.25, z + 0.25, COL.stoneGrey);
       }
       b.box(rect.x0, H0 - 0.25, rect.z0, rect.x1, H0, rect.z1, s.timber, 'b');
@@ -222,6 +224,22 @@ export function marketHall(ctx: Ctx, def: BuildingDef): void {
     roof: { type: s.id === 'gael' ? 'hip' : 'hip', pitch: s.pitch, mat, ov, gov: ov, ridge: 'plain' },
   });
   b.pop();
+  // the stair up from the market under the arcade at its west end, through a hatch into the council chamber (docs/INTERIORS.md)
+  {
+    const x0 = rect.x0 + 0.35, x1 = rect.x0 + 1.3;
+    const zTop = rect.z0 + 1.0, zFoot = Math.min(rect.z1 - 0.3, zTop + H0 / 0.82);
+    b.state({ layer: Layer.Wall, flags: F.Burn }, () => {
+      const n = Math.max(3, Math.round(H0 / 0.22));
+      for (let i = 0; i < n; i++) {
+        const a = zFoot + ((zTop - zFoot) * i) / n, c = zFoot + ((zTop - zFoot) * (i + 1)) / n;
+        const y = (H0 * (i + 1)) / n;
+        b.box(x0, y - 0.05, Math.min(a, c), x1, y, Math.max(a, c), { top: 0x9a7a52, side: 0x7a5a3a });
+      }
+      for (const x of [x0 + 0.04, x1 - 0.04]) b.beam([x, 0, zFoot], [x, H0, zTop], 0.08, 0.2, s.timber);
+      b.beam([x1, 0.9, zFoot], [x1, H0 + 0.9, zTop], 0.05, 0.05, s.timber);
+    });
+    hint(ctx, { kind: 'steps', x: (x0 + x1) / 2, y: 0, z: zFoot + 0.02, x1: (x0 + x1) / 2, y1: H0 + 0.05, z1: zTop, w: x1 - x0 });
+  }
   // Soffit under the jetty.
   b.state({ layer: Layer.Wall, flags: F.NoAO | F.Burn }, () => b.quad([up.x0, H0, up.z0], [up.x1, H0, up.z0], [up.x1, H0, up.z1], [up.x0, H0, up.z1], shade(s.timber, 0.85)));
   cupola(ctx, 0, (up.z0 + up.z1) / 2, res.roof.topY + H0 - 0.35, 1.0, 1.0, mat, { open: true, bell: true });

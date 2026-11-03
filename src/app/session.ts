@@ -40,7 +40,7 @@ export interface Session {
   readonly renderer: GameRenderer;
   readonly assets: MillenniaAssetLibrary;
   readonly controls: UiRendererControls;
-  /** Inside a building (the room is drawn instead of the world). */
+  /** Interiors in the world: doors, insides, "Go inside" (docs/INTERIORS.md). */
   readonly interior: InteriorMode;
   /** Riding with the host: march, camp, storm. */
   readonly campaign: CampaignMode;
@@ -76,7 +76,8 @@ export async function buildSession(sim: Simulation, o: SessionOptions): Promise<
   // modules, in the order of ARCHITECTURE §4b
   const social = installSocial(sim);
   const economy = installEconomy(sim, { social });
-  let zone: ZoneApi = installAgents(sim, { economy, social });
+  const zoneImpl = installAgents(sim, { economy, social });
+  let zone: ZoneApi = zoneImpl;
   if (o.devZone) zone = wrapWithDevZone(sim, zone);
   const player = installPlayer(sim, { zone, economy, social, cameraMode: () => renderer.getCameraMode(), pick: makePickPort(renderer) });
   // spread each game hour's calendar work over frames so an hour boundary never stalls one frame
@@ -113,16 +114,10 @@ export async function buildSession(sim: Simulation, o: SessionOptions): Promise<
   const t5 = performance.now();
   await o.progress(0.95, 'Almost there…');
 
-  // interiors: "Go inside" a house, the hall, the church…; inside, the HUD prompt is the room's own
-  const interior = new InteriorMode(sim, renderer, player, zone);
-  offs.push(sim.actions.register(interior.provider()));
-  offs.push(sim.events.on('playerSwitched', () => interior.exit()), sim.events.on('playerDied', () => interior.exit()));
-  const worldHud = player.hud.bind(player);
-  player.hud = () => {
-    const hud = worldHud();
-    if (!hud || !interior.active) return hud;
-    return { ...hud, prompt: interior.prompt() };
-  };
+  // interiors in the world (docs/INTERIORS.md): the plans for the navigation, the insides and door leaves for the renderer,
+  // the verbs of doors and "Go inside" / "Leave" for the player
+  const interior = new InteriorMode(sim, renderer, player, zoneImpl);
+  offs.push(sim.actions.register(interior.provider()), () => interior.dispose());
 
   const campaign = new CampaignMode(sim, zone, player);
   const campaignApi: CampaignApi = {

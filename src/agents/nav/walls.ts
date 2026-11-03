@@ -31,6 +31,7 @@ export interface WalkMove { x: number; z: number; y: number; blocked: boolean; f
 
 const PARAPET = 0.3;
 
+
 export class WallWalk {
   private rects: WalkRect[] = [];
   private flights: Stair[] = [];
@@ -76,24 +77,38 @@ export class WallWalk {
   }
 
   /**
-   * Where the stairs of a fortification are: in every tower and gatehouse (a door in the inner face), and along the curtain at
-   * about every third segment, so there is a way up within a short walk of any stretch of wall. The foot is on the ground a metre
-   * and a half inside the face; the landing is the inner edge of the floor.
+   * Where the stairs of a fortification are — the flights the building recipes draw and the navigation walks (docs/INTERIORS.md):
+   * one curtain segment in four (seed bucket 0) has two flights up its inner face; a gatehouse has its great stair from the bailey
+   * beside the passage; a fighting palisade has a ladder on every other length (even seed buckets); a tower its door and the ladders
+   * inside up to its top. The foot is on the ground at the bottom of the flight (a tower's: before its door), the top on the walk.
    */
   private stairOf(b: BuildingState, r: WalkRect): Stair | null {
     const def = BUILDINGS[b.kind];
-    if ((b.kind === 'wall' && b.id % 3 !== 0) || (b.kind === 'palisade' && b.id % 2 !== 0)) return null;
-    let lx = 0, lz = -(def.d / 2 + 1.5), tz = r.z0 + 0.4, tx = 0;
+    const bucket = ((b.seed | 0) % 4 + 4) % 4;
+    let lx: number, lz: number, tx: number, tz: number;
     if (b.kind === 'tower') {
-      // the door faces the middle of the place
+      // before its door, which faces the middle of the place (the model is turned by quarter turns to face it: assets/buildings/
+      // placement.ts towerTurn); "Climb the stairs" is the shortcut of the ladders inside up to its top
       const s = this.world.settlements.find((q) => q.id === b.settlement);
       const dx = (s?.x ?? b.x) - b.x, dz = (s?.z ?? b.z) - b.z;
-      // into the building's own axes
       const ax = dx * r.c - dz * r.s, az = dx * r.s + dz * r.c;
       const l = Math.hypot(ax, az) || 1;
       lx = (ax / l) * (def.w / 2 + 1.5); lz = (az / l) * (def.d / 2 + 1.5);
       tx = (ax / l) * (def.w / 2 - 0.9); tz = (az / l) * (def.d / 2 - 0.9);
-    }
+    } else if (b.kind === 'wall') {
+      if (bucket !== 0) return null;
+      const zf = -def.d / 2;
+      lx = -def.w / 2 - 0.3; lz = zf - 1.5; tx = -def.w / 2 + 0.9; tz = zf + 0.4;
+    } else if (b.kind === 'palisade') {
+      if (bucket % 2 !== 0) return null;
+      lx = 0; lz = -2.5; tx = 0; tz = -0.7;
+    } else if (b.kind === 'gatehouse') {
+      // the door from the passage into the left tower, near its back; the ladders inside go up to the top
+      const lv1 = b.level <= 1;
+      const zb = lv1 ? -def.d / 2 + 1.2 : -def.d / 2 + 0.5, zf = lv1 ? def.d / 2 - 1.2 : 1.6;
+      const zd = zb + 1.0 + 0.0 * zf;
+      lx = 0; lz = zd; tx = -def.w / 4; tz = zd;
+    } else return null;
     const foot = { x: r.cx + lx * r.c + lz * r.s, z: r.cz - lx * r.s + lz * r.c };
     const top = { x: r.cx + tx * r.c + tz * r.s, z: r.cz - tx * r.s + tz * r.c };
     return { building: b.id, kind: b.kind, foot, top, y: r.y, yaw: Math.atan2(foot.x - top.x, foot.z - top.z) };
