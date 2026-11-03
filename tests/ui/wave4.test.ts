@@ -187,8 +187,8 @@ describe('the first-minutes guide', () => {
     expect(pickHint(facts({ engaged: true, needs: { hunger: 0.1, rest: 0.8, warmth: 0.8, mood: 0.8 } }), seen)).toBeNull();
     const fight = HINTS.find((h) => h.id === 'fight')!;
     expect(fight.keys).toContain(keyLabel(KEYMAP.input.weapon));
-    expect(fight.text).toMatch(/Esc frees the mouse/);
-    expect(HINTS.find((h) => h.id === 'move')!.text).toMatch(/right mouse button/);
+    expect(fight.text).toMatch(/Alt frees the cursor/);
+    expect(HINTS.find((h) => h.id === 'move')!.text).toMatch(/Alt \(Option\) frees the cursor/);
     expect(HINTS.find((h) => h.id === 'interact')!.text).toMatch(/click/i);
   });
 

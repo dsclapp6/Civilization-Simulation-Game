@@ -15,6 +15,7 @@ import { atmoUniforms, installAtmospherePatch } from './sky/atmospherePatch';
 import { Sky } from './sky/sky';
 import { Lighting } from './sky/lighting';
 import { CameraRig } from './camera/cameraRig';
+import { FirstPerson, type EyeLayer } from './firstPerson';
 import { TerrainSystem } from './terrain/terrainSystem';
 import { WaterSystem } from './water/waterSystem';
 import { VegetationSystem } from './vegetation/vegetationSystem';
@@ -160,6 +161,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
   const frustum = new THREE.Frustum();
   const projScreen = new THREE.Matrix4();
   const focusVec = new THREE.Vector3();
+  const fpv = new FirstPerson();
   const wind = new THREE.Vector2();
   const tmpColor = new THREE.Color();
   const sunFogOut = new THREE.Color();
@@ -270,6 +272,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
       }
       rig.setAim(aiming, held);
     }
+    fpv.update(rig, dynamic.characters as EyeLayer, view.player(), vm === 'street');
     rig.update(dt, focusFor(view));
     const mapBlend = rig.mapBlend();
     const above = rig.heightAboveGround();
@@ -469,6 +472,10 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     pan(dx: number, dy: number): void { rig.pan(dx, dy, height); },
     moveFree(f: number, r: number, u: number, dt: number, fast?: boolean): void { rig.moveFree(f, r, u, dt, fast); },
     getCameraYaw(): number { return rig.getYaw(); },
+    setViewDistance(d: number): void { rig.setViewDistance(d); },
+    getViewDistance(): number { return rig.getViewDistance(); },
+    inFirstPerson(): boolean { return rig.inFirstPerson; },
+    setHeadBob(on: boolean): void { rig.bobbing = on; },
     setCameraPose(position: GroundPoint, lookAt: GroundPoint, transitionSeconds = 0): void { rig.setPose(position, lookAt, transitionSeconds); },
     focusMap(x: number, z: number, altitude?: number): void { rig.focusMap(x, z, altitude); },
     getCamera(): THREE.PerspectiveCamera { return camera; },

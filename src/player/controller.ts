@@ -392,7 +392,7 @@ export class PlayerController implements PlayerApi {
     const i = this.input;
     i.forward = input.forward; i.right = input.right; i.cameraYaw = input.cameraYaw;
     i.sprint = input.sprint; i.walk = input.walk; i.interactHeld = input.interactHeld;
-    i.attack = input.attack; i.block = input.block; i.aim = input.aim ?? null;
+    i.attack = input.attack; i.block = input.block; i.aim = input.aim ?? null; i.faceCamera = input.faceCamera;
     this.combat()?.input(input.attack, input.block, input.aim ?? null, input.cameraYaw, { forward: input.forward, right: input.right });
     if (input.interact) this.edgeInteract = true;
     if (input.mount) this.edgeMount = true;
@@ -811,7 +811,7 @@ export class PlayerController implements PlayerApi {
     if (this.scanT >= SCAN_INTERVAL) {
       this.scanT = 0;
       if (pending) this.interaction.clear(this.zone);
-      else this.interaction.scan(this.sim.actions, this.zone, this.personId, b.x, b.z, b.yaw, SCAN_INTERVAL);
+      else this.interaction.scan(this.sim.actions, this.zone, this.personId, b.x, b.z, input.faceCamera ? input.cameraYaw : b.yaw, SCAN_INTERVAL); // first person: what is in front is what the camera faces
     }
 
     this.persistT += dt;

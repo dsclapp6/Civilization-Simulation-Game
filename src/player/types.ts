@@ -66,6 +66,8 @@ export interface InputState {
   mount: boolean;
   dodge: boolean;
   cancel: boolean;
+  /** First person: the body faces where the camera looks (strafing and backing up keep it so) instead of turning to the way it walks. */
+  faceCamera?: boolean;
   /** Clarity pass, edge-triggered: draw / sheathe the weapon (G). */
   weapon?: boolean;
   // held

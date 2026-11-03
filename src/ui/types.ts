@@ -68,8 +68,12 @@ export interface Settings {
   pauseInMenus?: boolean;
   /** First-minutes hints (wave 4). Default true. */
   hints?: boolean;
-  /** Clarity pass: the old scheme where the mouse always turns the camera (left button strikes, right guards). Default false. */
+  /** Retired: the mouse now always looks (Alt / Option frees the cursor). Kept so old profiles read. */
   alwaysLook?: boolean;
+  /** The view the wheel last settled on: 0 = first person (the default), else the third-person camera distance (m). */
+  viewDistance?: number;
+  /** The gentle head bob of first person. Default true. */
+  headBob?: boolean;
   /** Clarity pass: the corner minimap (N). Default true. */
   minimap?: boolean;
   /** Work pass (docs/WORK.md): the hands-on mini-games over the action bar (J/K). Off, the work runs on its own as before. Default true. */
@@ -82,7 +86,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   quality: 'medium', mouseSensitivity: 1, invertY: false, volume: 0.7, labels: true, uiScale: 1, pauseInMenus: true, hints: true,
-  alwaysLook: false, minimap: true, askBeforeLiveAs: true, compactHud: false,
+  alwaysLook: false, viewDistance: 0, headBob: true, minimap: true, askBeforeLiveAs: true, compactHud: false,
 };
 
 /** Renderer controls the UI may use (map panel, settings). */
@@ -138,6 +142,10 @@ export interface UiHost {
   releaseMouseLook?(): boolean;
   /** Is the mouse looking (pointer locked) right now? The HUD tells a drawn weapon with a free cursor from one with the mouse taken. */
   mouseLooking?(): boolean;
+  /** 'look' (the mouse turns the view), 'wait' (a click takes it) or 'free' (the cursor is free); null when the street view is not up. */
+  mouseState?(): 'look' | 'wait' | 'free' | null;
+  /** The look hint's click: take the mouse back. */
+  takeMouse?(): void;
   /** Scenarios (a practice run, never saved): 'castle' = the march on the castle. */
   startScenario?(id: string): Promise<void>;
   /**

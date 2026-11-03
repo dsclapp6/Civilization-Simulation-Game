@@ -366,3 +366,29 @@
 .mu-hud.mu-compact .mu-hud-prompt { bottom: 62px; }
 .mu-hud.mu-compact .mu-hud-action { bottom: 118px; }
 .mu-hud.mu-compact .mu-hud-gains { bottom: 168px; }
+
+/* ---- the crosshair and the look hint (first person, the mouse looking) ---- */
+.mu-look { position: absolute; inset: 0; pointer-events: none; }
+.mu-xhair { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+.mu-xhair > i { position: absolute; display: block; background: rgba(252, 244, 214, 0.9); box-shadow: 0 0 0 1px rgba(20, 12, 4, 0.75); border-radius: 1px; }
+.mu-xhair .dot { left: -1.5px; top: -1.5px; width: 3px; height: 3px; border-radius: 50%; }
+.mu-xhair .t { left: -0.5px; top: -11px; width: 1px; height: 5px; }
+.mu-xhair .b { left: -0.5px; top: 6px; width: 1px; height: 5px; }
+.mu-xhair .l { left: -11px; top: -0.5px; width: 5px; height: 1px; }
+.mu-xhair .r { left: 6px; top: -0.5px; width: 5px; height: 1px; }
+.mu-xhair-label {
+  position: absolute; left: 50%; top: calc(50% + 26px); transform: translateX(-50%); text-align: center; white-space: nowrap; pointer-events: none;
+  padding: 4px 12px 5px; border-radius: 3px; background: rgba(22, 13, 6, 0.62); color: var(--cream, #f6e7be); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+}
+.mu-xhair-name { font-weight: 700; font-size: 15px; letter-spacing: 0.02em; }
+.mu-xhair-do { font-size: 13.5px; opacity: 0.95; margin-top: 1px; }
+.mu-xhair-why { font-size: 12.5px; color: #f1a58f; font-style: italic; }
+.mu-xhair-label.off .mu-xhair-do { opacity: 0.6; }
+.mu-look-hint {
+  position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); pointer-events: auto; cursor: pointer; font: inherit; font-size: 14px;
+  padding: 6px 14px 7px; border-radius: 3px; border: 1px solid #1f1309; background: var(--paper, #efe2c0); color: var(--ink, #2a1e12);
+  box-shadow: 0 0 0 2px rgba(172, 130, 58, 0.9), 0 0 0 3px #1f1309, 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+.mu-look-hint:hover { filter: brightness(1.06); }
+/* with the crosshair up its label says what E does; the plate at the bottom would only say it twice */
+body.mu-looking .mu-hud-prompt { display: none; }

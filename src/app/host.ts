@@ -34,7 +34,7 @@ function randomSeed(): string {
 export class AppHost implements UiHost {
   ui: GameUI | null = null;
   /** The input layer (set by game.ts): Esc asks it whether the mouse was looking. */
-  input: { releaseLook(): boolean; readonly pointerLocked: boolean } | null = null;
+  input: { releaseLook(): boolean; readonly pointerLocked: boolean; readonly lookState: 'look' | 'wait' | 'free'; takeMouse(): void } | null = null;
   session: Session | null = null;
   screen: UiScreen = 'menu';
   /** Notified whenever a session starts or ends. */
@@ -70,6 +70,10 @@ export class AppHost implements UiHost {
   releaseMouseLook(): boolean { return this.input?.releaseLook() ?? false; }
 
   mouseLooking(): boolean { return this.input?.pointerLocked ?? false; }
+
+  mouseState(): 'look' | 'wait' | 'free' | null { return this.session && this.screen === 'game' && !this.session.interior.active ? this.input?.lookState ?? null : null; }
+
+  takeMouse(): void { this.input?.takeMouse(); }
 
   /** Where the camera is and what it looks at (the glide from one body to another starts here). */
   cameraPose(focus?: { x: number; y: number; z: number }): CameraPose | null {

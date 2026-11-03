@@ -35,6 +35,7 @@ import { whoNowCard, type LiveAsReason } from '../core/liveAsModel';
 import { LifeSwitcher } from '../core/lifeSwitch';
 import { Toasts } from '../hud/toasts';
 import { Guide } from '../hud/guide';
+import { Crosshair } from '../hud/crosshair';
 import { createPanel } from '../panels/registry';
 import { LoadingLayer } from '../screens/loading';
 import { MenuLayer, type MenuView } from '../screens/menu';
@@ -63,6 +64,7 @@ export class UiApp implements GameUIExt {
   private readonly toasts: Toasts;
   private readonly guide: Guide;
   private readonly hud: Hud;
+  private readonly crosshair: Crosshair;
   /** What module hotkeys get (src/ui/core/extHud.ts). */
   private readonly extCtx: HudPartCtx;
   private readonly menu: MenuLayer;
@@ -115,6 +117,7 @@ export class UiApp implements GameUIExt {
       disable: () => { this.host.setSettings({ hints: false }); this.say('info', 'Hints are off. You can turn them on again in the settings.'); },
       suppressed: () => this.stack.all().length > 0,
     });
+    this.crosshair = new Crosshair(host);
     this.hud = new Hud({
       game: () => this.bound?.game ?? null,
       host,
@@ -145,7 +148,7 @@ export class UiApp implements GameUIExt {
       onHide: (p) => this.onPanelHidden(p),
       onChange: () => { this.syncPause(); this.syncHudDim(); },
     });
-    this.hudLayer.appendChild(this.hud.el);
+    this.hudLayer.append(this.hud.el, this.crosshair.el);
     this.hud.setVisible(false);
     // #ui > * is pointer-events:auto in base.css; the root must let clicks through to the 3D canvas (map picking, mouse look)
     this.root.style.pointerEvents = 'none';
@@ -212,6 +215,7 @@ export class UiApp implements GameUIExt {
   private guardedHud(): void {
     try {
       this.hud.update(this.clock);
+      this.crosshair.update(this.bound?.game ?? null, this.stack.all().length === 0);
     } catch (err) {
       if (this.hudFailures++ < 3) console.error('HUD update failed', err);
     }

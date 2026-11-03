@@ -70,3 +70,11 @@ describe('F: tap to mount, hold to call your horse', () => {
     expect(calls).toBe(0);
   });
 });
+
+describe('first person facing', () => {
+  it('passes the first-person flag through to the player input, and clears it', () => {
+    const m = new InputMapper();
+    expect(m.map(keys(), { ...ctx(), faceCamera: true }, 0.016).input.faceCamera).toBe(true);
+    expect(m.map(keys(), ctx(), 0.016).input.faceCamera).toBe(false);
+  });
+});

@@ -67,6 +67,8 @@ async function load(extra) {
   await page.evaluate(() => window.__game.ready());
   await page.evaluate(() => window.__game.freeze(true));
   await page.evaluate(() => window.__game.host.setSettings({ hints: false }));
+  // the tours point and click at the world: the mouse looks by default, so free the cursor (Alt / Option)
+  for (let i = 0; i < 3 && (await page.evaluate(() => window.__game.host.mouseState())) !== 'free'; i++) { await page.keyboard.press('AltLeft'); await page.evaluate(() => window.__game.tick(0.1)); }
   console.log(`run ready in ${((Date.now() - t0) / 1000).toFixed(1)} s (${extra})`);
 }
 

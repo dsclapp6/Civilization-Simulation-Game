@@ -649,8 +649,8 @@ export class Hud {
       if (drawnState) {
         this.drawnChip.replaceChildren(
           icon('swords', 15), h('b', null, 'Weapon drawn'),
-          h('span', null, drawnState === 'free' ? 'Click the view to take the mouse' : 'Left strikes, right guards'),
-          h('span.mu-dim', null, keycap('G', true), ' puts it away', drawnState === 'look' ? [' · ', keycap('Esc', true), ' frees the mouse'] : null));
+          h('span', null, drawnState === 'free' ? 'Cursor free: Alt takes the mouse back' : 'Left strikes, right guards'),
+          h('span.mu-dim', null, keycap('G', true), ' puts it away', drawnState === 'look' ? [' · ', keycap('Alt', true), ' frees the cursor'] : null));
       }
     }
     // stance chip

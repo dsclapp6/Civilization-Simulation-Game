@@ -204,6 +204,8 @@ try {
 
     // ======================================================================== the banner
     console.log('-- the banner');
+    // the mouse looks by default (the pointer is locked, nothing can be hovered or clicked): Alt frees the cursor to point at the banner
+    if ((await sim(() => window.__game.host.mouseState())) !== 'free') { await page.keyboard.press('AltLeft'); await frames(2); }
     s = await ui();
     check('nothing is left open before the banner', s.panels.length === 0, JSON.stringify(s));
     // The interface's clock is the one `tick` drives, so "six seconds" are sixty tenths here, whatever the machine does.

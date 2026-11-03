@@ -15,7 +15,11 @@ export interface CameraEnv {
 
 interface Pose { pos: THREE.Vector3; quat: THREE.Quaternion; fov: number }
 
-const FOLLOW_MIN = 2.2;
+const FOLLOW_MIN = 2.4;
+/** First person (the default view): the camera sits at the eyes; the wheel steps out to the shoulder and back. */
+const TP_NEAR = 3.4, FP_FOV = 68, FP_NEAR = 0.07, STAGE_COOLDOWN = 0.45;
+/** First-person look: pitch is positive looking DOWN (as the orbit boom is positive above), so this is the whole sky and the whole ground. */
+const FP_PITCH = 1.5;
 /** Eaves, bulging thatch and jetties overhang a building's footprint box by this much (m); the boom keeps clear of it. */
 const EAVE_PAD = 0.6;
 const FOLLOW_MAX = 140;
@@ -23,10 +27,6 @@ const MAP_MIN = 450;
 /** Aiming: shoulder offset to the right (m) and boom length. */
 const AIM_SHOULDER = 0.62;
 const AIM_DISTANCE = 3.2;
-/** Extra boom pitches tried, in order, when the way back is blocked. */
-const PITCH_LIFTS = [0, 0.12, 0.24, 0.36];
-/** Yaw swings (rad, either side) tried before the boom is pulled in close to a wall. */
-const YAW_SWINGS = [0.35, 0.7, 1.05];
 const MAP_MAX = 30000;
 /** Overview camera (builder mode, tactical view): default pitch (~55°), its range, and the glide in and out (s). */
 const OV_PITCH = 0.96, OV_PITCH_MIN = 0.62, OV_PITCH_MAX = 1.36, OV_GLIDE = 0.8;
@@ -71,12 +71,25 @@ export class CameraRig {
   private readonly probe = new THREE.Vector3();
   private readonly probe2 = new THREE.Vector3();
   private readonly side = new THREE.Vector3();
-  /** Extra pitch (smoothed) that lifts the boom over a roof or wall behind the character. */
-  private pitchLift = 0;
-  /** Smoothed yaw swing (rad) that takes the boom round a tall wall behind the character, its target and the re-search timer. */
-  private yawOff = 0;
-  private yawTarget = 0;
-  private yawSearchT = 0;
+  /** The boom's reach as the camera shows it: it eases in when something comes between and out again only after the way has stayed clear (no jumps). */
+  private reachSm = 99;
+  private clearT = 0;
+  /** First person: wanted (the wheel's choice), how far the blend to the eyes has got (0 boom … 1 eyes), the eyes (set each frame by the renderer) and the head bob. */
+  firstPerson = true;
+  private fpK = 0;
+  private readonly eye = new THREE.Vector3();
+  private eyeValid = false;
+  private eyeY = 0;
+  private eyeBob = 0;
+  private lastEyeX = NaN; private lastEyeZ = NaN;
+  private bobSpeed = 0;
+  private bobPhase = 0;
+  /** The "head bob" setting. */
+  bobbing = true;
+  /** After a step between first person and the shoulder the wheel waits a moment (animation time or real time, whichever is over first), so one flick of a trackpad is one step. */
+  private stageCool = 0;
+  private stageAtMs = -1e9;
+  private readonly fpPose: Pose = { pos: new THREE.Vector3(), quat: new THREE.Quaternion(), fov: FP_FOV };
   /** Over-the-shoulder aim blend (0 normal follow … 1 aiming a bow or crossbow) and its target. */
   private aimK = 0;
   private aimWant = false;
@@ -86,6 +99,7 @@ export class CameraRig {
 
   constructor(aspect: number, private readonly env: CameraEnv) {
     this.camera = new THREE.PerspectiveCamera(55, aspect, 0.2, 60000);
+    this.pitch = 0.05;
     this.camera.position.set(8000, 300, 8000);
     this.mapCentre.set(env.worldSize / 2, env.worldSize / 2);
   }
@@ -137,7 +151,7 @@ export class CameraRig {
         break;
       default:
         this.yaw += dYaw;
-        this.pitch = clamp(this.pitch + dPitch, -0.35, 1.45);
+        this.pitch = clamp(this.pitch + dPitch, this.firstPerson ? -FP_PITCH : -0.35, this.firstPerson ? FP_PITCH : 1.45);
     }
   }
 
@@ -151,8 +165,15 @@ export class CameraRig {
       const next = this.mapAlt * f;
       if (next < MAP_MIN && this.autoMapZoom && steps < 0) { this.setMode('follow'); this.distance = 40; return; }
       this.mapAlt = clamp(next, MAP_MIN, MAP_MAX);
+    } else if (this.mode === 'follow' && this.firstPerson) {
+      // the wheel out of first person: over the shoulder (one step at a time, not a slide through the stages)
+      if (steps > 0 && this.stageReady() && this.eyeValid) this.setViewDistance(TP_NEAR);
     } else if (this.mode === 'follow' || this.mode === 'cinematic') {
       const next = this.distance * f;
+      if (this.mode === 'follow' && steps < 0 && next < FOLLOW_MIN && this.eyeValid) {
+        if (this.stageReady()) this.setViewDistance(0);
+        return;
+      }
       if (next > FOLLOW_MAX && this.autoMapZoom && steps > 0 && this.mode === 'follow') { this.mapAlt = 2600; this.setMode('map'); return; }
       this.distance = clamp(next, FOLLOW_MIN, FOLLOW_MAX);
     } else {
@@ -162,6 +183,32 @@ export class CameraRig {
       this.freePos.addScaledVector(d, -steps * Math.max(4, (this.freePos.y - ground) * 0.15));
     }
   }
+
+  /** 0 = first person, else the third-person boom length (m). The wheel and the saved choice both come through here. */
+  setViewDistance(d: number): void {
+    if (d <= 0) {
+      if (!this.firstPerson) this.pitch = 0.05;
+      this.firstPerson = true;
+    } else {
+      if (this.firstPerson) this.pitch = Math.max(0.25, this.pitch);
+      this.firstPerson = false;
+      this.distance = clamp(d, FOLLOW_MIN, FOLLOW_MAX);
+    }
+    this.stageCool = STAGE_COOLDOWN;
+    this.stageAtMs = performance.now();
+  }
+  private stageReady(): boolean { return this.stageCool <= 0 || performance.now() - this.stageAtMs > STAGE_COOLDOWN * 1500; }
+  getViewDistance(): number { return this.firstPerson ? 0 : this.distance; }
+  /** The camera is (or is settling) at the eyes: the renderer hides the head and the input aims along the look. */
+  get inFirstPerson(): boolean { return this.mode === 'follow' && !this.ov && this.firstPerson && this.eyeValid; }
+  /** The player's eyes this frame (world metres), and how much of the stride shows as head bob (0 on a horse). Null: no body to look out of. */
+  setEye(x: number, y: number, z: number, bob = 1): void {
+    if (!this.eyeValid) { this.eyeY = y; this.lastEyeX = x; this.lastEyeZ = z; }
+    this.eye.set(x, y, z);
+    this.eyeBob = bob;
+    this.eyeValid = true;
+  }
+  clearEye(): void { this.eyeValid = false; this.lastEyeX = NaN; }
 
   pan(dx: number, dy: number, viewportHeight: number): void {
     if (this.ov) {
@@ -298,7 +345,7 @@ export class CameraRig {
     if (this.ov) return this.ov.syaw;
     if (this.mode === 'free') return this.freeYaw;
     if (this.mode === 'map') return this.mapYaw;
-    return this.mode === 'follow' ? this.yaw + this.yawOff : this.yaw;
+    return this.yaw;
   }
 
   /** 0 at street level … 1 high above (strategic view). */
@@ -360,32 +407,34 @@ export class CameraRig {
     return allowed;
   }
 
-  private boomDir(pitch: number, out: THREE.Vector3, yawOff = this.yawOff): THREE.Vector3 {
+  private boomDir(pitch: number, out: THREE.Vector3): THREE.Vector3 {
     const cp = Math.cos(pitch), sp = Math.sin(pitch);
-    const yaw = this.yaw + yawOff;
-    return out.set(-Math.sin(yaw) * cp, sp, -Math.cos(yaw) * cp);
+    return out.set(-Math.sin(this.yaw) * cp, sp, -Math.cos(this.yaw) * cp);
   }
 
-  /**
-   * Tall walls right behind the character (a townhouse across a lane): before the boom is pulled in
-   * close, look for a clear yaw swing to either side (cheapest swing and lowest rise that keep most of
-   * the wanted distance). Returns the swing in radians, 0 when straight back is fine.
-   */
-  private searchYaw(head: THREE.Vector3, want: number, need: number): number {
-    let bestOff = 0, bestCost = Infinity;
-    const offs = [0];
-    for (const a of YAW_SWINGS) { offs.push(a, -a); }
-    for (const off of offs) {
-      for (const l of PITCH_LIFTS) {
-        const p = this.pitch + l;
-        if (l > 0 && p > 1.3) break;
-        const reach = this.boomReach(head, this.boomDir(p, this.probe2, off), want);
-        // mild preference for the swing already in use (no flip-flopping) and for staying put
-        const cost = (off === 0 ? 0 : 1 + Math.abs(off)) + l * 4 - (off === this.yawTarget ? 0.35 : 0);
-        if (reach >= need) { if (cost < bestCost) { bestCost = cost; bestOff = off; } break; }
-      }
+  /** First person: the eyes (with a gentle bob that follows the stride) looking along yaw and pitch. */
+  private computeEyes(out: Pose, dt: number): void {
+    const e = this.eye;
+    // the speed the eyes are moving at drives the bob; the height settles instead of copying every step of the animation
+    if (dt > 0 && Number.isFinite(this.lastEyeX)) {
+      const sp = Math.hypot(e.x - this.lastEyeX, e.z - this.lastEyeZ) / dt;
+      this.bobSpeed += (Math.min(sp, 9) - this.bobSpeed) * (1 - Math.exp(-dt * 8));
+    } else if (dt > 0) this.bobSpeed = 0;
+    this.lastEyeX = e.x; this.lastEyeZ = e.z;
+    this.eyeY += (e.y - this.eyeY) * (dt > 0 ? 1 - Math.exp(-dt * 7) : 1);
+    if (Math.abs(this.eyeY - e.y) > 1.5) this.eyeY = e.y;
+    let bx = 0, by = 0;
+    if (this.bobbing && this.eyeBob > 0 && dt > 0) {
+      this.bobPhase += this.bobSpeed * dt * 7.2;
+      const k = Math.min(1, this.bobSpeed / 2.2) * this.eyeBob;
+      by = Math.sin(this.bobPhase * 2) * 0.028 * k;
+      bx = Math.cos(this.bobPhase) * 0.018 * k;
     }
-    return Number.isFinite(bestCost) ? bestOff : 0;
+    const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
+    const pos = this.probe.set(e.x + cy * bx, this.eyeY + by, e.z - sy * bx);
+    const cp = Math.cos(this.pitch);
+    const look = this.probe2.set(pos.x + sy * cp, pos.y - Math.sin(this.pitch), pos.z + cy * cp);
+    this.lookPose(out, pos, look, FP_FOV);
   }
 
   private computeFollow(out: Pose, focus: THREE.Vector3, dt: number): void {
@@ -393,6 +442,13 @@ export class CameraRig {
     const k = 1 - Math.exp(-dt * 14);
     this.target.lerp(focus, k);
     if (this.target.distanceTo(focus) > 40) this.target.copy(focus);
+    this.stageCool = Math.max(0, this.stageCool - dt);
+    // first person ⇄ over the shoulder: the camera glides between the eyes and the boom
+    const fpWant = this.firstPerson && this.eyeValid ? 1 : 0;
+    this.fpK += (fpWant - this.fpK) * (dt > 0 ? 1 - Math.exp(-dt * 9) : 1);
+    if (Math.abs(this.fpK - fpWant) < 0.002) this.fpK = fpWant;
+    if (this.fpK > 0) this.computeEyes(this.fpPose, dt);
+    if (this.fpK >= 1) { out.pos.copy(this.fpPose.pos); out.quat.copy(this.fpPose.quat); out.fov = this.fpPose.fov; return; }
     const head = this.tmp2.copy(this.target);
     head.y += 1.55;
     // over-the-shoulder aim: shift the boom origin (and the look point with it) to the right
@@ -401,58 +457,38 @@ export class CameraRig {
     // keyed to how long the aim has been held (simulation time), so it is in place even when
     // frames are few (screenshots, slow machines)
     if (this.aimWant) this.aimK = Math.max(this.aimK, Math.min(1, this.aimHeld * 3.5));
-    if (this.aimK > 1e-3) {
-      head.x += -Math.cos(this.yaw) * AIM_SHOULDER * this.aimK;
-      head.z += Math.sin(this.yaw) * AIM_SHOULDER * this.aimK;
-      head.y += 0.1 * this.aimK;
-    }
-    // In tight spots (a cottage right behind the character, a narrow lane) a camera that only
-    // pulls in ends up in the character's hair. Prefer to crane up over the obstacle: find the
-    // smallest extra pitch that keeps most of the wanted distance, and ease towards it.
+    // close in the camera rides over the right shoulder, so the character is not a wall in front of the view
+    const shoulder = Math.max(this.aimK * AIM_SHOULDER, AIM_SHOULDER * 0.7 * smoothstep(9, 3.6, this.distance));
+    head.x += -Math.cos(this.yaw) * shoulder;
+    head.z += Math.sin(this.yaw) * shoulder;
+    head.y += 0.1 * this.aimK;
     const want = this.distance + (Math.min(this.distance, AIM_DISTANCE) - this.distance) * this.aimK;
-    // wanted reach for the boom to count as clear (shared by the yaw search and the pitch lift below)
-    const need = Math.min(want - 0.3, Math.max(want * 0.8, 3.5));
-    if (want > 4) {
-      this.yawSearchT -= dt;
-      if (this.yawSearchT <= 0 || dt === 0) {
-        this.yawSearchT = 0.25;
-        this.yawTarget = this.searchYaw(head, want, need);
-        if (dt === 0) this.yawOff = this.yawTarget;
-      }
-      this.yawOff += (this.yawTarget - this.yawOff) * (dt > 0 ? 1 - Math.exp(-dt * (this.yawTarget === 0 ? 1.6 : 4)) : 1);
-    } else { this.yawTarget = 0; this.yawOff *= dt > 0 ? Math.exp(-dt * 6) : 0; }
-    let lift = 0;
-    if (dt > 0 || this.pitchLift === 0) {
-      let best = -1, bestLift = 0;
-      for (const l of PITCH_LIFTS) {
-        const p = this.pitch + l;
-        if (l > 0 && p > 1.3) break;
-        const reach = this.boomReach(head, this.boomDir(p, this.tmp), want);
-        if (reach > best + 0.6 + l * 4) { best = reach; bestLift = l; }
-        if (reach >= need) { bestLift = l; break; }
-      }
-      lift = bestLift;
-      // rise quickly, settle back slowly
-      const rate = lift > this.pitchLift ? 5 : 1.4;
-      this.pitchLift += (lift - this.pitchLift) * (dt > 0 ? 1 - Math.exp(-dt * rate) : 1);
-    }
-    const dir = this.boomDir(this.pitch + this.pitchLift, this.tmp);
-    const allowed = this.boomReach(head, dir, want);
-    // forward on the ground (dir is reused for the position below)
+    const dir = this.boomDir(this.pitch, this.tmp);
+    // Buildings never shove the camera round: it only gets closer when something really is in the way, eases there, and
+    // lets go again slowly once the way has stayed clear (no jitter walking along a wall or through a door).
+    const raw = this.boomReach(head, dir, want);
+    if (dt === 0 || this.reachSm > 90) { this.reachSm = raw; this.clearT = 0; }
+    else if (raw < this.reachSm) { this.clearT = 0; this.reachSm += (raw - this.reachSm) * (1 - Math.exp(-dt * 16)); }
+    else { this.clearT += dt; if (this.clearT > 0.45) this.reachSm += (raw - this.reachSm) * (1 - Math.exp(-dt * 1.6)); }
+    const allowed = Math.min(this.reachSm, want);
+    this.curDistance = allowed;
     const fl = Math.hypot(dir.x, dir.z) || 1;
     const fwdX = -dir.x / fl, fwdZ = -dir.z / fl;
-    if (allowed < this.curDistance) this.curDistance = allowed;
-    else this.curDistance += (allowed - this.curDistance) * (1 - Math.exp(-dt * 3));
-    const pos = this.tmp.set(head.x + dir.x * this.curDistance, head.y + dir.y * this.curDistance, head.z + dir.z * this.curDistance);
+    const pos = this.tmp.set(head.x + dir.x * allowed, head.y + dir.y * allowed, head.z + dir.z * allowed);
     const ground = this.env.heightAt(clamp(pos.x, 0, this.env.worldSize), clamp(pos.z, 0, this.env.worldSize));
     if (pos.y < ground + 0.45) pos.y = ground + 0.45;
-    const pitch = this.pitch + this.pitchLift;
     // pulled in close by a wall: look over the character's head down the way ahead instead of
     // filling the screen with the back of it
-    const close = want > 4 ? smoothstep(4.5, 1.6, this.curDistance) : 0;
+    const close = want > 4 ? smoothstep(4.5, 1.6, allowed) : 0;
     pos.y += close * 0.15;
-    const look = this.tmp2.set(head.x + fwdX * close * 1.1, head.y + Math.max(0, (0.2 - pitch)) * 0.8, head.z + fwdZ * close * 1.1);
+    const look = this.tmp2.set(head.x + fwdX * close * 1.1, head.y + Math.max(0, (0.2 - this.pitch)) * 0.8, head.z + fwdZ * close * 1.1);
     this.lookPose(out, pos, look, 55);
+    if (this.fpK > 0) {
+      const e = this.fpK * this.fpK * (3 - 2 * this.fpK);
+      out.pos.lerp(this.fpPose.pos, e);
+      out.quat.slerp(this.fpPose.quat, e);
+      out.fov = lerp(out.fov, FP_FOV, e);
+    }
   }
 
   private computeMap(out: Pose): void {
@@ -518,7 +554,7 @@ export class CameraRig {
     }
     // clip planes scale with altitude for depth precision
     const above = Math.max(0.5, this.heightAboveGround());
-    cam.near = clamp(above * 0.012, 0.15, 60);
+    cam.near = this.mode === 'follow' && this.fpK > 0.5 ? FP_NEAR : clamp(above * 0.012, 0.15, 60);
     cam.far = Math.max(42000, cam.position.y * 6 + 30000);
     cam.updateProjectionMatrix();
     cam.updateMatrixWorld();

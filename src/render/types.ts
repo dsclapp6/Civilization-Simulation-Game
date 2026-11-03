@@ -146,6 +146,13 @@ export interface GameRenderer {
   moveFree(forward: number, right: number, up: number, dt: number, fast?: boolean): void;
   /** Camera yaw (radians, 0 faces +z) so the input layer can move the player relative to the view. */
   getCameraYaw(): number;
+  /** First-person view (the default): 0 = through the player's eyes, else the third-person boom length (m); the wheel steps between them. */
+  setViewDistance(d: number): void;
+  getViewDistance(): number;
+  /** The camera is at the player's eyes now. */
+  inFirstPerson(): boolean;
+  /** The gentle head bob of first person (a setting). */
+  setHeadBob(on: boolean): void;
   /** Place the camera explicitly (switches to 'free'); used by tools and cut-scenes. */
   setCameraPose(position: GroundPoint, lookAt: GroundPoint, transitionSeconds?: number): void;
   /** Centre the map camera on a point (map mode). */
