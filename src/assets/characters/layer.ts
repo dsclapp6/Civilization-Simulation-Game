@@ -305,7 +305,7 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
     evaluatePose(a, item, ctx);
     poseToBones(a, item, ctx, crowd.bones, crowd.boneOffset(st.slot, 0));
     // first person (src/render/firstPerson.ts): the camera is inside the head, so the head, eyes and mouth are collapsed to nothing; the body and arms stay
-    if (item.id === fpId) { const o = crowd.boneOffset(st.slot, 0); for (const b of [HB.head, HB.eyes, HB.mouth]) setZero(crowd.bones, o + b * 12); }
+    if (item.id === fpId) { const o = crowd.boneOffset(st.slot, 0); for (const b of [HB.head, HB.eyes, HB.mouth, HB.ring]) setZero(crowd.bones, o + b * 12); }
     crowd.setParams(st.slot, item.highlight, a.flash);
     if (horse) {
       // reins to the rider's hands, stirrups to the feet
@@ -450,7 +450,7 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
     _ro.copy(raycaster.ray.origin); _rd.copy(raycaster.ray.direction);
     let best = -1, bestT = Infinity;
     for (const st of states.values()) {
-      if (st.hidden || !st.ready) continue;
+      if (st.hidden || !st.ready || st.id === fpId) continue; // (not the body the camera looks out of)
       // person capsule
       const r = st.mounted ? 0.32 : Math.max(0.22, st.radius);
       const y0 = st.py + (st.mounted ? 1.0 : r * 0.8), y1 = st.py + st.top;

@@ -76,7 +76,7 @@ export class CameraRig {
   private clearT = 0;
   /** First person: wanted (the wheel's choice), how far the blend to the eyes has got (0 boom … 1 eyes), the eyes (set each frame by the renderer) and the head bob. */
   firstPerson = true;
-  private fpK = 1;
+  private fpK = 0;
   private readonly eye = new THREE.Vector3();
   private eyeValid = false;
   private eyeY = 0;
@@ -464,7 +464,7 @@ export class CameraRig {
     // lets go again slowly once the way has stayed clear (no jitter walking along a wall or through a door).
     const raw = this.boomReach(head, dir, want);
     if (dt === 0 || this.reachSm > 90) { this.reachSm = raw; this.clearT = 0; }
-    else if (raw < this.reachSm) { this.clearT = 0; this.reachSm += (raw - this.reachSm) * (1 - Math.exp(-dt * 9)); }
+    else if (raw < this.reachSm) { this.clearT = 0; this.reachSm += (raw - this.reachSm) * (1 - Math.exp(-dt * 16)); }
     else { this.clearT += dt; if (this.clearT > 0.45) this.reachSm += (raw - this.reachSm) * (1 - Math.exp(-dt * 1.6)); }
     const allowed = Math.min(this.reachSm, want);
     this.curDistance = allowed;
