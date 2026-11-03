@@ -13,7 +13,7 @@ import { bagAdd, bagGet } from './items';
 import { perkSum } from './perks';
 import { stepsOfPlan } from './steps';
 import type { Quality } from './types';
-import { boutDone, disabled, giveOutput, holyDayBlock, incapable, option, round1, round2, secondsFor, speedOf } from './workkit';
+import { boutDone, disabled, giveOutput, holyDayBlock, incapable, noteMade, option, round1, round2, secondsFor, speedOf } from './workkit';
 
 export interface ButcherData { act: 'slaughter' | 'butcher'; animal: string; bld: number }
 
@@ -163,6 +163,8 @@ export function slaughter(E: Econ, p: Person, d: ButcherData): ActionOutcome {
     // a fowl is dressed in one go
     const meat = round2(beast.meat * conditionOf(E, hh) * (1 + perkSum(p, 'husbandry', 'yield')));
     giveOutput(E, p, 'meat', meat);
+  // the joints lie on the block where the carcass was cut up (the home's yard when it was not at a slaughterhouse)
+  noteMade(E, p, d.bld >= 0 && E.state.buildings.has(d.bld) ? d.bld : E.hhOf(p)?.home ?? -1, 'meat');
     gains.unshift({ label: 'Meat', amount: meat, ref: 'meat' });
     return { ok: true, message: `The ${d.animal} is plucked and dressed: ${meat} lb of meat.`, gains };
   }

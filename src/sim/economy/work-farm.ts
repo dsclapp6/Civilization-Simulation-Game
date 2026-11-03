@@ -20,7 +20,7 @@ import { applyForJob, employmentOf } from './jobs';
 import { capacityOf, carriedWeight } from './own';
 import { perkSum, perkTotal } from './perks';
 import {
-  BOUT_DAYS, boutDone, boutsLeft, careOf, disabled, haveOf, holyDayBlock, incapable, option, payBout, round1, round2, secondsFor, speedOf, stoch,
+  BOUT_DAYS, boutDone, boutsLeft, careOf, noteMade, disabled, haveOf, holyDayBlock, incapable, option, payBout, round1, round2, secondsFor, speedOf, stoch,
   toolFor, wearOut, type AccessMode, type ToolRef,
 } from './workkit';
 import { creditWeekWork } from './obligations';
@@ -745,6 +745,7 @@ function millBout(E: Econ, p: Person, d: BarnData, f: number): ActionOutcome {
   const multure = quern ? 0 : round2(got / 16);
   const flour = round2((got - multure) * FLOUR_PER_GALLON[g] * (1 + perkSum(p, 'brewing', 'yield') * 0));
   toStores(E, p, 'flour', flour);
+  noteMade(E, p, d.building, 'flour');
   if (multure > 0) {
     const mill = E.state.buildings.get(d.building);
     const lord = mill ? E.lordOf(mill.settlement) : null;

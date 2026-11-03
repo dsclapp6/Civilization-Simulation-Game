@@ -19,7 +19,7 @@ import { POTTAGE, consume, eatAtHome } from './needs';
 import { openChoices, perkSum } from './perks';
 import { butcher, listButchery, slaughter } from './butchery';
 import {
-  BOUT_DAYS, boutDone, disabled, giveOutput, giveXp, holyDayBlock, incapable, option, payBout, round1, round2, secondsFor, speedOf, stoch, toolFor,
+  BOUT_DAYS, boutDone, disabled, giveOutput, giveXp, holyDayBlock, incapable, option, payBout, round1, round2, secondsFor, speedOf, stoch, toolFor, noteMade,
 } from './workkit';
 import { MARKET_BUILDINGS } from './market';
 import { parseItemKey, type ItemKey } from './types';
@@ -167,6 +167,7 @@ export function stockProvider(E: Econ): ActionProvider {
         case 'muck': {
           const n = Math.max(1, stoch(E, 2 * f));
           giveOutput(E, p, 'manure', n);
+          if (o.target.kind === 'building') noteMade(E, p, o.target.id, 'manure');
           boutDone(E, p, { skill: 'husbandry', xp: 5, heavy: 0.6, bouts: f });
           gains.push({ label: 'Manure', amount: n, ref: 'manure' });
           return { ok: true, message: `${n} loads of manure.`, gains };
@@ -176,6 +177,7 @@ export function stockProvider(E: Econ): ActionProvider {
           const gal = round2(cows * 0.8 * f * yieldM);
           if (gal < 0.05) return { ok: false, message: 'The cows are dry.' };
           giveOutput(E, p, 'milk', gal);
+          if (o.target.kind === 'building') noteMade(E, p, o.target.id, 'milk');
           boutDone(E, p, { skill: 'husbandry', xp: 6, heavy: 0.2, bouts: f });
           gains.push({ label: 'Milk', amount: gal, ref: 'milk' });
           return { ok: true, message: `You milk ${gal} gallons.`, gains };
@@ -187,6 +189,7 @@ export function stockProvider(E: Econ): ActionProvider {
           if (n < 1) return { ok: false, message: 'Every sheep is clipped.' };
           const lb = round2(n * 1.4 * yieldM);
           giveOutput(E, p, 'wool', lb);
+          if (o.target.kind === 'building') noteMade(E, p, o.target.id, 'wool');
           st['~shY'] = E.yearIndex + 1;
           st['~shN'] = done + n;
           boutDone(E, p, { skill: 'husbandry', xp: 7, heavy: 0.3, bouts: f });

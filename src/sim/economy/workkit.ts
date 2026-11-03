@@ -176,6 +176,17 @@ export function giveOutput(E: Econ, p: Person, key: string, qty: number): 'pack'
   return 'stores';
 }
 
+/**
+ * The fresh result of the player's work lies where it was done for a while, more of it bout by bout (drawn only, by the
+ * prop feed: docs/WORK.md): loaves at the oven, a blade on the anvil, ore at the mine, flour at the mill, joints of meat.
+ */
+export function noteMade(E: Econ, p: Person, building: number, good: string): void {
+  if (!E.isPlayer(p.id) || building < 0 || !E.state.buildings.has(building)) return;
+  const was = E.notes.made.get(building);
+  E.notes.made.set(building, { good, batches: (was && was.good === good && E.day - was.day < 1 ? was.batches : 0) + 1, day: E.day });
+  E.notes.rev++;
+}
+
 /** Care a piece of work puts into a crop or product: skill, tool and how rested the worker is (0.4..1). */
 export function careOf(p: Person, skill: SkillId, toolQ: number | null): number {
   return Math.max(0.4, Math.min(1, 0.52 + 0.025 * skillLevel(p.skills[skill]) + 0.08 * ((toolQ ?? 1) - 1) + 0.12 * needsFactor(p) - 0.1));

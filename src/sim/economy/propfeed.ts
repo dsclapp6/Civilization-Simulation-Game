@@ -366,6 +366,9 @@ const MADE_PROP: Record<string, string> = {
   pick: 'anvil_work', hammer: 'anvil_work', tongs: 'anvil_work', chisel: 'anvil_work', shears: 'anvil_work', saw: 'anvil_work', scythe: 'anvil_work', dagger: 'anvil_work',
   bill: 'anvil_work', mace: 'anvil_work', war_axe: 'anvil_work', sword: 'anvil_work', crossbow: 'anvil_work', bolt: 'anvil_work', cap_helmet: 'anvil_work',
   kettle_hat: 'anvil_work', mail_hauberk: 'anvil_work', coat_of_plates: 'anvil_work', plough: 'anvil_work', spear: 'anvil_work',
+  // the works of the land, the mill, the byre and the block
+  iron_ore: 'stone_pile', silver_ore: 'stone_pile', gold_ore: 'stone_pile', clay: 'clay_heap', timber: 'log_pile', flour: 'sack_pile',
+  meat: 'meat_joints', wool: 'sack_pile', milk: 'barrel', manure: 'dung_heap',
 };
 const DISHES: ReadonlySet<string> = new Set(['roast_meat', 'roast_fowl', 'stew', 'salt_stew', 'fish_dish', 'pottage', 'porridge']);
 
