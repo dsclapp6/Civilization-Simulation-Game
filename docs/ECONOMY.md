@@ -255,6 +255,24 @@ is closed to a stranger. A mine's prop may give way (bruise) for hands below Min
 territory module present, a pit on ground with no clay deposit says "There is no clay in this ground" (without it, an ordinary
 bank). Day-labour posts are one for each keeper and kind of work (a quarry and a clay pit of one keeper share the pit's post).
 
+### Cooking (`recipes.json` `cook_*`, `diet.ts` `MEAL_RATION`, `needs.ts`, `macro.ts` `eat`)
+
+Meat, salt meat, fowl, fish, grain and pulses are cooked at a hearth - a home's (any home, the manor house included), an alehouse's or
+tavern's, a castle's (great hall, keep) - into **dishes** (goods with `meal: true`, category `food`): `roast_meat` (4 lb of meat, a joint),
+`roast_fowl` (a fowl, 1.4 lb), `stew` (meat and roots), `salt_stew` (salt meat boiled with peas), `fish_dish` (grilled fish), `pottage`
+(peas, roots, a little oats) and `porridge` (oats). Seven recipes, skill Brewing (the kitchen craft, like the bakehouse's), level 0 or 1,
+each batch a few portions; each follows a plan of its own (`roasting`: trim and skewer, build up the fire, turn the spit, carve;
+`stewing`, `boiling`, `grilling`, `potting`) with its animation and sound (`cut`, `fire`, `stir`), like the other crafts.
+
+A dish feeds better than what went into it (`food` 0.22 - 0.75 per portion against meat's 0.3 a pound; for the households' tables
+`MEAL_RATION`: a joint's portion is 1.1 rations against a pound of raw meat's 0.9), **cheers** (+0.05 mood a portion) and **warms** (+0.04
+warmth), and keeps a day or two (`spoilDays` 1.5 - 3, against meat's 6 and salt meat's 120: cooking is for eating soon; salt and the
+smoke-house are for keeping). The player's table (`eatAtHome`) and pack (`autoEat`) take dishes first; inns and alehouses stock them
+(`sold`). The macro households cook too: each day `eat` turns the meat and fish the household means to eat into roast and grilled fish
+(a little firewood a portion, `FIREWOOD_PER_PORTION`) and eats the dishes in the larder first, which feeds them about a fifth better on
+those foods (a few percent of the whole day's rations: the market stocks and prices of the calibrated model hold; `tools/fullsim.ts` at ten
+years is unchanged in population, prosperity and famine). Tests: `tests/sim/economy/cooking.test.ts`.
+
 ### Materials: stock-and-flow with a local supply (`supply.ts`)
 
 The twelve materials have a stock at every market (`goods.json` `"macro": true` + `"supply": {use, cover, relax}`). A market's

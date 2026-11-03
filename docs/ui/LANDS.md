@@ -94,6 +94,17 @@ estimated finish, the module's `note`; and, when `canManage`: **hired hands** (�
 **The works queue** (*Works* tab): all your sites in the order they are worked (`priority`), with status, progress and what they wait
 for, the works of others in the places you have a say in after them, dimmed; a click jumps the camera there and opens the site.
 
+### Walls in a line, and what is bought stocked
+
+A wall or palisade is not placed with one click: pick it, **click where the run starts, click where it ends** (Shift on the second click
+carries on from the end; Esc drops the start). While the cursor moves the label by it gives the run's length, its pieces ("60 m: 8 curtain
+walls, 2 wall towers, 1 gatehouse"), the price, or the first reason a piece cannot be laid; every piece is tinted on the ground (the
+build-area tint, the renderer has one ghost) and the ghost shows the first piece that fails, else the far end. The tool card has **Towers**
+and (for a wall) **Gate** toggles. A run is staked all or none; the Works tab shows it as one row ("Laying a run of curtain wall (14
+pieces)") with the mean progress, and its site card has *Cancel the whole run*. Models: `lineTip`, `lineAreas`, `lineGhostPart`,
+`queueRows` (`builderModel.ts`). A stable, byre, fold, sty or henhouse says in its description what comes with it, and its price includes
+the beasts (`docs/CONSTRUCTION.md` §3b).
+
 ## 2. Ruler mode (`U`)
 
 For `realm.canRule(me)`; otherwise a card says you rule nothing and offers the towns near you with someone to take over (*Rule …*).
@@ -123,6 +134,15 @@ the day change, never while a field in it is being typed into.
 ![diplomacy](lands-ruler-diplomacy-1280x720.jpg)
 ![rivals](lands-ruler-rivals-1280x720.jpg)
 ![the seat for someone who rules nothing](lands-ruler-card-1280x720.jpg)
+
+### Your knights, and the accolade (Military page)
+
+*Your knights*: the knights of the House, the holders of titles under yours and the men in your pay, the paid first, each with **Fight as him**
+(the sim's `fightAs`; disabled when he is hurt): you take his place - his sword, skill and wounds - while your lord (RunState.liege) carries
+on. While you play him a ribbon at the top of the screen says whose knight you are, with *Return to your lord (U)*; **U** does the same
+(`returnToLiege`; `src/ui/ruler/liegeBar.ts`, a HUD part and a hotkey). *Men fit for the accolade*: `realm.dubCandidates` - any man of your
+House, your oath or your lands who is fit, not only those raised by `recruit` - each with **Dub a knight** (`docs/REALM.md`). The
+Overview's map of your lands draws the roads and tracks that cross the picture (`roadPath`, `landsMap.ts`).
 
 ## 3. *Rule this town*
 
