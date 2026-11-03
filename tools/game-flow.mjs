@@ -199,13 +199,15 @@ try {
     check('closing it takes the mouse back', (await locked()) && (await lookState()) === 'look', await lookState());
     // the wheel steps out of first person to the shoulder, and back
     const wheel = (dy) => page.evaluate((d) => document.getElementById('viewport').dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: d })), dy);
+    const live = async (ms) => { await page.evaluate(() => window.__game.freeze(false)); await page.waitForTimeout(ms); await page.evaluate(() => window.__game.freeze(true)); }; // (`tick` runs no camera: let the real loop draw a moment)
+    await live(6000);
     await wheel(120);
-    await tick(0.6);
+    await live(6000);
     const out = await sim(() => ({ fp: window.__game.session.renderer.inFirstPerson(), d: window.__game.session.renderer.getViewDistance() }));
     check('the wheel out of first person goes over the shoulder', !out.fp && out.d > 2 && out.d < 5, JSON.stringify(out));
     await page.waitForTimeout(600);
     await wheel(-400);
-    await tick(0.8);
+    await live(6000);
     check('the wheel in goes back to first person', await sim(() => window.__game.session.renderer.inFirstPerson()));
     // leave the cursor free for the pointing checks below
     await page.keyboard.press('AltLeft');
@@ -314,7 +316,7 @@ try {
   await tick(0.2);
   await sim(() => window.__ui.showHint('interact'));
   await tick(0.2);
-  check('the guide shows a hint card', (await page.locator('.mu-guide:not(.mu-hide)').count()) === 1 && (await page.locator('.mu-guide-title').textContent()) === 'Point and click');
+  check('the guide shows a hint card', (await page.locator('.mu-guide:not(.mu-hide)').count()) === 1 && (await page.locator('.mu-guide-title').textContent()) === 'Look and act');
   await page.locator('.mu-guide-x').click();
   await tick(0.2);
   check('the hint can be dismissed', (await page.locator('.mu-guide:not(.mu-hide)').count()) === 0);
@@ -322,17 +324,9 @@ try {
   // ---- the free cursor (CLARITY §5): hover names things, a click walks there and acts, the right button turns the camera, G draws
   {
     await sim(() => { window.__game.session.sim.dispatch({ type: 'setSpeed', speed: 1 }); window.__game.session.sim.hostileNear = () => false; });
-    // someone close by, on the screen
-    const target = await sim(() => {
-      const g = window.__game; const s = g.session; const z = s.services.zone; const p = s.services.player; const b = p.body();
-      const a = [...z.agents()].filter((x) => x.visible && x.personId !== s.sim.state.run.playerId).sort((u, v) => Math.hypot(u.x - b.x, u.z - b.z) - Math.hypot(v.x - b.x, v.z - b.z))[0];
-      if (!a) return null;
-      // stand 6 m from them, facing them, so they are in the middle of the view
-      const dx = b.x - a.x, dz = b.z - a.z; const d = Math.hypot(dx, dz) || 1;
-      p.placeAt(a.x + (dx / d) * 6, a.z + (dz / d) * 6, Math.atan2(-dx, -dz));
-      const r = s.renderer; const yaw = Math.atan2(-dx, -dz); r.orbit(Math.atan2(Math.sin(yaw - r.getCameraYaw()), Math.cos(yaw - r.getCameraYaw())), 0);
-      return a.personId;
-    });
+    // someone close by, on the screen, with a clear line of sight from the eyes (hoverPerson tries the nearest few)
+    const hp = await hoverPerson();
+    const target = hp.hovered ? hp.id : null;
     if (target !== null) {
       await tick(0.5);
       await page.evaluate(() => window.__game.settle());
