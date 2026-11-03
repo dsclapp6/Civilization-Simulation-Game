@@ -355,6 +355,10 @@ height is that of the floor (`NavApi.walkMove / walkTopAt / groundBeside`, addit
   floor is battered away from under him he falls the same way ("The wall gives way under you").
 - A game saved on the walk loads with the body set down beside the wall (`placeBody` pushes a body out of a footprint).
 
+The stairs are built now (docs/INTERIORS.md): stone flights up the inner face of one curtain segment in four, a door from each gatehouse's passage into
+its left tower with ladders up inside, a ladder on every other length of a fighting palisade, a door and ladders inside every tower up to its top;
+they are walked (ramps) onto the walk and off it, and *Climb the stairs* / *Go down the stairs* remain as shortcuts at the same places.
+
 ## 14. A save in the middle of a storm
 
 Detail fights are not saved; the military module's record of the battle is (`rec.fight` is a number that means nothing in a new session). A load

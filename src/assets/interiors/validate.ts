@@ -19,7 +19,7 @@ export interface Reach {
 export function validatePlan(plan: InteriorPlan): Reach {
   const problems: string[] = [];
   // a sty, a coop: doorways for beasts only, nothing in them for a person
-  const forPeople = plan.doors.some((d) => d.outer && d.kind !== 'small');
+  const forPeople = plan.doors.some((d) => d.outer && d.kind !== 'small') || plan.stairs.some((st) => st.from < 0);
   const b = plan.bounds;
   const x0 = b.x0 - 2.5, z0 = b.z0 - 2.5;
   const nx = Math.ceil((b.x1 - b.x0 + 5) / CELL), nz = Math.ceil((b.z1 - b.z0 + 5) / CELL);
@@ -76,6 +76,13 @@ export function validatePlan(plan: InteriorPlan): Reach {
     const c = near(d.level, ix, iz, Math.max(0.4, d.w / 2));
     if (c < 0) problems.push(`outer door ${d.id} (${d.kind} ${d.w.toFixed(2)} m at ${d.x.toFixed(1)},${d.z.toFixed(1)}) has no standing room in its threshold`);
     else push(d.level, c);
+  }
+  // up steps from the ground (to a raised door, up to a wall-walk, into a hall over a market): in at their head
+  for (const st of plan.stairs) {
+    if (st.from >= 0) continue;
+    const head = stairEnd(st, 1, 0.3);
+    const c = near(st.to, (head.x0 + head.x1) / 2, (head.z0 + head.z1) / 2, 0.6);
+    if (c >= 0) push(st.to, c);
   }
   // stairs join the cell at the foot of a flight to the one at its head
   const links: Array<[number, number, number, number]> = [];

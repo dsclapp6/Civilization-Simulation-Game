@@ -77,7 +77,7 @@ export function flight(ctx: Ctx, x0: number, x1: number, z0: number, z1: number,
   const { b } = ctx;
   // along z: the same flight in a frame turned so its x runs along world z (x0..x1 are then z, z0..z1 are x)
   if (alongZ) { b.push(); b.rotY(-Math.PI / 2); b.scale(1, 1, -1); }
-  const n = Math.max(3, Math.round((y1 - y0) / 0.24));
+  const n = Math.max(3, Math.round((y1 - y0) / 0.28));
   const run = x1 - x0;
   b.state({ layer: Layer.Wall, flags: F.Snow | (timber ? F.Burn : 0) }, () => {
     for (let i = 0; i < n; i++) {
@@ -107,12 +107,6 @@ export function walkStair(ctx: Ctx, L: number, zf: number, H: number, col: numbe
   // the upper back along the wall to the walk at the -x end
   flight(ctx, xb, xa + 0.3, zf - w, zf + 0.3, H / 2, H, col, timber);
   return { x0: xa, x1: xa + 1.2 };
-}
-
-/** A straight flight from the bailey up to a gatehouse's top at H, along −z from its inner face (z = zf), in the band x0..x0+1.1. */
-export function gateStair(ctx: Ctx, x0: number, zf: number, H: number, col: number, timber: boolean): void {
-  const run = H / (timber ? 1.0 : 0.95);
-  flight(ctx, zf - run, zf + 0.3, x0, x0 + 1.1, 0, H, col, timber, true);
 }
 
 export function palisade(ctx: Ctx, def: BuildingDef): void {
@@ -264,7 +258,10 @@ export function gatehouse(ctx: Ctx, def: BuildingDef): void {
     const tw = 2.6;
     for (const sd of [-1, 1]) {
       const rc: Rect = { x0: sd < 0 ? -W / 2 + 0.6 : pw / 2, x1: sd < 0 ? -pw / 2 : W / 2 - 0.6, z0: -D / 2 + 1.2, z1: D / 2 - 1.2 };
-      house(ctx, { rect: rc, plinthH: 0.2, storeys: [{ h: 6.4, wall: 'planks', frame: 'none', openings: [{ side: 'pz', u: 0, w: 0.4, h: 0.5, y: 4.4, kind: 'slit', frame: 'timber' }] }], roof: null });
+      // the left tower is the way up: a door from the passage near the back, ladders inside to the top (docs/INTERIORS.md)
+      const ops: Opening[] = [{ side: 'pz', u: 0, w: 0.4, h: 0.5, y: 4.4, kind: 'slit', frame: 'timber' }];
+      if (sd < 0) ops.push({ side: 'px', u: (rc.z1 - rc.z0) / 2 - 1.0, w: 0.85, h: 1.9, y: 0, kind: 'door', frame: 'timber' });
+      house(ctx, { rect: rc, plinthH: 0.2, role: sd < 0 ? 'tower' : '', storeys: [{ h: 6.4, wall: 'planks', frame: 'none', openings: ops }], roof: null });
       void tw;
     }
     // Bridge room above the passage, jettied hoarding all round, and a shingled/thatched roof.
@@ -283,8 +280,6 @@ export function gatehouse(ctx: Ctx, def: BuildingDef): void {
     void res;
     // The gate leaves: open inwards, shut and barred, or battered in (FortView).
     gateLeaves(ctx, pw, -D / 2 + 1.5, 3.6, ctx.gate ?? 'open');
-    // the stair up to the top, behind the -x tower (agents/nav/walls.ts: the gatehouse's stairs)
-    gateStair(ctx, -W / 2 + 0.6, -D / 2 + 1.2, 6.6, s.timber, true);
     ctx.out.doors.push({ x: 0, z: D / 2 + 0.3 }, { x: 0, z: -D / 2 - 0.3 });
     return;
   }
@@ -295,7 +290,10 @@ export function gatehouse(ctx: Ctx, def: BuildingDef): void {
   const zf = 1.6;
   for (const sd of [-1, 1]) {
     const rc: Rect = { x0: sd < 0 ? -W / 2 + 0.5 : pw / 2, x1: sd < 0 ? -pw / 2 : W / 2 - 0.5, z0: -D / 2 + 0.5, z1: zf };
-    house(ctx, { rect: rc, plinthH: 0.6, storeys: [{ h: H - 0.6, wall, frame: 'none', openings: [{ side: 'nz', u: 0, w: 0.6, h: 1.0, y: 5.5, kind: 'window', frame: 'stone', shape: 'pointed' }] }], roof: null });
+    // the left block is the guardroom and the way up: a door from the passage at its back end, ladders inside to the top
+    const gops: Opening[] = [{ side: 'nz', u: 0, w: 0.6, h: 1.0, y: 5.5, kind: 'window', frame: 'stone', shape: 'pointed' }];
+    if (sd < 0) gops.push({ side: 'px', u: (rc.z1 - rc.z0) / 2 - 1.0, w: 0.9, h: 2.1, y: 0, kind: 'door', frame: 'stone', shape: 'round' });
+    house(ctx, { rect: rc, plinthH: 0.6, role: sd < 0 ? 'tower' : '', storeys: [{ h: H - 0.6, wall, frame: 'none', openings: gops }], roof: null });
     const R = 1.85;
     const tx = sd * (W / 2 - 0.5 - R), tz = zf;
     roundTower(ctx, tx, tz, R, H + 1.2, col, { batter: 0.35, crenel: true, roof: s.towerRoof === 'cone' ? 'slate' : 'none', roofH: R * 2.5 });
@@ -339,8 +337,6 @@ export function gatehouse(ctx: Ctx, def: BuildingDef): void {
   crenelLine(ctx, -W / 2 + 0.5, W / 2 - 0.5, -D / 2 + 0.95, H, col, { thick: 0.45, period: 1.5, merlon: 0.9, phase: 0.3 });
   b.state({ layer: Layer.Wall, flags: F.Snow }, () => b.box(-W / 2 + 0.5, H - 0.25, -D / 2 + 0.5, W / 2 - 0.5, H - 0.05, zf, { top: 0x9a948a, side: col }, 'b'));
   flagPole(ctx, 0, H, (zf - D / 2 + 0.5) / 2, 3.2, ctx.owner);
-  // the great stair up to the top from the bailey, beside the passage (agents/nav/walls.ts: the gatehouse's stairs)
-  gateStair(ctx, -W / 2 + 0.5, -D / 2 + 0.5, H, col, false);
   ctx.out.doors.length = 0;
   ctx.out.doors.push({ x: 0, z: D / 2 + 0.3 }, { x: 0, z: -D / 2 - 0.3 });
   void opening;
@@ -468,20 +464,19 @@ export function keepStone(ctx: Ctx, def: BuildingDef): void {
   if (q >= 2) flagPole(ctx, 0, H, cz, 4.2, ctx.owner);
   // Forebuilding with an external stair to the first-floor entrance on +z.
   const fb: Rect = { x0: -3.4, x1: 1.6, z0: rc.z1, z1: def.d / 2 - 0.4 };
-  house(ctx, { rect: fb, plinthH: 0.6, storeys: [{ h: 7.4, wall, frame: 'none', openings: [{ side: 'pz', u: 0.6, w: 1.3, h: 2.4, y: 4.4, kind: 'door', frame: 'stone', shape: 'round' }, { side: 'pz', u: -1.4, w: 0.4, h: 1.0, y: 2.0, kind: 'slit', frame: 'stone' }] }], roof: null });
+  house(ctx, { rect: fb, plinthH: 0.6, storeys: [{ h: 7.4, wall, frame: 'none', openings: [{ side: 'px', u: 0.15, w: 1.2, h: 2.4, y: 4.4, kind: 'door', frame: 'stone', shape: 'round' }, { side: 'pz', u: -1.4, w: 0.4, h: 1.0, y: 2.0, kind: 'slit', frame: 'stone' }, { side: 'pz', u: 0.8, w: 0.4, h: 1.0, y: 5.2, kind: 'slit', frame: 'stone' }] }], roof: null });
   crenelLine(ctx, fb.x0, fb.x1, fb.z1, 7.9, col, { thick: 0.45, period: 1.2, merlon: 0.7, phase: 0.25 });
   b.state({ layer: Layer.Wall, flags: F.Snow }, () => {
     b.box(fb.x0, 7.75, fb.z0, fb.x1, 8.0, fb.z1, { top: 0x7a746c, side: col }, 'b');
   });
   // the stair along the front of the forebuilding, up to a landing before the door on the first floor (docs/INTERIORS.md)
-  const doorY = 0.6 + 4.4, doorX = (fb.x0 + fb.x1) / 2 + 0.6;
-  flight(ctx, fb.x1 + 4.8, doorX + 0.7, fb.z1, fb.z1 + 1.25, 0, doorY, col);
-  landing(ctx, doorX - 0.9, doorX + 0.7, fb.z1, fb.z1 + 1.25, doorY, col);
-  // a parapet along the open side of the landing
-  b.state({ layer: Layer.Wall, flags: F.Snow }, () => b.box(doorX - 0.9, doorY, fb.z1 + 1.1, doorX + 0.7, doorY + 0.8, fb.z1 + 1.25, col));
+  // the stair up the east side of the forebuilding to a landing before its door, 5 m up (docs/INTERIORS.md)
+  const doorY = 0.6 + 4.4, dz = (fb.z0 + fb.z1) / 2 - 0.15;
+  flight(ctx, fb.x1 + 5.0, fb.x1 + 0.85, dz - 0.6, dz + 0.6, 0, doorY, col);
+  landing(ctx, fb.x1, fb.x1 + 0.85, dz - 0.6, dz + 0.6, doorY, col);
   void lod;
   ctx.out.doors.length = 0;
-  ctx.out.doors.push({ x: fb.x1 + 5.2, z: fb.z1 + 0.6 });
+  ctx.out.doors.push({ x: fb.x1 + 5.4, z: dz });
   ctx.out.smoke.push([rc.x0 + 3, H + 0.6, cz]);
   void chimney; void buildCone; void roofLook; void roofTint;
 }

@@ -397,7 +397,7 @@ export function furnish(pc: PlanCtx): void {
         }
         case 'great_hall': add(r, 'greathall', 'the great hall'); break;
         case 'guildhall': add(r, k === 0 ? 'undercroft' : 'council', k === 0 ? 'the undercroft' : 'the guild hall'); break;
-        case 'market_hall': add(r, k === 0 ? 'store' : 'council', k === 0 ? 'the market' : 'the council chamber'); break;
+        case 'market_hall': add(r, b.ys[k] > 2 ? 'council' : 'store', b.ys[k] > 2 ? 'the council chamber' : 'the market'); break;
         case 'tavern': {
           if (!isMain) { add(r, b.hs[0] > 3 ? 'stable' : 'store', b.hs[0] > 3 ? 'the stable' : 'store'); break; }
           if (k === 0) add(r, 'tap', 'the taproom');

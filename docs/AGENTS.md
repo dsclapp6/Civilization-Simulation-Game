@@ -219,6 +219,12 @@ expansions max) with thick line-of-sight string pulling; exact circle-vs-box/cir
 sub-stepped); bridge decks follow the renderer's deck profile; `doorOf` uses the door offsets measured from the
 building recipes. Path requests are queued, nearest-to-focus first, ≤ 1 ms/frame.
 
+**Interiors** (docs/INTERIORS.md, `nav/interiors.ts`, `doors.ts`, `indoors.ts`): with a source of plans (the app gives the building
+recipes' interior plans) the buildings within 42 m are not boxes to a moving body that knows its height but walls with doorways,
+doors, furniture, floors, stairs and steps; `doorOf` is the real main door (placed as the model is), else `doorTable.ts`. The door book
+opens and shuts every door's leaf (people passing, the habit of the place, the player), locks homes and shut-up places at night; the
+people whose day has them inside the rooms drawn near the player are there at their places (`Zone.indoors`, drawn with the agents).
+
 ## Behaviour, animals, interaction
 
 Agents follow paths with separation (lower ranks and the player's inferiors yield), queue at doors, work in bouts

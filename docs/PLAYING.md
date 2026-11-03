@@ -53,6 +53,12 @@ eligible is left the run ends and your Legacy gold stays.
 | **Esc** | Leave mouse-look first (it never opens the menu for that press); else close the top page (or the "What now?" card); with nothing open, the pause menu |
 | **← →**, **1–9**, **↑ ↓**, **PgUp PgDn**, **Enter** | Inside pages: switch tabs, scroll, confirm. **Enter** with a notice showing at the top of the screen opens the page it points to (a levy call or a war first) |
 
+**Doors and insides** (docs/INTERIORS.md): every door has a leaf that opens. Walk into a door and it opens before you and swings to
+behind you; **E** on a door opens or shuts it. Inside you walk the rooms, up the stairs and ladders to the floors above, onto the top
+of a tower and out along the wall-walk. At night a home is barred and a workshop, store, church or hall locked to all but its
+household, its lord's people, the invited and the law: **Knock** (someone at home may let you in) or **Force the door** (a crime the
+law hears of). On the wheel: **Go inside**, and inside **Leave** and **Sleep in your bed** (one of your household's).
+
 While a panel or menu has the focus the movement keys and the mouse do nothing. The old scheme (the mouse always turns the
 camera, left strikes, right guards, a click on the view takes the mouse) is the setting **Always use mouse-look**.
 

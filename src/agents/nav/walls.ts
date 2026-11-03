@@ -103,12 +103,11 @@ export class WallWalk {
       if (bucket % 2 !== 0) return null;
       lx = 0; lz = -2.5; tx = 0; tz = -0.7;
     } else if (b.kind === 'gatehouse') {
+      // the door from the passage into the left tower, near its back; the ladders inside go up to the top
       const lv1 = b.level <= 1;
-      const H = lv1 ? 6.6 : 11.5;
-      const zf = lv1 ? -def.d / 2 + 1.2 : -def.d / 2 + 0.5;
-      const run = H / (lv1 ? 1.0 : 0.95);
-      const x = -def.w / 2 + (lv1 ? 0.6 : 0.5) + 0.55;
-      lx = x; lz = zf - run - 0.6; tx = x; tz = zf + 0.5;
+      const zb = lv1 ? -def.d / 2 + 1.2 : -def.d / 2 + 0.5, zf = lv1 ? def.d / 2 - 1.2 : 1.6;
+      const zd = zb + 1.0 + 0.0 * zf;
+      lx = 0; lz = zd; tx = -def.w / 4; tz = zd;
     } else return null;
     const foot = { x: r.cx + lx * r.c + lz * r.s, z: r.cz - lx * r.s + lz * r.c };
     const top = { x: r.cx + tx * r.c + tz * r.s, z: r.cz - tx * r.s + tz * r.c };

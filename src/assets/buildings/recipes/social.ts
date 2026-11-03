@@ -219,28 +219,26 @@ export function marketHall(ctx: Ctx, def: BuildingDef): void {
       ...windowRow('pz', up.x1 - up.x0, 4, { w: 1.1, h: 1.0, y: 0.8, frame: 'timber', shutters: false, mullions: 3, lit: 0.9 }),
       ...windowRow('nz', up.x1 - up.x0, 3, { w: 1.0, h: 0.9, y: 0.8, frame: 'timber', shutters: false, mullions: 2 }),
       { side: 'px', u: 0, w: 1.1, h: 0.9, y: 0.8, kind: 'window', frame: 'timber', mullions: 2 },
-      { side: 'nx', u: 0, w: 1.0, h: 2.0, y: 0, kind: 'door', frame: 'timber' },
+      { side: 'nx', u: 0, w: 1.1, h: 0.9, y: 0.8, kind: 'window', frame: 'timber', mullions: 2 },
     ] }],
     roof: { type: s.id === 'gael' ? 'hip' : 'hip', pitch: s.pitch, mat, ov, gov: ov, ridge: 'plain' },
   });
   b.pop();
-  // the stair up the west end to the council chamber's door, and its landing (docs/INTERIORS.md)
+  // the stair up from the market under the arcade at its west end, through a hatch into the council chamber (docs/INTERIORS.md)
   {
-    const x0 = up.x0 - 1.15, x1 = up.x0 - 0.02;
-    const zTop = 0.65, zFoot = zTop + H0 / 0.75;
-    b.push(); b.rotY(-Math.PI / 2); b.scale(1, 1, -1);
-    // in this frame x runs along world z and z along world x (as in defence.ts flight)
-    b.state({ layer: Layer.Wall, flags: F.Snow | F.Burn }, () => {
-      const n = Math.max(3, Math.round(H0 / 0.24));
+    const x0 = rect.x0 + 0.35, x1 = rect.x0 + 1.3;
+    const zTop = rect.z0 + 1.0, zFoot = Math.min(rect.z1 - 0.3, zTop + H0 / 0.82);
+    b.state({ layer: Layer.Wall, flags: F.Burn }, () => {
+      const n = Math.max(3, Math.round(H0 / 0.22));
       for (let i = 0; i < n; i++) {
         const a = zFoot + ((zTop - zFoot) * i) / n, c = zFoot + ((zTop - zFoot) * (i + 1)) / n;
-        b.box(Math.min(a, c), -0.3, x0, Math.max(a, c), (H0 * (i + 1)) / n, x1, { side: shade(s.stone, i % 2 ? 0.93 : 0.97), top: shade(s.stone, 1.06) });
+        const y = (H0 * (i + 1)) / n;
+        b.box(x0, y - 0.05, Math.min(a, c), x1, y, Math.max(a, c), { top: 0x9a7a52, side: 0x7a5a3a });
       }
-      b.box(-zTop, -0.3, x0, zTop, H0, x1, { side: shade(s.stone, 0.95), top: shade(s.stone, 1.06) });
+      for (const x of [x0 + 0.04, x1 - 0.04]) b.beam([x, 0, zFoot], [x, H0, zTop], 0.08, 0.2, s.timber);
+      b.beam([x1, 0.9, zFoot], [x1, H0 + 0.9, zTop], 0.05, 0.05, s.timber);
     });
-    hint(ctx, { kind: 'steps', x: zFoot + 0.02, y: 0, z: (x0 + x1) / 2, x1: zTop, y1: H0, z1: (x0 + x1) / 2, w: x1 - x0 });
-    hint(ctx, { kind: 'landing', x: -zTop, y: H0, z: x0, x1: zTop, z1: x1 });
-    b.pop();
+    hint(ctx, { kind: 'steps', x: (x0 + x1) / 2, y: 0, z: zFoot + 0.02, x1: (x0 + x1) / 2, y1: H0 + 0.05, z1: zTop, w: x1 - x0 });
   }
   // Soffit under the jetty.
   b.state({ layer: Layer.Wall, flags: F.NoAO | F.Burn }, () => b.quad([up.x0, H0, up.z0], [up.x1, H0, up.z0], [up.x1, H0, up.z1], [up.x0, H0, up.z1], shade(s.timber, 0.85)));

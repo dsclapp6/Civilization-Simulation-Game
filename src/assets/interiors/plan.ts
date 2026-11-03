@@ -211,7 +211,7 @@ function innerRect(r: PRect, t: number, open: readonly Side[]): PRect {
 /** Towers and keeps are one tall storey to the house kit: floors are put in every few metres, under the windows. */
 function towerFloors(pc: PlanCtx): void {
   for (const b of pc.blocks) {
-    const tall = b.hs.length === 1 && b.hs[0] > 7.5 && (b.tower || pc.kind === 'keep_stone');
+    const tall = b.hs.length === 1 && (b.hs[0] > 7.5 || (b.role === 'tower' && b.hs[0] > 5.5)) && (b.tower || pc.kind === 'keep_stone');
     if (!tall) continue;
     const y0 = b.ys[0], top = y0 + b.hs[0];
     // floor heights: under the sills of the windows (a window wants its floor 0.9–1.4 m below it), else every 3.6–4.6 m
@@ -233,7 +233,7 @@ function towerFloors(pc: PlanCtx): void {
       i += n - 1;
     }
     // the top of the tower is a floor too (a roof one stands on, or under a spire the belfry floor already has its own)
-    if (pc.kind === 'keep_stone' || pc.kind === 'tower') want.push(top);
+    if (pc.kind === 'keep_stone' || pc.kind === 'tower' || pc.kind === 'gatehouse') want.push(top);
     if (pc.kind === 'keep_stone') {
       // the hall is on the floor of the door from the forebuilding
       const door = (pc.out.doorways ?? []).find((d) => d.y > 2);
@@ -403,6 +403,16 @@ function placeDoors(pc: PlanCtx, doorways: DoorwayRec[], hints: InteriorHint[]):
     if (h.kind !== 'solid' || h.x1 === undefined || h.y1 === undefined || h.z1 === undefined) continue;
     plan.solids.push({ x0: Math.min(h.x, h.x1), x1: Math.max(h.x, h.x1), z0: Math.min(h.z, h.z1), z1: Math.max(h.z, h.z1), y0: Math.min(h.y, h.y1), y1: Math.max(h.y, h.y1) });
   }
+  // where one stands to use an outer door on the ground: before it, and clear of the building's plot (the box the paths keep off)
+  const def = BUILDINGS[pc.kind];
+  for (const d of plan.doors) {
+    if (!d.outer || d.sy > 0.3) continue;
+    const along = Math.abs(d.nz) > 0.5 ? d.z * d.nz : d.x * d.nx;
+    const edge = Math.abs(d.nz) > 0.5 ? def.d / 2 : def.w / 2;
+    const out = Math.max(1.25, edge + 1.0 - along);
+    d.sx = d.x + d.nx * out;
+    d.sz = d.z + d.nz * out;
+  }
   // the main door: the outer one a person uses at the lowest sill, the widest ordinary door first
   let main = -1;
   plan.doors.forEach((d, i) => {
@@ -571,6 +581,8 @@ function towerFlights(pc: PlanCtx, b: Block): boolean {
 
 function makeStairs(pc: PlanCtx): void {
   for (const b of pc.blocks) {
+    // a block no doorway opens into (a gatehouse's mass) has no stairs in it
+    if (!b.rects.some((r, k) => pc.plan.doors.some((d) => d.level === b.lv[k] && contains(r, d.x, d.z, d.t + 0.3)))) continue;
     if (b.tower && b.ys.length > 1 && towerFlights(pc, b)) continue;
     for (let k = 0; k + 1 < b.ys.length; k++) {
       const lo = b.inner[k], hi = b.inner[k + 1];
@@ -702,6 +714,14 @@ function addLoft(pc: PlanCtx, b: Block, y: number): void {
  */
 function blindStoreys(pc: PlanCtx): void {
   for (const b of pc.blocks) {
+    // a block with no doorway and no stair at all (a gatehouse's flanking masses) is sealed: no floor in it
+    // a gatehouse's towers and the room over its passage have no way in: its stair goes up to the walk on top
+    const reached = b.rects.some((r, k) => pc.plan.doors.some((d) => d.level === b.lv[k] && contains(r, d.x, d.z, d.t + 0.3)))
+      || pc.plan.stairs.some((s) => s.kind === 'steps' && b.inner.some((r) => overlaps(s, r)));
+    if (!reached) {
+      for (let k = 0; k < b.ys.length; k++) b.skip.add(k);
+      continue;
+    }
     for (let k = 1; k < b.ys.length; k++) {
       if ((b.openings[k] ?? []).some((o) => o.kind !== 'door')) continue;
       const lv = b.lv[k];
@@ -805,7 +825,7 @@ function makeFloors(pc: PlanCtx): void {
       let parts: PRect[] = [r];
       // the stairwell: the floor above a flight is cut where the flight comes up through it
       for (const st of plan.stairs) {
-        if (st.to !== b.lv[k] || st.kind === 'steps') continue;
+        if (st.to !== b.lv[k] || (st.kind === 'steps' && Math.abs(st.y1 - b.ys[k]) > 0.3)) continue;
         if (!overlaps(st, r)) continue;
         const hole = { x0: st.x0 - 0.02, x1: st.x1 + 0.02, z0: st.z0 - 0.02, z1: st.z1 + 0.02 };
         parts = parts.flatMap((q) => subtract(q, hole));
@@ -823,7 +843,7 @@ function makeFloors(pc: PlanCtx): void {
       // a scrap of floor boxed in behind a stairwell is no room at all
       const heads = plan.stairs.filter((st) => st.to === b.lv[k]).map((st) => stairEnd(st, 1, 0.4));
       parts = parts.filter((q) => parts.length === 1 || heads.some((h) => overlaps(h, q)) || (Math.min(q.x1 - q.x0, q.z1 - q.z0) >= 0.85 && (Math.min(q.x1 - q.x0, q.z1 - q.z0) >= 1.0 || (q.x1 - q.x0) * (q.z1 - q.z0) >= 1.6)));
-      for (const q of parts) plan.floors.push({ ...q, y: b.ys[k], level: b.lv[k], room: -1, walk: (pc.kind === 'tower' || pc.kind === 'keep_stone') && k === b.ys.length - 1 && k > 0 ? true : undefined });
+      for (const q of parts) plan.floors.push({ ...q, y: b.ys[k], level: b.lv[k], room: -1, walk: (pc.kind === 'tower' || pc.kind === 'keep_stone' || pc.kind === 'gatehouse') && k === b.ys.length - 1 && k > 0 ? true : undefined });
     });
   }
   // the doorway's threshold: a floor through the thickness of the wall at the sill
