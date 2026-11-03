@@ -18,6 +18,7 @@ const opt = (name, def) => { const a = args.find((x) => x.startsWith(`--${name}=
 const PORT = Number(opt('port', 5291));
 const seed = opt('seed', 'millennia');
 const SHOTS = opt('shots', '');
+const ONLY = opt('only', ''); // 'host': just the host's part
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 
 async function serverUp() { try { return (await fetch(`http://localhost:${PORT}/`)).ok; } catch { return false; } }
@@ -70,6 +71,7 @@ async function runSkip(max = 120) {
 
 try {
   // ---- breath after a sprint
+  if (ONLY !== 'host') {
   await load('autostart=1&time=0.42');
   await ev(() => window.__game.freeze(false));
   await ev(() => window.__game.host.setSettings({ labels: false }));
@@ -140,6 +142,7 @@ try {
   await page.keyboard.press('Escape');
   await tick(0.3);
 
+  }
   // ---- the host
   await load('scenario=castle');
   await ev(() => window.__game.tick(0.3));
