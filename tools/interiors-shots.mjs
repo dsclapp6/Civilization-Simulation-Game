@@ -2,8 +2,8 @@
 // church, a workshop, a keep's stair and the wall-walk, by day and at night. Vite on a private port, headless Chromium, the game
 // driven through `window.__game` with the real-time loop frozen. Saves docs/interiors/<name>.png.
 //
-//   PORT=5191 node tools/interiors-shots.mjs                 # everything
-//   PORT=5191 node tools/interiors-shots.mjs cottage church  # selected shots
+//   PORT=5293 node tools/interiors-shots.mjs                 # everything
+//   PORT=5293 node tools/interiors-shots.mjs cottage church  # selected shots
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
