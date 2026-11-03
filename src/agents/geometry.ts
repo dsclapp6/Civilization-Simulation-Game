@@ -1,6 +1,7 @@
 // Small geometry helpers: oriented footprints of buildings, their front doors and the points just
 // outside them. Pure functions; no allocation except where a result object is passed in.
 import { BUILDINGS, type BuildingKind } from '../content/types';
+import { DOOR_STAND } from './doorTable';
 
 export interface DoorPoint { x: number; z: number; yaw: number }
 
@@ -25,7 +26,17 @@ const STAND_OFF = 1.45;
 
 export function doorOffsetX(kind: BuildingKind): number { return DOOR_X[kind] ?? 0; }
 
-interface Placed { kind: BuildingKind; x: number; z: number; rot: number }
+interface Placed { kind: BuildingKind; x: number; z: number; rot: number; level?: number; culture?: string }
+
+/**
+ * The real main door of a building (docs/INTERIORS.md): the standing place before it and the yaw of its outward face, local, from
+ * the table measured from the building recipes' interior plans (doorTable.ts), or null for a kind with no plan.
+ */
+export function mainDoorOf(b: Placed): readonly [number, number, number] | null {
+  if (b.level === undefined || b.culture === undefined) return null;
+  const lv = Math.max(1, Math.min(BUILDINGS[b.kind].maxLevel, Math.round(b.level)));
+  return DOOR_STAND[`${b.kind}|${lv}|${b.culture}`] ?? null;
+}
 
 /** Local (lx, lz) → world, for a building with footprint centre and rotation (see world/geom.localToWorld). */
 export function toWorld(b: Placed, lx: number, lz: number, out: { x: number; z: number }): { x: number; z: number } {
@@ -39,6 +50,15 @@ export function toWorld(b: Placed, lx: number, lz: number, out: { x: number; z: 
 export function doorStand(b: Placed, out: DoorPoint, extra = 0): DoorPoint {
   const def = BUILDINGS[b.kind];
   const c = Math.cos(b.rot), s = Math.sin(b.rot);
+  const m = mainDoorOf(b);
+  if (m) {
+    // before the real door (on whichever face it is), `extra` further out along its outward face
+    const lx = m[0] + Math.sin(m[2]) * extra, lz = m[1] + Math.cos(m[2]) * extra;
+    out.x = b.x + lx * c + lz * s;
+    out.z = b.z - lx * s + lz * c;
+    out.yaw = b.rot + m[2];
+    return out;
+  }
   const lx = doorOffsetX(b.kind), lz = def.d / 2 + STAND_OFF + extra;
   out.x = b.x + lx * c + lz * s;
   out.z = b.z - lx * s + lz * c;

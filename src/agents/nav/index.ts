@@ -354,16 +354,22 @@ export class Nav implements NavApi {
   }
 
   doorOf(buildingId: number): { x: number; z: number; yaw: number } | null {
-    const b = this.state.buildings.get(buildingId);
-    if (!b) return null;
-    const o = doorStand(b, { x: 0, z: 0, yaw: 0 });
-    return { x: o.x, z: o.z, yaw: o.yaw };
+    const o = { x: 0, z: 0, yaw: 0 };
+    return this.doorInto(buildingId, o) ? o : null;
   }
 
-  /** Allocation-free variant of doorOf; false when the building does not exist. */
+  /** Allocation-free variant of doorOf; false when the building does not exist. The real main door where the plans are known. */
   doorInto(buildingId: number, out: { x: number; z: number; yaw: number }): boolean {
     const b = this.state.buildings.get(buildingId);
     if (!b) return false;
+    const l = this.interiors.enabled ? this.interiors.placed(b) : null;
+    if (l && l.plan.main >= 0) {
+      // where the model really stands (a mill turned to its water, a tower to the middle of its place)
+      const d = l.plan.doors[l.plan.main];
+      this.interiors.toWorld(l, d.sx, d.sz, out);
+      out.yaw = l.rot + Math.atan2(d.nx, d.nz);
+      return true;
+    }
     doorStand(b, out);
     return true;
   }
