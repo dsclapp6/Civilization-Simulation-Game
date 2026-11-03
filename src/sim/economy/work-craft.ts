@@ -397,6 +397,13 @@ function craftBatch(E: Econ, p: Person, d: CraftData): ActionOutcome {
     if (pay > 0) gains.push({ label: 'Wages', amount: round2(pay), ref: 'money' });
   }
   gains.push({ label: r.skill, ref: r.skill });
+  // the fresh work lies at the bench for a while, more of it batch by batch (drawn only: docs/WORK.md)
+  if (E.isPlayer(p.id)) {
+    const was = E.notes.made.get(b.id);
+    const good = Object.keys(r.outputs)[0];
+    E.notes.made.set(b.id, { good, batches: (was && was.good === good && E.day - was.day < 1 ? was.batches : 0) + 1, day: E.day });
+    E.notes.rev++;
+  }
   const first = made[0];
   return { ok: true, message: `${r.name}: ${first.amount} ${first.label.toLowerCase()}.`, gains };
 }

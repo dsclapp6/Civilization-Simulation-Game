@@ -74,7 +74,10 @@ export type PropKind =
   | 'stook' | 'sheaf' | 'hay_cock' | 'stump' | 'logs'
   // civilization pass (CIV §5, §7, §8): the new work's results and building sites' materials (assets/props/civProps.ts)
   | 'carcass_hook' | 'carcass_hanging' | 'carcass_block' | 'hide_frame' | 'meat_joints' | 'tallow_pot'
-  | 'brick_stack' | 'clay_heap' | 'salt_heap' | 'log_pile' | 'timber_stack' | 'straw_bundles';
+  | 'brick_stack' | 'clay_heap' | 'salt_heap' | 'log_pile' | 'timber_stack' | 'straw_bundles'
+  // work pass (docs/WORK.md): garden beds by stage and crop, and the fresh results of crafts (assets/props/workProps.ts)
+  | 'garden_bed' | 'bed_cabbage' | 'bed_onions' | 'bed_leeks' | 'bed_turnips' | 'veg_basket' | 'bread_board' | 'cheese_board'
+  | 'cloth_bolts' | 'anvil_work' | 'dish_pot' | 'pot_rows' | 'leather_rail';
 
 /** Shared colour palette so terrain, models and UI agree. Values are 0xRRGGBB. */
 export interface Palette {

@@ -22,8 +22,12 @@ export interface FeedNotes {
   mown: Map<number, { bales: number; day: number }>;
   /** Quarry or pit building → blocks broken out recently and the day of the last of them. */
   dug: Map<number, { blocks: number; day: number }>;
+  /** Work pass (docs/WORK.md): household → bed → the day it was gathered and the pounds (a basket stands by it a while). */
+  gathered: Map<number, Map<number, { day: number; lb: number }>>;
+  /** Work pass: building → the fresh result of the player's craft there (what, how many batches, the day of the last). */
+  made: Map<number, { good: string; batches: number; day: number }>;
 }
 
 export function newFeedNotes(): FeedNotes {
-  return { rev: 0, felled: [], mown: new Map(), dug: new Map() };
+  return { rev: 0, felled: [], mown: new Map(), dug: new Map(), gathered: new Map(), made: new Map() };
 }

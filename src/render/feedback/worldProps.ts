@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { hash01 } from '../../core/math';
 import type { WorldPropView } from '../../core/view';
 import type { AssetLibrary, InstancedKit, PropKind } from '../../assets/types';
+import { WORK_PILE_KINDS } from '../../assets/props/workProps'; // F1 work pass: kinds whose count is their stage
 
 const GROW_S = 0.5;
 const LEAVE_S = 0.4;
@@ -14,6 +15,8 @@ const LEAVE_S = 0.4;
 const VARIETY: Partial<Record<string, number>> = { stook: 4, sheaf: 3, hay_cock: 3, stump: 2, logs: 2, stone_pile: 2, carcass_hook: 2, carcass_hanging: 2, log_pile: 2, meat_joints: 2 };
 /** Kinds whose `count` picks a pile size (civilization pass: bricks, clay, salt, trunks, squared timber, straw). */
 const PILES = new Set(['woodpile', 'sack_pile', 'stone_pile', 'logs', 'plank_pile', 'brick_stack', 'clay_heap', 'salt_heap', 'log_pile', 'timber_stack', 'straw_bundles']);
+// F1 work pass (docs/WORK.md): garden beds (count = their stage) and the fresh results of crafts grow with their count too
+for (const k of WORK_PILE_KINDS) PILES.add(k);
 
 interface Placed {
   id: number;

@@ -849,6 +849,11 @@ function gardenBout(E: Econ, p: Person, d: GardenData, f: number): ActionOutcome
         bagAdd(p.inventory, 'vegetables', lb);
         E.state.touch(p);
         bed.c = ''; delete bed.w; bed.d = 1;
+        // a basket of what was gathered stands by the cleared bed for a while (drawn only: docs/WORK.md)
+        let g = E.notes.gathered.get(hh.id);
+        if (!g) E.notes.gathered.set(hh.id, (g = new Map()));
+        g.set(beds.indexOf(bed), { day: E.day, lb });
+        E.notes.rev++;
         message = `You gather ${lb} lb of ${def ? 'vegetables' : 'greens'}.`;
         gains.push({ label: 'Vegetables', amount: lb, ref: 'vegetables' });
         break;
