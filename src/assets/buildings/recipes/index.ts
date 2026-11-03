@@ -28,4 +28,6 @@ export const RECIPES: Record<BuildingKind, Recipe> = {
   great_hall: greatHall, barracks, archery_butts: archeryButts, training_yard: trainingYard, tent,
   // civilization pass (docs/CIV.md §5, §7, §8): the new works and the lock-up
   slaughterhouse, clay_pit: clayPit, salt_pan: saltPan, lumber_camp: lumberCamp, gaol,
+  // the library (from the collaborator's branch): a stone hall of books, the guildhall's frame until it has a model of its own
+  library: (c, d) => guildhall(c, d),
 };

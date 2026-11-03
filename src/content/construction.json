@@ -320,6 +320,7 @@
         { "goods": { "planks": 30, "stone": 30, "nails": 16 }, "labour": 20, "pence": 20 }
       ]
     },
+    "library": {"cat":"civic","rank":4,"own":0,"max":1,"skill":"masonry","does":"Books, a quiet room and a copyist: any technique can be worked out here, and the work goes half again as fast.","levels":[{"goods":{"timber":16,"planks":50,"stone":60,"nails":20,"vellum":20},"labour":70,"pence":120},{"goods":{"planks":30,"stone":40,"vellum":20},"labour":35,"pence":80},{"goods":{"planks":30,"stone":40,"vellum":30},"labour":35,"pence":100}]},
     "guildhall": {
       "cat": "civic", "rank": 4, "own": 0, "max": 1, "tech": "guild_charter", "skill": "masonry",
       "does": "The meeting house of the crafts: masterpieces are judged and standards kept.",

@@ -50,10 +50,11 @@ export function paceOf(R: Rlm, A: Adv, p: Person, def: TechDef, cands?: readonly
 }
 
 /** Progress per day of a researcher at a place. */
-export function rateOf(R: Rlm, A: Adv, p: Person, def: TechDef, building: { level: number; settlement: number }, pace = paceOf(R, A, p, def)): number {
+export function rateOf(R: Rlm, A: Adv, p: Person, def: TechDef, building: { level: number; settlement: number; kind?: string }, pace = paceOf(R, A, p, def)): number {
   const days = def.research?.days ?? 30;
   const skill = A.skillOf(p, def.learn.skill ?? 'letters');
-  const f = (0.55 + 0.07 * skill) * (0.7 + 0.03 * p.trained.int) * (1 + 0.1 * (building.level - 1)) * (p.settlement === building.settlement ? 1 : 0.7);
+  // a library (books, a quiet room, a copyist) speeds any work of the mind
+  const f = (0.55 + 0.07 * skill) * (0.7 + 0.03 * p.trained.int) * (1 + 0.1 * (building.level - 1)) * (p.settlement === building.settlement ? 1 : 0.7) * (building.kind === 'library' ? 1.6 : 1);
   return Math.max(0.01, Math.min(2.5, pace * f)) / days;
 }
 
