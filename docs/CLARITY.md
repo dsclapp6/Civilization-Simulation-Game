@@ -91,6 +91,14 @@ under the tracked steps, dangers first, each opening the page where it is decide
 
 ## 5. Controls and the cursor
 
+> **Superseded (first-person pass, G1):** the cursor is no longer free by default and the right button no longer turns the camera. The
+> mouse looks (pointer lock; first person is the default view); **Left Alt / Option** frees the cursor for pointing and clicking as
+> described below (hover card, click to walk and act, clickable HUD, a still camera); **Alt** again or a click on the hint "Click to look
+> around" takes the mouse back; **Esc** frees it; opening a page frees it and closing it takes it back. In look mode a crosshair marks
+> the middle and what is under it is the target (outlined, named, with what **E** does; a left tap acts, holding **E** opens the wheel);
+> **LMB** strikes and **RMB** guards with the weapon drawn. The wheel steps first person, over the shoulder, farther out, the map. Buildings
+> never shove the camera. The text below still describes the free-cursor behaviour, which is what **Alt** gives.
+
 - **Exploring (default): a free, visible cursor.** Hold the **right mouse button** and drag to turn the camera
   (pointer lock only while held, so the cursor stays where it was); wheel zooms; WASD moves as before.
 - **Hover** shows a tooltip with the name and the default action, the cursor changes (talk, work, trade,

@@ -54,13 +54,13 @@ const k = keyLabel;
 
 export const HINTS: readonly HintDef[] = [
   {
-    id: 'move', icon: 'boot', title: 'Walk and look', keys: [k(KEYMAP.input.forward), k(KEYMAP.input.left), k(KEYMAP.input.back), k(KEYMAP.input.right), 'RMB'],
-    text: 'Walk about with W A S D (Shift sprints). Hold the right mouse button and drag to turn the camera; the wheel zooms. Your cursor stays free.',
+    id: 'move', icon: 'boot', title: 'Walk and look', keys: [k(KEYMAP.input.forward), k(KEYMAP.input.left), k(KEYMAP.input.back), k(KEYMAP.input.right), 'Alt'],
+    text: 'Walk about with W A S D (Shift sprints) and look with the mouse; click the view once to take it. Alt (Option) frees the cursor to click things and buttons. The wheel steps out to a view over your shoulder, and on to the map.',
     when: (f) => f.seconds > 2 && f.moved < 8, done: (f) => f.moved >= 8,
   },
   {
-    id: 'interact', icon: 'hand', title: 'Point and click', keys: ['LMB', k(KEYMAP.input.interact)],
-    text: 'Move the cursor over a person, a door, a strip or a tree: a label says what it is and what a click will do. Click to walk there and do it, or stand close and press E. Hold E for every option.',
+    id: 'interact', icon: 'hand', title: 'Look and act', keys: ['LMB', k(KEYMAP.input.interact)],
+    text: 'Put the crosshair on a person, a door, a strip or a tree: it is outlined and a label says what it is and what E does. Press E (or tap the left button) to do it; hold E for every option. With the cursor freed (Alt) you can point and click instead.',
     when: (f) => f.moved >= 8 && f.interacted === 0, done: (f) => f.interacted > 0,
   },
   {
@@ -82,13 +82,13 @@ export const HINTS: readonly HintDef[] = [
   },
   {
     id: 'fight', icon: 'swords', title: 'Steel is out', keys: ['LMB', 'RMB', k(KEYMAP.input.dodge), k(KEYMAP.input.weapon)],
-    text: 'The mouse looks around while the weapon is drawn: tap the left button to strike, hold it for a heavy blow, hold the right to guard, Space rolls out of the way. G puts the weapon away; Esc frees the mouse.',
+    text: 'Tap the left button to strike, hold it for a heavy blow, hold the right to guard (J and K do the same), Space rolls out of the way. G puts the weapon away; Alt frees the cursor.',
     link: { label: 'Fighting help', request: { panel: 'help', tab: 'combat' } },
     when: (f) => f.engaged && !f.ranged, done: () => false, maxSeconds: 16,
   },
   {
     id: 'bow', icon: 'archery', title: 'Drawing the bow', keys: ['RMB', 'LMB', k(KEYMAP.input.weapon)],
-    text: 'Hold the right button to draw: the ring closes and holds steady. Aim the centre of the screen at the target and click the left button to loose. A long shot drops, so aim a little high.',
+    text: 'Hold the right button to draw: the ring closes and holds steady. Put the crosshair on the target and click the left button to loose. A long shot drops, so aim a little high.',
     when: (f) => f.engaged && f.ranged, done: () => false, maxSeconds: 14,
   },
   {

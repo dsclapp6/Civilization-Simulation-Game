@@ -29,18 +29,18 @@ eligible is left the run ends and your Legacy gold stays.
 | **Shift** | Sprint (5.5 m/s, drains stamina; out of breath = walk). On a horse (a trot, 3.5 m/s, by default): canter (6 m/s); held 1.2 s, gallop (10 m/s) |
 | **X** | Toggle slow walk (1.4 m/s; riding: a walk, 1.7 m/s) |
 | **Space** | Dodge roll (costs stamina) |
-| **Mouse** (cursor free) | Point at a person, animal, door, strip or tree: a tooltip names it and what a click will do, the cursor shows the kind of action (talk, work, trade, go in, fight, walk here) and the thing is outlined |
-| **Left click** | Walk to what is under the cursor along the paths and do its default action there (bare ground: just walk). Any movement key, **E**, **Q** or a dodge stops the walk; a click on something that cannot be done says why instead of walking |
-| **Right button** (hold, drag) | Turn the camera. The pointer is locked only while the button is held, so the cursor is back where it was when you let go |
-| **E** (tap) | The default action on what you face: talk, work, trade, use. The prompt shows what it will do |
+| **Mouse** (looking, the default) | **First person**: the camera is at your eyes (a rider's eyes on a horse) and turns with the mouse or trackpad — no button held. A small crosshair marks the middle; the person, animal, door, strip, tree or thing under it (within reach) is outlined, named under the crosshair with what **E** does. Look down for your own hands, arms and body (not your head) with what they hold; your shadow is cast; the view bobs gently with your stride (Settings: *Head bob*). The first click in the game takes the mouse (a hint says so) and never acts. Sensitivity and invert-Y are in the Settings |
+| **Alt** (Left Alt, **Option** on a Mac) | Free the cursor: point at things (a tooltip names them and what a click does, the cursor shows the kind of action, the thing is outlined) and click them and the HUD; the view stays still. **Alt** again, or a click on the hint *Click to look around*, takes the mouse back. **Esc** frees it too (never opening the menu for that press); opening any page frees it and closing it takes it back |
+| **Left click** (cursor free) | Walk to what is under the cursor along the paths and do its default action there (bare ground: just walk). Any movement key, **E**, **Q** or a dodge stops the walk; a click on something that cannot be done says why instead of walking. While looking, a tap of the left button (weapon sheathed) does what **E** does on the thing under the crosshair |
+| **E** (tap) | The default action on what is under the crosshair: talk, work, trade, use. The prompt shows what it will do |
 | **E** (hold ½ s) | The action wheel: every option on the target, with reasons for the disabled ones. With nothing in front: rest, sit, sleep (at home) |
-| **G** | Draw or put away the weapon. While it is drawn the mouse looks around (left strikes, right guards; with a bow right draws and aims); a fight draws it by itself and it goes away a few seconds after the fight. The click that takes the mouse is never a blow. Esc frees the mouse, the weapon stays out |
+| **G** | Draw or put away the weapon. While looking, with it drawn: left strikes, right guards (a two-finger click on a Mac trackpad); with a bow right draws and aims along the crosshair. A fight draws it by itself and it goes away a few seconds after the fight. The click that takes the mouse is never a blow. **J** / **K** strike and guard from the keyboard |
 | **Q** | Stop the timed action in progress (walking away also stops it) |
 | **F** | Mount the horse in front of you (your household's, or your lord's if you serve him) / dismount. **Hold F** (½ s) with no horse at hand: call yours — it trots to you from the stable or where you left it |
 | **Y** | The "What now?" card: the tracked task's next step first, then what the hour and the day suggest; choose a line to be shown the way |
 | **O** | The journal: tasks, today, the people you know, places (each with **Find**) |
 | **N** | Show or hide the minimap |
-| **Wheel** | Zoom. Far out, the view becomes the strategic map |
+| **Wheel** | Steps between **first person**, **over the shoulder** (third person), **farther out** and the **strategic map** (one step at a time out of first person). The choice is remembered. In third person buildings never shove the camera: it eases in smoothly when something comes between and lets go slowly |
 | **1 / 2 / 3** | Game speed 1× / 3× / 8× (refused with a message while an enemy is within 150 m) |
 | **P** | Pause |
 | **Tab** character · **I** inventory · **H** family and House · **J** ledger · **M** map and travel · **L** chronicle · **Z** sleep or wait | The UI's books and pages |
@@ -50,11 +50,11 @@ eligible is left the run ends and your Legacy gold stays.
 | **4 5 6 7** · **8** · **C** (in a battle where you command men) | Choose a group (all / foot / archers / horse) · the order wheel · the tactical view (outside a battle **C** is the command page) |
 | **Tab**, then *Wounds* | The wounds page is a tab of the character sheet (and the red or gold mark under your name on the HUD opens it): *Bind your wounds* there |
 | **F1** | Help and controls (also in the pause menu): all the keys, first steps, fighting, lords and wars |
-| **Esc** | Leave mouse-look first (it never opens the menu for that press); else close the top page (or the "What now?" card); with nothing open, the pause menu |
+| **Esc** | Free the cursor first (it never opens the menu for that press); else close the top page (or the "What now?" card); with nothing open, the pause menu |
 | **← →**, **1–9**, **↑ ↓**, **PgUp PgDn**, **Enter** | Inside pages: switch tabs, scroll, confirm. **Enter** with a notice showing at the top of the screen opens the page it points to (a levy call or a war first) |
 
-While a panel or menu has the focus the movement keys and the mouse do nothing. The old scheme (the mouse always turns the
-camera, left strikes, right guards, a click on the view takes the mouse) is the setting **Always use mouse-look**.
+While a panel or menu has the focus the movement keys and the mouse do nothing. (The old setting *Always use mouse-look* is gone:
+the mouse always looks unless you free it with **Alt**.)
 
 ## The screen
 

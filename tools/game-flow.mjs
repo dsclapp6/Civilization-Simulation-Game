@@ -153,6 +153,67 @@ try {
   check('beginning the life resumes the world', s.panels.length === 0 && !s.captures && !(await sim(() => window.__game.session.sim.clock.paused)), JSON.stringify(s));
   await tick(0.6);
 
+  // ---- first person: the mouse looks (pointer lock, no button), Alt / Option frees the cursor, Esc frees it, pages free it and give it back
+  {
+    const lookState = () => sim(() => window.__game.host.mouseState());
+    const locked = () => page.evaluate(() => document.pointerLockElement !== null);
+    const yawOf = () => sim(() => window.__game.session.renderer.getCameraYaw());
+    check('first person is the default view', await sim(() => window.__game.session.renderer.inFirstPerson() && window.__game.session.renderer.getViewDistance() === 0));
+    if (!(await locked())) {
+      check('the mouse waits for the click that takes it, and the hint says so', (await lookState()) === 'wait' && (await page.locator('.mu-look-hint:not(.mu-hide)').textContent()).includes('Click to look around'));
+      await page.mouse.click(640, 360);
+      await tick(0.2);
+    }
+    check('the click takes the mouse (the pointer is locked)', (await locked()) && (await lookState()) === 'look');
+    check('a crosshair marks the middle of the view', (await page.locator('.mu-xhair:not(.mu-hide)').count()) === 1);
+    const y0 = await yawOf();
+    await page.mouse.move(640, 360);
+    await page.mouse.move(700, 360, { steps: 6 });
+    await page.mouse.move(760, 360, { steps: 6 });
+    await tick(0.2);
+    const y1 = await yawOf();
+    check('moving the mouse turns the view, no button held', Math.abs(Math.atan2(Math.sin(y1 - y0), Math.cos(y1 - y0))) > 0.05, `${y0.toFixed(3)} -> ${y1.toFixed(3)}`);
+    await page.keyboard.press('AltLeft');
+    await tick(0.2);
+    check('Alt frees the cursor (the pointer is given back, a hint says how to look again)', !(await locked()) && (await lookState()) === 'free' && (await page.locator('.mu-look-hint:not(.mu-hide)').count()) === 1);
+    const y2 = await yawOf();
+    await page.mouse.move(500, 300, { steps: 5 });
+    await page.mouse.move(700, 380, { steps: 5 });
+    await tick(0.2);
+    check('with the cursor free the view stays still', Math.abs(await yawOf() - y2) < 1e-6);
+    await page.keyboard.press('AltLeft');
+    await tick(0.2);
+    check('Alt again takes the mouse back', (await locked()) && (await lookState()) === 'look');
+    await page.waitForTimeout(120);
+    await page.keyboard.press('Escape');
+    await tick(0.3);
+    s = await ui();
+    check('Esc frees the cursor and never opens the menu for that press', !(await locked()) && (await lookState()) === 'free' && s.panels.length === 0, JSON.stringify(s));
+    await page.locator('.mu-look-hint').click();
+    await tick(0.2);
+    check('a click on the hint takes the mouse back', (await locked()) && (await lookState()) === 'look');
+    await page.keyboard.press('Tab');
+    await tick(0.2);
+    check('a page opening frees the pointer', !(await locked()) && (await ui()).panels.join() === 'character');
+    await page.keyboard.press('Tab');
+    await tick(0.3);
+    check('closing it takes the mouse back', (await locked()) && (await lookState()) === 'look', await lookState());
+    // the wheel steps out of first person to the shoulder, and back
+    await page.mouse.move(640, 360);
+    await page.mouse.wheel(0, 120);
+    await tick(0.6);
+    const out = await sim(() => ({ fp: window.__game.session.renderer.inFirstPerson(), d: window.__game.session.renderer.getViewDistance() }));
+    check('the wheel out of first person goes over the shoulder', !out.fp && out.d > 2 && out.d < 5, JSON.stringify(out));
+    await page.waitForTimeout(600);
+    await page.mouse.wheel(0, -400);
+    await tick(0.8);
+    check('the wheel in goes back to first person', await sim(() => window.__game.session.renderer.inFirstPerson()));
+    // leave the cursor free for the pointing checks below
+    await page.keyboard.press('AltLeft');
+    await tick(0.2);
+    check('(the cursor is free for what follows)', (await lookState()) === 'free');
+  }
+
   // ---- HUD and prompt
   check('the HUD is shown', (await page.locator('.mu-hud:not(.mu-hide)').count()) === 1);
   const hud = await sim(() => { const h = window.__game.session.services.player.hud(); return { name: h.name, age: h.age, stamina: h.stamina, max: h.maxStamina }; });
@@ -304,27 +365,27 @@ try {
     await page.mouse.move(640, 80);
     await tick(0.3);
 
-    // the right button turns the camera, and only while it is held; the cursor stays free
+    // the right button no longer turns the camera, and the free cursor does not either
     const y0 = await sim(() => window.__game.session.renderer.getCameraYaw());
     await page.mouse.move(640, 360);
     await page.mouse.down({ button: 'right' });
     await page.mouse.move(700, 360, { steps: 6 });
     await page.mouse.move(760, 360, { steps: 6 });
-    await tick(0.2);
-    const y1 = await sim(() => window.__game.session.renderer.getCameraYaw());
-    check('holding the right button and dragging turns the camera', Math.abs(Math.atan2(Math.sin(y1 - y0), Math.cos(y1 - y0))) > 0.05, `${y0.toFixed(3)} -> ${y1.toFixed(3)}`);
     await page.mouse.up({ button: 'right' });
     await tick(0.2);
-    check('the pointer is not locked once the button is up', await page.evaluate(() => document.pointerLockElement === null));
+    const y1 = await sim(() => window.__game.session.renderer.getCameraYaw());
+    check('with the cursor free, dragging with the right button does not turn the camera', Math.abs(Math.atan2(Math.sin(y1 - y0), Math.cos(y1 - y0))) < 1e-6, `${y0.toFixed(3)} -> ${y1.toFixed(3)}`);
+    check('the pointer is not locked while the cursor is free', await page.evaluate(() => document.pointerLockElement === null));
     const y2 = await sim(() => window.__game.session.renderer.getCameraYaw());
     await page.mouse.move(600, 340, { steps: 4 });
     await tick(0.2);
     check('moving the free cursor does not turn the camera', Math.abs(await sim(() => window.__game.session.renderer.getCameraYaw()) - y2) < 1e-6);
 
-    // G draws and puts away; a drawn weapon takes the mouse for looking
+    // G draws and puts away; drawing with the cursor free takes the mouse back for looking
     await page.keyboard.press('KeyG');
     await tick(0.2);
     check('G draws the weapon', (await sim(() => window.__game.session.services.player.drawn?.())) === true && (await sim(() => window.__game.session.services.player.hud().drawn)) === true);
+    check('drawing the weapon with the cursor free takes the mouse for looking', (await page.evaluate(() => document.pointerLockElement !== null)) && (await sim(() => window.__game.host.mouseState())) === 'look');
     check('while drawn the hover card and click-to-act are off', (await sim(() => window.__game.session.services.player.hover?.())) === null);
     // Esc leaves mouse-look first (it must not open the menu for that press); the weapon stays drawn; the next Esc is the menu's
     await page.waitForTimeout(120);

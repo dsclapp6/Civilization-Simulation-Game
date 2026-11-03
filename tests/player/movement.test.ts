@@ -43,6 +43,25 @@ describe('speeds and directions', () => {
     expect(Math.abs(c.z)).toBeLessThan(0.05);
   });
 
+  it('first person: the body faces where the camera looks, however it strafes or backs up', () => {
+    const zone = new FakeZone();
+    const a = createBody(0, 0, 0, 10, 10);
+    walk(a, zone, 1.5, { right: 1, cameraYaw: Math.PI / 2, faceCamera: true });
+    expect(Math.abs(a.yaw - Math.PI / 2)).toBeLessThan(0.05);
+    const c = createBody(0, 0, 0, 10, 10);
+    walk(c, zone, 1.5, { forward: -1, cameraYaw: 0, faceCamera: true });
+    expect(Math.abs(c.yaw)).toBeLessThan(0.05);
+    expect(c.z).toBeLessThan(-2); // it backed up, still facing +z
+    // idle, it still turns to the view
+    const d = createBody(0, 0, 0, 10, 10);
+    walk(d, zone, 1, { cameraYaw: 1.2, faceCamera: true });
+    expect(Math.abs(d.yaw - 1.2)).toBeLessThan(0.05);
+    // without it the old way: it turns to the way it walks
+    const e = createBody(0, 0, 0, 10, 10);
+    walk(e, zone, 1.5, { forward: -1, cameraYaw: 0 });
+    expect(Math.abs(e.yaw)).toBeGreaterThan(3);
+  });
+
   it('does not move faster diagonally', () => {
     const zone = new FakeZone();
     const a = createBody(0, 0, 0, 10, 10);

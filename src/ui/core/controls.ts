@@ -13,6 +13,7 @@ export function keyLabel(code: string): string {
     case 'ShiftLeft': case 'ShiftRight': return 'Shift';
     case 'Space': return 'Space';
     case 'Escape': return 'Esc';
+    case 'AltLeft': case 'AltRight': return 'Alt';
     default: return code;
   }
 }
@@ -24,21 +25,21 @@ export const CONTROL_GROUPS: readonly ControlGroup[] = [
   {
     title: 'Moving',
     rows: [
-      { keys: [k(K.input.forward), k(K.input.left), k(K.input.back), k(K.input.right)], what: 'Walk, relative to the camera (the arrow keys work too). The default gait is a jog.' },
+      { keys: [k(K.input.forward), k(K.input.left), k(K.input.back), k(K.input.right)], what: 'Walk, relative to where you look (the arrow keys work too). The default gait is a jog.' },
       { keys: [k(K.input.sprint)], what: 'Sprint; it costs stamina. On a horse: gallop.' },
       { keys: [k(K.input.walk)], what: 'Toggle a slow walk.' },
       { keys: [k(K.input.dodge)], what: 'Dodge roll (costs stamina).' },
-      { keys: ['Mouse'], what: 'The cursor is free: point at a person, door, strip or tree and a label says what it is and what a click will do.' },
-      { keys: ['LMB'], what: 'Click a thing to walk there (along the paths) and do its default action. Any movement key stops you.' },
-      { keys: ['RMB'], what: 'Hold and drag to turn the camera: the cursor comes back where it was when you let go.' },
-      { keys: ['Wheel'], what: 'Zoom the camera. Far out it becomes the map of the land.' },
+      { keys: ['Mouse'], what: 'Move the mouse (or a trackpad) and the view turns with it; no button needs holding. You see through your own eyes: look down for your hands, your body and what you hold. The first click in the game takes the mouse.' },
+      { keys: ['Alt'], what: 'Left Alt (Option on a Mac) frees the cursor so you can point and click at the world and the buttons; the view stays still. Alt again, or a click on the hint, takes the mouse back. Esc frees it too; opening a page does.' },
+      { keys: ['LMB'], what: 'Looking: a tap does what E does on the thing under the crosshair. With the cursor free: click a person, door, strip or tree to walk there (along the paths) and do its default action. Any movement key stops you.' },
+      { keys: ['Wheel'], what: 'First person, over the shoulder, farther out, the map of the land: scroll out or in to step between them. Your choice is remembered. Settings has a head-bob switch.' },
       { keys: [k(K.input.mount)], what: 'Mount or dismount your household’s horse.' },
     ],
   },
   {
     title: 'Doing',
     rows: [
-      { keys: [k(K.input.interact)], what: 'Tap: the default action on what you face (the prompt tells you which); the same as clicking it.' },
+      { keys: [k(K.input.interact)], what: 'Tap: the default action on what is under the crosshair (it is outlined, named and the action written under it); a tap of the left button does the same.' },
       { keys: ['Hold ' + k(K.input.interact)], what: 'The action wheel: every option on the target, with the reasons for the greyed ones.' },
       { keys: [k(K.input.cancel)], what: 'Stop the work you are doing (walking away stops it too). At the forge, the butcher’s block or the kiln the bar under your name says which step the work is at.' },
       { keys: [k(K.ui.rest)], what: 'Sleep or wait until a time you choose.' },
@@ -50,16 +51,16 @@ export const CONTROL_GROUPS: readonly ControlGroup[] = [
   {
     title: 'Fighting',
     rows: [
-      { keys: [k(K.input.weapon)], what: 'Draw or put away your weapon. While it is drawn the mouse looks around; a fight draws it by itself. Esc frees the mouse.' },
-      { keys: ['LMB'], what: 'Strike (weapon drawn). A tap is a quick blow; hold it for a heavy overhead stroke. The click that takes the mouse is never a blow.' },
-      { keys: ['RMB'], what: 'Guard with a weapon or shield (weapon drawn). With a bow: draw and aim along the camera.' },
+      { keys: [k(K.input.weapon)], what: 'Draw or put away your weapon; a fight draws it by itself.' },
+      { keys: ['LMB'], what: 'Strike (weapon drawn, mouse looking). A tap is a quick blow; hold it for a heavy overhead stroke. The click that takes the mouse is never a blow.' },
+      { keys: ['RMB'], what: 'Guard with a weapon or shield (weapon drawn; a two-finger click on a Mac trackpad). With a bow: draw and aim along the crosshair.' },
       { keys: [k(K.input.strike), k(K.input.guard)], what: 'Fight from the keyboard alone (weapon drawn): J strikes (hold for a heavy blow, or to draw a bow and loose on release), K guards; while the mouse rests you turn to face the nearest foe. W A S D and Space as ever.' },
       { keys: ['W + J', 'S + J', 'A/D + J'], what: 'The line of a blow: W with it comes over the top at the head, S with it cuts low at the legs, A or D with it thrusts with the point (good against armour). J alone cuts at the body.' },
       { keys: ['W + K', 'S + K'], what: 'The line of the guard: a guard covers its own line, the next mostly, the far one hardly at all (a shield covers the body whatever the guard). The bar over the action shows the line of the blow coming at you: match it.' },
       { keys: ['K in a swing'], what: 'Feint: check your own blow early; a foe who guarded against it is drawn wide, and your next blow finds him more surely.' },
       { keys: ['J after a parry'], what: 'Riposte: a guard raised just as the blow comes turns it aside; strike at once for a quicker, surer, harder answer. A tired arm is slow and weak: mind your breath.' },
       { keys: ['E at the stairs'], what: 'Walls and towers: at the foot of a flight of stairs (a door in every tower and gatehouse) E climbs to the wall-walk; up there you walk, shoot and fight, the parapet holds you, and E at a landing goes down (or jump down for a hard fall). A ladder in a storm lands you there too.' },
-      { keys: ['RMB then LMB'], what: 'Bow: hold RMB to draw, click LMB to loose. The reticle in the middle of the screen is where the arrow goes.' },
+      { keys: ['RMB then LMB'], what: 'Bow: hold RMB to draw, click LMB to loose. The crosshair in the middle of the screen is where the arrow goes.' },
       { keys: [k(K.input.dodge)], what: 'Roll out of a blow; for a moment nothing can touch you.' },
       { keys: [k(K.input.sprint), 'LMB'], what: 'On a horse with a lance: gallop at someone and hold LMB to couch the lance.' },
     ],
@@ -90,7 +91,7 @@ export const CONTROL_GROUPS: readonly ControlGroup[] = [
       { keys: [k(K.ui.politics)], what: 'Realm and politics: Houses, wars, claims, offices.' },
       { keys: [k(K.ui.command)], what: 'Command and army (the household page of the ledger when you have no troops).' },
       { keys: [k(K.ui.help)], what: 'This help.' },
-      { keys: [k(K.ui.menu)], what: 'Leave mouse-look; else close the top page; with nothing open, the pause menu.' },
+      { keys: [k(K.ui.menu)], what: 'Free the cursor (it never opens the menu for that press); else close the top page; with nothing open, the pause menu.' },
     ],
   },
   {
