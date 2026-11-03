@@ -293,7 +293,8 @@
 
 /* ---- work mini-games (above the action bar) ---- */
 .mu-mini {
-  position: absolute; left: 50%; bottom: 166px; transform: translateX(-50%); width: 340px; padding: 8px 14px 10px;
+  /* work pass: beside the action bar (left of it), clear of the worker and the work in the middle of the view */
+  position: absolute; right: calc(50% + 172px); bottom: 88px; width: 300px; padding: 8px 14px 10px;
   background: var(--paper); border-radius: 3px; border: 1px solid #1f1309; pointer-events: auto; user-select: none; cursor: pointer;
   box-shadow: 0 0 0 2px rgba(172, 130, 58, 0.9), 0 0 0 3px #1f1309, 0 6px 18px rgba(0, 0, 0, 0.45);
 }

@@ -382,7 +382,8 @@ function bedSpots(E: Econ, home: BuildingState, n: number): { x: number; z: numb
     const d = Math.hypot(cx / 4 - home.x, cz / 4 - home.z);
     if (d < bd) { bd = d; best = q.poly; }
   }
-  if (best) {
+  // (the beds are worked from the house: they lie within a few strides of it, so the spade is seen from where one stands)
+  if (best && bedsInReach(best, home, n)) {
     const f = stripFrame(best, { sx: 0, sz: 0, ux: 0, uz: 1, len: 1, vx: 1, vz: 0, width: 1 });
     // beds across the plot, side by side along it, from the end nearer the house
     const nearStart = Math.hypot(f.sx - home.x, f.sz - home.z) <= Math.hypot(f.sx + f.ux * f.len - home.x, f.sz + f.uz * f.len - home.z);
@@ -402,6 +403,15 @@ function bedSpots(E: Econ, home: BuildingState, n: number): { x: number; z: numb
     out.push({ x: home.x + lx * c + lz * s, z: home.z - lx * s + lz * c, rot: home.rot });
   }
   return out;
+}
+
+/** Do the first beds of a croft garden lie within reach of the house (≈ 12 m from its middle)? */
+function bedsInReach(poly: readonly P2[], home: BuildingState, n: number): boolean {
+  const f = stripFrame(poly, { sx: 0, sz: 0, ux: 0, uz: 1, len: 1, vx: 1, vz: 0, width: 1 });
+  const nearStart = Math.hypot(f.sx - home.x, f.sz - home.z) <= Math.hypot(f.sx + f.ux * f.len - home.x, f.sz + f.uz * f.len - home.z);
+  const t = Math.min(f.len - 1.2, 1.6 + Math.max(0, Math.min(n, 3) - 1) * 2.3);
+  const tt = nearStart ? t : f.len - t;
+  return Math.hypot(f.sx + f.ux * tt - home.x, f.sz + f.uz * tt - home.z) <= 12;
 }
 
 function sizeOf(b: BuildingState): { w: number; d: number } {

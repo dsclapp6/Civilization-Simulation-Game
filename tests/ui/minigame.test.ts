@@ -64,4 +64,37 @@ describe('work mini-games', () => {
     L.update(0.1);
     expect(L.release('J')[0].score).toBeLessThan(0.2);
   });
+
+  // work pass (docs/WORK.md): the faults found playing them
+  it('an ignored game costs nothing: no misses before the first key of the bout', () => {
+    const sow = new MiniLogic('sow', 5);
+    expect(sow.update(10)).toEqual([]);
+    expect(sow.mean).toBe(-1);
+    const steady = new MiniLogic('steady', 5);
+    for (let i = 0; i < 100; i++) expect(steady.update(0.05)).toEqual([]);
+    expect(steady.mean).toBe(-1);
+    // once the player is sowing, a seed not dropped in time is a miss
+    sow.press(sow.want);
+    const late = sow.update(2);
+    expect(late.length).toBe(1);
+    expect(late[0].score).toBe(0);
+  });
+
+  it('takes only the keys it uses: K is the sower\'s, elsewhere it stays the realm page\'s', () => {
+    expect(new MiniLogic('sow', 1).uses('K')).toBe(true);
+    for (const k of ['rhythm', 'steady', 'aim'] as const) {
+      const L = new MiniLogic(k, 1);
+      expect(L.uses('K')).toBe(false);
+      expect(L.uses('J')).toBe(true);
+      expect(L.press('K')).toEqual([]);
+      expect(L.engaged).toBe(false);
+    }
+  });
+
+  it('sowing is told by the bout\'s motion as well as its id (the garden and the strip both sow)', () => {
+    expect(miniKindOf('farm.keep', 'work_sow')).toBe('sow');
+    expect(miniKindOf('garden.sow.cabbage', 'work_sow')).toBe('sow');
+    expect(miniKindOf('arms.practise.keep', 'shoot_bow')).toBe('aim');
+    expect(miniKindOf('dig.stone.keep', 'work_pick')).toBe('rhythm');
+  });
 });

@@ -774,7 +774,7 @@ function listGardenOptions(E: Econ, p: Person, hhId: number, buildingId: number,
   const beds = bedsOf(E, hhId);
   const now = E.day;
   const sea = Math.floor(E.dayOfYear / 4);
-  const base = { target, range: 8 };
+  const base = { target, range: 10 };
   const speed = speedOf(E, p, 'farming', 'str', toolFor(E, p, 'spade')?.quality ?? 0);
   const push = (o: ActionOption): void => { if (block) { o.enabled = false; o.reason = block; } out.push(o); };
   // the bed most in need
