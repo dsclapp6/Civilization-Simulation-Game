@@ -205,15 +205,15 @@ try {
     check('closing it takes the mouse back', (await locked()) && (await lookState()) === 'look', await lookState());
     // the wheel steps out of first person to the shoulder, and back
     const wheel = (dy) => page.evaluate((d) => document.getElementById('viewport').dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: d })), dy);
-    const live = (n) => page.evaluate((k) => { for (let i = 0; i < k; i++) window.__game.draw(); }, n); // (`tick` runs no camera, and the stage cooldown counts drawn frames: draw 32 of them, half a second)
-    await live(32);
+    const live = (ms) => page.waitForTimeout(ms); // (the wheel waits a moment between steps: a trackpad flick is one step)
+    await live(900);
     await wheel(120);
-    await live(32);
+    await live(900);
     const out = await sim(() => ({ fp: window.__game.session.renderer.inFirstPerson(), d: window.__game.session.renderer.getViewDistance() }));
     check('the wheel out of first person goes over the shoulder', !out.fp && out.d > 2 && out.d < 5, JSON.stringify(out));
     await page.waitForTimeout(600);
     await wheel(-400);
-    await live(32);
+    await live(900);
     check('the wheel in goes back to first person', await sim(() => window.__game.session.renderer.inFirstPerson()));
     // leave the cursor free for the pointing checks below
     await page.keyboard.press('AltLeft');

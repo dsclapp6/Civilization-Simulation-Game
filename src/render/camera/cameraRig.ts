@@ -86,7 +86,9 @@ export class CameraRig {
   private bobPhase = 0;
   /** The "head bob" setting. */
   bobbing = true;
+  /** After a step between first person and the shoulder the wheel waits a moment (animation time or real time, whichever is over first), so one flick of a trackpad is one step. */
   private stageCool = 0;
+  private stageAtMs = -1e9;
   private readonly fpPose: Pose = { pos: new THREE.Vector3(), quat: new THREE.Quaternion(), fov: FP_FOV };
   /** Over-the-shoulder aim blend (0 normal follow … 1 aiming a bow or crossbow) and its target. */
   private aimK = 0;
@@ -165,11 +167,11 @@ export class CameraRig {
       this.mapAlt = clamp(next, MAP_MIN, MAP_MAX);
     } else if (this.mode === 'follow' && this.firstPerson) {
       // the wheel out of first person: over the shoulder (one step at a time, not a slide through the stages)
-      if (steps > 0 && this.stageCool <= 0 && this.eyeValid) this.setViewDistance(TP_NEAR);
+      if (steps > 0 && this.stageReady() && this.eyeValid) this.setViewDistance(TP_NEAR);
     } else if (this.mode === 'follow' || this.mode === 'cinematic') {
       const next = this.distance * f;
       if (this.mode === 'follow' && steps < 0 && next < FOLLOW_MIN && this.eyeValid) {
-        if (this.stageCool <= 0) this.setViewDistance(0);
+        if (this.stageReady()) this.setViewDistance(0);
         return;
       }
       if (next > FOLLOW_MAX && this.autoMapZoom && steps > 0 && this.mode === 'follow') { this.mapAlt = 2600; this.setMode('map'); return; }
@@ -193,7 +195,9 @@ export class CameraRig {
       this.distance = clamp(d, FOLLOW_MIN, FOLLOW_MAX);
     }
     this.stageCool = STAGE_COOLDOWN;
+    this.stageAtMs = performance.now();
   }
+  private stageReady(): boolean { return this.stageCool <= 0 || performance.now() - this.stageAtMs > STAGE_COOLDOWN * 1500; }
   getViewDistance(): number { return this.firstPerson ? 0 : this.distance; }
   /** The camera is (or is settling) at the eyes: the renderer hides the head and the input aims along the look. */
   get inFirstPerson(): boolean { return this.mode === 'follow' && !this.ov && this.firstPerson && this.eyeValid; }
