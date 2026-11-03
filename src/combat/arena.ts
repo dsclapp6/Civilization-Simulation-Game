@@ -72,7 +72,7 @@ export interface ArenaEnv {
   fx: FxQueue;
   proj: Projectiles;
   /** The player's body, if the player module is installed. */
-  playerBody(): { x: number; y: number; z: number; yaw: number } | null;
+  playerBody(): { x: number; y: number; z: number; yaw: number; walk?: boolean } | null;
   notify(kind: SimEvents['notify']['kind'], text: string, person?: PersonId): void;
   /** Wind at the player (m/s). */
   wind(): { x: number; z: number };
@@ -568,8 +568,17 @@ export class Arena {
     if (!b) return;
     f.px = f.x; f.pz = f.z;
     f.x = b.x; f.z = b.z; f.y = b.y; f.yaw = b.yaw;
-    // he has come down off the wall-walk
-    if (f.onWall && f.station && b.y < f.station.y - 2.5) {
+    if (b.walk !== undefined) {
+      // the navigation knows whether he stands on a wall-walk (the stairs, a ladder's top, a tower), and he may walk along it
+      if (b.walk && !f.onWall) f.onWall = true;
+      else if (!b.walk && f.onWall) {
+        if (f.station?.holder === f) f.station.holder = null;
+        f.onWall = false;
+        f.station = null;
+        if (f.role === R.Wall) f.role = R.None;
+      }
+    } else if (f.onWall && f.station && b.y < f.station.y - 2.5) {
+      // he has come down off the wall-walk
       if (f.station.holder === f) f.station.holder = null;
       f.onWall = false;
       f.station = null;

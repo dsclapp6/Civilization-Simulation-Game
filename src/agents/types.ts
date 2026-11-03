@@ -125,6 +125,12 @@ export interface NavApi {
   doorOf(buildingId: number): { x: number; z: number; yaw: number } | null;
   /** Additive (civilization pass): is the straight line between two points clear of walls, buildings and trunks (what can be seen)? */
   lineClear?(x0: number, z0: number, x1: number, z1: number): boolean;
+  /** Additive (the wall-walk): one step of a body standing on a wall-walk or a tower top, at height `y`; it keeps to the floors. */
+  walkMove?(x: number, z: number, dx: number, dz: number, y: number, out: { x: number; z: number; y: number; blocked: boolean; fell: boolean }): { x: number; z: number; y: number; blocked: boolean; fell: boolean };
+  /** Additive: the height of the wall-walk floor under (x, z) for a body at height `y`, or NaN when there is none. */
+  walkTopAt?(x: number, z: number, y: number): number;
+  /** Additive: the nearest standing place on the ground when (x, z) lies within a wall or a building (true and written to `out`), or false. */
+  groundBeside?(x: number, z: number, out: P2): boolean;
 }
 
 /** Something the player can interact with, as found near a point. */

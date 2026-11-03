@@ -11,6 +11,7 @@ import type { MoveResult, NavApi } from '../types';
 import { NavGrid } from './grid';
 import { Obstacles } from './obstacles';
 import { PathBuf, PathQueue, Pathfinder } from './path';
+import { WallWalk, type WalkMove } from './walls';
 
 // ---------------------------------------------------------------------------------------------
 // Bridge decks (the renderer's deck profile, src/render/water/bridges.ts)
@@ -89,6 +90,8 @@ export class Nav implements NavApi {
   readonly finder: Pathfinder;
   readonly queue: PathQueue;
   private readonly decks: BridgeDecks;
+  /** The tops of walls and towers: floors to stand on (docs/WAR.md §7). */
+  readonly walls: WallWalk;
   private readonly tmp = { x: 0, z: 0 };
   private readonly buf = new PathBuf();
   private readonly doorTmp = { x: 0, z: 0, yaw: 0 };
@@ -100,6 +103,7 @@ export class Nav implements NavApi {
     this.finder = new Pathfinder(this.grid, this.obstacles);
     this.queue = new PathQueue(this.finder);
     this.decks = new BridgeDecks(world);
+    this.walls = new WallWalk(world, state);
   }
 
   /** Per-frame upkeep: building changes, felled trees, incremental tile building around the focus. */
@@ -220,6 +224,21 @@ export class Nav implements NavApi {
       out.wading = ws !== null && ws > this.world.heightAt(nx, nz) + 0.05;
     }
     return out;
+  }
+
+  // ---- the wall-walk ----
+
+  walkMove(x: number, z: number, dx: number, dz: number, y: number, out: WalkMove): WalkMove {
+    return this.walls.move(x, z, dx, dz, y, out);
+  }
+
+  walkTopAt(x: number, z: number, y: number): number { return this.walls.heightAt(x, z, y); }
+
+  /** The nearest standing place on the ground when (x, z) lies within a wall or tower (a body set down there, or one that jumped from the walk). */
+  groundBeside(x: number, z: number, out: P2): boolean {
+    if (this.walls.inFootprint(x, z) || this.obstacles.blocked(x, z, 0.2)) return this.finder.nearestWalkable(x, z, 14, out);
+    out.x = x; out.z = z;
+    return true;
   }
 
   findPath(from: P2, to: P2, maxLength = 0): P2[] | null {

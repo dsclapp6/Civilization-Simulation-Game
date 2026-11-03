@@ -200,7 +200,7 @@ export class PlayerController implements PlayerApi {
   private readonly markerList: MapMarker[] = [];
   private readonly mapFocusObj: { x: number; z: number; altitude?: number } = { x: 0, z: 0 };
   private readonly walkOut: P2 = { x: 0, z: 0 };
-  private readonly bodyView = { x: 0, y: 0, z: 0, yaw: 0 };
+  private readonly bodyView: { x: number; y: number; z: number; yaw: number; walk?: boolean } = { x: 0, y: 0, z: 0, yaw: 0 };
   private rideMark = 0;
   private readonly offs: Array<() => void> = [];
   private persisted: PlayerExt | null = null;
@@ -650,13 +650,13 @@ export class PlayerController implements PlayerApi {
 
   travel(): TravelState | null { return this.journey ? this.journey.state : null; }
 
-  body(): { x: number; y: number; z: number; yaw: number } | null {
+  body(): { x: number; y: number; z: number; yaw: number; walk?: boolean } | null {
     return this.dead ? null : this.bodyView;
   }
 
-  placeAt(x: number, z: number, yaw?: number): void {
+  placeAt(x: number, z: number, yaw?: number, walkY?: number): void {
     const b = this.avatar;
-    placeBody(b, x, z, yaw ?? b.yaw, this.zone.nav);
+    placeBody(b, x, z, yaw ?? b.yaw, this.zone.nav, walkY);
     this.sim.actions.cancel(this.personId, 'cancelled');
     this.followId = null;
     this.syncDraw(1);
@@ -798,6 +798,7 @@ export class PlayerController implements PlayerApi {
       if (Math.abs(angleDiff(b.yaw, this.faceYaw)) < 0.02) this.faceYaw = null;
     } else if (!frozen) this.faceYaw = null;
     stepBody(b, driver, env, dt);
+    if (b.fell > 0) this.fallFromWalk(b.fell);
     if (combatPose !== null) {
       if (combatPose.faceYaw !== null && !b.mounted && b.dodgeT <= 0) b.yaw = turnToward(b.yaw, combatPose.faceYaw, 15, dt);
       if (combatPose.unhorse && b.mounted) this.throwRider();
@@ -971,6 +972,14 @@ export class PlayerController implements PlayerApi {
     if (b.speed > 4.5) return { ok: false, message: 'Slow down before you dismount.' };
     b.lock = { kind: 'dismount', t: 0, dur: DISMOUNT_SECONDS * this.lockScale() };
     return { ok: true, message: 'You slip down from the saddle.' };
+  }
+
+  /** The wall-walk gave way under him: he drops to the ground, and the height is a wound (a bad knock from 4 m, worse from a tower). */
+  private fallFromWalk(height: number): void {
+    this.avatar.fell = 0;
+    if (height < 2.5) return;
+    this.sim.services.combat?.harm?.(this.personId, Math.min(0.9, 0.12 + height * 0.045), 'a fall from the wall');
+    this.sim.events.emit('notify', { kind: 'danger', text: 'The wall gives way under you, and you fall!', person: this.personId });
   }
 
   private finishDismount(): void {
@@ -1878,6 +1887,8 @@ export class PlayerController implements PlayerApi {
     // keep the plain-data views current
     const bv = this.bodyView;
     bv.x = b.x; bv.y = b.y; bv.z = b.z; bv.yaw = b.yaw;
+    // (only a navigation with wall-walks says whether he is on one; without, the storm's own idea of the wall stands)
+    bv.walk = this.zone.nav.walkTopAt ? b.onWalk : undefined;
   }
 
   private viewPlayer(): PlayerView | null {
