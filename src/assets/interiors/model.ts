@@ -79,7 +79,57 @@ function enterInner(b: MeshBuilder, r: { x0: number; x1: number; z0: number; z1:
 
 interface Hole { u: number; w: number; v0: number; v1: number; shape: 'flat' | 'round' | 'pointed' | 'tudor'; win: PWindow | null; door: PDoor | null }
 
+/** A round block: the inner face of its wall as a ring (open at its doorways, with their passages), and the floor to the wall. */
+function drawRoundBlock(b: MeshBuilder, plan: InteriorPlan, bl: PBlock, s: CultureStyle): void {
+  const rd = bl.round!;
+  const col = innerColor(bl.wall, plan.kind, s), reveal = shade(col, 0.8);
+  const n = 18;
+  const P = (a: number, r: number, y: number): [number, number, number] => [rd.cx + Math.sin(a) * r, y, rd.cz + Math.cos(a) * r];
+  const doors = plan.doors.filter((d) => Math.abs(Math.hypot(d.x - rd.cx, d.z - rd.cz) - rd.r) < 0.6);
+  b.state({ layer: Layer.Wall, flags: F.NoAO }, () => {
+    bl.ys.forEach((y, k) => {
+      const top = y + Math.min(bl.hs[k], 7.5);
+      for (let i = 0; i < n; i++) {
+        const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2;
+        const am = (a0 + a1) / 2;
+        let lo = y;
+        for (const d of doors) {
+          if (Math.abs(d.y - y) > 0.6) continue;
+          const da = Math.atan2(d.x - rd.cx, d.z - rd.cz);
+          const half = (d.w / 2) / rd.rin + Math.PI / n;
+          if (Math.abs(Math.atan2(Math.sin(am - da), Math.cos(am - da))) < half) lo = Math.max(lo, d.y + d.h);
+        }
+        b.quad(P(a1, rd.rin, lo), P(a0, rd.rin, lo), P(a0, rd.rin, top), P(a1, rd.rin, top), i % 2 ? col : shade(col, 0.96));
+      }
+      // the floor out to the wall beyond each side of the plan's square floor
+      const half = rd.rin / Math.SQRT2 + 0.12;
+      if (half < rd.rin) {
+        const tc = Math.atan2(Math.sqrt(rd.rin * rd.rin - half * half), half);
+        for (const phi of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+          const pts: [number, number, number][] = [];
+          for (let j = 0; j <= 6; j++) pts.push(P(phi - tc + (2 * tc * j) / 6, rd.rin, y - 0.01));
+          b.poly(pts, k > 0 ? 0x8a6a48 : mixHex(s.stone, 0x8a847a, 0.5));
+        }
+      }
+      // the doorways' passages through the thickness of the wall
+      for (const d of doors) {
+        if (Math.abs(d.y - y) > 0.6) continue;
+        const da = Math.atan2(d.x - rd.cx, d.z - rd.cz);
+        const ux = Math.cos(da), uz = -Math.sin(da);
+        for (const sd of [-1, 1]) {
+          const ox = ux * sd * d.w / 2, oz = uz * sd * d.w / 2;
+          const inner: [number, number, number] = [rd.cx + Math.sin(da) * (rd.rin - 0.05) + ox, d.y, rd.cz + Math.cos(da) * (rd.rin - 0.05) + oz];
+          const outer: [number, number, number] = [rd.cx + Math.sin(da) * rd.r + ox, d.y, rd.cz + Math.cos(da) * rd.r + oz];
+          const q = [inner, outer, [outer[0], d.y + d.h, outer[2]], [inner[0], d.y + d.h, inner[2]]] as [number, number, number][];
+          if (sd > 0) b.quad(q[0], q[1], q[2], q[3], reveal); else b.quad(q[3], q[2], q[1], q[0], reveal);
+        }
+      }
+    });
+  });
+}
+
 function drawBlock(b: MeshBuilder, panes: MeshBuilder, plan: InteriorPlan, bl: PBlock, s: CultureStyle): void {
+  if (bl.round) { drawRoundBlock(b, plan, bl, s); return; }
   const col = innerColor(bl.wall, plan.kind, s);
   const reveal = shade(col, 0.82);
   const cap = shade(col, 0.7);

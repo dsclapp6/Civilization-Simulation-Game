@@ -223,6 +223,13 @@ export function stepBody(b: BodyState, input: Readonly<InputState>, env: BodyEnv
   // ---- move against the world ----
   const intended = Math.hypot(moveX, moveZ) * dt;
   b.fell = 0;
+  if (intended > 1e-6 && b.onWalk && nav.floorY && nav.walkTopAt) {
+    // off the end of the walk onto the head of a flight of steps (or into a tower's top room): the body walks on, off the walk
+    const tx = b.x + moveX * dt * 2, tz = b.z + moveZ * dt * 2;
+    const top = nav.walkTopAt(tx, tz, b.y);
+    const fy = nav.floorY(tx, tz, b.y);
+    if (!(top === top) && Math.abs(fy - b.y) < 0.6) b.onWalk = false;
+  }
   if (intended > 1e-6 && b.onWalk && nav.walkMove) {
     // on the wall-walk: held to the floors (the parapet is a wall), the height that of the floor
     nav.walkMove(b.x, b.z, moveX * dt, moveZ * dt, b.y, wm);

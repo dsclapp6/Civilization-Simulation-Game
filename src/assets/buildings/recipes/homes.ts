@@ -261,7 +261,8 @@ export function manorHouse(ctx: Ctx, def: BuildingDef): void {
   chimney(ctx, { x: 0.8, z: hallZ0 - 0.15, baseY: -0.3, topY: hall.roof.topY + 0.8, w: 1.1, d: 0.6, baseW: 1.4, baseD: 0.62, color: stone ? s.stone : COL.brick, pots: 2, shoulderY: 4.6 });
   // Porch / porch tower
   if (q >= 3) {
-    const pr: Rect = { x0: -3.6, x1: -1.6, z0: hallZ1, z1: hallZ1 + 2.2 };
+    // wide enough for the ladder up to the chambers over the porch beside the way through (docs/INTERIORS.md)
+    const pr: Rect = { x0: -4.15, x1: -1.05, z0: hallZ1, z1: hallZ1 + 2.6 };
     const tw: WallKind = wall;
     house(ctx, {
       rect: pr, plinthH: 0.35,

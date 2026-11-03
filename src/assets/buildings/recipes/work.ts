@@ -3,7 +3,7 @@
 import type { BuildingDef } from '../../../content/types';
 import { F, Layer, Mat, MeshBuilder, shade, type V3 } from '../../core/builder';
 import { clothQuad, decorInto } from '../../props/props';
-import { chimney, cupola, enterSide, fenceRun, house, opening, planks, strawFloor, windowRow, type Ctx, type Opening, type Rect } from '../parts';
+import { chimney, cupola, enterSide, fenceRun, hint, house, opening, roundShell, planks, strawFloor, windowRow, type Ctx, type Opening, type Rect } from '../parts';
 import { buildCone, buildRoof, roofLook, type RoofMat } from '../roof';
 import { COL, roofTint, type FrameKind, type WallKind } from '../style';
 import { ovFor, vernacular } from '../vernacular';
@@ -165,6 +165,9 @@ export function windmill(ctx: Ctx, def: BuildingDef): void {
   void def;
   const postTop = q >= 2 ? 3.6 : 3.2;
   // Trestle: piers, crosstrees, quarterbars and the main post (static).
+  // (in a roundhouse the trestle stands across the diagonals, clear of the door)
+  b.push();
+  if (q >= 2) b.rotY(Math.PI / 4);
   b.state({ layer: Layer.Wall, flags: F.Snow | F.Burn }, () => {
     for (const [x, z] of [[-2.3, 0], [2.3, 0], [0, -2.3], [0, 2.3]] as [number, number][]) b.box(x - 0.35, -0.3, z - 0.35, x + 0.35, 0.55, z + 0.35, { side: COL.brick, top: shade(COL.brick, 1.1) });
     b.box(-2.5, 0.55, -0.16, 2.5, 0.85, 0.16, s.timber);
@@ -172,6 +175,15 @@ export function windmill(ctx: Ctx, def: BuildingDef): void {
     for (const [x, z] of [[-2.2, 0], [2.2, 0], [0, -2.2], [0, 2.2]] as [number, number][]) b.beam([x, 0.8, z], [x * 0.12, postTop - 0.9, z * 0.12], 0.17, 0.17, s.timber);
     b.box(-0.27, 0.55, -0.27, 0.27, postTop + 0.2, 0.27, s.timber);
   });
+  b.pop();
+  if (q >= 2) {
+    // the trestle is in the way inside: the post, and the crosstrees as a row of blocks along each diagonal
+    hint(ctx, { kind: 'solid', x: -0.35, y: 0, z: -0.35, x1: 0.35, y1: 3, z1: 0.35 });
+    for (let i = -4; i <= 4; i++) {
+      const d = i * 0.42;
+      for (const [x, z] of [[d, d], [d, -d]]) hint(ctx, { kind: 'solid', x: x - 0.22, y: 0, z: z - 0.22, x1: x + 0.22, y1: 1.6, z1: z + 0.22 });
+    }
+  }
   if (q >= 2) {
     // Roundhouse enclosing the trestle.
     const R = 2.55;
@@ -181,7 +193,8 @@ export function windmill(ctx: Ctx, def: BuildingDef): void {
       b.lathe([[R + 0.1, -0.4], [R + 0.1, 0.3], [R, 0.4], [R, 2.4]], lod === 0 ? 14 : 8, [shade(col, 0.85), col, col], {});
       b.pop();
     });
-    b.push(); b.translate(0, 0, R); opening(ctx, { side: 'pz', u: 0, w: 0.9, h: 1.85, y: 0, kind: 'door', frame: 'timber' }); b.pop();
+    b.push(); b.translate(0, 0, R); opening(ctx, { side: 'pz', u: 0, w: 0.9, h: 1.85, y: 0.05, kind: 'door', frame: 'timber' }); b.pop();
+    roundShell(ctx, 0, 0, R + 0.1, 2.4, 'rubble', { role: 'roundhouse', plinth: 0.05 });
     const lk = roofLook(s.id === 'norse' ? 'turf' : 'thatch', s.thatch);
     buildCone(b, 0, 0, 2.4, R, 1.1, lod === 0 ? 14 : 8, lk, 0.3, lod);
   } else {
@@ -199,17 +212,13 @@ export function windmill(ctx: Ctx, def: BuildingDef): void {
   house(sub, {
     rect: brect, plinthH: 0, noFloor: true,
     storeys: [{ h: bh, wall: 'weatherboard', color: boardCol, frame: 'none', openings: [
-      { side: 'nz', u: 0, w: 0.8, h: 1.7, y: 0.1, kind: 'door', frame: 'timber' },
       { side: 'px', u: 0, w: 0.4, h: 0.4, y: 2.6, kind: 'window', frame: 'timber', mullions: 0 },
       { side: 'nx', u: 0, w: 0.4, h: 0.4, y: 2.6, kind: 'window', frame: 'timber', mullions: 0 },
     ] }],
     roof: { type: 'gable', axis: 'z', pitch: 34, mat: q >= 2 && s.id !== 'norse' ? 'lead' : 'plank', tint: q >= 2 ? COL.lead : 0x8a7a66, ov: 0.15, gov: 0.25, ridge: 'plain', frame: false },
   });
-  // Ladder and tail pole at the back.
+  // The tail pole at the back (the buck turns to the wind: no ladder or door to it, docs/INTERIORS.md).
   buck.state({ layer: Layer.Detail, flags: F.Burn | F.Snow }, () => {
-    buck.beam([-0.4, 0.05, -bd / 2], [-0.4, -postTop + 0.1, -bd / 2 - 1.15], 0.07, 0.1, s.timber);
-    buck.beam([0.4, 0.05, -bd / 2], [0.4, -postTop + 0.1, -bd / 2 - 1.15], 0.07, 0.1, s.timber);
-    for (let i = 1; i < 9; i++) { const t = i / 9; buck.box(-0.4, -postTop * t + 0.05, -bd / 2 - 1.15 * t - 0.05, 0.4, -postTop * t + 0.1, -bd / 2 - 1.15 * t + 0.05, s.timber); }
     buck.beam([0, 0.6, -bd / 2], [0, -postTop + 0.6, -bd / 2 - 1.25], 0.14, 0.14, s.timber);
     // Windshaft nose.
     buck.tube([0, bh * 0.72, bd / 2 - 0.2], [0, bh * 0.72 + 0.12, bd / 2 + 0.5], 0.17, 0.15, 6, 0x4e3a26);
@@ -523,8 +532,8 @@ export function charcoalMound(ctx: Ctx, def: BuildingDef): void {
   // Billets stacked around, a ladder and a rake.
   if (lod === 0) b.state({ layer: Layer.Decor, flags: F.Burn | F.Snow }, () => {
     for (let i = 0; i < 6; i++) b.tube([-2.3 + i * 0.12, 0.12, 1.9 - i * 0.05], [-1.1 + i * 0.12, 0.12 + (i % 2) * 0.05, 2.2 - i * 0.05], 0.09, 0.09, 5, COL.bark, { caps: false });
-    b.beam([1.6, 0, 1.2], [0.9, 1.6, 0.7], 0.05, 0.05, COL.timber);
-    b.beam([1.85, 0, 1.0], [1.15, 1.6, 0.5], 0.05, 0.05, COL.timber);
+    // (a ladder leaning on nothing was here: gone, docs/INTERIORS.md) the rake lies by the billets
+    b.beam([1.2, 0.04, 1.6], [2.0, 0.04, 0.8], 0.05, 0.05, COL.timber);
   });
   ctx.out.doors.push({ x: 0, z: 2.4 });
 }

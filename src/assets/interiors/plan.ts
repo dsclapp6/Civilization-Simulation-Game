@@ -10,6 +10,7 @@ import { normalizeRequest, runRecipe } from '../buildings/index';
 import type { DoorwayRec, InteriorHint, Opening, RecipeOut, ShellRec } from '../buildings/parts';
 import type { WallKind } from '../buildings/style';
 import { furnish } from './furnish';
+import { validatePlan } from './validate';
 import type { InteriorPlan, PBlock, PBox, PDoor, PFloor, PLevel, PRect, PRoom, PStair, PWindow } from './types';
 
 /** The most a body steps up without a stair (m); a doorway's threshold is crossed whatever the step. */
@@ -87,6 +88,8 @@ export interface Block {
   tower: boolean;
   /** Storeys with no floor (the masonry under a raised door). */
   skip: Set<number>;
+  /** A round block: centre and outer radius (absolute), and the radius of its inner face. */
+  round?: { cx: number; cz: number; r: number; rin: number };
 }
 
 /** Everything the furnisher needs: the plan being made and the blocks behind it. */
@@ -100,6 +103,8 @@ export interface PlanCtx {
   /** Zones to keep clear (doorways, stair feet and heads), per level. */
   clear: Array<PRect & { level: number; stair?: boolean }>;
   seed: number;
+  /** Which way round the tower flights are tried first (interiorPlan retries). */
+  attempt?: number;
 }
 
 const cache = new Map<string, InteriorPlan | null>();
@@ -109,26 +114,37 @@ export function interiorPlan(kind: BuildingKind, level: number, culture: Culture
   const n = normalizeRequest({ kind, level, culture, seed });
   const key = `${n.kind}|${n.level}|${n.culture}|${n.seedBucket}`;
   if (cache.has(key)) return cache.get(key)!;
-  const { ctx } = runRecipe(n, true);
   let plan: InteriorPlan | null = null;
-  try { plan = makePlan(n.kind, n.level, n.culture, ctx.out, key, n.seedBucket); } catch (e) { if (typeof process !== 'undefined' && process.env?.INTERIOR_DEBUG) throw e; plan = null; }
+  // a tall tower's flights may be laid round it several ways: the first way that leaves nothing unreached is taken
+  let best: { plan: InteriorPlan; bad: number } | null = null;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const { ctx } = runRecipe(n, true);
+    try { plan = makePlan(n.kind, n.level, n.culture, ctx.out, key, n.seedBucket, attempt); } catch (e) { if (typeof process !== 'undefined' && process.env?.INTERIOR_DEBUG) throw e; plan = null; }
+    if (!plan || !plan.blocks.some((b) => b.ys.length > 2 && b.hs[0] > 2.5 && b.rects[0].x1 - b.rects[0].x0 < 8)) break;
+    const bad = validatePlan(plan).problems.length;
+    if (!best || bad < best.bad) best = { plan, bad };
+    if (bad === 0) break;
+  }
+  if (best) plan = best.plan;
   cache.set(key, plan);
   return plan;
 }
 
 export function clearPlanCache(): void { cache.clear(); }
 
-export function makePlan(kind: BuildingKind, level: number, culture: CultureId, out: RecipeOut, key: string, seed: number): InteriorPlan | null {
+export function makePlan(kind: BuildingKind, level: number, culture: CultureId, out: RecipeOut, key: string, seed: number, attempt = 0): InteriorPlan | null {
   const doorways = (out.doorways ?? []).filter((d) => d.w >= 0.3);
   const hints = out.hints ?? [];
-  if (!doorways.length && !hints.some((h) => h.kind === 'door')) return null;
+  const steps = hints.some((h) => h.kind === 'steps');
+  if (!doorways.length && !hints.some((h) => h.kind === 'door') && !steps) return null;
   const blocks = makeBlocks(kind, out.shells ?? []);
-  if (!blocks.length) return null;
+  // a wall's stairs, a palisade's ladder: a plan of steps alone
+  if (!blocks.length && !steps) return null;
   const plan: InteriorPlan = {
     key, kind, level, culture, blocks: [], levels: [], rooms: [], floors: [], stairs: [], solids: [], doors: [], windows: [], furniture: [],
     spots: [], lights: [], outside: [], partitions: [], rails: [], bounds: { x0: 0, x1: 0, z0: 0, z1: 0 }, main: -1,
   };
-  const pc: PlanCtx = { kind, level, culture, plan, blocks, out, clear: [], seed };
+  const pc: PlanCtx = { kind, level, culture, plan, blocks, out, clear: [], seed, attempt };
   towerFloors(pc);
   doorFloors(pc, doorways);
   makeLevels(pc);
@@ -136,6 +152,7 @@ export function makePlan(kind: BuildingKind, level: number, culture: CultureId, 
   joinBlocks(pc);
   placeWindows(pc);
   makeStairs(pc);
+  blindStoreys(pc);
   makeWalls(pc);
   makeFloors(pc);
   furnish(pc);
@@ -148,23 +165,37 @@ export function makePlan(kind: BuildingKind, level: number, culture: CultureId, 
 
 function makeBlocks(kind: BuildingKind, shells: ShellRec[]): Block[] {
   const out: Block[] = [];
-  for (const sh of shells) {
+  for (let sh of shells) {
     if (sh.turned) continue;
     const r0 = sh.rects[0];
     if (r0.x1 - r0.x0 < 1.2 || r0.z1 - r0.z0 < 1.2) continue;
-    const rects = sh.rects.map((r) => ({ x0: r.x0 + sh.ox, x1: r.x1 + sh.ox, z0: r.z0 + sh.oz, z1: r.z1 + sh.oz }));
     const ys = sh.bases.map((b, i) => sh.oy + (i === 0 ? Math.max(0.05, sh.plinth) : b));
     const hs = sh.hs.map((h, i) => (i === 0 ? h + sh.bases[0] - Math.max(0.05, sh.plinth) : h));
     const short = Math.min(r0.x1 - r0.x0, r0.z1 - r0.z0);
-    const t = Math.min(wallThickness(sh.walls[0], kind), (short < 3 ? 0.14 : 0.24) * short);
+    let t = Math.min(wallThickness(sh.walls[0], kind), (short < 3 ? 0.14 : 0.24) * short);
+    let round: Block['round'];
+    if (sh.round) {
+      // a round block: the room is the square inscribed in its inner face; the masonry round it is solid (makeWalls)
+      const R = sh.round.r;
+      const rin = R - Math.min(wallThickness(sh.walls[0], kind), R * 0.35);
+      const half = rin / Math.SQRT2 + 0.12;
+      const cx = sh.round.cx + sh.ox, cz = sh.round.cz + sh.oz;
+      round = { cx, cz, r: R, rin };
+      sh = { ...sh, rects: [{ x0: sh.round.cx - half, x1: sh.round.cx + half, z0: sh.round.cz - half, z1: sh.round.cz + half }] };
+      t = 0.12;
+    }
+    const shr = sh;
+    const rects = sh.rects.map((r) => ({ x0: r.x0 + shr.ox, x1: r.x1 + shr.ox, z0: r.z0 + shr.oz, z1: r.z1 + shr.oz }));
     const fp = (r0.x1 - r0.x0) * (r0.z1 - r0.z0);
     const tower = sh.role === 'tower' || (hs[0] > 7.5 && fp < 60 && sh.hs.length === 1 && hs[0] > 1.4 * Math.max(r0.x1 - r0.x0, r0.z1 - r0.z0));
+    // a small tower's walls are thin enough inside for its ladders (the stone of its outer face is the model's)
+    if (tower && !round && short < 4.5) t = Math.min(t, 0.4);
     const open = sh.open.map((o) => o as Side[]);
     const inner = rects.map((r, i) => innerRect(r, t, open[i] ?? []));
     const roof = sh.roof;
     out.push({
       i: out.length, shell: sh, role: sh.role, rects, ys, hs, walls: sh.walls, t, open, openings: sh.openings, inner, lv: [],
-      eave: sh.oy + sh.eaveY, ridge: roof ? sh.oy + roof.ridgeY : sh.oy + sh.eaveY, axis: roof?.axis ?? 'x', tower, skip: new Set<number>(),
+      eave: sh.oy + sh.eaveY, ridge: roof ? sh.oy + roof.ridgeY : sh.oy + sh.eaveY, axis: roof?.axis ?? 'x', tower, skip: new Set<number>(), round,
     });
   }
   return out;
@@ -261,6 +292,7 @@ function makeLevels(pc: PlanCtx): void {
   for (const y of hs) if (!lv.length || y - lv[lv.length - 1] > 0.6) lv.push(y);
   for (const b of pc.blocks) b.lv = b.ys.map((y) => { let best = 0; for (let i = 0; i < lv.length; i++) if (Math.abs(lv[i] - y) < Math.abs(lv[best] - y)) best = i; return best; });
   const names = ['ground floor', 'first floor', 'second floor', 'third floor', 'fourth floor', 'fifth floor', 'sixth floor'];
+  if (!lv.length) lv.push(0);
   pc.plan.levels = lv.map((y, i) => {
     // the cut-away takes off what is above the storeys standing at this level
     let cut = y + 2.4;
@@ -278,6 +310,18 @@ function wallOf(pc: PlanCtx, x: number, y: number, z: number, nx: number, nz: nu
   const side: Side = Math.abs(nx) > Math.abs(nz) ? (nx > 0 ? 'px' : 'nx') : (nz > 0 ? 'pz' : 'nz');
   let best: { b: Block; s: Side; k: number } | null = null, bd = 0.35;
   for (const b of pc.blocks) {
+    if (b.round) {
+      // a doorway in a round wall: on its circle
+      const off = Math.abs(Math.hypot(x - b.round.cx, z - b.round.cz) - b.round.r);
+      if (off < 0.45) {
+        for (let k = 0; k < b.rects.length; k++) {
+          if (y < b.ys[k] - 0.6 || y > b.ys[k] + b.hs[k]) continue;
+          if (k + 1 < b.rects.length && y >= b.ys[k + 1] - 0.3) continue;
+          return { b, s: side, k };
+        }
+      }
+      continue;
+    }
     for (let k = 0; k < b.rects.length; k++) {
       if (y < b.ys[k] - 0.6 || y > b.ys[k] + b.hs[k]) continue;
       // the storey whose floor is under the sill (a sill on the top of one storey's wall is the next one's floor)
@@ -306,8 +350,10 @@ function placeDoors(pc: PlanCtx, doorways: DoorwayRec[], hints: InteriorHint[]):
     const ix = d.x - nx * (b.t + 0.3), iz = d.z - nz * (b.t + 0.3);
     const ox = d.x + nx * 0.4, oz = d.z + nz * 0.4;
     const intoOther = pc.blocks.some((q) => q !== b && q.inner.some((r, kk) => q.lv[kk] === level && contains(r, ox, oz)));
+    // through a round wall: from its face to the square room inside
+    const t = b.round ? Math.max(b.t, Math.abs((nx ? d.x - b.round.cx : d.z - b.round.cz)) - (b.round.rin / Math.SQRT2 + 0.12) + b.t) : b.t;
     const door: PDoor = {
-      id: plan.doors.length, x: d.x, z: d.z, y: d.y, w: d.w, h: d.h, nx, nz, t: b.t, outer: !intoOther, kind,
+      id: plan.doors.length, x: d.x, z: d.z, y: d.y, w: d.w, h: d.h, nx, nz, t, outer: !intoOther, kind,
       open: d.open || (kind === 'wide' && d.open), hinge: hingeFor(b.rects[k], w.s, d.x, d.z, nx, nz), leaves: kind === 'wide' && d.w >= 1.6 ? 2 : 1,
       shape: d.shape, color: d.color, stone: d.stone, level, sx: d.x + nx * 1.25, sz: d.z + nz * 1.25, sy: 0,
     };
@@ -343,6 +389,19 @@ function placeDoors(pc: PlanCtx, doorways: DoorwayRec[], hints: InteriorHint[]):
     };
     plan.stairs.push(st);
     if (best) { best.sx = h.x - (axis === 'x' ? Math.sign(run) * 0.9 : 0); best.sz = h.z - (axis === 'z' ? Math.sign(run) * 0.9 : 0); best.sy = h.y; }
+  }
+  // landings the recipe built (before a raised door, at the turn of a flight): floors of the level nearest their height
+  for (const h of hints) {
+    if (h.kind !== 'landing' || h.x1 === undefined || h.z1 === undefined) continue;
+    let lvl = 0, bd = Infinity;
+    for (const d of plan.doors) { const dd = Math.abs(d.y - h.y); if (dd < bd) { bd = dd; lvl = d.level; } }
+    plan.floors.push({ x0: Math.min(h.x, h.x1), x1: Math.max(h.x, h.x1), z0: Math.min(h.z, h.z1), z1: Math.max(h.z, h.z1), y: h.y, level: lvl, room: -1 });
+    plan.outside.push({ x0: Math.min(h.x, h.x1), x1: Math.max(h.x, h.x1), z0: Math.min(h.z, h.z1), z1: Math.max(h.z, h.z1), y0: -1, y1: h.y - 0.3 });
+  }
+  // solids the recipe names (the trestle of a mill in its roundhouse)
+  for (const h of hints) {
+    if (h.kind !== 'solid' || h.x1 === undefined || h.y1 === undefined || h.z1 === undefined) continue;
+    plan.solids.push({ x0: Math.min(h.x, h.x1), x1: Math.max(h.x, h.x1), z0: Math.min(h.z, h.z1), z1: Math.max(h.z, h.z1), y0: Math.min(h.y, h.y1), y1: Math.max(h.y, h.y1) });
   }
   // the main door: the outer one a person uses at the lowest sill, the widest ordinary door first
   let main = -1;
@@ -473,16 +532,18 @@ function towerFlights(pc: PlanCtx, b: Block): boolean {
   const L = Math.min(r.x1 - r.x0, r.z1 - r.z0);
   const n = b.ys.length - 1;
   if (n < 1) return true;
-  const w = L > 4 ? 0.8 : 0.62;
-  // the corner between two flights is the landing: as wide as a flight each way
-  const margin = w + 0.12;
-  for (let rot = 0; rot < 4; rot++) {
-    for (const ccw of [true, false]) {
+  const w = L > 4 ? 0.8 : L > 2.5 ? 0.62 : 0.5;
+  // the corner between two flights is the landing: as wide as a flight each way (and room to turn in a big tower)
+  const margin = w + (L > 4 ? 0.35 : 0.12);
+  const a0 = pc.attempt ?? 0;
+  for (let rr = 0; rr < 4; rr++) {
+    const rot = (rr + a0) % 4;
+    for (const ccw of (a0 >= 4 ? [false, true] : [true, false])) {
       const out: PStair[] = [];
       let ok = true;
       for (let i = 0; i < n && ok; i++) {
         const rise = b.ys[i + 1] - b.ys[i];
-        const slope = Math.max(rise / Math.max(0.6, L - 2 * margin), L > 4.4 ? 0.9 : 1.6);
+        const slope = Math.max(rise / Math.max(0.6, L - 2 * margin), L > 4.4 && (pc.attempt ?? 0) < 4 ? 0.9 : 1.6);
         const run = rise / slope;
         if (run + 2 * margin > L + 1e-6) { ok = false; break; }
         const e = ((ccw ? i : -i) + rot + 400) % 4;
@@ -495,7 +556,8 @@ function towerFlights(pc: PlanCtx, b: Block): boolean {
         else if (e === 2) { const a0 = ccw ? r.x1 - margin - run : r.x0 + margin; st = { ...base, x0: a0, x1: a0 + run, z0: r.z1 - w, z1: r.z1, axis: 'x', dir: ccw ? -1 : 1 }; }
         else { const a0 = ccw ? r.z1 - margin - run : r.z0 + margin; st = { ...base, x0: r.x0, x1: r.x0 + w, z0: a0, z1: a0 + run, axis: 'z', dir: ccw ? -1 : 1 }; }
         const foot = stairEnd(st, 0, 0.5), head = stairEnd(st, 1, 0.5);
-        const bad = (q: PRect, lvl: number): boolean => pc.clear.some((c) => c.level === lvl && !c.stair && overlaps(c, q, 0.02));
+        // a ladder flat to the wall may stand beside a doorway's way through (not in it)
+        const bad = (q: PRect, lvl: number): boolean => pc.clear.some((c) => c.level === lvl && !c.stair && overlaps(c, q, 0.02 + (kind === 'ladder' ? 0.34 : 0)));
         if (bad(st, b.lv[i]) || bad(foot, b.lv[i]) || bad(st, b.lv[i + 1]) || bad(head, b.lv[i + 1])) ok = false;
         out.push(st);
       }
@@ -541,8 +603,11 @@ function fitStair(pc: PlanCtx, b: Block, k: number, lo: PRect, hi: PRect, rise: 
     // straight up through a hatch, in a turret or a tower too small for a flight
     { kind: 'ladder', slope: 5, w: 0.55 },
   ];
-  const free = (r: PRect, lvl: number): boolean => !pc.clear.some((c) => c.level === lvl && overlaps(c, r, 0.02)) && !pc.plan.stairs.some((s) => overlaps(s, r, -0.2));
+  // a hatch ladder flat against a wall may stand beside a doorway's way through (not in it): the doorway's zone less its margins
+  let relax = 0;
+  const free = (r: PRect, lvl: number): boolean => !pc.clear.some((c) => c.level === lvl && overlaps(c, r, 0.02 + (c.stair ? 0 : relax))) && !pc.plan.stairs.some((s) => overlaps(s, r, -0.2));
   for (const tk of tryKinds) {
+    relax = tk.slope >= 5 ? 0.34 : 0;
     const run = rise / tk.slope;
     // along each wall, from each end, nearest the back of the building first
     const cands: PStair[] = [];
@@ -606,37 +671,82 @@ function keepStairClear(pc: PlanCtx, st: PStair, lo: number, hi: number): void {
 
 /** A hay loft under the roof of a one-storey block, at the eaves, with a ladder up to it. */
 function addLoft(pc: PlanCtx, b: Block, y: number): void {
-  if (b.ys.length > 1) return;
-  const r = b.inner[0];
-  const loftY = Math.min(y, b.ys[0] + b.hs[0]) ;
-  if (loftY - b.ys[0] < 2.0) return;
+  const k0 = b.ys.length - 1;
+  const r = b.inner[k0];
+  const loftY = Math.min(y, b.ys[k0] + b.hs[k0]);
+  if (loftY - b.ys[k0] < 2.0) return;
   // half the block, the end of the loft door
   b.ys.push(loftY);
   b.hs.push(Math.max(0.5, b.ridge - loftY));
-  b.rects.push({ ...b.rects[0] });
+  b.rects.push({ ...b.rects[k0] });
   b.inner.push({ ...r });
   b.open.push([]);
-  b.walls.push(b.walls[0]);
+  b.walls.push(b.walls[k0]);
   b.openings.push([]);
-  b.hs[0] = loftY - b.ys[0];
+  b.hs[k0] = loftY - b.ys[k0];
   // a new level for the loft
   const lv = pc.plan.levels;
   let li = lv.findIndex((l) => Math.abs(l.y - loftY) < 0.6);
   if (li < 0) { lv.push({ y: loftY, cut: b.ridge + 0.5, name: 'loft' }); li = lv.length - 1; }
   b.lv.push(li);
-  lv[b.lv[0]].cut = Math.min(lv[b.lv[0]].cut, loftY - 0.05);
+  lv[b.lv[k0]].cut = Math.min(lv[b.lv[k0]].cut, loftY - 0.05);
   b.role = b.role || 'loft';
-  const rise = loftY - b.ys[0];
-  const st = fitStair(pc, b, 0, b.inner[0], b.inner[1], rise);
-  if (st) { pc.plan.stairs.push(st); keepStairClear(pc, st, b.lv[0], li); }
+  const rise = loftY - b.ys[k0];
+  const st = fitStair(pc, b, k0, b.inner[k0], b.inner[k0 + 1], rise);
+  if (st) { pc.plan.stairs.push(st); keepStairClear(pc, st, b.lv[k0], li); }
+}
+
+/**
+ * An upper storey with no window, no doorway and no stair to it (the top of a porch tower under its leads) shows no room from
+ * outside and has none inside: no floor is laid in it.
+ */
+function blindStoreys(pc: PlanCtx): void {
+  for (const b of pc.blocks) {
+    for (let k = 1; k < b.ys.length; k++) {
+      if ((b.openings[k] ?? []).some((o) => o.kind !== 'door')) continue;
+      const lv = b.lv[k];
+      if (pc.plan.stairs.some((s) => s.to === lv && overlaps(s, b.inner[k]))) continue;
+      if (pc.plan.doors.some((d) => d.level === lv && contains(b.rects[k], d.x, d.z, d.t + 0.3))) continue;
+      b.skip.add(k);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
 // walls
 
+/** The masonry of a round block between its square room and its round face, in slices, open at its doorways. */
+function roundMasonry(pc: PlanCtx, b: Block): void {
+  const rd = b.round!;
+  const half = rd.rin / Math.SQRT2 + 0.12;
+  const y0 = b.ys[0] - 0.3, y1 = b.ys[b.ys.length - 1] + b.hs[b.hs.length - 1];
+  const R = rd.r;
+  for (const s of SIDES) {
+    const [nx, nz] = normalOf(s);
+    const doors = pc.plan.doors.filter((d) => d.nx === nx && d.nz === nz && d.kind !== 'small' && Math.abs(Math.hypot(d.x - rd.cx, d.z - rd.cz) - R) < 0.6);
+    const n = 3;
+    for (let i = 0; i < n; i++) {
+      const c0 = half + ((R - half) * i) / n, c1 = half + ((R - half) * (i + 1)) / n;
+      const hw = Math.sqrt(Math.max(0, R * R - c1 * c1));
+      // pieces along the side, round the doorways
+      const cuts = doors.map((d) => { const a = nz ? d.x - rd.cx : d.z - rd.cz; return [a - d.w / 2, a + d.w / 2]; }).sort((p, q) => p[0] - q[0]);
+      let a = -hw;
+      const piece = (a0: number, a1: number): void => {
+        if (a1 - a0 < 0.02) return;
+        const lo = Math.min(c0, c1), hi = Math.max(c0, c1);
+        if (nz) pc.plan.outside.push({ x0: rd.cx + a0, x1: rd.cx + a1, z0: rd.cz + (nz > 0 ? lo : -hi), z1: rd.cz + (nz > 0 ? hi : -lo), y0, y1 });
+        else pc.plan.outside.push({ x0: rd.cx + (nx > 0 ? lo : -hi), x1: rd.cx + (nx > 0 ? hi : -lo), z0: rd.cz + a0, z1: rd.cz + a1, y0, y1 });
+      };
+      for (const [p0, p1] of cuts) { piece(a, Math.min(hw, p0)); a = Math.max(a, p1); }
+      piece(a, hw);
+    }
+  }
+}
+
 function makeWalls(pc: PlanCtx): void {
   const S = pc.plan.solids;
   const doors = pc.plan.doors;
+  for (const b of pc.blocks) if (b.round) roundMasonry(pc, b);
   for (const b of pc.blocks) {
     b.rects.forEach((r, k) => {
       const y0 = b.ys[k], y1 = b.ys[k] + b.hs[k];
@@ -675,7 +785,7 @@ function makeWalls(pc: PlanCtx): void {
         for (const g of gaps) {
           box(a, g[0], y0, y1);
           if (g[2] > y0 + 0.3) box(g[0], g[1], y0, g[2]); // below a raised sill (one steps over a low one)
-          box(g[0], g[1], g[3], y1); // over the head
+          // (over the head of a doorway: nothing a body meets — a low door is passed stooping)
           a = Math.max(a, g[1]);
         }
         box(a, p.a1, y0, y1);
@@ -740,9 +850,14 @@ function finish(pc: PlanCtx): void {
     for (const r of plan.rooms) if (r.level === f.level && contains(r, cx, cz, 0.3) && (!best || area(r) < area(best))) best = r;
     f.room = best ? best.id : -1;
   }
-  plan.blocks = pc.blocks.map((b): PBlock => ({ rects: b.rects, ys: b.ys, hs: b.hs, t: b.t, wall: b.walls[0], open: b.open as string[][], eave: b.eave, ridge: b.ridge, axis: b.axis }));
+  plan.blocks = pc.blocks.map((b): PBlock => ({ rects: b.rects, ys: b.ys, hs: b.hs, t: b.t, wall: b.walls[0], open: b.open as string[][], eave: b.eave, ridge: b.ridge, axis: b.axis, ...(b.round ? { round: b.round } : {}) }));
   let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
-  for (const b of pc.blocks) for (const r of b.rects) { x0 = Math.min(x0, r.x0); x1 = Math.max(x1, r.x1); z0 = Math.min(z0, r.z0); z1 = Math.max(z1, r.z1); }
+  for (const b of pc.blocks) {
+    for (const r of b.rects) { x0 = Math.min(x0, r.x0); x1 = Math.max(x1, r.x1); z0 = Math.min(z0, r.z0); z1 = Math.max(z1, r.z1); }
+    if (b.round) { x0 = Math.min(x0, b.round.cx - b.round.r); x1 = Math.max(x1, b.round.cx + b.round.r); z0 = Math.min(z0, b.round.cz - b.round.r); z1 = Math.max(z1, b.round.cz + b.round.r); }
+  }
+  for (const st of plan.stairs) { x0 = Math.min(x0, st.x0); x1 = Math.max(x1, st.x1); z0 = Math.min(z0, st.z0); z1 = Math.max(z1, st.z1); }
+  for (const f of plan.floors) { x0 = Math.min(x0, f.x0); x1 = Math.max(x1, f.x1); z0 = Math.min(z0, f.z0); z1 = Math.max(z1, f.z1); }
   plan.bounds = { x0, x1, z0, z1 };
   // chimney stacks outside the walls, the yard's solid things
   for (const c of pc.out.chimneys ?? []) {
@@ -758,7 +873,8 @@ function finish(pc: PlanCtx): void {
     const r = st.axis === 'x'
       ? { x0: st.dir > 0 ? st.x0 + len * k0 : st.x0, x1: st.dir > 0 ? st.x1 : st.x1 - len * k0, z0: st.z0, z1: st.z1 }
       : { x0: st.x0, x1: st.x1, z0: st.dir > 0 ? st.z0 + len * k0 : st.z0, z1: st.dir > 0 ? st.z1 : st.z1 - len * k0 };
-    plan.outside.push({ ...r, y0: st.y0 - 1, y1: st.y0 + (st.y1 - st.y0) * k0 - 0.05 });
+    // a stone flight is solid to the ground under it
+    plan.outside.push({ ...r, y0: -1, y1: st.y0 + (st.y1 - st.y0) * k0 - 0.05 });
   }
   // under a flight inside: solid for a body on the floor below, past the first fifth of it
   for (const st of plan.stairs) {

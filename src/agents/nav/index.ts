@@ -115,7 +115,8 @@ export class Nav implements NavApi {
   readonly interiors: Interiors;
   /** The height of the body being moved (its feet), for the insides' collision. */
   private moveY = 0;
-  private readonly fl = { building: -1, level: -1, inside: false };
+  private readonly fl = { building: -1, level: -1, inside: false, sill: false };
+  private readonly fl2 = { building: -1, level: -1, inside: false, sill: false };
 
   /** The app gives the plans of insides (the building recipes) and where the models stand. */
   setInteriorSource(src: InteriorSource | null): void {
@@ -250,9 +251,9 @@ export class Nav implements NavApi {
       if (!this.terrainOk(p.x, p.z) && this.interiors.floorAt(p.x, p.z, y) !== this.interiors.floorAt(p.x, p.z, y)) return false;
       const f = this.interiors.floorAt(p.x, p.z, y, this.fl);
       const ny = f === f ? (this.fl.inside ? f : Math.max(f, this.groundY(p.x, p.z))) : this.groundY(p.x, p.z);
-      // within a building one does not drop down a stairwell; walking out of a door onto lower ground is a step
-      const wasInside = this.interiors.roomAt(x, z, y) >= 0;
-      if (!this.interiors.dropOk(y, ny, this.fl.inside || (wasInside && f === f))) return false;
+      // on a floor, a stair or steps one does not drop down a stairwell or off the side; out of a door onto lower ground is a step
+      const cur = this.interiors.floorAt(x, z, y, this.fl2);
+      if (!this.interiors.dropOk(y, ny, cur === cur && cur > this.groundY(x, z) + 0.05, !!this.fl2.sill)) return false;
       return true;
     };
     let ok = try1(x + dx, z + dz);

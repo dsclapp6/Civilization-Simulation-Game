@@ -46,6 +46,8 @@ export interface ShellRec {
   noFloor: boolean;
   eaveY: number;
   roof: { type: string; axis: 'x' | 'z'; ridgeY: number; under(x: number, z: number): number } | null;
+  /** A round block (a round tower, a roundhouse): its centre and outer radius, relative to the origin. */
+  round?: { cx: number; cz: number; r: number };
 }
 export interface DoorwayRec {
   /** Centre of the threshold on the outer wall plane, and the outward normal. */
@@ -88,6 +90,8 @@ export interface Ctx {
   out: RecipeOut;
   /** Civilization pass: a gatehouse's gate state (FortView; default open). */
   gate?: 'open' | 'shut' | 'broken';
+  /** The request's seed bucket (0..3): which of a kind's variants this is (a wall segment with its stairs). */
+  bucket?: number;
 }
 
 export function newOut(): RecipeOut {
@@ -947,6 +951,21 @@ export function roundTower(ctx: Ctx, cx: number, cz: number, r: number, h: numbe
     top = buildCone(b, cx, cz, h, r + (opts.crenel ? 0.1 : 0), opts.roofH ?? r * 2.2, sides, look, 0.25, lod);
   }
   return top;
+}
+
+/**
+ * Records a round block for the interiors (docs/INTERIORS.md) without drawing anything: a round tower, a dovecote, a mill's
+ * roundhouse is drawn by its recipe (lathe); its inside is planned on the square inscribed in it.
+ */
+export function roundShell(ctx: Ctx, cx: number, cz: number, r: number, h: number, wall: WallKind, o: { role?: string; plinth?: number; openings?: Opening[] } = {}): void {
+  const origin = ctx.b.xf([0, 0, 0]);
+  const half = r / Math.SQRT2;
+  const ph = o.plinth ?? 0.2;
+  ctx.out.shells?.push({
+    ox: origin[0], oy: origin[1], oz: origin[2], turned: false, role: o.role ?? 'tower',
+    rects: [{ x0: cx - half, x1: cx + half, z0: cz - half, z1: cz + half }], bases: [ph], hs: [h - ph], walls: [wall],
+    openings: [o.openings ?? []], open: [[]], plinth: ph, noFloor: false, eaveY: h, roof: null, round: { cx, cz, r },
+  });
 }
 
 /** Ring of merlons on a round tower top. */

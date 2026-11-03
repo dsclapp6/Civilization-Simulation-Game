@@ -82,7 +82,7 @@ class Fill {
     const blocks = (b: PBox): boolean => b.y0 < y + 1.5 && b.y1 > y + 0.25;
     for (const sb of plan.solids) if (blocks(sb)) paint(sb, 0, R);
     // under a flight there is no way through (finish() makes it solid); its foot is the way up
-    for (const st of plan.stairs) if (st.from === lvl && st.kind !== 'steps') { paint(st, 0, R * 0.5); paint(stairEnd(st, 0, 0.3), 1, 0); }
+    for (const st of plan.stairs) if (st.from === lvl && st.kind !== 'steps') { paint(st, 0, R); paint(stairEnd(st, 0, 0.3), 1, 0); }
     if (extra) paint(extra, 0, R);
     const cell = (x: number, z: number, rr = 0.45): number => {
       // the nearest free cell within rr
@@ -759,7 +759,9 @@ function fillRoom(pc: PlanCtx, f: Fill, type: string): void {
       const cd = Math.min(1.8, f.d * 0.45);
       for (let i = 0; i < n; i++) {
         const x0 = f.r.x0 + (f.w * i) / n, x1 = f.r.x0 + (f.w * (i + 1)) / n;
-        f.put('cell_bars', (x0 + x1) / 2, f.r.z0 + cd, 0, x1 - x0 - 0.1, 0.1, 2.2, true, false);
+        // the bars across the cell, with its barred door standing open at one end (shut on a prisoner by the gaoler)
+        const bw = x1 - x0 - 0.1 - 0.85;
+        f.put('cell_bars', x0 + 0.05 + bw / 2, f.r.z0 + cd, 0, bw, 0.1, 2.2, true, false);
         f.put('pallet', (x0 + x1) / 2, f.r.z0 + cd / 2, H, 1.6, 0.7, 0.15, false, false);
         f.spot((x0 + x1) / 2, f.r.z0 + cd / 2, 0, 'sit', 0.0);
         if (i + 1 < n) pc.plan.solids.push({ x0: x1 - 0.06, x1: x1 + 0.06, z0: f.r.z0, z1: f.r.z0 + cd, y0: y, y1: y + 2.2 });
@@ -835,7 +837,7 @@ function fillRoom(pc: PlanCtx, f: Fill, type: string): void {
     }
     case 'refectory': f.table(f.cx, f.cz, longX ? 'x' : 'z', Math.min(6, Math.max(f.w, f.d) * 0.6), 6, 'trestle'); f.wall(endB, 0.5, 'lectern', 0.6, 0.6, 1.2); break;
     case 'towerbase': case 'towerroom': {
-      f.wall('nz', 0.5, 'chest', 0.9, 0.5, 0.55);
+      if (type === 'towerbase') f.wall('nz', 0.5, 'chest', 0.9, 0.5, 0.55);
       if (type === 'towerroom') f.spot(f.cx, f.cz, 0, 'ring');
       else f.wall('px', 0.5, 'bench', 1.2, 0.35, 0.45);
       break;

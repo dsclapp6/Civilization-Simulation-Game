@@ -2,7 +2,7 @@
 import type { BuildingDef } from '../../../content/types';
 import { F, Layer, Mat, shade, type V3 } from '../../core/builder';
 import { decorInto } from '../../props/props';
-import { cupola, enterSide, fenceRun, flagPole, house, opening, staddle, strawFloor, windowRow, type Ctx, type Opening, type Rect } from '../parts';
+import { cupola, enterSide, fenceRun, flagPole, hint, house, opening, roundShell, staddle, strawFloor, windowRow, type Ctx, type Opening, type Rect } from '../parts';
 import { buildCone, buildRoof, roofLook, type RoofMat } from '../roof';
 import { COL, roofTint, wallColor, type CultureStyle, type FrameKind, type WallKind } from '../style';
 import { ovFor } from '../vernacular';
@@ -37,6 +37,8 @@ export function loftGablet(ctx: Ctx, rc: Rect, eaveY: number, x: number, w: numb
   enterSide(b, g, 'pz', eaveY - 0.05);
   opening(ctx, { side: 'pz', u: 0, w: w * 0.55, h: h * 0.8, y: 0.05, kind: 'window', frame: 'timber', shutters: true, mullions: 0, lit: 0.15 });
   b.pop();
+  // the loft the pitching door serves: a floor at the eaves, a ladder up to it inside (docs/INTERIORS.md)
+  hint(ctx, { kind: 'loft', x, y: eaveY, z: z1 - 0.4 });
   const look = roofLook(mat, roofTint(mat, s));
   buildRoof(b, { x0: g.x0, x1: g.x1, z0: g.z0, z1: g.z1, eaveY: eaveY + h, type: 'gable', axis: 'z', pitch, ov: 0.18, gov: 0.15, ridge: 'plain', frame: false }, { ...look, thickness: Math.min(look.thickness, 0.3) }, lod);
   if (lod === 0) b.state({ layer: Layer.Detail, flags: F.Burn }, () => b.beam([x, eaveY + h + 0.2, z1 - 0.2], [x, eaveY + h + 0.2, z1 + 0.3], 0.12, 0.14, s.timber));
@@ -176,10 +178,11 @@ export function granary(ctx: Ctx, def: BuildingDef): void {
     roof: { type: q >= 2 ? 'hip' : 'pyramid', pitch: 48, mat, ov, gov: ov, ridge: 'plain' },
   });
   b.pop();
-  // Detached stone steps (keeps the rats out).
+  // Detached stone steps (keeps the rats out), walked up to the door (docs/INTERIORS.md).
   b.state({ layer: Layer.Ground, flags: F.Snow }, () => {
     for (let i = 0; i < 3; i++) b.box(-0.45, -0.3, rect.z1 + 0.22 + i * 0.28, 0.45, lift - 0.08 - i * 0.25, rect.z1 + 0.5 + i * 0.28, { side: COL.stoneGrey, top: COL.stone });
   });
+  hint(ctx, { kind: 'steps', x: 0, y: 0, z: rect.z1 + 1.1, x1: 0, y1: lift, z1: rect.z1 + 0.02, w: 0.9 });
   ctx.out.doors.length = 0;
   ctx.out.doors.push({ x: 0, z: rect.z1 + 1.2 });
   if (q >= 2 && lod === 0) cupola(ctx, 0, 0, res.roof.topY - 0.2, 0.7, 0.55, mat, { open: false });
@@ -380,11 +383,10 @@ export function dovecote(ctx: Ctx, def: BuildingDef): void {
   // Door and flight holes.
   b.push();
   b.translate(0, 0, R);
-  b.state({ layer: Layer.Detail, flags: F.Burn | F.Snow }, () => {
-    b.flat([[-0.38, 0.05], [0.38, 0.05], [0.38, 1.55], [0, 1.75], [-0.38, 1.55]], 0.03, s.stoneTrim);
-    b.flat([[-0.3, 0.05], [0.3, 0.05], [0.3, 1.5], [0, 1.66], [-0.3, 1.5]], 0.045, pickDoor(s));
-  });
+  opening(ctx, { side: 'pz', u: 0, w: 0.62, h: 1.66, y: 0.05, kind: 'door', frame: 'stone', shape: 'pointed', color: pickDoor(s) });
   b.pop();
+  // inside: the nest-holes in the walls, from the floor to the eaves (docs/INTERIORS.md)
+  roundShell(ctx, 0, 0, R, H, 'stone', { role: 'dovecote', plinth: 0.05 });
   if (lod === 0) b.state({ layer: Layer.Detail, flags: F.NoAO }, () => {
     for (let i = 0; i < 12; i++) {
       const a = (i / 12) * Math.PI * 2 + 0.26;

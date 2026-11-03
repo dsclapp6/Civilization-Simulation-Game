@@ -183,8 +183,8 @@ export class Interiors {
    * (a threshold from the ground whatever the ground does), or NaN where no inside has one. `inside` is set when the point is
    * within a building's rooms or doorways (the terrain does not count there).
    */
-  floorAt(x: number, z: number, y: number, out?: { building: number; level: number; inside: boolean }): number {
-    let best = NaN, bestB = -1, bestL = -1, inside = false;
+  floorAt(x: number, z: number, y: number, out?: { building: number; level: number; inside: boolean; sill?: boolean }): number {
+    let best = NaN, bestB = -1, bestL = -1, inside = false, sill = false;
     const p = this.lp;
     for (const l of this.list) {
       this.toLocal(l, x, z, p);
@@ -198,7 +198,7 @@ export class Interiors {
         if (f.y > ly + (l.sill[i] ? SILL_UP : STEP_UP)) continue;
         inside = true;
         const wy = f.y + l.y;
-        if (!(best >= wy)) { best = wy; bestB = l.id; bestL = f.level; }
+        if (!(best >= wy)) { best = wy; bestB = l.id; bestL = f.level; sill = l.sill[i]; }
       }
       for (const st of l.plan.stairs) {
         if (p.x < st.x0 || p.x > st.x1 || p.z < st.z0 || p.z > st.z1) continue;
@@ -206,10 +206,10 @@ export class Interiors {
         if (h > ly + STEP_UP) continue;
         if (st.kind !== 'steps') inside = true;
         const wy = h + l.y;
-        if (!(best >= wy)) { best = wy; bestB = l.id; bestL = st.to; }
+        if (!(best >= wy)) { best = wy; bestB = l.id; bestL = st.to; sill = false; }
       }
     }
-    if (out) { out.building = bestB; out.level = bestL; out.inside = inside; }
+    if (out) { out.building = bestB; out.level = bestL; out.inside = inside; out.sill = sill; }
     return best;
   }
 
@@ -237,8 +237,11 @@ export class Interiors {
   }
 
   /** May a body step from height y to a floor at y2 here (no drop down a stairwell, off a flight or a loft)? */
-  dropOk(y: number, y2: number, inside: boolean): boolean {
-    return !inside || y2 >= y - DROP;
+  /** May a body step from height y to a floor at y2 here? Off a floor, a stair or steps it drops no more than a step (off a door's
+   *  threshold onto the ground below it, the height of the door's steps). */
+  dropOk(y: number, y2: number, fromPlan: boolean, fromSill: boolean): boolean {
+    if (!fromPlan) return true;
+    return y2 >= y - (fromSill ? SILL_UP : DROP);
   }
 }
 

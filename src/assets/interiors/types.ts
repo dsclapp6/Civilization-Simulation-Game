@@ -127,6 +127,8 @@ export interface PBlock {
   eave: number;
   ridge: number;
   axis: 'x' | 'z';
+  /** A round block (a round tower): centre, outer radius and the radius of its inner face; the room is the inscribed square. */
+  round?: { cx: number; cz: number; r: number; rin: number };
 }
 
 export interface InteriorPlan {

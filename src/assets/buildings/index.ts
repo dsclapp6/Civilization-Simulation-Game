@@ -92,7 +92,7 @@ export function runRecipe(n: NormalizedRequest, dry = false): { b: MeshBuilder; 
   const seed = hashSeed(n.kind, n.culture, n.seedBucket);
   const b = new MeshBuilder(seed);
   b.dry = dry;
-  const ctx: Ctx = { b, s: STYLES[n.culture], level: n.level, lod: n.lod, r: prng(seed ^ 0x5bd1e995), seed, owner: n.owner, out: newOut(), gate: n.gate };
+  const ctx: Ctx = { b, s: STYLES[n.culture], level: n.level, lod: n.lod, r: prng(seed ^ 0x5bd1e995), seed, owner: n.owner, out: newOut(), gate: n.gate, bucket: n.seedBucket };
   const recipe = RECIPES[n.kind];
   recipe(ctx, def);
   return { b, ctx, def };
