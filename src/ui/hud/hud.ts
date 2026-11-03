@@ -359,6 +359,9 @@ export class Hud {
   private updateDock(game: GameServices): void {
     const sim = game.sim;
     const badges = dockBadges(sim, sim.state.run.playerId);
+    // dangers on the lands are marked on the ruler's button
+    const dangers = this.tracker.dangers();
+    if (dangers > 0) badges.set('ruler', { count: dangers, tone: 'vermilion' });
     let anyRealm = false;
     for (const [pid, b] of this.dockBtns) {
       const d = this.dockEntries.get(pid) as DockEntry;

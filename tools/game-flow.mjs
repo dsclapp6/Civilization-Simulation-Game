@@ -5,7 +5,7 @@
 // ruler buttons, the settings, the wheel's Live as, quest marks, steps and their cues, the wounds tab, the accolade, V and the glide or
 // fade, the death screen's search.
 //
-//   node tools/game-flow.mjs [--seed=abc] [--devzone]
+//   node tools/game-flow.mjs [--seed=abc] [--devzone] [--port=5178]
 //
 // The loop is driven through `window.__game` (src/app/game.ts): `tick(seconds)` runs whole frames — real held
 // keys, the UI, the simulation — without drawing, so the software renderer does not slow the checks down.
@@ -17,9 +17,9 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const PORT = 5178;
 const args = process.argv.slice(2);
 const opt = (name, def) => { const a = args.find((x) => x.startsWith(`--${name}=`)); return a ? a.slice(name.length + 3) : def; };
+const PORT = Number(opt('port', 5178));
 const seed = opt('seed', 'flow');
 const devzone = args.includes('--devzone');
 
@@ -815,6 +815,54 @@ try {
   await tick(0.3);
   const back = await sim(() => ({ id: window.__game.session.sim.state.run.playerId, body: { ...window.__game.session.services.player.body() } }));
   check('Continue puts the same character back where they were', back.id === after.id && Math.hypot(back.body.x - spot.x, back.body.z - spot.z) < 1, JSON.stringify({ back, spot }));
+
+  // ---- (station, duties and the start) a run that starts as a lord: the seat opens, the agenda stands under the tracker, the compact HUD
+  await sim(() => window.__game.host.quitToMenu());
+  await page.waitForFunction(() => window.__game.session === null && window.__game.host.screen === 'menu', null, { timeout: 60000 });
+  await page.getByRole('button', { name: 'New run' }).click();
+  await page.waitForSelector('.mu-start');
+  check('the New run page offers both ways to begin, the birth first', (await page.locator('.mu-start').count()) === 2 && (await page.locator('.mu-start.sel').getAttribute('data-start')) === 'birth');
+  await page.locator('.mu-start[data-start="lord"]').click();
+  check('choosing Start as a lord offers to begin at once (no shop)', (await page.getByRole('button', { name: 'Begin as a lord' }).count()) === 1 && (await page.getByRole('button', { name: 'Legacy shop' }).count()) === 0);
+  await page.getByRole('button', { name: 'Begin as a lord' }).click();
+  await page.waitForSelector('.mu-birth', { timeout: 240000 });
+  await page.evaluate(() => window.__game.freeze(true));
+  check('a lord\'s reveal says so and offers the seat', (await page.locator('.mu-birth-headline').textContent()).match(/year-old (man|woman), (lord|lady) of /) !== null && (await page.getByRole('button', { name: 'Take your seat' }).count()) === 1, await page.locator('.mu-birth-headline').textContent());
+  await page.getByRole('button', { name: 'Take your seat' }).click();
+  await wait(300);
+  check('the intro card follows', (await ui()).panels.join() === 'intro');
+  check('the intro says the player wakes as the lord of the place', (await page.locator('.mu-intro-text').textContent()).match(/lord of/) !== null, await page.locator('.mu-intro-text').textContent());
+  await page.getByRole('button', { name: 'Straight in' }).click();
+  await wait(500);
+  s = await ui();
+  check('then the seat of government opens by itself', s.panels.join() === 'ruler', JSON.stringify(s));
+  const lordInfo = await sim(() => { const se = window.__game.session; const st = se.sim.state; const me = st.persons.get(st.run.playerId); return { age: se.services.player.hud().age, titles: [...st.titlesHeldBy(me.id)].length, rules: se.services.realm.canRule(me.id) }; });
+  check('the lord is a grown holder of a title who rules', lordInfo.age >= 18 && lordInfo.titles > 0 && lordInfo.rules, JSON.stringify(lordInfo));
+  await page.keyboard.press('Escape');
+  await tick(0.3);
+  await page.waitForTimeout(150);
+  if ((await ui()).panels.includes('ruler')) { await page.keyboard.press('Escape'); await tick(0.3); }
+  await page.evaluate(() => window.__game.freeze(false));
+  await tick(2.5);
+  const card = await page.evaluate(() => { const e = document.querySelector('.mu-tracker-agenda:not(.mu-hide)'); return e ? e.textContent : ''; });
+  check('a lord\'s tracker carries the matters of the realm', /Matters of the realm/.test(card), card);
+  const tut = await sim(() => window.__game.session.services.objectives.list().filter((o) => o.state === 'active').map((o) => `${o.source}:${o.title}`));
+  check('a lord has no chores or goals, only the first-day lessons', tut.every((t) => t.startsWith('tutorial:')) && tut.length > 0, tut.join(' | '));
+  // a thin purse is a matter, and its button opens the page
+  await sim(() => { const se = window.__game.session; const st = se.sim.state; const v = se.services.realm.view(st.run.playerId); st.households.get(v.household).purse = 12; });
+  await tick(2.5);
+  const item = page.locator('.mu-agenda-item', { hasText: 'treasury is thin' });
+  check('a thin treasury is listed', (await item.count()) === 1);
+  await item.click();
+  await tick(0.3);
+  check('and its button opens the seat of government', (await ui()).panels.join() === 'ruler');
+  await page.keyboard.press('Escape');
+  await tick(0.3);
+  // the compact HUD
+  await sim(() => window.__game.host.setSettings({ compactHud: true }));
+  await tick(0.3);
+  check('the compact HUD setting makes the cards flat', (await page.locator('.mu-hud.mu-compact').count()) === 1);
+  await sim(() => window.__game.host.setSettings({ compactHud: false }));
 } catch (e) {
   console.log('FLOW ERROR', e.message);
   failures++;

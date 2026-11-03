@@ -44,7 +44,7 @@ export function introText(O: Obj): string {
   const place = O.settlementById.get(me.settlement)?.name ?? 'the village';
   const head = headOf(O, me);
   const rel = head ? O.deps.social.relationLabel(me.id, head.id) : '';
-  const own = head?.id === me.id;
+  const own = O.state.households.get(me.household)?.head === me.id;
   const owner = own ? 'your own' : /^your (father|mother|uncle|aunt|grandfather|grandmother|brother|sister|lord|master)$/.test(rel) ? `${rel}'s` : 'your family\'s';
   const house = home ? BUILDINGS[home.kind].name.toLowerCase() : 'home';
   const noble = O.state.run.birthClass === 'gentry' || O.state.run.birthClass === 'knightly' || O.state.run.birthClass === 'baronial';

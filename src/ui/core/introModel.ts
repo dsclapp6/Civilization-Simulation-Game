@@ -4,7 +4,7 @@
 import { BUILDINGS } from '../../content/types';
 import { SEASON_NAMES, toDate } from '../../core/time';
 import { settlementCard } from '../../sim/api';
-import type { BuildingState } from '../../sim/state';
+import { ageYears, type BuildingState } from '../../sim/state';
 import type { GameServices } from '../types';
 
 export interface TourSpot { kind: 'home' | 'strip' | 'church'; x: number; z: number; label: string; caption: string }
@@ -70,7 +70,9 @@ export function introModel(game: GameServices): IntroModel | null {
   const given = game.objectives?.intro?.();
   const paragraphs = [given ? given : `${SEASON_NAMES[d.season]}. ${wake} ${SEASON_LINES[d.season]}`];
   const why = game.objectives?.tracked()?.why;
-  const classLine = CLASS_LINES[st.run.birthClass];
+  // a lord (the run began as one) holds the manor himself
+  const lordly = !!head && head.id === me.id && ageYears(me, sim.absDay) >= 18 && st.titlesHeldBy(me.id).size > 0;
+  const classLine = lordly ? 'The manor is yours: its fields, its purse and its men. Orders are given from the seat of government (U); the first day will show you how.' : CLASS_LINES[st.run.birthClass];
   const placeLine = given && card ? `${card.name} is ${/^[aeiou]/i.test(card.kind) ? 'an' : 'a'} ${card.kind}${card.county || card.kingdom ? ` in ${card.county || card.kingdom}` : ''}.` : '';
   paragraphs.push([placeLine, classLine, why].filter(Boolean).join(' '));
   paragraphs.push('Look about you. Whatever there is to do is written in the top left corner of the screen, and a gold marker shows you where.');

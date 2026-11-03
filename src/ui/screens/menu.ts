@@ -215,12 +215,9 @@ export class MenuLayer {
       h('div.mu-tier-top', null,
         h('span.mu-tier-ico', null, icon(lord ? 'castle' : 'home', 24)),
         h('div', null, h('h4', null, lord ? 'Start as a lord' : 'Be born into a family'), h('div.mu-dim.mu-ital.mu-small', null, lord ? 'A manor of your own from the first morning' : 'The birth lottery, and the Legacy shop'))),
-      h('ul.mu-bullets', null, (lord
-        ? ['You are a grown man or woman, the holder of a manor, with its fields, purse and men to order from the seat of government (U).',
-          'The first day teaches the ruling: hear your steward, set the fields, put your purse to work, drill at the yard.',
-          'No Legacy ranks are spent; you begin as you are.']
-        : ['You are born into a random family of the period, weighted like the real world: most are peasants, a few are gentry or noble. You start at twelve.',
-          'Your Legacy gold buys stat ranks for the birth.']).map((c) => h('li', null, c))),
+      h('p.mu-small.mu-ink2.mu-start-text', null, lord
+        ? 'A grown holder of a manor, ruling its fields, purse and men from the seat of government (U) from the first morning. The first day teaches the ruling; no Legacy ranks are spent.'
+        : 'A random family of the period, most of them peasants, and a start at twelve. Your Legacy gold buys stat ranks for the birth.'),
       sel ? h('span.mu-tier-check', null, icon('check', 16)) : null);
     const pick = (): void => { this.startKind = kind; this.go('difficulty'); };
     card.addEventListener('click', pick);

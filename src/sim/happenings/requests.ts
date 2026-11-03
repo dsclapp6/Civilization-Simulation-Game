@@ -253,13 +253,14 @@ function maybeOffer(H: Hap): void {
   const cfg = DATA.requests;
   const open = H.save.reqs.filter((r) => r.state === 'offered' || r.state === 'accepted').length;
   if (open >= cfg.maxOpen) return;
-  // a lord is not sent on villagers' errands: their petitions are matters of the realm, decided from the ruler's seat
-  if (H.state.titlesHeldBy(me.id).size > 0) return;
   const since = H.day - H.save.lastOffer;
   if (since < cfg.minGapDays * GAP) return;
   // a long quiet spell makes the next request likelier
   const p = hourly(cfg.hourlyChance * H.diff('requests')) + Math.min(0.5, Math.max(0, since - 1.2 / PACE) * 0.35 * PACE);
   if (!H.rng().chance(p)) return;
+  // a lord is not sent on villagers' errands: their petitions are matters of the realm, decided from the ruler's seat (the draw is
+  // made all the same, so the stream of chance does not depend on who rules)
+  if (H.state.titlesHeldBy(me.id).size > 0) return;
   offer(H, me);
 }
 

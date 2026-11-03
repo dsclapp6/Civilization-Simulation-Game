@@ -46,6 +46,7 @@ export class Tracker {
   private readonly agenda = h('div.mu-tracker-agenda.mu-hide');
   private agendaSig = '';
   private agendaAt = -10;
+  private dangerCount = 0;
   private sig = '';
   /** The module's change counter when the tracked task was last read (it says when anything about the tasks changed). */
   private version = -2;
@@ -81,6 +82,9 @@ export class Tracker {
     this.el.classList.add(`flash-${kind}`);
     this.flashUntil = this.now + 2;
   }
+
+  /** How many of the lord's matters are dangers (the ruler's button on the dock carries the count). */
+  dangers(): number { return this.dangerCount; }
 
   setVisible(v: boolean): void { this.el.classList.toggle('mu-hide', !v); }
 
@@ -125,6 +129,7 @@ export class Tracker {
   private paintAgenda(game: GameServices): void {
     const ruling = rules(game);
     const items = ruling ? realmAgenda(game) : [];
+    this.dangerCount = items.filter((i) => i.tone === 'danger').length;
     const show = ruling && (items.length > 0 || !this.cur);
     const sig = show ? `r|${this.cur ? 'c' : ''}|${items.map((i) => `${i.key}:${i.text}`).join('|')}` : '';
     if (sig === this.agendaSig) return;
