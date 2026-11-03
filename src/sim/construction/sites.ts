@@ -9,7 +9,7 @@ import { evaluate, depositAt, nearestHeld, OUTPOST_REACH, type Standing } from '
 import type { Construction } from './core';
 import { footprintCorners } from './geometry';
 import {
-  CANCEL_REFUND, DEMOLISH_LABOUR, REPAIR, SALVAGE, costValue, goodsValue, levelCost, maxCrew, maxLevelOf, priceOf, rulesOf, totalCost,
+  CANCEL_REFUND, DEMOLISH_LABOUR, REPAIR, SALVAGE, costValue, goodsValue, levelCost, maxCrew, maxLevelOf, priceOf, rulesOf, stockPence, totalCost,
 } from './data';
 import type { OutpostRec, SiteRec, WorkKind } from './save';
 import { noScopeReason, rankFolk, scopeInfo, type Auth } from './scope';
@@ -136,7 +136,7 @@ function newRec(C: Construction, o: {
     id: C.save.nextSite++, building: b.id, kind: b.kind, work: o.work, level: o.level, settlement: b.settlement, outpost: o.outpost ?? 0,
     household: o.payer.id, house: o.house, builder: o.builder, priority: o.priority ?? (C.save.nextSite - 1) * 10, placed: C.absDay,
     occupant: o.occupant, hired: o.hired ?? 'auto',
-    need: {}, have: {}, transit: {}, labour: Math.max(0.25, r2(o.cost.labour)), done: 0, pence: o.cost.pence, paid: 0, damage0: o.damage0 ?? 0,
+    need: {}, have: {}, transit: {}, labour: Math.max(0.25, r2(o.cost.labour)), done: 0, pence: o.cost.pence - (o.work === 'build' && o.level === 1 ? stockPence(b.kind) : 0), paid: 0, damage0: o.damage0 ?? 0,
     perDay: 0, crew: [], from: [0, 0, 0], planned: -1, status: 'waiting', note: 'Staked out: waiting for materials and hands',
     started: false, told: 0, idle: 0, shown: 0, closed: 0,
   };
@@ -482,7 +482,7 @@ export function viewOf(C: Construction, rec: SiteRec): SiteView {
     x: b?.x ?? 0, z: b?.z ?? 0, rot: b?.rot ?? 0, household: rec.household, house: rec.house, progress, missing, labourLeft, workers,
     status: rec.status, note: rec.note || undefined, eta: open ? eta : 0, priority: rec.priority,
     level: rec.level, builder: rec.builder, stage: stageOf(progress), hired: rec.from[2], materials: materialFraction(rec),
-    cost: { goods: rec.need, labour: rec.labour, pence: rec.pence },
+    cost: { goods: rec.need, labour: rec.labour, pence: rec.pence + (rec.work === 'build' && rec.level === 1 ? stockPence(rec.kind) : 0) },
   };
   if (rec.outpost) { const o = C.outpost(rec.outpost); if (o) v.outpost = o.name; }
   if (rec.line) v.line = rec.line;

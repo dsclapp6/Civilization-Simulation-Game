@@ -28,6 +28,8 @@ export interface KindRules {
   slope: number;
   skill: SkillId;
   does: string;
+  /** Beasts that come with it, bought in its price and delivered to the payer's stores when it is done (item key → head). */
+  stock?: Readonly<Record<string, number>>;
   levels: readonly LevelCost[];
 }
 
@@ -35,7 +37,7 @@ export interface OfficeRule { agent: boolean; cats?: readonly BuildCategory[]; m
 
 interface RawKind {
   cat: BuildCategory; rank: number; own: number; max?: MaxPer; tech?: string; terrain?: KindRules['terrain'];
-  deposits?: ResourceKind[]; wild?: boolean; slope?: number; skill?: SkillId; does: string; levels: LevelCost[];
+  deposits?: ResourceKind[]; wild?: boolean; slope?: number; skill?: SkillId; does: string; stock?: Record<string, number>; levels: LevelCost[];
 }
 
 interface RawFile {
@@ -73,7 +75,7 @@ for (const kind of BUILDING_KINDS) {
   if (!r) continue;
   RULES.set(kind, {
     kind, cat: r.cat, rank: r.rank, own: r.own, max: r.max, tech: r.tech, terrain: r.terrain, deposits: r.deposits,
-    wild: r.wild === true, slope: r.slope ?? DEFAULT_SLOPE, skill: r.skill ?? 'carpentry', does: r.does, levels: r.levels,
+    wild: r.wild === true, slope: r.slope ?? DEFAULT_SLOPE, skill: r.skill ?? 'carpentry', does: r.does, stock: r.stock, levels: r.levels,
   });
 }
 
@@ -99,10 +101,30 @@ export function maxLevelOf(kind: BuildingKind): number { return BUILDINGS[kind].
 
 /** Cost of raising the kind new (level 1) or of upgrading it to `level` (level 2+): the content's entry. */
 export function levelCost(kind: BuildingKind, level = 1): BuildCost {
+  const c = bareCost(kind, level);
+  const sp = i0(level) ? stockPence(kind) : 0;
+  return sp > 0 ? { goods: c.goods, labour: c.labour, pence: c.pence + sp } : c;
+}
+
+const i0 = (level: number): boolean => Math.round(level) <= 1;
+
+/** The building's own cost of that level, without the beasts that come with a new one. */
+export function bareCost(kind: BuildingKind, level = 1): BuildCost {
   const r = rulesOf(kind);
   const i = Math.max(1, Math.min(r.levels.length, Math.round(level))) - 1;
   const l = r.levels[i];
   return { goods: l.goods, labour: l.labour, pence: l.pence };
+}
+
+/** The beasts bought with a new building of the kind (item key → head); empty for most. */
+export function stockOf(kind: BuildingKind): Readonly<Record<string, number>> { return RULES.get(kind)?.stock ?? NO_STOCK; }
+const NO_STOCK: Readonly<Record<string, number>> = Object.freeze({});
+
+/** What the beasts that come with a new building are worth at reference prices, pence (a part of its price). */
+export function stockPence(kind: BuildingKind): number {
+  let v = 0;
+  for (const [key, n] of Object.entries(stockOf(kind))) v += n * priceOf(key.split('#')[0]);
+  return Math.round(v);
 }
 
 /** Everything spent on a building of a level so far (new + the upgrades up to it). */
@@ -111,7 +133,7 @@ export function totalCost(kind: BuildingKind, level: number): BuildCost {
   let labour = 0, pence = 0;
   const top = Math.max(1, Math.min(rulesOf(kind).levels.length, Math.round(level)));
   for (let l = 1; l <= top; l++) {
-    const c = levelCost(kind, l);
+    const c = bareCost(kind, l);
     for (const [g, q] of Object.entries(c.goods)) goods[g] = (goods[g] ?? 0) + q;
     labour += c.labour;
     pence += c.pence;
