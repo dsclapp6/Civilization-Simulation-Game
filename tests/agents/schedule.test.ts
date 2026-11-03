@@ -4,7 +4,7 @@ import { pointInPolygon } from '../../src/core/math';
 import { daylight } from '../../src/core/time';
 import { marketDayOf } from '../../src/sim/calendar';
 import { ageYears, type Person } from '../../src/sim/state';
-import { newIntent } from '../../src/agents/schedule';
+import { dutiesOf, newIntent } from '../../src/agents/schedule';
 import type { Settlement } from '../../src/world/types';
 import { makeRig, settlementOfKind, setClock, village, type Rig } from './helpers';
 
@@ -63,6 +63,21 @@ describe('whereabouts', () => {
       if (sp.strips.some((s) => pointInPolygon(I.x, I.z, s.poly) || Math.hypot(I.x - s.poly[0].x, I.z - s.poly[0].z) < 40)) atStrip++;
     }
     expect(atStrip / farmers.length).toBeGreaterThan(0.8);
+  });
+
+  it('sends a knight about his duties through the week: patrol, training the men, the forge, attending the lord', () => {
+    const k = adults().find((p) => p.sex === 'm')!;
+    const was = k.career;
+    k.career = 'knight';
+    const seen = new Set<string>();
+    try {
+      for (let dow = 1; dow <= 3; dow++) for (const season of [0, 1, 2, 3]) for (const frac of [0.38, 0.6]) seen.add(where(k, season, dow, frac).label);
+    } finally { k.career = was; }
+    const all = [...seen].join(' | ');
+    expect(all).toMatch(/patrol/i);
+    expect(all).toMatch(/Training the men|Sword practice/);
+    expect(seen.size).toBeGreaterThanOrEqual(3);
+    expect(dutiesOf('knight')).toEqual(expect.arrayContaining(['At the forge, seeing to his arms', 'Riding the bounds on patrol']));
   });
 
   it('keeps the priest at the church and the smith at the smithy', () => {

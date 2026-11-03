@@ -189,7 +189,7 @@ export class PlayerController implements PlayerApi {
 
   // ---- reused objects ----
   private readonly hudObj: PlayerHud;
-  private readonly hudAction: NonNullable<PlayerHud['action']> = { label: '', progress: 0, seconds: 0 };
+  private readonly hudAction: NonNullable<PlayerHud['action']> = { label: '', progress: 0, seconds: 0, id: '', anim: '' };
   private readonly playerView: PlayerView = { personId: 0, x: 0, y: 0, z: 0, yaw: 0, mounted: false, alive: true };
   private readonly focusPoint: P2 = { x: 0, z: 0 };
   private readonly markers: MapMarker[] = [
@@ -426,7 +426,7 @@ export class PlayerController implements PlayerApi {
     const a = this.sim.actions.active(this.personId);
     if (a && a.option.seconds > 0) {
       const ha = this.hudAction;
-      ha.label = a.option.label; ha.progress = a.progress; ha.seconds = a.option.seconds;
+      ha.label = a.option.label; ha.progress = a.progress; ha.seconds = a.option.seconds; ha.id = a.option.id;
       // a bout with visible steps says which one it is in (the action bar's label and the sound cue follow it)
       const cur = stepAt(a.option.steps, a.progress);
       if (cur) {
@@ -434,6 +434,8 @@ export class PlayerController implements PlayerApi {
         hs.index = cur.index; hs.count = a.option.steps!.length; hs.label = cur.step.label; hs.sfx = cur.step.sfx;
         ha.step = hs;
       } else ha.step = undefined;
+      // the work mini-game reads which bout it is and how the body moves in it (the step's animation, else the bout's)
+      ha.anim = cur?.step.anim ?? a.option.anim ?? '';
       h.action = ha;
     } else h.action = null;
     h.travel = this.journey ? this.journey.state : null;

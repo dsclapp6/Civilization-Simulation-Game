@@ -75,7 +75,10 @@ export function secondsFor(bouts: number, speed: number, min = 5, max = 90): num
 
 /** Experience for `bouts` bouts of work (perks and quick learners are applied by gainSkill). */
 export function giveXp(E: Econ, p: Person, skill: SkillId, base: number, bouts: number): void {
-  const mult = 1 + perkSum(p, skill, 'xp') + perkTotal(p, 'xpAll');
+  // the hand in the bout's mini-game: a deft bout teaches more, a clumsy one less (unplayed: as before)
+  const perf = E.sim.actions.performance(p.id);
+  const hand = perf < 0 ? 1 : 0.75 + 0.75 * perf;
+  const mult = (1 + perkSum(p, skill, 'xp') + perkTotal(p, 'xpAll')) * hand;
   gainSkill(E.sim, p, skill, base * bouts * mult * XP_SCALE);
 }
 

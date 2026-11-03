@@ -140,11 +140,15 @@ export interface ActiveAction {
   /** 0..1 */
   progress: number;
   readonly startedDay: number;
+  /** The worker's hand in the bout's mini-game (0..1, the mean of their strokes); −1 when it was not played. */
+  perf: number;
+  /** Strokes played in the mini-game. */
+  hits: number;
 }
 
 export type ActionEvent =
   | { type: 'started'; actor: PersonId; option: ActionOption }
-  | { type: 'completed'; actor: PersonId; option: ActionOption; outcome: ActionOutcome }
+  | { type: 'completed'; actor: PersonId; option: ActionOption; outcome: ActionOutcome; perf?: number }
   | { type: 'cancelled'; actor: PersonId; option: ActionOption; reason: string };
 
 const CHECK_INTERVAL = 1;
@@ -155,6 +159,8 @@ export class ActionRegistry {
   private readonly running = new Map<PersonId, ActiveAction & { sinceCheck: number }>();
   private readonly listeners: Array<(e: ActionEvent) => void> = [];
   private readonly scratch: ActionOption[] = [];
+  /** The bout being completed and the hand it was done with (read by providers through `performance`). */
+  private finishing: { actor: PersonId; perf: number } | null = null;
 
   constructor(private readonly ctx: SimContext) {}
 
@@ -221,8 +227,29 @@ export class ActionRegistry {
     p.start?.(this.ctx, actor, option);
     this.emit({ type: 'started', actor, option });
     if (option.seconds <= 0) return this.finish(actor, option, p, 1);
-    this.running.set(actor, { actor, option, elapsed: 0, progress: 0, startedDay: this.ctx.absDay, sinceCheck: 0 });
+    this.running.set(actor, { actor, option, elapsed: 0, progress: 0, startedDay: this.ctx.absDay, sinceCheck: 0, perf: -1, hits: 0 });
     return { ok: true };
+  }
+
+  /**
+   * A stroke of the bout's mini-game (the forge's hammer on the beat, the seed in the furrow, the steady hand on a
+   * wound): `score` 0 (a miss) .. 1 (perfect). Good strokes bring the end of the bout nearer; the mean is the worker's
+   * hand, which the providers read when the bout is done (`performance`): more experience, a better piece.
+   */
+  perform(actor: PersonId, score: number): void {
+    const a = this.running.get(actor);
+    if (!a) return;
+    const s = Math.max(0, Math.min(1, score));
+    a.perf = a.hits === 0 ? s : (a.perf * a.hits + s) / (a.hits + 1);
+    a.hits++;
+    a.elapsed = Math.min(a.option.seconds * 0.98, a.elapsed + a.option.seconds * 0.045 * s);
+    a.progress = Math.min(1, a.elapsed / a.option.seconds);
+  }
+
+  /** The worker's hand in the bout being finished (or running): 0..1, −1 when no mini-game was played. */
+  performance(actor: PersonId): number {
+    if (this.finishing && this.finishing.actor === actor) return this.finishing.perf;
+    return this.running.get(actor)?.perf ?? -1;
   }
 
   cancel(actor: PersonId, reason = 'cancelled'): void {
@@ -257,14 +284,17 @@ export class ActionRegistry {
       }
       if (a.progress >= 1) {
         this.running.delete(a.actor);
-        this.finish(a.actor, a.option, p, 1);
+        this.finish(a.actor, a.option, p, 1, a.perf);
       }
     }
   }
 
-  private finish(actor: PersonId, option: ActionOption, p: ActionProvider, fraction: number): ActionOutcome {
-    const outcome = this.safeComplete(p, actor, option, fraction);
-    this.emit({ type: 'completed', actor, option, outcome });
+  private finish(actor: PersonId, option: ActionOption, p: ActionProvider, fraction: number, perf = -1): ActionOutcome {
+    this.finishing = { actor, perf };
+    let outcome: ActionOutcome;
+    try { outcome = this.safeComplete(p, actor, option, fraction); } finally { this.finishing = null; }
+    if (perf >= 0 && outcome.ok && outcome.message) outcome.message = `${outcome.message} ${perf >= 0.85 ? '(Masterly work.)' : perf >= 0.6 ? '(Good work.)' : perf >= 0.35 ? '' : '(Clumsy work.)'}`.trim();
+    this.emit(perf >= 0 ? { type: 'completed', actor, option, outcome, perf } : { type: 'completed', actor, option, outcome });
     if (outcome.ok && option.repeat && option.seconds > 0) {
       // re-list so the next bout reflects the new state (strip progress, tool wear…)
       const next = this.list(actor, option.target).find((o) => o.id === option.id && o.provider === option.provider);

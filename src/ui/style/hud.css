@@ -290,3 +290,28 @@
 .mu-hud-clock.folded .mu-hud-speeds, .mu-hud-clock.folded .mu-hud-place, .mu-hud-clock.folded .mu-hud-daytype { display: none; }
 .mu-minimap.folded .mu-minimap-frame, .mu-minimap.folded .mu-minimap-caption, .mu-minimap.folded .mu-minimap-btn { display: none; }
 .mu-toasts.folded .mu-toast:not(.urgent) { display: none; }
+
+/* ---- work mini-games (above the action bar) ---- */
+.mu-mini {
+  position: absolute; left: 50%; bottom: 142px; transform: translateX(-50%); width: 340px; padding: 8px 14px 10px;
+  background: var(--paper); border-radius: 3px; border: 1px solid #1f1309; pointer-events: auto; user-select: none; cursor: pointer;
+  box-shadow: 0 0 0 2px rgba(172, 130, 58, 0.9), 0 0 0 3px #1f1309, 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+.mu-mini-title { font-weight: 700; font-size: 13.5px; margin-bottom: 6px; }
+.mu-mini-stage { position: relative; }
+.mu-mini-track { position: relative; height: 16px; border-radius: 2px; background: #3a2a19; box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6); overflow: hidden; }
+.mu-mini-band { position: absolute; top: 0; bottom: 0; background: linear-gradient(180deg, #f2d27a, #c49a35); box-shadow: 0 0 6px rgba(242, 210, 122, 0.7); }
+.mu-mini-needle { position: absolute; top: -2px; bottom: -2px; width: 4px; margin-left: -2px; background: #fff7e2; box-shadow: 0 0 4px #000; }
+.mu-mini-stage.steady .mu-mini-band { background: linear-gradient(180deg, #a8d48a, #5b9a3e); box-shadow: 0 0 6px rgba(140, 200, 110, 0.7); }
+.mu-mini-key { text-align: center; font-weight: 700; font-size: 20px; letter-spacing: 0.04em; margin-bottom: 6px; }
+.mu-mini-timer { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #7a5a2c, #c49a35); }
+.mu-mini-target { position: relative; height: 92px; display: flex; align-items: center; justify-content: center; margin-bottom: 6px;
+  background: radial-gradient(circle, #f6e7be 0 14px, #b3261e 15px 24px, #f6e7be 25px 34px, #1f4f9a 35px 44px, #e9dfc4 45px); border-radius: 2px; }
+.mu-mini-ring { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: #1b1208; }
+.mu-mini-reticle { position: absolute; width: 18px; height: 18px; border: 2px solid #1b1208; border-radius: 50%; box-shadow: 0 0 0 1px #fff7e2; }
+.mu-mini-draw { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #5b9a3e, #c49a35); }
+.mu-mini-word { height: 18px; margin-top: 4px; text-align: center; font-weight: 700; font-size: 14px; }
+.mu-mini-word.perfect { color: #8a6a10; text-shadow: 0 0 6px rgba(242, 210, 122, 0.9); }
+.mu-mini-word.good { color: #2f7d32; }
+.mu-mini-word.miss { color: #b3261e; }
+.mu-mini-help { font-size: 12px; opacity: 0.8; text-align: center; }
