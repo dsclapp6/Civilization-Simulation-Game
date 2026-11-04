@@ -890,6 +890,9 @@ export class BuildingSystem {
     for (const id of inside) { const c = cutAt?.get(id); if (c) this.rayPass.set(id, c); }
   }
 
+  /** The player is inside a building (its cut-away is on; the camera's boom stays in the room): J2's camera passes walls only outside. */
+  isInside(): boolean { return this.rayPass.size > 0; }
+
   /** Where a building's model stands (world), and its detailed model when one is drawn. */
   placement(id: number): { x: number; y: number; z: number; rot: number; asset: BuildingAsset | null; lod: number; visible: boolean } | null {
     const e = this.entries.get(id);

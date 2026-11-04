@@ -69,9 +69,11 @@ class RangeAllocator {
 
 const VERT_PARS = /* glsl */`
 uniform highp sampler2D crowdBones;
+uniform vec4 crowdHide;
 attribute vec4 skin;
 attribute float slot;
 varying float vCrowdFlag;
+varying float vCrowdHide;
 varying vec4 vCrowdParams;
 mat4 crowdBone( const in int s, const in int b ) {
   int x = b * 3;
@@ -90,10 +92,15 @@ const VERT_SKIN = /* glsl */`
     crowdM += ( crowdB - crowdM ) * ( skin.z / 255.0 );
   }
   vCrowdFlag = skin.w;
+  // first person: the head of the one whose eyes the camera is at (crowdHide.x = its slot, .yzw = the head, eyes and mouth bones) is
+  // left out of the view but stays in the shadow pass, so the player's shadow has a head
+  int crowdSk = int( skin.x + 0.5 );
+  vCrowdHide = ( crowdHide.x >= 0.0 && crowdSlot == int( crowdHide.x + 0.5 ) && ( crowdSk == int( crowdHide.y + 0.5 ) || crowdSk == int( crowdHide.z + 0.5 ) || crowdSk == int( crowdHide.w + 0.5 ) ) ) ? 1.0 : 0.0;
   vCrowdParams = texelFetch( crowdBones, ivec2( ${PARAM_TEXEL}, crowdSlot ), 0 );
 `;
 
 const FRAG_PARS = /* glsl */`
+varying float vCrowdHide;
 varying float vCrowdFlag;
 varying vec4 vCrowdParams;
 `;
@@ -172,6 +179,7 @@ export class SkinnedCrowd {
   private slotAttr!: THREE.BufferAttribute;
   private index!: THREE.BufferAttribute;
   private boneUniform: { value: THREE.DataTexture };
+  private readonly hideUniform: { value: THREE.Vector4 };
   /** Raw bone texture data: slotCapacity rows × SLOT_TEXELS texels × 4 floats. */
   bones: Float32Array;
   private boneTex: THREE.DataTexture;
@@ -193,39 +201,45 @@ export class SkinnedCrowd {
     this.bones = new Float32Array(this.slotCap * SLOT_TEXELS * 4);
     this.boneTex = this.makeBoneTexture();
     this.boneUniform = { value: this.boneTex };
+    this.hideUniform = { value: new THREE.Vector4(-1, 0, 0, 0) };
 
     this.material = new THREE.MeshStandardMaterial({
       vertexColors: true, flatShading: true, roughness: 0.86, metalness: 0, side: THREE.DoubleSide,
     });
     this.material.name = `${opts.name}-crowd`;
     const uniform = this.boneUniform;
+    const hide = this.hideUniform;
     this.material.onBeforeCompile = (shader) => {
       shader.uniforms.crowdBones = uniform;
+      shader.uniforms.crowdHide = hide;
       shader.uniforms.uILight = INDOOR_LIGHTS.pos;
       shader.uniforms.uILightCol = INDOOR_LIGHTS.col;
       shader.vertexShader = patchVertex(shader.vertexShader, true);
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', `#include <common>\n${FRAG_PARS}\n${GLSL_INDOOR}`)
+        .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n  if ( vCrowdHide > 0.5 ) discard;')
         // the hearth and the candles of the room one is in light the people too (docs/INTERIORS.md)
         .replace('#include <opaque_fragment>', 'outgoingLight += mlIndoor(diffuseColor.rgb, normal, -vViewPosition);\n#include <opaque_fragment>')
         .replace('#include <roughnessmap_fragment>', FRAG_ROUGH)
         .replace('#include <metalnessmap_fragment>', FRAG_METAL)
         .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\n${FRAG_EMISSIVE}`);
     };
-    this.material.customProgramCacheKey = () => 'millennia-crowd-std-v2';
+    this.material.customProgramCacheKey = () => 'millennia-crowd-std-v3';
 
     this.depthMat = new THREE.MeshDepthMaterial();
     this.depthMat.onBeforeCompile = (shader) => {
       shader.uniforms.crowdBones = uniform;
+      shader.uniforms.crowdHide = hide;
       shader.vertexShader = patchVertex(shader.vertexShader, false);
     };
-    this.depthMat.customProgramCacheKey = () => 'millennia-crowd-depth-v1';
+    this.depthMat.customProgramCacheKey = () => 'millennia-crowd-depth-v2';
     this.distMat = new THREE.MeshDistanceMaterial();
     this.distMat.onBeforeCompile = (shader) => {
       shader.uniforms.crowdBones = uniform;
+      shader.uniforms.crowdHide = hide;
       shader.vertexShader = patchVertex(shader.vertexShader, false);
     };
-    this.distMat.customProgramCacheKey = () => 'millennia-crowd-dist-v1';
+    this.distMat.customProgramCacheKey = () => 'millennia-crowd-dist-v2';
 
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.name = opts.name;
@@ -321,6 +335,14 @@ export class SkinnedCrowd {
 
   /** Offset (in floats) of bone b of slot s inside `bones`. */
   boneOffset(s: number, b: number): number { return (s * SLOT_TEXELS + b * 3) * 4; }
+
+  /**
+   * First person: leave this slot's head parts (the bones given) out of the view the camera sees, while the shadow pass still
+   * draws them. A slot of -1 shows everyone whole.
+   */
+  setHidden(slot: number, ...bones: number[]): void {
+    this.hideUniform.value.set(slot, bones[0] ?? 0, bones[1] ?? bones[0] ?? 0, bones[2] ?? bones[0] ?? 0);
+  }
 
   /** Collapse every bone of a slot (actor invisible). */
   hideSlot(s: number): void {

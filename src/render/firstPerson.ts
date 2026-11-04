@@ -1,6 +1,7 @@
-// First person (the default view): the camera sits at the player's eyes and the player's own head is not drawn.
-// Per frame this finds the eyes in the character layer (the rider's eyes on a horse), hands them to the camera rig, and
-// tells the layer whose head to hide. The body, arms, hands and what they hold stay in view: look down and they are yours.
+// First person (the default view): the camera sits at the player's eyes and the player's own head is left out of the camera's view (it still
+// casts its shadow, see assets/characters/engine/crowd.ts). Per frame this finds the eyes in the character layer (the rider's eyes on a horse),
+// hands them to the camera rig, and tells the layer whose head to hide. The body, arms, hands and what they hold stay in view: look down and
+// they are yours, and at rest the arms are posed low in front of you (assets/characters/human/animator.ts fpArms).
 import * as THREE from 'three';
 import type { PlayerView } from '../core/view';
 import type { CameraRig } from './camera/cameraRig';

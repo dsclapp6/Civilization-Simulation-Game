@@ -100,7 +100,6 @@ export async function start(root: AppRoot): Promise<void> {
     inGame: () => host.screen === 'game' && host.session !== null,
     renderer: () => host.session?.renderer ?? null,
     settings: () => host.settings(),
-    inRoom: () => !!host.session?.interior.active,
     rememberView: (d) => host.setSettings({ viewDistance: d }),
     travelling: () => host.session?.services.player.travel()?.phase === 'travelling',
     openWheel: () => ui.open({ panel: 'actions' }),
