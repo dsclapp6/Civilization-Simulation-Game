@@ -72,7 +72,7 @@ export class Adv {
   seeding = false;
   readonly settlementById = new Map<number, Settlement>();
   private readonly houseCache = new Map<number, { ver: number; techs: ReadonlySet<string> }>();
-  private readonly settleCache = new Map<number, { ver: number; day: number; counts: Map<string, number> }>();
+  private readonly settleCache = new Map<number, { ver: number; res: number; counts: Map<string, number> }>();
   private readonly kindCache = new Map<number, { rev: number; kinds: Set<string> }>();
 
   constructor(sim: Simulation, deps: Wave3Deps) {
@@ -179,15 +179,16 @@ export class Adv {
 
   /** tech -> number of residents of the settlement who know it (cached for the day). */
   settlementCounts(settlement: number): ReadonlyMap<string, number> {
-    const day = Math.floor(this.day);
+    // (keyed on who lives where as well as on what is known: a cache that went stale within a day made a loaded game see a later state than the one it was saved from)
+    const res = this.state.residentsRevision;
     const hit = this.settleCache.get(settlement);
-    if (hit && hit.ver === this.version && hit.day === day) return hit.counts;
+    if (hit && hit.ver === this.version && hit.res === res) return hit.counts;
     const counts = new Map<string, number>();
     for (const p of this.state.residentsOf(settlement)) {
       const k = this.knownBy.get(p.id);
       if (k) for (const t of k) counts.set(t, (counts.get(t) ?? 0) + 1);
     }
-    this.settleCache.set(settlement, { ver: this.version, day, counts });
+    this.settleCache.set(settlement, { ver: this.version, res, counts });
     return counts;
   }
 

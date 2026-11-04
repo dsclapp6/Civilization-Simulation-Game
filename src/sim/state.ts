@@ -468,6 +468,8 @@ export class GameState {
   /** Bumped whenever a household's stores or purse are marked changed, and whenever an ext section is (views read these to know when to look again; not saved). */
   householdRevision = 0;
   extRevision = 0;
+  /** Bumped whenever someone joins, leaves or moves between the settlements' resident lists (derived caches of residents key on it; not saved). */
+  residentsRevision = 0;
 
   constructor(seed: string, difficulty: Difficulty) {
     this.seed = seed;
@@ -587,6 +589,7 @@ export class GameState {
     let list = this.residents.get(p.settlement);
     if (!list) { list = []; this.residents.set(p.settlement, list); }
     insertSorted(list, p);
+    this.residentsRevision++;
     if (p.house) {
       let hs = this.houseMembers.get(p.house);
       if (!hs) { hs = new Set(); this.houseMembers.set(p.house, hs); }
@@ -598,6 +601,7 @@ export class GameState {
   private unindexPerson(p: Person): void {
     const list = this.residents.get(p.settlement);
     if (list) removeSorted(list, p);
+    this.residentsRevision++;
     if (p.house) this.houseMembers.get(p.house)?.delete(p);
     this.living--;
   }
@@ -635,6 +639,7 @@ export class GameState {
       let to = this.residents.get(settlement);
       if (!to) { to = []; this.residents.set(settlement, to); }
       insertSorted(to, p);
+      this.residentsRevision++;
     }
     p.settlement = settlement;
     this.touch(p);

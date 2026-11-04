@@ -445,7 +445,9 @@ function makeGarrison(g: GenContext, s: Settlement, lordHouse: House, count: num
   state.setHead(hh, captain);
   for (let i = 1; i < count; i++) {
     const age = sampleStationaryAge(rng, 17, 48, 'garrison');
-    mk(age, 'man_at_arms', 1, 2);
+    const man = mk(age, 'man_at_arms', 1, 2);
+    // every fifth man of a garrison draws the crossbow: a career of its own (made after the man, so the draws that made him are the same)
+    if (i % 5 === 4) { man.career = 'crossbowman'; }
   }
   hh.purse = rollPurse(rng, 3, 0.6);
   hh.target = count;
