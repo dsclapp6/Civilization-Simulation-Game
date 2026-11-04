@@ -38,7 +38,8 @@ export type WaitUntil =
   | 'marketDay'
   | 'cropRipe'
   | number
-  | { test: () => boolean; label?: string; maxDays?: number };
+  /** `until`: the day the wait ends at exactly (otherwise the test is looked at hour by hour, so a short wait would run to the next hour). */
+  | { test: () => boolean; label?: string; maxDays?: number; until?: number };
 
 /** Commands the UI / player controller can dispatch. Later waves add entries via declaration merging. */
 export interface CommandMap {
@@ -395,7 +396,7 @@ export class Simulation implements SimContext {
           maxDays = 64;
           test = () => this.cropsRipeNearPlayer();
         }
-      } else { test = u.test; label = u.label ?? 'Wait'; maxDays = u.maxDays ?? 16; }
+      } else { test = u.test; label = u.label ?? 'Wait'; maxDays = u.maxDays ?? 16; if (typeof u.until === 'number') target = u.until; }
       if (target !== null && target <= this.clock.absDay) return no('that time has passed');
       this.clock.resume();
       this.clock.startSkip('wait', label, target, test, maxDays);

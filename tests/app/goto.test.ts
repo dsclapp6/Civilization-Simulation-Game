@@ -142,7 +142,7 @@ describe('go to: the time passes and you arrive', () => {
     expect(t.placed.length).toBe(0);
     const passed = runOut(t.sim);
     expect(passed * DAY_SECONDS).toBeGreaterThanOrEqual(c.seconds - 1);
-    expect(passed * DAY_SECONDS).toBeLessThan(c.seconds + 2000);
+    expect(passed * DAY_SECONDS).toBeLessThan(c.seconds + 3); // to the minute, not to the next hour
     expect(t.sim.absDay - t0).toBeCloseTo(passed, 6);
     expect(t.goto.busy()).toBe(false);
     expect(t.placed.length).toBe(1);

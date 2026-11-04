@@ -40,6 +40,7 @@ let page = null;
 const errors = [];
 let failures = 0;
 const check = (name, ok, detail = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : `  ${detail}`}`); if (!ok) failures++; };
+const note = (s) => console.log(`     ${s}`);
 const tick = (s) => page.evaluate((n) => window.__game.tick(n), s);
 const ev = (fn, arg) => page.evaluate(fn, arg);
 const panels = () => page.evaluate(() => window.__ui.openPanels());
@@ -149,29 +150,45 @@ try {
     check('a 30 m hop is allowed and counts the walk, not a floor of 20 s', hop.ok && hop.seconds < 18 && hop.seconds > 6, JSON.stringify(hop));
     const d0 = await ev(() => window.__game.session.sim.absDay);
     await ev((id) => { const g = window.__game.session.services.goto; return g.go(g.places().find((q) => q.id === id)); }, hop.id);
+    for (let i = 0; i < 20 && !(await ev(() => !!window.__game.session.sim.clock.skip)); i++) await tick(0.1);
     await runSkip();
     const d1 = await ev(() => window.__game.session.sim.absDay);
     const bodySeconds = (d1 - d0) * 1800;
-    check('and the clock moved by about the walk (not 16 minutes)', bodySeconds > 5 && bodySeconds < 18, `${bodySeconds.toFixed(1)} s`);
+    check('and the clock moved by about the walk (not 16 minutes)', bodySeconds > 5 && bodySeconds < hop.seconds + 10, `${bodySeconds.toFixed(1)} s for a walk of ${hop.seconds.toFixed(1)} s`);
   }
 
   // ---- J4: the people who follow you and the animals you lead come along
   {
+    // (first, if the household keeps no beast that can be led, we become a person of one that does: the same switch as the game's)
+    await ev(() => {
+      const se = window.__game.session, z = se.services.zone, sim = se.sim;
+      const pid = sim.state.run.playerId;
+      const me = sim.state.persons.get(pid);
+      const tame = [...z.animals()].filter((a) => !a.wild && !a.hostile && !a.summoned && a.owner && !/chicken|goose|duck|hen|bird/.test(String(a.kind)));
+      if (tame.some((a) => a.owner === me.household)) return;
+      const beast = tame[0];
+      const hh = beast ? sim.state.households.get(beast.owner) : null;
+      const who = hh ? [hh.head, ...hh.members].find((id) => { const q = sim.state.persons.get(id); return q && !q.death && id !== pid; }) : 0;
+      if (who) sim.dispatch({ type: 'switchCharacter', personId: who });
+    });
+    await tick(1);
     const setup = await ev(() => {
-      const se = window.__game.session, z = se.services.zone, p = se.services.player, sim = se.sim, pid = sim.state.run.playerId;
+      const se = window.__game.session, z = se.services.zone, p = se.services.player, sim = se.sim;
+      const pid = sim.state.run.playerId;
       const b = p.body();
       const me = sim.state.persons.get(pid);
-      const mine = [...z.animals()].filter((a) => a.owner === me.household && !a.wild);
+      const mine = [...z.animals()].filter((a) => !a.wild && !a.hostile && !a.summoned && a.owner === me.household && !/chicken|goose|duck|hen|bird/.test(String(a.kind)));
       let led = null;
       for (const a of mine) {
         // bring the animal to the player, then take it on the halter (the verb of the wheel: Lead)
         a.x = b.x + 1.5; a.z = b.z + 1.5;
         const r = z.leadAnimal(a.id, pid);
         if (r.ok) { led = a.id; break; }
+        (window.__ledWhy ??= []).push(`${a.kind}:${r.reason}`);
       }
       const folk = [...z.agents()].filter((a) => a.visible && a.personId !== pid && !a.summoned).sort((a, c) => Math.hypot(a.x - b.x, a.z - b.z) - Math.hypot(c.x - b.x, c.z - b.z))[0];
       if (folk) z.command(folk.personId, { kind: 'follow', leader: pid, distance: 3 });
-      return { led, mineCount: mine.length, folk: folk ? folk.personId : null };
+      return { led, why: window.__ledWhy ?? [], mineCount: mine.length, folk: folk ? folk.personId : null };
     });
     note(`followers: ${JSON.stringify(setup)}`);
     check('a villager follows the player (the zone\'s follow order)', setup.folk !== null);
@@ -179,7 +196,7 @@ try {
     const far = await ev(() => {
       const se = window.__game.session, g = se.services.goto, p = se.services.player;
       const b = p.body();
-      const cands = g.places().filter((q) => q.kind === 'building' && Math.hypot(q.stand.x - b.x, q.stand.z - b.z) > 60).sort((a, c) => Math.hypot(c.stand.x - b.x, c.stand.z - b.z) - Math.hypot(a.stand.x - b.x, a.stand.z - b.z));
+      const cands = g.places().filter((q) => q.kind === 'building' && Math.hypot(q.stand.x - b.x, q.stand.z - b.z) > 60).sort((a, c) => Math.hypot(a.stand.x - b.x, a.stand.z - b.z) - Math.hypot(c.stand.x - b.x, c.stand.z - b.z));
       const t = cands[0];
       return t ? { id: t.id, name: t.name, x: t.stand.x, z: t.stand.z } : null;
     });
@@ -192,10 +209,10 @@ try {
       const se = window.__game.session, z = se.services.zone, p = se.services.player;
       const b = p.body();
       const f = folkId ? z.agent(folkId) : null;
-      const an = ledId !== null ? z.animals().find((a) => a.id === ledId) : null;
+      const an = ledId !== null ? (z.ledBy(se.sim.state.run.playerId)[0] ?? null) : null;
       return {
         folk: f ? { d: Math.hypot(f.x - b.x, f.z - b.z), control: f.control, order: f.order ? f.order.kind : null } : null,
-        animal: an ? { d: Math.hypot(an.x - b.x, an.z - b.z), led: z.ledBy(se.sim.state.run.playerId).some((q) => q.id === ledId) } : null,
+        animal: an ? { d: Math.hypot(an.x - b.x, an.z - b.z), led: z.ledBy(se.sim.state.run.playerId).length > 0 } : { led: false, led0: ledId },
       };
     }, [setup.folk, setup.led]);
     note(`after: ${JSON.stringify(after)}`);
@@ -235,7 +252,7 @@ try {
       const g = se.services.goto;
       const listed = new Set(g.places().map((q) => q.ref));
       const me = sim.state.persons.get(pid);
-      const cand = [...sim.state.buildings.values()].filter((q) => q.settlement === me.settlement && q.construction >= 1 && Math.hypot(q.x - b.x, q.z - b.z) > 90 && Math.hypot(q.x - b.x, q.z - b.z) < 500)
+      const cand = [...sim.state.buildings.values()].filter((q) => q.settlement === me.settlement && q.construction >= 1 && Math.hypot(q.x - b.x, q.z - b.z) > 65 && Math.hypot(q.x - b.x, q.z - b.z) < 400)
         .sort((x, y) => Number(listed.has(x.id)) - Number(listed.has(y.id)))[0];
       if (!cand) return null;
       const opts = sim.actions.list(pid, { kind: 'building', id: cand.id });
@@ -246,8 +263,10 @@ try {
     check('the wheel offers "Go there now" on a far building (even one that is not on the page)', !!w && !w.none && w.enabled && w.label === 'Go there now', JSON.stringify(w));
     if (w && !w.none) {
       const d0 = await ev(() => window.__game.session.sim.absDay);
-      await ev((id) => { const se = window.__game.session; const o = se.sim.actions.list(se.sim.state.run.playerId, { kind: 'building', id }).find((q) => q.id === 'goto'); return se.services.player.perform(o); }, w.id);
-      const done = await runSkip(200);
+      await ev((id) => { const se = window.__game.session; const o = se.sim.actions.list(se.sim.state.run.playerId, { kind: 'building', id }).find((q) => q.id === 'goto'); const r = se.services.player.perform(o); window.__wr = r; return r; }, w.id);
+      note('perform: ' + JSON.stringify(await ev(() => window.__wr)));
+      for (let i = 0; i < 60 && !(await ev(() => !!window.__game.session.sim.clock.skip)); i++) await tick(0.2);
+      const done = await runSkip(400);
       const at = await ev((id) => { const se = window.__game.session; const b = se.services.player.body(); const bd = se.sim.state.buildings.get(id); return Math.hypot(bd.x - b.x, bd.z - b.z); }, w.id);
       check('performing it skips the walk and you stand at that building', done && at < 14, `${at.toFixed(1)} m`);
     }

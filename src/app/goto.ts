@@ -73,7 +73,7 @@ export interface GotoApi {
 export interface GotoEnv {
   sim: Simulation;
   player: Pick<PlayerApi, 'body' | 'placeAt'> & Partial<Pick<PlayerApi, 'mounted' | 'restraint' | 'travel'>>;
-  zone: Pick<ZoneApi, 'ledBy'> & Partial<Pick<ZoneApi, 'agents' | 'summon' | 'command'>> & { nav: Pick<ZoneApi['nav'], 'doorOf'> };
+  zone: Pick<ZoneApi, 'ledBy'> & Partial<Pick<ZoneApi, 'agents' | 'animals' | 'summon' | 'command' | 'leadAnimal'>> & { nav: Pick<ZoneApi['nav'], 'doorOf'> };
   /** The campaign's phase ('march' | 'camp' | 'before' | 'storm') or null. */
   campaignPhase(): string | null;
   economy?: Pick<EconomyApi, 'employment' | 'holding'>;
@@ -92,6 +92,7 @@ export const MIN_SECONDS = 0.5;
 export const NEIGHBOURS = 1500;
 const EXT_KEY = 'goto';
 interface GotoExt { v: 1; seen: number[] }
+interface LedBeast { id: number; kind: string; owner: number }
 interface Follower { id: number; order: AgentOrder; mounted: boolean; coat: number }
 /** The nearest-to-a-settlement-edge place for another village: this far (m) short of its middle. */
 const EDGE_OFF = 0.8;
@@ -146,7 +147,7 @@ function edgeOf(poly: ReadonlyArray<{ x: number; z: number }>, fx: number, fz: n
 }
 
 export class GotoMode {
-  private pending: { label: string; place: GotoPlace; led: Array<{ id: number }>; followers: Follower[] } | null = null;
+  private pending: { label: string; place: GotoPlace; led: LedBeast[]; followers: Follower[] } | null = null;
   /** Settlements seen or heard of (saved in `state.ext.goto`). */
   private seen = new Set<number>();
   private offs: Array<() => void> = [];
@@ -410,10 +411,10 @@ export class GotoMode {
     if (!c.ok) return { ok: false, reason: c.reason };
     const { sim } = this.env;
     const label = `${c.mounted ? 'Riding' : 'Walking'} to ${place.name.replace(/^The /, 'the ')}…`;
-    const led = this.env.zone.ledBy?.(this.pid)?.map((a) => ({ id: a.id })) ?? [];
+    const led = this.env.zone.ledBy?.(this.pid)?.map((a) => ({ id: a.id, kind: a.kind as string, owner: a.owner })) ?? [];
     this.pending = { label, place, led, followers: this.followers() };
     const until = sim.absDay + c.seconds / DAY_SECONDS;
-    const r = sim.dispatch({ type: 'waitUntil', until: { test: () => sim.absDay >= until - 1e-6, label, maxDays: 2 } });
+    const r = sim.dispatch({ type: 'waitUntil', until: { test: () => sim.absDay >= until - 1e-6, label, maxDays: 2, until } });
     if (!r.ok) { this.pending = null; return { ok: false, reason: r.reason ?? 'You cannot go now.' }; }
     return { ok: true };
   }
@@ -429,7 +430,7 @@ export class GotoMode {
   }
 
   /** The skip is over: stand at the door (the horse comes with the body; the led animals and the followers are brought up behind). */
-  private arrive(place: GotoPlace, led: Array<{ id: number }>, followers: readonly Follower[]): void {
+  private arrive(place: GotoPlace, led: readonly LedBeast[], followers: readonly Follower[]): void {
     const { player, zone } = this.env;
     player.placeAt(place.stand.x, place.stand.z, place.stand.yaw);
     const body = player.body();
@@ -440,9 +441,18 @@ export class GotoMode {
       const by = body!.yaw;
       return { x: body!.x - Math.sin(by) * back + Math.cos(by) * side * 0.9, z: body!.z - Math.cos(by) * back - Math.sin(by) * side * 0.9 };
     };
+    // (the zone's re-placing lets go of the halters and may make the beast anew: the household's beast of that kind nearest to you is set
+    // down behind you and taken on the halter again)
     for (const l of led) {
-      const a = zone.ledBy?.(this.pid)?.find((q) => q.id === l.id);
-      if (a && body) { const q = behind(2); a.x = q.x; a.z = q.z; }
+      if (!body) break;
+      const led0 = zone.ledBy?.(this.pid) ?? [];
+      const pool = zone.animals?.() ?? [];
+      const a = led0.find((q) => q.id === l.id) ?? pool.find((q) => q.id === l.id)
+        ?? pool.filter((q) => q.owner === l.owner && (q.kind as string) === l.kind && !led0.some((x) => x.id === q.id)).sort((p, r) => dist(p.x, p.z, body.x, body.z) - dist(r.x, r.z, body.x, body.z))[0];
+      if (!a) continue;
+      const q = behind(2);
+      a.x = q.x; a.z = q.z;
+      if (!led0.some((x) => x.id === a.id)) zone.leadAnimal?.(a.id, this.pid);
     }
     // the zone re-places everyone at their schedules when you arrive: those who follow you are put behind you and told to follow again
     if (body && zone.summon && zone.command) {
