@@ -261,7 +261,13 @@ export function evaluatePose(st: HumanAnimState, item: CharacterDrawItem, ctx: A
   // (only an arm that holds something comes up: empty hands hang at the sides, out of view, standing or walking)
   const fpRest = st.fp && armsFree && !riding && item.carry === 'none' && item.anim !== 'carry_walk';
   const fpHolds = mainDef !== null || offDef !== null;
-  st.fpHold = (mainDef !== null ? (mainDef.hand === 'R' ? 2 : 1) : 0) | (offDef !== null ? 1 : 0) | (item.anim.startsWith('work_') || item.anim.startsWith('attack_') || item.anim.includes('bow') || item.anim.startsWith('block') ? 3 : 0);
+  {
+    // which hands hold something (bit 0 left, bit 1 right): in a work, strike or aim clip a two-handed tool is held by both
+    const active = item.anim.startsWith('work_') || item.anim.startsWith('attack_') || item.anim.includes('bow') || item.anim.startsWith('block');
+    let hold = (mainDef !== null ? (mainDef.hand === 'R' ? 2 : 1) : 0) | (offDef !== null ? 1 : 0);
+    if (active && mainDef !== null && mainDef.grip !== 'light' && mainDef.grip !== 'torch') hold = 3;
+    st.fpHold = hold;
+  }
   const lowered = 1; // (the arms stay in front of you looking down too: the body is not drawn, only the arms and what they hold)
   st.fpW += ((fpRest && fpHolds ? lowered : 0) - st.fpW) * (dt > 0 ? 1 - Math.exp(-dt * 7) : 1);
   if (st.fpW < 0.002) st.fpW = 0;
@@ -411,6 +417,22 @@ export function poseToBones(st: HumanAnimState, item: CharacterDrawItem, ctx: An
     for (let b = 0; b < POSE_BONES; b++) W[b * 12 + 7] += shift;
   }
 
+  // ---- first person: the view-model's shoulders (the hands' arms in the camera pass) ----
+  // The arms that hold something rise from just below and a little behind the eye, 0.14 m either side of centre, so in the view they come
+  // up from the bottom edge towards the hands instead of crossing the frame from the real shoulders (the body itself is not drawn there).
+  if (st.fp && (st.fpHold & 3) !== 0 && (st.fpW > 0.002 || item.anim.startsWith('work_'))) {
+    xformPoint(W, HB.head * 12, d.bind[HB.eyes * 3] - d.bind[HB.head * 3], d.bind[HB.eyes * 3 + 1] - d.bind[HB.head * 3 + 1], d.bind[HB.eyes * 3 + 2] - d.bind[HB.head * 3 + 2], _q);
+    const pl0 = ctx.place;
+    for (const side of ['L', 'R'] as const) {
+      if (!(st.fpHold & (side === 'L' ? 1 : 2))) continue;
+      const sg = side === 'L' ? 1 : -1; // +x is the body's left
+      const tx = _q[0] + pl0[0] * 0.14 * sg - pl0[2] * 0.05, ty = _q[1] - 0.25, tz = _q[2] + pl0[8] * 0.14 * sg - pl0[10] * 0.05;
+      const ua0 = (side === 'L' ? HB.uaL : HB.uaR) * 12;
+      const ddx = tx - W[ua0 + 3], ddy = ty - W[ua0 + 7], ddz = tz - W[ua0 + 11];
+      for (const b of side === 'L' ? [HB.uaL, HB.faL, HB.handL] : [HB.uaR, HB.faR, HB.handR]) { const o = b * 12; W[o + 3] += ddx; W[o + 7] += ddy; W[o + 11] += ddz; }
+    }
+  }
+
   // ---- item frames (item-first) and arm IK ----
   const def = st.clipDef;
   const mainDef = itemDef(item.mainHand);
@@ -493,8 +515,12 @@ export function poseToBones(st: HumanAnimState, item: CharacterDrawItem, ctx: An
   // The hands keep the clip's own movement; everything is shifted by the difference between a viewmodel spot (0.5 m ahead, 0.3 m down)
   // and where the hands are on average (a slow average, so the swing itself is kept), and the held items go with them.
   if (st.fp && def && !def.riding && !riding && item.anim.startsWith('work_')) {
-    const hl = HB.handL * 12, hr = HB.handR * 12;
-    const mx = (W[hl + 3] + W[hr + 3]) / 2, my = (W[hl + 7] + W[hr + 7]) / 2, mz = (W[hl + 11] + W[hr + 11]) / 2;
+    const hands: number[] = [];
+    if (st.fpHold & 1) hands.push(HB.handL * 12);
+    if (st.fpHold & 2) hands.push(HB.handR * 12);
+    if (hands.length === 0) hands.push(HB.handR * 12);
+    let mx = 0, my = 0, mz = 0;
+    for (const o of hands) { mx += W[o + 3] / hands.length; my += W[o + 7] / hands.length; mz += W[o + 11] / hands.length; }
     const m = st.fpMean;
     if (!st.fpMeanOk) { m[0] = mx; m[1] = my; m[2] = mz; st.fpMeanOk = true; }
     const k = dt > 0 ? 1 - Math.exp(-dt * 1.2) : 1;
@@ -505,23 +531,31 @@ export function poseToBones(st: HumanAnimState, item: CharacterDrawItem, ctx: An
     let ox = (_q[0] + pl[2] * 0.46 - m[0]) * e, oy = (_q[1] - 0.46 - m[1]) * e, oz = (_q[2] + pl[10] * 0.46 - m[2]) * e;
     // the swing of a clip may carry a hand up to the face (a wind-up over the head): the nearer hand is kept at least 0.42 m ahead of the eyes
     // and 0.22 m below them (the whole arm moves with it), so a hand is never at the lens
-    let ahead = Infinity, below = Infinity;
-    for (const hb of [HB.handL, HB.handR]) {
-      const hx = W[hb * 12 + 3] + ox - _q[0], hy = W[hb * 12 + 7] + oy - _q[1], hz = W[hb * 12 + 11] + oz - _q[2];
+    let ahead = Infinity, high = -Infinity;
+    for (const o of hands) {
+      const hx = W[o + 3] + ox - _q[0], hy = W[o + 7] + oy - _q[1], hz = W[o + 11] + oz - _q[2];
       ahead = Math.min(ahead, hx * pl[2] + hz * pl[10]);
-      below = Math.min(below, -hy);
+      high = Math.max(high, hy);
     }
-    if (ahead < 0.4) { ox += pl[2] * (0.4 - ahead); oz += pl[10] * (0.4 - ahead); }
-    if (below < 0.3) oy -= 0.3 - below;
+    if (ahead < 0.55) { ox += pl[2] * (0.55 - ahead); oz += pl[10] * (0.55 - ahead); }
+    // the rise is capped in camera space: a wind-up never takes the tool's head out of the top of the frame
+    if (high > -0.34) oy -= high + 0.34;
     // the hand that holds the tool goes first; the tool follows where that hand ACTUALLY got to (the arm may not reach the whole shift),
     // and the other hand follows the tool by the same step, so both stay on the haft
     const first: ArmSide = mainDef !== null && mainDef.hand !== 'R' ? 'L' : 'R';
     let dx = ox, dy = oy, dz = oz;
     for (const side of [first, first === 'R' ? 'L' : 'R'] as const) {
+      if (!(st.fpHold & (side === 'L' ? 1 : 2))) continue;
       const hd = side === 'L' ? HB.handL : HB.handR;
       const x0 = W[hd * 12 + 3], y0 = W[hd * 12 + 7], z0 = W[hd * 12 + 11];
       copy12(_hand, 0, W, hd * 12);
       _hand[3] += dx; _hand[7] += dy; _hand[11] += dz;
+      // a long tool's swing is turned most of the way to the carry (pointing forward and up), so its head stays in the frame through a wind-up
+      const hg = (side === 'L' ? offDef ?? mainDef : mainDef)?.grip;
+      if (hg === 'shoulder' || hg === 'upright' || hg === 'twohand') {
+        setBasisZ(_m2, 0, FP_TOOL_Z[0] * pl[2], FP_TOOL_Z[1], FP_TOOL_Z[0] * pl[10], 0, 1, 0, _hand[3], _hand[7], _hand[11]);
+        lerp12(_hand, 0, _hand, 0, _m2, 0, 0.7);
+      }
       armIK(st, side, _hand, 1, null);
       if (side === first) { dx = W[hd * 12 + 3] - x0; dy = W[hd * 12 + 7] - y0; dz = W[hd * 12 + 11] - z0; }
     }

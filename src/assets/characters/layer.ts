@@ -312,7 +312,7 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
     // (crowd.setHidden, in the camera's pass only: the player's shadow keeps its head); the body and arms stay, and so does the ring's absence
     if (item.id === fpId) { setZero(crowd.bones, crowd.boneOffset(st.slot, 0) + HB.ring * 12); const free: number[] = [];
       // looking down, an arm that holds nothing is left out of the view (hands at the lens read as giant fists)
-      if (fpDown > 0.7) { if (!(a.fpHold & 1)) free.push(HB.uaL, HB.faL, HB.handL); if (!(a.fpHold & 2)) free.push(HB.uaR, HB.faR, HB.handR); }
+      { if (!(a.fpHold & 1)) free.push(HB.uaL, HB.faL, HB.handL); if (!(a.fpHold & 2)) free.push(HB.uaR, HB.faR, HB.handR); }
       crowd.setHidden(st.slot, HB.root, HB.spine, HB.chest, HB.neck, HB.head, HB.thL, HB.shL, HB.ftL, HB.thR, HB.shR, HB.ftR, HB.skirtL, HB.skirtR, HB.cloak, HB.back, HB.eyes, HB.mouth, ...free); }
     crowd.setParams(st.slot, item.highlight, a.flash);
     if (horse) {

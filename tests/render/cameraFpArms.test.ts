@@ -48,10 +48,25 @@ function workHands(anim: string, main: HeldItem): number[][] {
 }
 
 describe('first-person arms', () => {
+  it('the view-model shoulders sit just below the eyes, 0.14 m either side, so the arms rise from the bottom of the view', () => {
+    const st = createAnimState(7, dims); st.fp = true;
+    const place = new Float32Array(12); setIdentity(place, 0);
+    const it: CharacterDrawItem = { id: 1, x: 0, y: 0, z: 0, yaw: 0, look, lookVersion: 1, mainHand: 'axe', offHand: 'none', back: 'none', carry: 'none', anim: 'work_axe', animTime: 0, moveSpeed: 0, highlight: 0 };
+    const ctx: AnimContext = { place, saddle: null, stand: null, horsePhase: 0, horseBob: 0, dt: 1 / 30, time: 0 };
+    const bones = new Float32Array(HUMAN_BONES * 12);
+    for (let f = 0; f < 40; f++) { it.animTime += 1 / 30; ctx.time += 1 / 30; evaluatePose(st, it, ctx); poseToBones(st, it, ctx, bones, 0); }
+    const W = st.world, e = HB.eyes * 12;
+    for (const b of [HB.uaL, HB.uaR]) {
+      const o = b * 12;
+      expect(W[e + 7] - W[o + 7]).toBeGreaterThan(0.2); expect(W[e + 7] - W[o + 7]).toBeLessThan(0.3);
+      expect(Math.abs(W[o + 3] - W[e + 3])).toBeGreaterThan(0.1); expect(Math.abs(W[o + 3] - W[e + 3])).toBeLessThan(0.18);
+    }
+  });
+
   for (const [anim, main] of [['work_dig', 'spade'], ['work_hammer', 'hammer'], ['work_axe', 'axe']] as const) {
     it(`${anim}: the working hand stays in the lower half of the view through the motion`, () => {
-      // (the swing may raise the hand to about the eye line in the wind-up, never to the lens or behind it)
-      for (const h of workHands(anim, main)) { expect(h[2]).toBeGreaterThan(0.25); expect(h[1]).toBeLessThan(0.05); expect(Math.abs(h[0])).toBeLessThan(0.6); }
+      // the working hands stay ahead of the eyes and in the lower half of the view through the whole motion
+      for (const h of workHands(anim, main)) { expect(h[2]).toBeGreaterThan(0.3); expect(h[1]).toBeLessThan(-0.2); expect(Math.abs(h[0])).toBeLessThan(0.5); }
     });
   }
 
