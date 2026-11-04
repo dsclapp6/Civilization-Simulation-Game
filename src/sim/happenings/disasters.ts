@@ -230,7 +230,9 @@ function epidemicDecay(H: Hap): void {
   for (const ss of H.state.settlements.values()) {
     if (ss.epidemic <= 0 || H.activeAtOf('plague', ss.id)) continue;
     const decay = 0.14 + (adv?.settlementBonus?.(ss.id, 'epidemic.decay') ?? 0);
-    ss.epidemic = ss.epidemic * (1 - decay) < 0.02 ? 0 : Math.round(ss.epidemic * (1 - decay) * 100) / 100;
+    // at least a hundredth a day: at two decimals 3% of a x0.86 decay rounds back to itself, and the epidemic would linger for ever
+    const next = Math.min(ss.epidemic * (1 - decay), ss.epidemic - 0.01);
+    ss.epidemic = next < 0.02 ? 0 : Math.round(next * 100) / 100;
     H.state.touchSettlement(ss);
   }
 }

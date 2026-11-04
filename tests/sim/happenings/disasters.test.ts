@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { MilitaryApi } from '../../../src/sim/wave3';
 import { banditOdds } from '../../../src/sim/happenings/disasters';
 import { mkPerson } from '../builders';
+import { noPlayer } from '../helpers';
 import { advSim } from '../advancement/helpers';
 
 const out = (s: string): void => { process.stderr.write(`\n${s}\n`); };
@@ -54,13 +55,21 @@ describe('plague', () => {
   });
 
   it('ends: the epidemic fades after the wave has passed', () => {
-    const a = advSim({ seed: 'plague-end', preset: 'small' });
-    const origin = hub(a);
-    a.adv.happenings.trigger!('plague', origin);
-    a.sim.advanceDays(16 * 3);
-    expect(a.adv.happenings.active().filter((r) => r.kind === 'plague')).toHaveLength(0);
-    for (const ss of a.sim.state.settlements.values()) expect(ss.epidemic).toBeLessThan(0.05);
-    expect(a.sim.state.chronicle.some((c) => /plague/i.test(c.text))).toBe(true);
+    // over a few seeds, with no player to die of the plague and stop the clock (a stopped sim never runs the decay)
+    for (const seed of ['plague-end', 'plague-end-b', 'plague-end-c']) {
+      const a = advSim({ seed, preset: 'small' });
+      noPlayer(a.sim);
+      const origin = hub(a);
+      a.adv.happenings.trigger!('plague', origin);
+      const plagues = (): number => a.adv.happenings.active().filter((r) => r.kind === 'plague').length;
+      // the wave runs as long as it runs (it hops along the roads); then the epidemic needs time to fade from its peak (x0.86 a day)
+      for (let d = 0; d < 120 && (d < 2 || plagues() > 0); d++) a.sim.advanceDays(1);
+      expect(plagues(), `${seed}: the wave ends`).toBe(0);
+      a.sim.advanceDays(32);
+      expect(plagues(), `${seed}: and does not come back`).toBe(0);
+      for (const ss of a.sim.state.settlements.values()) expect(ss.epidemic, `${seed}: settlement ${ss.id}`).toBeLessThan(0.05);
+      expect(a.sim.state.chronicle.some((c) => /plague/i.test(c.text))).toBe(true);
+    }
   });
 
   it('is gentler where herbal medicine and an infirmary are known', () => {
