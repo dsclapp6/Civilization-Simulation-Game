@@ -293,6 +293,11 @@ export class SiegeSystem {
       }
     }
     dArmy.morale = Math.max(0.2, rec.morale);
+    // the companies of the plan bring what they can carry to the walls: a ram for each full crew, a ladder for each squad (a storm
+    // ordered the day the host arrives is not a bare charge when the plan has a ram crew and ladder squads)
+    const works = siegeWorks(a.plan ?? defaultPlan(M, a));
+    if (rec.rams === 0) rec.rams = works.rams;
+    rec.ladders = rec.ladders || works.ladders > 0;
     rec.lastAssault = M.day;
     a.stance = 'charge';
     const pt = settlementPoint(M, sid);

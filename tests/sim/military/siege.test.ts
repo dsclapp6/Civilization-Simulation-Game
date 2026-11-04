@@ -134,7 +134,7 @@ describe('sieges', () => {
   it('the engines follow the assault plan\'s companies: a ram for each full crew, no ram without a crew', () => {
     const company = (id: number, task: 'ram' | 'ladders' | 'charge', levy: number) => ({ id, name: task, captain: 0, men: { levy }, task });
     const gap = CFG.siege.assaultGap;
-    CFG.siege.assaultGap = 999; // no storm: watch the works grow
+    (CFG.siege as { assaultGap: number }).assaultGap = 999; // no storm: watch the works grow
     const run = (seed: string, companies: ReturnType<typeof company>[]) => {
       const t = setupSiege(seed);
       t.army.plan = { companies };
@@ -145,7 +145,7 @@ describe('sieges', () => {
     };
     const crewed = run('siege-plan-a', [company(1, 'ram', 25), company(2, 'ladders', 12), company(3, 'charge', 20)]);
     const bare = run('siege-plan-b', [company(3, 'charge', 40)]);
-    CFG.siege.assaultGap = gap;
+    (CFG.siege as { assaultGap: number }).assaultGap = gap;
     expect(crewed).toBeTruthy();
     expect(bare).toBeTruthy();
     if (crewed) expect(crewed.rams).toBeGreaterThanOrEqual(1);

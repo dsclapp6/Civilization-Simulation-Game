@@ -571,7 +571,8 @@ export class Arena {
     if (b.walk !== undefined) {
       // the navigation knows whether he stands on a wall-walk (the stairs, a ladder's top, a tower), and he may walk along it
       if (b.walk && !f.onWall) f.onWall = true;
-      else if (!b.walk && f.onWall) {
+      // (a body at the station's height inside the gatehouse or a tower — the walk runs into its chamber — is still up on the wall)
+      else if (!b.walk && f.onWall && !(f.station && Math.abs(b.y - f.station.y) < 1.4)) {
         if (f.station?.holder === f) f.station.holder = null;
         f.onWall = false;
         f.station = null;
