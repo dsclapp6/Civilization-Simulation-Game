@@ -157,6 +157,23 @@ export const WORK_PROPS: Record<string, Fn> = {
       b.beam([x, 0.12, z], [x + 0.12, 0.15, z + 0.05], 0.06, 0.012, 0x8a8a4a);
     }
   },
+  /**
+   * Arrows standing in the straw of an archery target (placed where the target stands, face +z; size 1..8: from a few to a
+   * crowd, thickest near the gold). They are pulled out when the shooter collects them.
+   */
+  target_arrows(b, r, lod, _meta, size) {
+    const n = Math.max(1, Math.min(8, size || 3)) * (lod === 2 ? 2 : 3);
+    for (let i = 0; i < n; i++) {
+      const a = r() * Math.PI * 2, d = Math.abs(r() + r() - 1) * 0.5; // clustered towards the middle
+      const x = Math.cos(a) * d, y = 1.0 + Math.sin(a) * d * 0.98;
+      const lean = (r() - 0.5) * 0.16;
+      b.beam([x, y, 0.13], [x + lean, y + 0.05, 0.62], 0.012, 0.012, 0xb08e62);
+      if (lod < 2) {
+        const fx = x + lean * 0.9, fy = y + 0.045;
+        b.box(fx - 0.02, fy - 0.015, 0.54, fx + 0.02, fy + 0.015, 0.66, i % 3 === 0 ? 0xc0302a : 0xe8e0c8);
+      }
+    }
+  },
   bed_cabbage: cropBed('cabbage'),
   bed_onions: cropBed('onions'),
   bed_leeks: cropBed('leeks'),

@@ -119,9 +119,13 @@ export function studyProvider(A: Adv): ActionProvider {
       if (!defs || !p) return;
       for (const def of defs) {
         if (A.knows(actor, def.id)) continue;
+        // the job is the sittings the lesson still needs (each adds 1 + 4% per point of Intelligence over ten), then it stops
+        const need = def.learn.player?.need ?? 1;
+        const perSitting = Math.max(0.2, 1 + 0.04 * (p.trained.int - 10));
+        const sittings = Math.max(1, Math.ceil((need - (A.save.prog[def.id] ?? 0)) / perSitting - 1e-9));
         const o: ActionOption = {
           id: `tech.study.${def.id}`, provider: '', label: `Study: ${def.name}`, category: 'learn', target, enabled: true,
-          seconds: 20, anim: 'idle', mainHand: 'book', range: 10, priority: 22, repeat: true,
+          seconds: 20, anim: 'idle', mainHand: 'book', range: 10, priority: 22, repeat: true, bouts: sittings,
           preview: `${A.save.prog[def.id] ? `${Math.round(((A.save.prog[def.id] ?? 0) / (def.learn.player?.need ?? 1)) * 100)}% · ` : ''}${def.learn.skill ? `${def.learn.skill[0].toUpperCase()}${def.learn.skill.slice(1)} grows with the study` : 'Learn the craft'}`,
           data: { tech: def.id },
         };

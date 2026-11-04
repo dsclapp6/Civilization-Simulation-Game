@@ -31,7 +31,7 @@ export interface SceneOptions {
   count?: number;
   animals?: number;
   /** solo scene: subject description (URL params). */
-  solo?: { tier: RankTier; sex: Sex; age: number; culture: CultureId; animal?: AnimalKind; main?: HeldItem; off?: HeldItem; arm?: 'levy' | 'archer' | 'crossbow' | 'man_at_arms' | 'knight'; speed?: number; yaw?: number };
+  solo?: { tier: RankTier; sex: Sex; age: number; culture: CultureId; animal?: AnimalKind; main?: HeldItem; off?: HeldItem; arm?: 'levy' | 'archer' | 'crossbow' | 'man_at_arms' | 'knight'; speed?: number; yaw?: number; bandages?: number };
 }
 
 let nextId = 1;
@@ -540,6 +540,7 @@ export function soloScene(o: SceneOptions): SceneDef {
   } else {
     const look = generateLook(rng, { tier: so.tier, sex: so.sex, age: so.age, culture: so.culture });
     if (so.arm) armLook(rng, look, so.arm);
+    if (so.bandages) look.bandages = so.bandages;
     const it = makeChar(look, 0, 0, yaw);
     const anim = o.anim || 'idle';
     applyAnim(it, anim);

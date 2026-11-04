@@ -244,14 +244,19 @@ export interface CachedLook { look: CharacterLook; version: number }
 export class AppearanceCache {
   private readonly entries = new Map<number, { sig: number; value: CachedLook }>();
 
+  /** Which parts of a person wear bandages (a bit per hit location, see CharacterLook.bandages); set by the combat module. */
+  bandageOf: ((id: number) => number) | null = null;
+
   constructor(private readonly palette: Palette = PALETTE) {}
 
   get(state: GameState, p: Person, absDay: number): CachedLook {
     const age = ageYears(p, absDay);
-    const sig = signature(state, p, age);
+    const bandages = this.bandageOf ? this.bandageOf(p.id) : 0;
+    const sig = bandages === 0 ? signature(state, p, age) : hash3(signature(state, p, age), bandages, 0x6a09);
     const e = this.entries.get(p.id);
     if (e && e.sig === sig) return e.value;
     const value: CachedLook = { look: buildLook(state, p, absDay, this.palette), version: e ? e.value.version + 1 : 1 };
+    if (bandages !== 0) value.look.bandages = bandages;
     this.entries.set(p.id, { sig, value });
     return value;
   }

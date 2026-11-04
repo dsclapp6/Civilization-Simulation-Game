@@ -45,6 +45,13 @@ const AMBUSH_RADIUS = 85;
 export function installCombat(sim: Simulation, deps: Wave3Deps): CombatModule {
   const { zone, economy, social, player } = deps;
   const book = new WoundBook(sim);
+  // a bound wound shows on the body: the appearance cache asks which parts wear linen (assets/characters/human/bandages.ts)
+  const BIT: Record<string, number> = { head: 1, torso: 2, arm_l: 4, arm_r: 8, leg_l: 16, leg_r: 32 };
+  sim.view.appearance.bandageOf = (id) => {
+    let m = 0;
+    for (const w of book.wounds(id)) if (w.care >= 1) m |= BIT[w.location] ?? 0;
+    return m;
+  };
   const fx = new FxQueue();
   const proj = new Projectiles();
   const gearEnv: GearEnv = {

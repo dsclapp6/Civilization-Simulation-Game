@@ -49,9 +49,9 @@ Seconds are at 1×; "bar" is the action bar's text one second in. *Before* is th
 | Grind at the mill / quern | 3 bouts unasked | one bout; a sack of flour at the mill |
 | Milk, shear, muck out | repeated | one bout; milk in a cask, wool in sacks, a dung heap |
 | Slaughter, butcher | carcass hanging in the yard | one job; **joints of meat** on the rack where it was cut up |
-| Bind a wound (combat module) | *steady* game never scored | the game works; no world result (the wounds page shows it) |
-| Practise archery at the butts | 8 rounds unasked; the bow never drew | one round; *Keep shooting at the butts* is its own choice; the bow draws and looses |
-| Drill at the pell, spar, study, work on a building site, push the ram (other modules) | repeated silently | still open-ended (their modules give no bout count), but the bar now says so: *Bout 3 · on until you stop (Q)* |
+| Bind a wound (combat module) | *steady* game never scored | the game works; the bound part shows linen on the body and the wounds tab says so |
+| Practise archery at the butts | 8 rounds unasked; the bow never drew | one round of six arrows; they stay in the butts until pulled out; *Keep shooting at the butts* is its own choice; the bow draws and looses |
+| Drill at the pell, spar, study, work on a building site, push the ram | repeated silently, then "on until you stop" | all counted: the pell is **6 rounds** (and *Keep drilling at the pell* is its own open choice), sparring **4 bouts**, the yard target **6 rounds**, study the **sittings the lesson still needs** (its need minus progress, over what an Intelligence of this size adds a sitting), a building site the **bouts to the next stage** (pegs, footings, frame, roof, done; *Keep at it until it is done* goes to the end, as far as the materials allow), the ram the **blows the gate still needs** (shortening as more men push; it ends when the gate gives). Bar: *Bout 2 of 6 · Q stops*, time left of the whole job |
 | Lead an animal | instant | unchanged |
 
 ## How the job works (code)
@@ -92,11 +92,24 @@ Tests: `tests/sim/economy/workjobs.test.ts` (a bed dug in two bouts and drawn as
 the open-ended choice; a one-bout batch), `tests/ui/minigame.test.ts` (no misses before the first key, K only for sowing, the kind
 from the motion). Props stay under the 1500-triangle budget (`tests/assets/assets.test.ts`).
 
+## Archery, binding, gardens (the last pass)
+
+* **Arrows in the butts.** A round at the butts looses six arrows from the quiver (about one in 160 splits); the rest stand in the
+  straw of the two targets (`target_arrows` props, thicker as they gather; saved as `ww['bt<building>']`) until you choose *Pull your
+  arrows from the butts (n)* at the butts, which gives them back (their mean quality) and clears the straw. With fewer than six in the
+  quiver the practice says so and points at the butts.
+* **A bound wound shows.** `CharacterLook.bandages` is a mask (head 1, torso 2, left arm 4, right arm 8, left leg 16, right leg 32) set
+  by the combat module through `sim.view.appearance.bandageOf` from the wounds with care of 1 or more; the look's version moves with it
+  and `assets/characters/human/bandages.ts` winds linen bands round that part of the body (arms and legs from the elbow or thigh down,
+  the torso from the waist to the chest, a band round the head). The wounds tab names the bound parts ("Your wounds are bound: linen
+  shows on the left arm."), draws them dashed on the figure, and each wound keeps its *Bound* / *Skilfully dressed* chip.
+* **Gardens of the other households.** Households the economy keeps by the day have no beds of their own, so a household in a family
+  home in the zone (within 150 m) shows one to three beds as the season has them (`npcBeds`, a pure function of the household and the
+  season: dug or sown in spring, growing and weedy in summer, ripe or lately cleared in autumn, turned soil in winter; about one in five
+  keeps none; manors none). The player's household keeps its real beds.
+* **The duty "train the men at the yard"** (a knight's) leads to the training yard and the pell (`Drill at the pell`, three rounds), not
+  the butts; an archer's duty is the butts; the other men take the pell, or the butts where there is no yard.
+
 ## Left as it is
 
-* The other modules' repeating work (pell, sparring, study, building sites, the ram) is labelled honestly as open-ended but not
-  counted: their providers would need to say how many bouts their job has.
-* Archery leaves no arrows in the butts; binding a wound leaves nothing in the world.
-* The beds stand before the house whatever the croft garden behind it; a household's beds are drawn only for the player's
-  household (the others keep no beds).
 * In the headless tool's `tick()` mode a Q pressed and released between frames is not seen (the real loop sees it).

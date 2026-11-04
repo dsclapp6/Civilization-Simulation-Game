@@ -196,6 +196,14 @@ export class SiegeScene {
     return clamp(1 - g.b.damage / GATE_BROKEN_AT, 0, 1);
   }
 
+  /** Blows the ram at `w` still needs to break the gate with the men at its beam now (J3: the push job counts them). */
+  ramBlowsLeft(w: Work): number {
+    const g = this.gate;
+    if (!g || this.gateOpen()) return 0;
+    const force = clamp(Math.max(1, this.crewNear(w)) / 5, 0.3, 1.3);
+    return Math.max(1, Math.ceil((GATE_BROKEN_AT - g.b.damage) / (RAM_BLOW * force * (g.b.level >= 2 ? 0.65 : 1)) - 1e-9));
+  }
+
   gateBroken(): boolean { return !!this.gate && this.gate.b.damage >= GATE_BROKEN_AT; }
   gateOpen(): boolean { return this.gateBroken() || this.gateOpened || !this.gate; }
 

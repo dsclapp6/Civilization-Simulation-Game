@@ -75,6 +75,8 @@ export interface CharacterLook {
   armour: ArmourLook;
   helmet: HelmetLook;
   heraldry?: Heraldry;
+  /** Bound wounds show as linen: a bit per hit location (head 1, torso 2, left arm 4, right arm 8, left leg 16, right leg 32). */
+  bandages?: number;
 }
 
 export interface MountLook {

@@ -3,6 +3,7 @@
 // uncovered (neck, face, hands, bare legs/feet). See head.ts for heads and headwear.
 import type { CharacterLook } from '../../../core/view';
 import { type Bind, type GeometryData, MAT, MeshBuilder, type Ring, mix, shade } from '../engine/builder';
+import { addBandages } from './bandages'; // J3: bound wounds show on the body (docs/WORK.md)
 import { buildHead } from './head';
 import { designPolys, emitPolys } from './heraldry';
 import { HB, type HumanDims } from './skeleton';
@@ -395,6 +396,7 @@ export function buildHumanBody(look: CharacterLook, d: HumanDims, lod: 0 | 1 = 0
   if (c.cloak !== undefined) buildCloak(b, look, d, prof);
 
   // ---------------- head ----------------
+  addBandages(b, look, d, (y) => toRing(sampleTorso(prof, y), 0.006 * H)); // J3
   buildHead(b, look, d, lod);
 
   return b.finish();

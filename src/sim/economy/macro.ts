@@ -16,6 +16,7 @@ import { BEASTS, CAREER_ECON, GOODS, careerEcon, keyOf } from './data';
 import { COOKED_AS, FIREWOOD_PER_PORTION, GRAIN_PER_UNIT_DAY, MEALS, MEAL_RATION, RATION, STAPLE_GRAINS, dietOf, marketBuyShare } from './diet';
 import { daysToHarvest, farmDay, onBuild, seedWanted } from './farm';
 import { bagAdd } from './items';
+import { homeUpkeep } from './upkeep';
 import { beginTick, endTick, marketBuy, marketDay, marketSell, postedPrice, tickPrice } from './market';
 import type { Quality } from './types';
 
@@ -93,6 +94,7 @@ export function settlementDay(E: Econ, s: Settlement, part = 0, parts = 1): void
   }
   endTick(E);
   if (part === 0 && dayNo % DAYS_PER_YEAR === s.id % DAYS_PER_YEAR) livestockYear(E, s, hhs);
+  if (part === 0) homeUpkeep(E, s, hhs);
   E.touchSave();
 }
 
@@ -454,7 +456,7 @@ export const RENT_PER_STRIP = 3;
 // ---------------------------------------------------------------------------------------------
 
 /** Once a year (on the settlement's own day): lambing and calving, the autumn cull, shearing, murrain and winter losses. */
-function livestockYear(E: Econ, s: Settlement, hhs: Household[]): void {
+export function livestockYear(E: Econ, s: Settlement, hhs: Household[]): void {
   const rng = E.rng('livestock');
   for (const hh of hhs) {
     const st = hh.stores;
@@ -477,6 +479,10 @@ function livestockYear(E: Econ, s: Settlement, hhs: Household[]): void {
       if (cull > 0) {
         bagAdd(st, 'meat', cull * meatLb);
         if (key !== 'chicken') bagAdd(st, 'hide', cull * (key === 'sheep' ? 0.4 : 1));
+        // the fat is rendered too (the carcass table's tallow, scaled to the meat taken): the larder's tallow is no food, so the
+        // household diet is as it was; it is candle-stuff for the household's own use and for sale
+        const beast = BEASTS[key];
+        if (beast && beast.tallow > 0 && beast.meat > 0) bagAdd(st, 'tallow', Math.round(cull * beast.tallow * (meatLb / beast.meat) * 100) / 100);
       }
       if (next <= 0) delete st[key]; else st[key] = next;
       touched = true;

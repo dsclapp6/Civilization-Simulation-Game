@@ -55,6 +55,7 @@ export function start(root: AppRoot): void {
       arm: (params.get('arm') ?? undefined) as undefined,
       speed: params.get('speed') ? Number(params.get('speed')) : undefined,
       yaw: params.get('yaw') ? Number(params.get('yaw')) : undefined,
+      bandages: params.get('bandages') ? Number(params.get('bandages')) : undefined, // J3: bound wounds (look.bandages mask)
     },
   };
   let sceneName: string = params.get('scene') ?? 'lineup';

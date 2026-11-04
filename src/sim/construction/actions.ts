@@ -103,6 +103,19 @@ function stepsFor(rec: SiteRec): ActionStep[] {
   ];
 }
 
+/** Progress (0..1) at which each stage of a building ends: pegs, footings, frame, roof, done. */
+const STAGE_ENDS = [0.08, 0.3, 0.75, 1] as const;
+const NEXT_NAMES = ['footings', 'frame', 'roof', 'finish'] as const;
+
+function nextStageIndex(rec: SiteRec): number {
+  const p = progressOf(rec);
+  const i = STAGE_ENDS.findIndex((e) => p < e - 1e-9);
+  return i < 0 ? STAGE_ENDS.length - 1 : i;
+}
+
+/** The worker-days at which the building leaves the stage it is in. */
+function nextStageLabour(rec: SiteRec): number { return STAGE_ENDS[nextStageIndex(rec)] * rec.labour; }
+
 function labelFor(rec: SiteRec, kindName: string): string {
   switch (rec.work) {
     case 'upgrade': return `Work on the ${kindName} (improving it)`;
@@ -143,15 +156,26 @@ export function constructionProvider(C: Construction): ActionProvider {
       if (rec.labour - rec.done > 0.01 && capacity(rec) <= 0.01) refreshSupply(C, rec);
       const reason = blockedFor(C, p, rec);
       const pct = Math.round(progressOf(rec) * 100);
+      // the job is the bouts to the next stage of the building (pegs, footings, frame, roof, done) or, as its own choice, to
+      // the end; never more than the materials in hand allow
+      const room = Math.max(0, Math.min(rec.labour - rec.done, capacity(rec)));
+      const toStage = Math.max(0, Math.min(room, nextStageLabour(rec) - rec.done));
+      const boutsTo = (labour: number): number => Math.max(1, Math.ceil(labour / BOUT_DAYS - 1e-6));
       const o: ActionOption = {
         id: 'build.work', provider: '', label: labelFor(rec, kindName), category: 'work', target, enabled: !reason,
         seconds: Math.max(5, Math.min(60, Math.round((BOUT / speed) * 10) / 10)),
         anim: steps[0].anim, mainHand: steps[0].mainHand as HeldItem | undefined,
         preview: `${pct}% done · ${skill === 'masonry' ? 'Masonry' : 'Carpentry'}${wage > 0 ? ` · ${r2(wage)}d a day from the paying household` : ''}`,
-        range: 12, priority: 36, repeat: true, steps, data: { site: rec.id, skill },
+        range: 12, priority: 36, repeat: true, bouts: boutsTo(toStage), steps, data: { site: rec.id, skill },
       };
+      o.preview += ` · ${o.bouts} bout${o.bouts === 1 ? '' : 's'} to the ${NEXT_NAMES[nextStageIndex(rec)]}`;
       if (reason) o.reason = reason;
       out.push(o);
+      // and the whole of it, to the end (or as far as the materials go)
+      if (!reason && boutsTo(room) > (o.bouts ?? 1)) {
+        out.push({ ...o, id: 'build.keep', label: `Keep at it until ${rec.work === 'demolish' ? 'it is down' : 'it is done'}`, priority: 30, bouts: boutsTo(room),
+          preview: `${pct}% done · ${boutsTo(room)} bouts to the end · ${skill === 'masonry' ? 'Masonry' : 'Carpentry'}` });
+      }
     },
 
     check(_ctx, actor, option) {

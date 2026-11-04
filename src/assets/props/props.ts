@@ -8,7 +8,7 @@ import { CIV_PILE_KINDS, CIV_PROPS } from './civProps';
 import { WORK_PILE_KINDS, WORK_PROPS } from './workProps';
 
 type WorkPropKind = 'garden_bed' | 'bed_cabbage' | 'bed_onions' | 'bed_leeks' | 'bed_turnips' | 'veg_basket' | 'bread_board' | 'cheese_board'
-  | 'cloth_bolts' | 'anvil_work' | 'dish_pot' | 'pot_rows' | 'leather_rail';
+  | 'cloth_bolts' | 'anvil_work' | 'dish_pot' | 'pot_rows' | 'leather_rail' | 'target_arrows';
 type CivPropKind = 'carcass_hook' | 'carcass_hanging' | 'carcass_block' | 'hide_frame' | 'meat_joints' | 'tallow_pot'
   | 'brick_stack' | 'clay_heap' | 'salt_heap' | 'log_pile' | 'timber_stack' | 'straw_bundles';
 

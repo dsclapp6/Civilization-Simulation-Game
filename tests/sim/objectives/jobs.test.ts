@@ -1,7 +1,8 @@
 // Work objectives: the duty of a post (an apprentice at the bench, a farmhand on the demesne) and a serf's
 // week-work for the lord. Wages come from the economy bout by bout; the objective says where and what, and counts.
 import { describe, expect, it } from 'vitest';
-import { adopt, makeApprentice } from '../economy/helpers';
+import { installCombat } from '../../../src/combat';
+import { adopt, makeApprentice, raise } from '../economy/helpers';
 import { active, goHome, install, objSim, playObjectives, playerOf, recOf, runTo, skipTutorial, type ObjSim } from './helpers';
 
 /** An apprentice smith at the bench of a master, ready for the first dawn. */
@@ -102,6 +103,32 @@ describe('the duties of one\'s station (in place of quests)', () => {
     }
     const all = [...titles].join(' | ');
     expect(all).toMatch(/Your duty: (ride the bounds|train the men at the yard|see to your arms at the forge|stand the watch)/);
+  });
+
+  it('a knight\'s duty to train the men at the yard leads to the pell (sword and spear), not the archery butts', () => {
+    const o = objSim({ seed: 'duty-pell', install: false });
+    const me = playerOf(o.sim);
+    for (const t of [...o.sim.state.titlesHeldBy(me.id)]) o.sim.state.setTitleHolder(t, 0);
+    me.career = 'knight';
+    me.birthDay -= 16 * 14;
+    me.needs.hunger = 1;
+    goHome(o);
+    installCombat(o.sim, { economy: o.economy, social: o.social });
+    const yard = raise(o.sim, 'training_yard', { settlement: me.settlement });
+    raise(o.sim, 'archery_butts', { settlement: me.settlement });
+    install(o);
+    skipTutorial(o);
+    let found: ReturnType<typeof active>[number] | undefined;
+    for (let d = 1; d <= 40 && !found; d++) {
+      runTo(o, Math.floor(o.sim.absDay) + 1, 6);
+      found = active(o, 'job').find((j) => /train the men at the yard/.test(j.title));
+    }
+    expect(found, 'a knight is asked to train the men at the yard some day').toBeTruthy();
+    expect(found!.steps[1].text).toMatch(/pell/i);
+    expect(found!.steps[1].target).toMatchObject({ kind: 'building', id: yard.id });
+    // and the action it points to is there under that building: the pell, with sword and spear
+    const opts = o.sim.actions.list(me.id, { kind: 'building', id: yard.id });
+    expect(opts.find((x) => x.id === 'pell')?.enabled).toBe(true);
   });
 
   it('a lord has no chores, duties or goals: he manages', () => {

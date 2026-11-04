@@ -50,10 +50,13 @@ export function createWarProvider(sv: Services): ActionProvider {
       const { pf, scene } = s;
       if (pf.side === scene.attackerSide) {
         const ram = scene.ramNear(pf.x, pf.z, RAM_REACH);
-        if (ram) {
+        if (ram && !scene.gateOpen()) {
+          // the job is the blows the gate still needs (one blow a bout, the crew's: it shortens as more men push); it ends
+          // when the gate gives
+          const blows = scene.ramBlowsLeft(ram);
           out.push(opt({
-            id: 'push', label: 'Push the ram', target: SELF, priority: 44, seconds: 3.2, anim: 'push', repeat: true,
-            preview: 'Your weight on the beam: the gate gives sooner', data: ram.id,
+            id: 'push', label: 'Push the ram', target: SELF, priority: 44, seconds: 3.2, anim: 'push', repeat: true, bouts: blows,
+            preview: `Your weight on the beam: about ${blows} blow${blows === 1 ? '' : 's'} to break the gate`, data: ram.id,
           }));
         }
         const lad = scene.ladderNear(pf.x, pf.z, LADDER_REACH);

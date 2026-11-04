@@ -60,18 +60,25 @@ export function roleDuty(O: Obj, me: Person, round = 0): NewObjective | null {
   const seat = findNear(O, me, ['keep_stone', 'great_hall', 'manor_house'], 2500);
 
   if (ARMS.has(c)) {
-    const yard = findNear(O, me, ['training_yard', 'archery_butts'], 1500);
+    // the yard drills the arm-at-hand: a knight trains the men at the pell (sword and spear), never at the butts; an archer shoots
+    // at the butts; the rest take the pell, or the butts where there is no yard (J3: docs/WORK.md)
+    const pellYard = findNear(O, me, ['training_yard'], 1500);
+    const buttsYard = findNear(O, me, ['archery_butts'], 1500);
+    const useButts = c === 'archer' ? !!buttsYard : !pellYard && !!buttsYard && c !== 'knight' && c !== 'squire';
+    const yard = useButts ? buttsYard : pellYard;
     const smithy = findNear(O, me, ['smithy'], 1500);
     // the round: the yard, the bounds, the forge (a knight), the gate (the men)
     const pick = roll < 0.4 && yard ? 'yard' : roll < 0.75 ? 'bounds' : c === 'knight' || c === 'squire' ? (smithy ? 'forge' : 'bounds') : 'gate';
-    if (pick === 'yard' && yard && enabledOption(O, me, { kind: 'building', id: yard.id }, /^arms\.practise/)) {
+    if (pick === 'yard' && yard && enabledOption(O, me, { kind: 'building', id: yard.id }, useButts ? /^arms\.practise/ : /^pell/)) {
       const at = buildingTarget(O, yard);
       const ph = buildingPhrase(O, yard);
       return {
         ...base, title: c === 'knight' ? 'Your duty: train the men at the yard' : 'Your duty: drill at the yard', why: 'Men who drill stand in the line; men who do not, run.',
         steps: [
           reach(`Go to ${ph}`, 'Walk there (or click it)', at, 12),
-          { text: c === 'knight' ? 'Set the example: practise with the men' : 'Practise at the butts', hint: 'Press E there and play the bout (J)', target: at, goal: 3, progress: 0, m: { k: 'act', ids: ['arms.practise'], at: { kind: 'building', id: yard.id }, need: 3 } },
+          useButts
+            ? { text: 'Practise at the butts', hint: 'Press E there and play the bout (J)', target: at, goal: 3, progress: 0, m: { k: 'act', ids: ['arms.practise'], at: { kind: 'building', id: yard.id }, need: 3 } }
+            : { text: c === 'knight' ? 'Set the example: drill with sword and spear at the pell' : 'Drill at the pell', hint: 'Press E at the yard and choose "Drill at the pell"', target: at, goal: 3, progress: 0, m: { k: 'act', ids: ['pell', 'pell.keep'], at: { kind: 'building', id: yard.id }, need: 3 } },
         ],
       };
     }

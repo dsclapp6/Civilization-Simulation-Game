@@ -41,9 +41,14 @@ describe('working on a building', () => {
     const r = rig('act-a');
     const { p, building } = playerPeasant(r);
     const opts = options(r, p.id, building);
-    expect(opts).toHaveLength(1);
+    // J3: the job is counted: the bouts to the next stage, and its own choice for the whole way
+    expect(opts.map((x) => x.id)).toEqual(['build.work', 'build.keep']);
     const o = opts[0];
     expect(o.label).toBe('Work on the building');
+    expect(o.bouts).toBeGreaterThan(0);
+    expect(opts[1].label).toMatch(/^Keep at it until/);
+    expect(opts[1].bouts!).toBeGreaterThan(o.bouts!);
+    expect(o.preview).toMatch(/bouts? to the/);
     expect(o.category).toBe('work');
     expect(o.enabled, o.reason).toBe(true);
     expect(o.repeat).toBe(true);
