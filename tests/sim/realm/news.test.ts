@@ -179,8 +179,9 @@ describe('rivals', () => {
   });
 
   it('counts a year as it rolls: this year and the part of last year still within the last 16 days', () => {
-    const { sim, R, lord } = scene();
-    const house = [...sim.state.houses.values()].find((h) => h.kind === 'noble' && h.id !== lord.house)!;
+    // no player in this world: were the lord to fall in some war, the run would end and the clock stop short of the days asked for
+    const { sim, R } = realmSim({ preset: 'large', politics: true, military: true });
+    const house = [...sim.state.houses.values()].find((h) => h.kind === 'noble')!;
     setDay(sim, 16 * 3 + 0.01); // just after the turn of a year
     bump(R, house.id, 0, 8);
     expect(yearCounts(R, house.id).built).toBe(8);
