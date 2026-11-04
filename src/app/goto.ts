@@ -3,9 +3,11 @@
 // the alehouse; the manor; your fields; your work; your lord; the household at work; the fields of farmers you know; the next village).
 // Choosing one: the time a walk (or a ride) there would take passes as in any skip — needs, the world and the people go on — and you
 // stand at its door or edge. Refused, with the reason, in or near a fight, on the host's march or in a siege, bound or held, on the
-// road of a map journey, on hostile land, when it is too far, and when the place is not one you know. Nothing here is saved: the skip is
-// the sim's own `waitUntil`, the body is placed when it ends. Map travel to far settlements and the campaign's march are not this.
-import type { ZoneApi } from '../agents/types';
+// road of a map journey, on hostile land, when it is too far, and when the place is not one you know. The skip is the sim's own
+// `waitUntil`, the body is placed when it ends; the people following you (the zone's follow orders) and the animals you lead come along.
+// What you know is a record kept in `state.ext.goto`: the settlements you have been to or been told of (your own, your lord's and your
+// near neighbours are known from the start). Map travel to far settlements and the campaign's march are not this.
+import type { AgentOrder, ZoneApi } from '../agents/types';
 import { doorStand } from '../agents/geometry';
 import { BUILDINGS, type BuildingKind } from '../content/types';
 import { DAY_SECONDS, isNight } from '../core/time';
@@ -71,7 +73,7 @@ export interface GotoApi {
 export interface GotoEnv {
   sim: Simulation;
   player: Pick<PlayerApi, 'body' | 'placeAt'> & Partial<Pick<PlayerApi, 'mounted' | 'restraint' | 'travel'>>;
-  zone: Pick<ZoneApi, 'ledBy'> & { nav: Pick<ZoneApi['nav'], 'doorOf'> };
+  zone: Pick<ZoneApi, 'ledBy'> & Partial<Pick<ZoneApi, 'agents' | 'animals' | 'summon' | 'command' | 'leadAnimal'>> & { nav: Pick<ZoneApi['nav'], 'doorOf'> };
   /** The campaign's phase ('march' | 'camp' | 'before' | 'storm') or null. */
   campaignPhase(): string | null;
   economy?: Pick<EconomyApi, 'employment' | 'holding'>;
@@ -84,8 +86,14 @@ export const GOTO_RANGE = 4500;
 export const DETOUR = 1.3;
 /** Closer than this you are there already. */
 export const HERE = 14;
-/** The shortest skip (s): even a few steps take a moment. */
-export const MIN_SECONDS = 20;
+/** The shortest skip (s): only what the sim's clock can tell apart from none; a short hop takes the walk's own time. */
+export const MIN_SECONDS = 0.5;
+/** Neighbouring settlements this close (m) to your home are known from childhood. */
+export const NEIGHBOURS = 1500;
+const EXT_KEY = 'goto';
+interface GotoExt { v: 1; seen: number[] }
+interface LedBeast { id: number; kind: string; owner: number }
+interface Follower { id: number; order: AgentOrder; mounted: boolean; coat: number }
 /** The nearest-to-a-settlement-edge place for another village: this far (m) short of its middle. */
 const EDGE_OFF = 0.8;
 
@@ -139,19 +147,29 @@ function edgeOf(poly: ReadonlyArray<{ x: number; z: number }>, fx: number, fz: n
 }
 
 export class GotoMode {
-  private pending: { label: string; place: GotoPlace; led: Array<{ id: number }> } | null = null;
+  private pending: { label: string; place: GotoPlace; led: LedBeast[]; followers: Follower[] } | null = null;
+  /** Settlements seen or heard of (saved in `state.ext.goto`). */
+  private seen = new Set<number>();
   private offs: Array<() => void> = [];
 
   constructor(private readonly env: GotoEnv) {
     const { sim } = env;
+    const ext = sim.state.ext[EXT_KEY] as GotoExt | undefined;
+    if (ext && Array.isArray(ext.seen)) for (const id of ext.seen) this.seen.add(id);
+    this.visit();
     this.offs.push(
+      sim.events.on('hourStarted', () => this.visit()),
+      sim.events.on('travel', (e) => { if (e.phase === 'arrive') this.told(e.to); }),
+      sim.events.on('news', (e) => { if (e.settlement > 0) this.told(e.settlement); }),
+      sim.events.on('happening', (e) => { if (e.phase === 'start' && e.settlement > 0) this.told(e.settlement); }),
+      sim.events.on('siege', (e) => { if (e.settlement > 0) this.told(e.settlement); }),
       sim.events.on('skip', (e) => {
         const p = this.pending;
         if (!p || e.label !== p.label) return;
         if (e.phase === 'start') return;
         this.pending = null;
         if (e.phase === 'cancel') { this.say('You change your mind and stay where you are.'); return; }
-        this.arrive(p.place, p.led);
+        this.arrive(p.place, p.led, p.followers);
       }),
     );
   }
@@ -159,6 +177,33 @@ export class GotoMode {
   dispose(): void { for (const off of this.offs) off(); this.offs = []; }
 
   busy(): boolean { return this.pending !== null; }
+
+  /** A settlement you have heard of (a traveller's tale, news, a summons): it joins the places you know. */
+  told(settlement: number): void {
+    if (this.seen.has(settlement) || !this.env.sim.world.settlements.some((s) => s.id === settlement)) return;
+    this.seen.add(settlement);
+    const st = this.env.sim.state;
+    st.ext[EXT_KEY] = { v: 1, seen: [...this.seen].sort((a, b) => a - b) } satisfies GotoExt;
+    st.touchExt(EXT_KEY);
+  }
+
+  /** The settlement you stand in or at: you have been there. */
+  private visit(): void {
+    const body = this.env.player.body();
+    if (!body) return;
+    for (const s of this.env.sim.world.settlements) if (!this.seen.has(s.id) && dist(s.x, s.z, body.x, body.z) <= s.radius + 40) this.told(s.id);
+  }
+
+  /** True when the settlement is one you know: yours, your lord's, a near neighbour, or one you have been to or heard of. */
+  knows(settlement: number): boolean {
+    const { sim } = this.env;
+    const me = sim.state.persons.get(this.pid);
+    if (!me) return false;
+    if (settlement === me.settlement || settlement === sim.state.run.birthSettlement || this.seen.has(settlement)) return true;
+    if (this.lordOf(me.settlement)?.settlement === settlement) return true;
+    const s = sim.world.settlements.find((q) => q.id === settlement), h = sim.world.settlements.find((q) => q.id === me.settlement);
+    return !!s && !!h && dist(s.x, s.z, h.x, h.z) <= NEIGHBOURS;
+  }
 
   private get pid(): PersonId { return this.env.sim.state.run.playerId; }
   private say(text: string, kind: 'info' | 'warn' = 'info'): void { this.env.sim.events.emit('notify', { kind, text, person: this.pid }); }
@@ -255,7 +300,7 @@ export class GotoMode {
 
     // your lands and the next villages within a few kilometres
     const nearby = sim.world.settlements
-      .filter((s) => s.id !== me.settlement && dist(s.x, s.z, homeSpot.x, homeSpot.z) <= GOTO_RANGE)
+      .filter((s) => s.id !== me.settlement && dist(s.x, s.z, homeSpot.x, homeSpot.z) <= GOTO_RANGE && this.knows(s.id))
       .filter((s) => (lord && s.id === lord.settlement) || s.kind === 'village' || s.kind === 'hamlet' || s.kind === 'town')
       .sort((a, b) => dist(a.x, a.z, homeSpot.x, homeSpot.z) - dist(b.x, b.z, homeSpot.x, homeSpot.z))
       .slice(0, 8);
@@ -347,7 +392,7 @@ export class GotoMode {
     if (sim.state.clock.actionTime) return bad('Not in the middle of the action.', metres);
     if (metres < HERE) return bad('You are there already.', metres);
     if (metres > GOTO_RANGE) return bad(`Too far: ${(metres / 1000).toFixed(1)} km. Keep to the roads, or use the map.`, metres);
-    if (!(known ?? this.places()).some((p) => p.id === place.id)) return bad('You do not know that place.', metres);
+    if (!(known ?? this.places()).some((p) => p.id === place.id) && !(place.kind === 'building' && this.env.sim.state.buildings.has(place.ref) && this.knows(place.settlement))) return bad('You do not know that place.', metres);
     const terr = sim.services.territory as TerritoryApi | undefined;
     if (terr) {
       const here = terr.trespass(this.pid, body.x, body.z);
@@ -366,24 +411,70 @@ export class GotoMode {
     if (!c.ok) return { ok: false, reason: c.reason };
     const { sim } = this.env;
     const label = `${c.mounted ? 'Riding' : 'Walking'} to ${place.name.replace(/^The /, 'the ')}…`;
-    const led = this.env.zone.ledBy?.(this.pid)?.map((a) => ({ id: a.id })) ?? [];
-    this.pending = { label, place, led };
+    const led = this.env.zone.ledBy?.(this.pid)?.map((a) => ({ id: a.id, kind: a.kind as string, owner: a.owner })) ?? [];
+    this.pending = { label, place, led, followers: this.followers() };
     const until = sim.absDay + c.seconds / DAY_SECONDS;
-    const r = sim.dispatch({ type: 'waitUntil', until: { test: () => sim.absDay >= until - 1e-6, label, maxDays: 2 } });
+    const r = sim.dispatch({ type: 'waitUntil', until: { test: () => sim.absDay >= until - 1e-6, label, maxDays: 2, until } });
     if (!r.ok) { this.pending = null; return { ok: false, reason: r.reason ?? 'You cannot go now.' }; }
     return { ok: true };
   }
 
-  /** The skip is over: stand at the door (the horse comes with the body; the led animals are brought up behind). */
-  private arrive(place: GotoPlace, led: Array<{ id: number }>): void {
+  /** The people with a follow order on you, as they are now. */
+  private followers(): Follower[] {
+    const out: Follower[] = [];
+    for (const a of this.env.zone.agents?.() ?? []) {
+      const x = a as unknown as { order?: AgentOrder | null; mounted?: boolean; mountCoat?: number; person?: { death?: unknown } };
+      if (x.order?.kind === 'follow' && x.order.leader === this.pid && !x.person?.death) out.push({ id: a.personId, order: x.order, mounted: !!x.mounted, coat: x.mountCoat ?? 0 });
+    }
+    return out;
+  }
+
+  /** The skip is over: stand at the door (the horse comes with the body; the led animals and the followers are brought up behind). */
+  private arrive(place: GotoPlace, led: readonly LedBeast[], followers: readonly Follower[]): void {
     const { player, zone } = this.env;
     player.placeAt(place.stand.x, place.stand.z, place.stand.yaw);
     const body = player.body();
+    let n = 0;
+    const behind = (back: number): { x: number; z: number } => {
+      const side = n % 2 ? 1 : -1;
+      n++;
+      const by = body!.yaw;
+      return { x: body!.x - Math.sin(by) * back + Math.cos(by) * side * 0.9, z: body!.z - Math.cos(by) * back - Math.sin(by) * side * 0.9 };
+    };
+    // (the zone's re-placing lets go of the halters and may make the beast anew: the household's beast of that kind nearest to you is set
+    // down behind you and taken on the halter again)
     for (const l of led) {
-      const a = zone.ledBy?.(this.pid)?.find((q) => q.id === l.id);
-      if (a && body) { a.x = body.x - Math.sin(body.yaw) * 2; a.z = body.z - Math.cos(body.yaw) * 2; }
+      if (!body) break;
+      const led0 = zone.ledBy?.(this.pid) ?? [];
+      const pool = zone.animals?.() ?? [];
+      const a = led0.find((q) => q.id === l.id) ?? pool.find((q) => q.id === l.id)
+        ?? pool.filter((q) => q.owner === l.owner && (q.kind as string) === l.kind && !led0.some((x) => x.id === q.id)).sort((p, r) => dist(p.x, p.z, body.x, body.z) - dist(r.x, r.z, body.x, body.z))[0];
+      if (!a) continue;
+      const q = behind(2);
+      a.x = q.x; a.z = q.z;
+      if (!led0.some((x) => x.id === a.id)) zone.leadAnimal?.(a.id, this.pid);
     }
+    // the zone re-places everyone at their schedules when you arrive: those who follow you are put behind you and told to follow again
+    if (body && zone.summon && zone.command) {
+      for (const f of followers) {
+        const q = behind(2.6 + n * 0.5);
+        zone.summon(f.id, q.x, q.z, body.yaw, f.mounted ? { mounted: true, coat: f.coat } : undefined);
+        zone.command(f.id, f.order);
+      }
+    }
+    this.visit();
     this.say(`You are at ${place.name.replace(/^The /, 'the ')}.`);
+  }
+
+  /** A listed building, or any other building of a settlement you know (named for what it is). */
+  private placeOf(id: number): GotoPlace | null {
+    const listed = this.places().find((p) => p.kind === 'building' && p.ref === id);
+    if (listed) return listed;
+    const b = this.env.sim.state.buildings.get(id);
+    if (!b || b.construction < 1 || !this.knows(b.settlement)) return null;
+    const h = b.household ? this.env.sim.state.households.get(b.household) : undefined;
+    const head = h ? this.env.sim.state.persons.get(h.head) : undefined;
+    return this.building(id, BUILDINGS[b.kind].name, head && !head.death ? `${fullName(head)}’s` : (this.env.sim.world.settlements.find((s) => s.id === b.settlement)?.name ?? ''), 'pin', 'village', `b${id}`);
   }
 
   /** "Go there now" on a building under the cursor or in the action wheel. */
@@ -395,7 +486,7 @@ export class GotoMode {
         const body = this.env.player.body();
         const b = this.env.sim.state.buildings.get(target.id);
         if (!b || !body || dist(b.x, b.z, body.x, body.z) < 60) return;
-        const place = this.places().find((p) => p.kind === 'building' && p.ref === b.id);
+        const place = this.placeOf(b.id);
         if (!place) return;
         const c = this.check(place);
         const o: ActionOption = {
@@ -407,7 +498,7 @@ export class GotoMode {
       },
       complete: (_c, _actor, option) => {
         if (option.target.kind !== 'building') return { ok: false };
-        const place = this.places().find((p) => p.kind === 'building' && p.ref === (option.target as { id: number }).id);
+        const place = this.placeOf((option.target as { id: number }).id);
         if (!place) return { ok: false, message: 'You do not know that place.' };
         const r = this.go(place);
         return r.ok ? { ok: true } : { ok: false, message: r.reason };

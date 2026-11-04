@@ -40,6 +40,11 @@ export interface PlanEffect {
   note: string;
 }
 
+/** Men to carry and work one ram (the heavier the better); two crewed rams break a gate. */
+export const RAM_CREW = 10;
+/** Men to carry and set one ladder. */
+export const LADDER_SQUAD = 5;
+
 const count = (c: Company): number => Object.values(c.men).reduce((s, n) => s + (n ?? 0), 0);
 
 export function armyCounts(a: Army): Record<UnitKind, number> {
@@ -56,8 +61,9 @@ export function defaultPlan(M: Mil, a: Army): AssaultPlan {
   const cap = (): PersonId => captains[next++] ?? 0;
   const take = (k: UnitKind, n: number): number => { const t = Math.min(c[k], Math.max(0, Math.round(n))); c[k] -= t; return t; };
   const total = Object.values(c).reduce((s, n) => s + n, 0);
-  const ram = { man_at_arms: take('man_at_arms', Math.min(20, total * 0.08)), levy: 0, mercenary: take('mercenary', 6) };
-  ram.levy = take('levy', Math.max(0, 24 - ram.man_at_arms - ram.mercenary));
+  // a crew for two rams (as many as the army can spare)
+  const ram = { man_at_arms: take('man_at_arms', Math.min(RAM_CREW * 2, total * 0.08)), levy: 0, mercenary: take('mercenary', 6) };
+  ram.levy = take('levy', Math.max(0, RAM_CREW * 2 - ram.man_at_arms - ram.mercenary));
   const ladders = { levy: take('levy', total * 0.18), man_at_arms: take('man_at_arms', c.man_at_arms * 0.3) };
   const reserve = { levy: take('levy', total * 0.1), sergeant: take('sergeant', c.sergeant * 0.3) };
   const companies: Company[] = [
@@ -69,6 +75,28 @@ export function defaultPlan(M: Mil, a: Army): AssaultPlan {
   ];
   void M;
   return { companies: companies.filter((x) => count(x) > 0 || x.id === 4) };
+}
+
+export interface SiegeWorks {
+  /** Rams with a full crew, ladders with a squad, and the bows in the companies that loose at the walls. */
+  rams: number;
+  ladders: number;
+  bows: number;
+}
+
+/**
+ * What the assault plan's companies can field in a long siege (the macro model of siege.ts follows these, not a fixed number of
+ * men): a ram for each full crew of the ram company (at most three), a ladder for each squad of the ladder company, and the
+ * archers and crossbowmen set to loose at the walls.
+ */
+export function siegeWorks(plan: AssaultPlan): SiegeWorks {
+  let ramMen = 0, ladderMen = 0, bows = 0;
+  for (const c of plan.companies) {
+    if (c.task === 'ram') ramMen += count(c);
+    else if (c.task === 'ladders') ladderMen += count(c);
+    else if (c.task === 'loose') bows += (c.men.archer ?? 0) + (c.men.crossbow ?? 0);
+  }
+  return { rams: Math.min(3, Math.floor(ramMen / RAM_CREW)), ladders: Math.floor(ladderMen / LADDER_SQUAD), bows };
 }
 
 /** What a plan does to a storm of this army against a place whose walls count `fort` times (1 = open ground). */
@@ -88,8 +116,8 @@ export function planEffect(plan: AssaultPlan, a: Army, defenders: number, fort: 
   const walled = fort > 1.05;
   // archers on the walls keep the defenders' heads down: about one bow to two men on the walls does it
   const suppress = walled ? Math.min(1, looseShots / Math.max(10, defenders * 0.5)) : 0;
-  // the ram: twenty or more men, the heavier the better, break the gate
-  const breach = walled ? Math.min(1, (ramMen / 24) * (0.6 + 0.4 * Math.min(1, ramHeavy / Math.max(1, ramMen)))) : 1;
+  // the ram: each crewed ram (RAM_CREW men, the heavier the better); two of them break the gate
+  const breach = walled ? Math.min(1, (ramMen / (RAM_CREW * 2)) * (0.6 + 0.4 * Math.min(1, ramHeavy / Math.max(1, ramMen)))) : 1;
   const fortMul = walled ? Math.max(0.35, 1 - 0.22 * suppress - 0.38 * breach - 0.1 * Math.min(1, ladder / Math.max(20, defenders * 0.3))) : 1;
   const engaged = (charge * (0.55 + 0.55 * breach) + ladder * 1.05 + ramMen * 0.5 + looseShots * 0.4 + reserve * 0.35) / total;
   const att = Math.max(0.5, Math.min(1.25, engaged));

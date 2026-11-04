@@ -108,7 +108,7 @@ describe('go to: the refusals', () => {
     const t = rig();
     const p = far(t);
     expect(t.goto.check({ ...p, x: t.body.x + GOTO_RANGE + 500 }).reason).toMatch(/too far/i);
-    expect(t.goto.check({ ...p, id: 'b999999' }).reason).toMatch(/do not know/i);
+    expect(t.goto.check({ ...p, id: 'b999999', ref: 999999 }).reason).toMatch(/do not know/i);
     expect(t.goto.check({ ...p, x: t.body.x + 2, z: t.body.z }).reason).toMatch(/already/i);
     const land = (level: string) => ({ level, reason: 'the lands of House Avenel', land: {} });
     t.sim.services.territory = { trespass: (_p: number, x: number) => (x === p.stand.x ? land('hostile') : land('none')) } as never;
@@ -142,7 +142,7 @@ describe('go to: the time passes and you arrive', () => {
     expect(t.placed.length).toBe(0);
     const passed = runOut(t.sim);
     expect(passed * DAY_SECONDS).toBeGreaterThanOrEqual(c.seconds - 1);
-    expect(passed * DAY_SECONDS).toBeLessThan(c.seconds + 2000);
+    expect(passed * DAY_SECONDS).toBeLessThan(c.seconds + 3); // to the minute, not to the next hour
     expect(t.sim.absDay - t0).toBeCloseTo(passed, 6);
     expect(t.goto.busy()).toBe(false);
     expect(t.placed.length).toBe(1);
@@ -170,6 +170,74 @@ describe('go to: the time passes and you arrive', () => {
     expect(t.goto.busy()).toBe(false);
     runOut(t.sim);
     expect(t.placed.length).toBe(0);
+  });
+});
+
+describe('go to: followers, what you know, short hops', () => {
+  it('a short hop takes the walk\'s own time, not a floor', () => {
+    const t = rig('goto-hop');
+    const near = t.goto.places().find((q) => q.kind === 'building' && Math.hypot(q.x - t.body.x, q.z - t.body.z) > 20)!;
+    const c = t.goto.check({ ...near, x: t.body.x + 30, z: t.body.z });
+    expect(c.ok).toBe(true);
+    // 30 m at a run is about 12 s of body time: a few game minutes, not the old 20 s floor (16 minutes)
+    expect(c.seconds).toBeLessThan(16);
+    expect(c.seconds).toBeGreaterThan(8);
+  });
+
+  it('settlements beyond your neighbours are not known until you have been there or been told; the record is saved', () => {
+    const t = rig('goto-know');
+    const far = t.sim.world.settlements.filter((s) => s.id !== t.me.settlement && (s.kind === 'village' || s.kind === 'hamlet' || s.kind === 'town'))
+      .map((s) => ({ s, d: Math.hypot(s.x - t.body.x, s.z - t.body.z) })).filter((q) => q.d > 1700 && q.d < 4400).sort((a, b) => a.d - b.d)[0];
+    if (!far) return;
+    const named = () => t.goto.places().some((p) => p.id === `t${far.s.id}`);
+    expect(named()).toBe(false);
+    t.goto.told(far.s.id);
+    expect(named()).toBe(true);
+    expect((t.st.ext.goto as { seen: number[] }).seen).toContain(far.s.id);
+    // a new mode over the same state (a load) remembers
+    const again = new GotoMode(t.env);
+    expect(again.places().some((p) => p.id === `t${far.s.id}`)).toBe(true);
+    again.dispose();
+  });
+
+  it('walking into a settlement is going there: it is known afterwards', () => {
+    const t = rig('goto-visit');
+    const far = t.sim.world.settlements.filter((s) => s.id !== t.me.settlement).map((s) => ({ s, d: Math.hypot(s.x - t.body.x, s.z - t.body.z) })).filter((q) => q.d > 1700).sort((a, b) => a.d - b.d)[0];
+    if (!far) return;
+    expect(t.goto.knows(far.s.id)).toBe(false);
+    t.body.x = far.s.x; t.body.z = far.s.z;
+    t.sim.events.emit('hourStarted', {} as never);
+    expect(t.goto.knows(far.s.id)).toBe(true);
+  });
+
+  it('any building of a place you know can be gone to from the wheel; the followers and the led animals come along', () => {
+    const t = rig('goto-follow');
+    const listed = new Set(t.goto.places().map((p) => p.ref));
+    const other = [...t.st.buildings.values()].find((b) => b.settlement === t.me.settlement && b.construction >= 1 && !listed.has(b.id) && Math.hypot(b.x - t.body.x, b.z - t.body.z) > 80);
+    expect(other).toBeTruthy();
+    const opts: Array<{ id: string; enabled: boolean }> = [];
+    t.goto.provider().list({} as never, t.st.run.playerId, { kind: 'building', id: other!.id } as never, opts as never);
+    expect(opts.length).toBe(1);
+    expect(opts[0].enabled).toBe(true);
+    // a follower and a led animal
+    const folk = [...t.st.persons.values()].find((p) => !p.death && p.id !== t.me.id)!;
+    const summoned: Array<{ id: number; x: number; z: number }> = [];
+    const commanded: Array<{ id: number; order: unknown }> = [];
+    const animal = { id: 7, x: 0, z: 0 };
+    const order = { kind: 'follow', leader: t.me.id, distance: 3 };
+    Object.assign(t.env.zone, {
+      agents: () => [{ personId: folk.id, order, mounted: false, person: folk }, { personId: 99999, order: { kind: 'follow', leader: 123456 }, person: {} }],
+      summon: (id: number, x: number, z: number) => { summoned.push({ id, x, z }); },
+      command: (id: number, o: unknown) => { commanded.push({ id, order: o }); },
+      ledBy: () => [animal],
+    });
+    const place = t.goto.places().find((q) => q.kind === 'building' && Math.hypot(q.x - t.body.x, q.z - t.body.z) > 60)!;
+    expect(t.goto.go(place).ok).toBe(true);
+    runOut(t.sim);
+    expect(summoned.map((q) => q.id)).toEqual([folk.id]);
+    expect(commanded).toEqual([{ id: folk.id, order }]);
+    expect(Math.hypot(summoned[0].x - t.body.x, summoned[0].z - t.body.z)).toBeLessThan(6);
+    expect(Math.hypot(animal.x - t.body.x, animal.z - t.body.z)).toBeLessThan(6);
   });
 });
 

@@ -24,6 +24,9 @@ export function walkHeight(kind: BuildingKind, level: number): number {
   }
 }
 
+/** A ladder is only set against a station whose floor is raised at least this far above the ground: a level 1 palisade has stakes and no walk. */
+export const LADDER_MIN_RISE = 1.5;
+
 const tmp = { x: 0, z: 0 };
 
 /** The stations of one building (0 to 2 of them). */

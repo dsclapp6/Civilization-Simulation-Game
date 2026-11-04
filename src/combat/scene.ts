@@ -12,6 +12,7 @@
 //
 // Everything here is the arena's: positions are authoritative while the storm lasts, the outcome is the fight's, and the damage
 // the walls take goes to `BuildingState.damage` so a storm that fails still leaves its mark on the siege.
+import { LADDER_MIN_RISE } from '../agents/stations';
 import type { WallStation } from '../agents/types';
 import { BUILDINGS } from '../content/types';
 import { clamp, dist, hash3, type P2 } from '../core/math';
@@ -467,7 +468,8 @@ export class SiegeScene {
   private ladderSitesNearCamp(n: number): Station[] {
     const out: Station[] = [];
     const g = this.gate;
-    const cands = this.stations.filter((s) => (s.kind === 'wall' || s.kind === 'palisade') && !(g && dist(s.x, s.z, g.x, g.z) < 12));
+    // (only where there is a walk to come up onto: a level 1 palisade has stakes and no floor, so no ladder is set against it)
+    const cands = this.stations.filter((s) => (s.kind === 'wall' || s.kind === 'palisade') && s.y - this.arena.groundY(s.x, s.z) >= LADDER_MIN_RISE && !(g && dist(s.x, s.z, g.x, g.z) < 12));
     cands.sort((p, q) => dist(p.x, p.z, this.campX, this.campZ) - dist(q.x, q.z, this.campX, this.campZ));
     for (const c of cands) {
       if (out.length >= n) break;

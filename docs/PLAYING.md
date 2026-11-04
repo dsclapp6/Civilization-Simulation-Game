@@ -90,7 +90,7 @@ the mouse always looks unless you free it with **Alt**.)
 - **Bottom left**: the message feed. **Top centre**: toasts and **notices** (below).
 - **Bottom right**: the dock. Two rows of buttons for every page: character, inventory, family, ledger, map,
   chronicle, rest; then requests, builder mode (**B**), ruler mode (**U**), House techniques, realm and politics, command and army, and
-  the menu. A gold dot with a number says something waits (requests, letters and petitions); a red one that the levy is called.
+  the menu (sixteen buttons, eight to a row: the dock keeps to two rows at 1280×720 and 1920×1080, and builder mode's window ends above it on a screen lower than 800 px). A gold dot with a number says something waits (requests, letters and petitions); a red one that the levy is called.
 - **Under your name**: besides the bars and the four signs, a **wound mark** (gold while wounds mend, red and throbbing while one bleeds;
   it opens the Wounds page of the character sheet) and, after you take up another life, the **who you are now** card.
 
@@ -330,11 +330,23 @@ smith, the mill, the market and its stalls, the merchant, the fisherman's landin
 know** (the fields of the farmers you know); and **your lands and the next villages** within a few kilometres. Type to search. *Go*
 skips the walk: the screen shows the wait, the clock moves on by the time the walk would have taken (about three metres a second;
 a ride is quicker; the old and the slow take longer), the world, the needs and the people go on as in any wait, and you stand at the
-place's door, or at the edge of the field. You can also use *Go now* beside *Find* in the journal's places, *Go there now* on a
+place's door, or at the edge of the field. The people who follow you (anyone with a follow order on you) and the animals you lead
+come along: they are set down behind you when you arrive and keep following. A short hop takes the walk's own time (30 m is about ten
+game minutes at a run, not a fixed minimum). The places you may name are the ones you *know*: your own village, your lord's seat, your
+near neighbours (within 1.5 km of home), and any settlement you have walked into or been told of (news, a happening, a siege, a journey
+there); that record is kept with the run (`state.ext.goto`). Any building of a place you know can be gone to from its wheel, whether or
+not the page lists it. You can also use *Go now* beside *Find* in the journal's places, *Go there now* on a
 "What now?" line, and *Go there now* in the action wheel on a far building. **Refused**, with the reason: in or near a fight or
 hostile men, on the host's march or in a siege, bound or held, on a journey of the map, on hostile land (yours or the place's), a place
 you do not know, one beyond the lands and a few kilometres (use the map), or when time is passing already. Out of doors in the dark
 you are warned (it is your own risk). Mounted, the horse comes with you and the time is a ride's.
+
+*How the long siege follows the plan.* Between storms the macro siege (`src/sim/military/siege.ts`) takes its engines from the assault
+plan's companies (`siegeWorks` in `plan.ts`): a ram for each full crew of ten in the ram company (three at most, built over the days),
+a ladder for each squad of five, and the bows set to loose at the walls weaken the defence at the next count of odds; there is no fixed
+number of men a ram needs. `node tools/war-flow.mjs` plays the war in the real game: the castle scenario from the menu (march skipped,
+camp, dawn storm, ladder and stairs onto the wall-walk, fighting there, the retreat), *Plan an attack* from the ruler's Military page,
+and raiders on the lands showing as the danger of the lord's agenda.
 
 *Ride with the host.* Planning an attack (the ruler's *Plan an attack*) puts you in the host at once; so does *Ride with the host* on
 an army marching on a place (the ruler's military page, the army panel's list): the march is skipped — the days pass as the march

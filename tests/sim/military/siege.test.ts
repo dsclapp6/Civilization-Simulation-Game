@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { militaryContext } from '../../../src/sim/military';
 import { foodStock, wallIntegrity, fortBonus } from '../../../src/sim/military/siege';
-import { planEffect } from '../../../src/sim/military/plan';
+import { planEffect, siegeWorks } from '../../../src/sim/military/plan';
+import { CFG } from '../../../src/sim/military/config';
 import { addMan } from '../../../src/sim/military/armies';
 import type { AdvancementApi } from '../../../src/sim/wave3';
 import { mkPerson } from '../builders';
@@ -128,6 +129,29 @@ describe('sieges', () => {
     const damaged = [...tech.sim.state.buildingsAt.get(tech.castle.id)!].filter((b) => b.damage > 0).length;
     expect(damaged).toBeGreaterThan(0);
     expect(fortBonus(tech.M, tech.castle.id)).toBeLessThan(f0);
+  });
+
+  it('the engines follow the assault plan\'s companies: a ram for each full crew, no ram without a crew', () => {
+    const company = (id: number, task: 'ram' | 'ladders' | 'charge', levy: number) => ({ id, name: task, captain: 0, men: { levy }, task });
+    const gap = CFG.siege.assaultGap;
+    (CFG.siege as { assaultGap: number }).assaultGap = 999; // no storm: watch the works grow
+    const run = (seed: string, companies: ReturnType<typeof company>[]) => {
+      const t = setupSiege(seed);
+      t.army.plan = { companies };
+      // the most rams the besiegers had on any day of the first week
+      let rams = -1;
+      for (let d = 0; d < 7; d++) { t.sim.advanceDays(1); const v = t.mil.siegeAt(t.castle.id); if (v) rams = Math.max(rams, v.rams); }
+      return rams < 0 ? null : { rams };
+    };
+    const crewed = run('siege-plan-a', [company(1, 'ram', 25), company(2, 'ladders', 12), company(3, 'charge', 20)]);
+    const bare = run('siege-plan-b', [company(3, 'charge', 40)]);
+    (CFG.siege as { assaultGap: number }).assaultGap = gap;
+    expect(crewed).toBeTruthy();
+    expect(bare).toBeTruthy();
+    if (crewed) expect(crewed.rams).toBeGreaterThanOrEqual(1);
+    if (bare) expect(bare.rams).toBe(0);
+    expect(siegeWorks({ companies: [company(1, 'ram', 25), company(2, 'ladders', 12)] })).toMatchObject({ rams: 2, ladders: 2 });
+    expect(siegeWorks({ companies: [company(1, 'ram', 9)] }).rams).toBe(0);
   });
 
   it('a siege is lifted when the besiegers go home', () => {

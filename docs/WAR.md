@@ -76,8 +76,11 @@ top lands on the wall-walk and fights there as one of the men who hold it. A def
 ladder off before anyone has landed (the climber falls: a bad knock, `a fall from a ladder`; the ladder lies 9 s and is raised again).
 A man on the wall-walk with no defender within 4 m drops down inside after 12 s, and three of them inside at the gate for 6 s throw it
 open ("The gate is thrown open from within!", the gatehouse then counts as broken). The player can climb (**Climb the ladder**). The
-climb ends on the wall-walk if the navigation can stand a body up there; if it cannot (the zone's navigation has no heights yet) he is
-put inside, at the foot of the stairs, so he is never left standing in stone.
+climb ends on the wall-walk: ladders are only set against a station whose floor is raised at least `LADDER_MIN_RISE` (1.5 m) above the ground
+(`src/agents/stations.ts`), so never against a level 1 palisade (stakes and no walk — the timber castles are taken by the gate and the
+ram), and every such station is on a floor the navigation stands a body on (`tests/combat/ladderTargets.test.ts` checks it over every
+fortified place of two generated worlds). A climber who ends in the chamber of a gatehouse or tower the walk runs into is still on the wall
+(`followPlayerBody`). If a floor is battered away he is put inside, at the foot of the stairs, never in stone.
 
 **Breaches and engines.** An engine (trebuchet, mangonel: only when the House has the technique) throws a stone every 15 s at a wall
 segment (projectile kind `stone`): damage 0.055, ×1.8 on a palisade, ×0.6 on a gatehouse. A wall with damage ≥ 0.5 is a breach: the
@@ -263,9 +266,9 @@ and let them go.
 
 **For B6 / B1 (UI):** keys 4–7 select a group, 8 opens the order wheel, C is the tactical view in a battle where the player commands men
 and the command panel otherwise (`KEYMAP.battle`, handled through `registerHotkey` in the HUD part, so the key dispatch needs no edit);
-the HUD part is `registerHudPart('battle')` and the tactical view the ext panel `battle`. `tools/game-flow.mjs` has no step for them.
+the HUD part is `registerHudPart('battle')` and the tactical view the ext panel `battle`. `tools/war-flow.mjs` plays them in the real game (the castle scenario from the menu with one of the army's own ladders climbed onto the curtain and a fight there, Plan an attack, the retreat, raiders in the agenda, the stairs).
 
-**Not done:** the wall-walk is not a place the player can stand until the zone's navigation has heights; ranged garrisons are
+**Not done:** ranged garrisons are
 the macro model's (a garrison with no archers is given bows from its armoury, §2); the macro kinds `archer` and `crossbow` that are not
 careers are not turned into bows in the detail fight; a detail fight is not saved (a load settles it by the macro model, as before).
 

@@ -449,6 +449,15 @@ try {
   {
   // ---- the dock has the builder's and the ruler's buttons; the settings carry the live-as switch
   check('the dock has Builder (B) and Ruler (U) buttons and no Wounds button', (await page.locator('.mu-dockbtn[aria-label^="Builder mode"]').count()) === 1 && (await page.locator('.mu-dockbtn[aria-label^="Ruler mode"]').count()) === 1 && (await page.locator('.mu-dockbtn[aria-label="Wounds"]').count()) === 0);
+  // J4: the dock keeps to two rows on 1280x720 and 1920x1080 (builder mode's window above it is checked in tools/war-flow.mjs, as a lord)
+  for (const [vw, vh] of [[1280, 720], [1280, 760], [1920, 1080]]) {
+    await page.setViewportSize({ width: vw, height: vh });
+    await tick(0.3);
+    const rows = await page.evaluate(() => new Set([...document.querySelectorAll('.mu-dockbtn')].map((e) => Math.round(e.getBoundingClientRect().top))).size);
+    check(`the dock fits in two rows at ${vw}x${vh}`, rows <= 2, `${rows} rows`);
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await tick(0.2);
   await sim(() => window.__ui.openPanel({ panel: 'settings' }));
   await tick(0.2);
   check('the settings have "Ask before living as someone", on by default', (await page.locator('.mu-field label', { hasText: 'Ask before living as someone' }).count()) === 1 && (await sim(() => window.__game.host.settings().askBeforeLiveAs)) === true);

@@ -40,6 +40,7 @@ let page = null;
 const errors = [];
 let failures = 0;
 const check = (name, ok, detail = '') => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : `  ${detail}`}`); if (!ok) failures++; };
+const note = (s) => console.log(`     ${s}`);
 const tick = (s) => page.evaluate((n) => window.__game.tick(n), s);
 const ev = (fn, arg) => page.evaluate(fn, arg);
 const panels = () => page.evaluate(() => window.__ui.openPanels());
@@ -73,7 +74,8 @@ try {
   // ---- breath after a sprint
   if (ONLY !== 'host') {
   await load('autostart=1&time=0.42');
-  await ev(() => window.__game.freeze(false));
+  // (the flow's own steps move the world; the real-time loop would draw every frame in software GL and take gigabytes)
+  await ev(() => window.__game.freeze(true));
   await ev(() => window.__game.host.setSettings({ labels: false }));
   await page.keyboard.down('KeyW');
   await page.keyboard.down('ShiftLeft');
@@ -131,6 +133,145 @@ try {
   await page.keyboard.press('Escape');
   await tick(0.3);
   await ev(() => { window.__game.session.sim.hostileNear = () => false; });
+
+  // ---- J4: a short hop takes the walk's own time, not a floor
+  {
+    const hop = await ev(() => {
+      const se = window.__game.session, p = se.services.player, g = se.services.goto;
+      const places = g.places().filter((q) => q.kind === 'building');
+      const target = places.sort((a, b) => Math.hypot(a.stand.x - p.body().x, a.stand.z - p.body().z) - Math.hypot(b.stand.x - p.body().x, b.stand.z - p.body().z))[1] ?? places[0];
+      // stand 30 m from its door, on the side away from the building
+      const bx = target.x, bz = target.z; const dx = target.stand.x - bx, dz = target.stand.z - bz, d = Math.hypot(dx, dz) || 1;
+      p.placeAt(target.stand.x + (dx / d) * 30, target.stand.z + (dz / d) * 30, 0);
+      se.zone && window.__game.tick(0.3);
+      const c = g.check(target);
+      return { id: target.id, name: target.name, ok: c.ok, seconds: c.seconds, metres: c.metres, reason: c.reason };
+    });
+    note(`hop: ${JSON.stringify(hop)}`);
+    check('a 30 m hop is allowed and counts the walk, not a floor of 20 s', hop.ok && hop.seconds < 18 && hop.seconds > 6, JSON.stringify(hop));
+    const d0 = await ev(() => window.__game.session.sim.absDay);
+    await ev((id) => { const g = window.__game.session.services.goto; return g.go(g.places().find((q) => q.id === id)); }, hop.id);
+    for (let i = 0; i < 20 && !(await ev(() => !!window.__game.session.sim.clock.skip)); i++) await tick(0.1);
+    await runSkip();
+    const d1 = await ev(() => window.__game.session.sim.absDay);
+    const bodySeconds = (d1 - d0) * 1800;
+    check('and the clock moved by about the walk (not 16 minutes)', bodySeconds > 5 && bodySeconds < hop.seconds + 10, `${bodySeconds.toFixed(1)} s for a walk of ${hop.seconds.toFixed(1)} s`);
+  }
+
+  // ---- J4: the people who follow you and the animals you lead come along
+  {
+    // (first, if the household keeps no beast that can be led, we become a person of one that does: the same switch as the game's)
+    await ev(() => {
+      const se = window.__game.session, z = se.services.zone, sim = se.sim;
+      const pid = sim.state.run.playerId;
+      const me = sim.state.persons.get(pid);
+      const tame = [...z.animals()].filter((a) => !a.wild && !a.hostile && !a.summoned && a.owner && !/chicken|goose|duck|hen|bird/.test(String(a.kind)));
+      if (tame.some((a) => a.owner === me.household)) return;
+      const beast = tame[0];
+      const hh = beast ? sim.state.households.get(beast.owner) : null;
+      const who = hh ? [hh.head, ...hh.members].find((id) => { const q = sim.state.persons.get(id); return q && !q.death && id !== pid; }) : 0;
+      if (who) sim.dispatch({ type: 'switchCharacter', personId: who });
+    });
+    await tick(1);
+    const setup = await ev(() => {
+      const se = window.__game.session, z = se.services.zone, p = se.services.player, sim = se.sim;
+      const pid = sim.state.run.playerId;
+      const b = p.body();
+      const me = sim.state.persons.get(pid);
+      const mine = [...z.animals()].filter((a) => !a.wild && !a.hostile && !a.summoned && a.owner === me.household && !/chicken|goose|duck|hen|bird/.test(String(a.kind)));
+      let led = null;
+      for (const a of mine) {
+        // bring the animal to the player, then take it on the halter (the verb of the wheel: Lead)
+        a.x = b.x + 1.5; a.z = b.z + 1.5;
+        const r = z.leadAnimal(a.id, pid);
+        if (r.ok) { led = a.id; break; }
+        (window.__ledWhy ??= []).push(`${a.kind}:${r.reason}`);
+      }
+      const folk = [...z.agents()].filter((a) => a.visible && a.personId !== pid && !a.summoned).sort((a, c) => Math.hypot(a.x - b.x, a.z - b.z) - Math.hypot(c.x - b.x, c.z - b.z))[0];
+      if (folk) z.command(folk.personId, { kind: 'follow', leader: pid, distance: 3 });
+      return { led, why: window.__ledWhy ?? [], mineCount: mine.length, folk: folk ? folk.personId : null };
+    });
+    note(`followers: ${JSON.stringify(setup)}`);
+    check('a villager follows the player (the zone\'s follow order)', setup.folk !== null);
+    await tick(0.5);
+    const far = await ev(() => {
+      const se = window.__game.session, g = se.services.goto, p = se.services.player;
+      const b = p.body();
+      const cands = g.places().filter((q) => q.kind === 'building' && Math.hypot(q.stand.x - b.x, q.stand.z - b.z) > 60).sort((a, c) => Math.hypot(a.stand.x - b.x, a.stand.z - b.z) - Math.hypot(c.stand.x - b.x, c.stand.z - b.z));
+      const t = cands[0];
+      return t ? { id: t.id, name: t.name, x: t.stand.x, z: t.stand.z } : null;
+    });
+    check('a far place to go to', !!far);
+    const r = await ev((id) => { const g = window.__game.session.services.goto; return g.go(g.places().find((q) => q.id === id)); }, far.id);
+    check('Go is allowed with a follower and a led animal', r.ok, JSON.stringify(r));
+    await runSkip(200);
+    await tick(0.6);
+    const after = await ev(([folkId, ledId]) => {
+      const se = window.__game.session, z = se.services.zone, p = se.services.player;
+      const b = p.body();
+      const f = folkId ? z.agent(folkId) : null;
+      const an = ledId !== null ? (z.ledBy(se.sim.state.run.playerId)[0] ?? null) : null;
+      return {
+        folk: f ? { d: Math.hypot(f.x - b.x, f.z - b.z), control: f.control, order: f.order ? f.order.kind : null } : null,
+        animal: an ? { d: Math.hypot(an.x - b.x, an.z - b.z), led: z.ledBy(se.sim.state.run.playerId).length > 0 } : { led: false, led0: ledId },
+      };
+    }, [setup.folk, setup.led]);
+    note(`after: ${JSON.stringify(after)}`);
+    check('the follower arrives with the player and keeps following', !!after.folk && after.folk.d < 12 && after.folk.order === 'follow', JSON.stringify(after.folk));
+    if (setup.led !== null) check('the led animal is brought up behind and is still led', !!after.animal && after.animal.d < 12 && after.animal.led, JSON.stringify(after.animal));
+    else console.log(`     (no animal of the household stands in the zone to lead: ${setup.mineCount} found; the led-animal path is covered by tests/app/goto.test.ts)`);
+    await ev(() => { const se = window.__game.session; se.services.zone.fauna?.unleadAll?.(se.sim.state.run.playerId); });
+  }
+
+  // ---- J4: what you know — a far village is not a place you know until you have been there or been told
+  {
+    const k = await ev(() => {
+      const se = window.__game.session, sim = se.sim, g = se.services.goto;
+      const me = sim.state.persons.get(sim.state.run.playerId);
+      const home = sim.world.settlements.find((s) => s.id === me.settlement);
+      const far = sim.world.settlements.filter((s) => s.id !== me.settlement && (s.kind === 'village' || s.kind === 'hamlet' || s.kind === 'town'))
+        .map((s) => ({ s, d: Math.hypot(s.x - home.x, s.z - home.z) })).filter((q) => q.d > 1700 && q.d < 4400).sort((a, b) => a.d - b.d)[0];
+      if (!far) return null;
+      const listed = () => g.places().some((p) => p.id === `t${far.s.id}`);
+      const before = listed();
+      const ext0 = sim.state.ext.goto ?? null;
+      // a traveller's tale (the sim's own news about the place), as it reaches the player
+      sim.events.emit('news', { id: 99999, kind: 'test', house: 0, settlement: far.s.id, text: 'tale', threat: 0 });
+      return { name: far.s.name, before, after: listed(), saved: (sim.state.ext.goto?.seen ?? []).includes(far.s.id), ext0 };
+    });
+    if (k) {
+      note(`known: ${JSON.stringify(k)}`);
+      check('a far village is not listed until you have been told of it; then it is, and the record is saved', k.before === false && k.after === true && k.saved === true, JSON.stringify(k));
+    } else console.log('     (no village 1.7-4.4 km away in this world: the known-places record is covered by tests/app/goto.test.ts)');
+  }
+
+  // ---- J4: "Go there now" on a far building in the action wheel (the provider's own option, performed as the wheel does)
+  {
+    const w = await ev(() => {
+      const se = window.__game.session, sim = se.sim, p = se.services.player, pid = sim.state.run.playerId;
+      const b = p.body();
+      const g = se.services.goto;
+      const listed = new Set(g.places().map((q) => q.ref));
+      const me = sim.state.persons.get(pid);
+      const cand = [...sim.state.buildings.values()].filter((q) => q.settlement === me.settlement && q.construction >= 1 && Math.hypot(q.x - b.x, q.z - b.z) > 65 && Math.hypot(q.x - b.x, q.z - b.z) < 400)
+        .sort((x, y) => Number(listed.has(x.id)) - Number(listed.has(y.id)))[0];
+      if (!cand) return null;
+      const opts = sim.actions.list(pid, { kind: 'building', id: cand.id });
+      const o = opts.find((q) => q.id === 'goto');
+      return o ? { id: cand.id, kind: cand.kind, listed: listed.has(cand.id), enabled: o.enabled, preview: o.preview ?? '', label: o.label } : { id: cand.id, kind: cand.kind, none: true };
+    });
+    note(`wheel: ${JSON.stringify(w)}`);
+    check('the wheel offers "Go there now" on a far building (even one that is not on the page)', !!w && !w.none && w.enabled && w.label === 'Go there now', JSON.stringify(w));
+    if (w && !w.none) {
+      const d0 = await ev(() => window.__game.session.sim.absDay);
+      await ev((id) => { const se = window.__game.session; const o = se.sim.actions.list(se.sim.state.run.playerId, { kind: 'building', id }).find((q) => q.id === 'goto'); const r = se.services.player.perform(o); window.__wr = r; return r; }, w.id);
+      note('perform: ' + JSON.stringify(await ev(() => window.__wr)));
+      for (let i = 0; i < 60 && !(await ev(() => !!window.__game.session.sim.clock.skip)); i++) await tick(0.2);
+      const done = await runSkip(400);
+      const at = await ev((id) => { const se = window.__game.session; const b = se.services.player.body(); const bd = se.sim.state.buildings.get(id); return Math.hypot(bd.x - b.x, bd.z - b.z); }, w.id);
+      check('performing it skips the walk and you stand at that building', done && at < 14, `${at.toFixed(1)} m`);
+    }
+  }
 
   // ---- the journal's Go now
   await page.keyboard.press('KeyO');
