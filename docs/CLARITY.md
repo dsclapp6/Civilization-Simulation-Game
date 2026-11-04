@@ -121,6 +121,9 @@ under the tracked steps, dangers first, each opening the page where it is decide
   chest), written by the rig each frame; every building shader drops fragments by the same 4x4 ordered dither as the LOD cross-fade,
   more the nearer they are to the line of sight (none beyond 1.7 m of it, all within 0.5 m), between the camera and 0.6 m in front of the
   player. Off in first person, beyond 45 m, on the map, and inside a cut-away building (which cuts its own walls).
+  Outside a building the boom no longer crowds the player when a wall is in the way: it goes on through the wall (up to 2.6 m past its
+  face, `WALL_PASS` in the rig) and the wall fades along the line of sight; inside a building (`BuildingSystem.isInside`, `env.insideBuilding`)
+  the walls stop the boom as before.
 - **The touchpad.** A swipe is one gesture (`WheelGesture` in `app/inputLogic.ts`): its many small pixel events zoom by their length
   (one boom step per 110 px) and take at most one step between views (first person, the shoulder, far out, the map) once 26 px have
   gone one way, then the rest of the swipe and its inertia is ignored; events less than 200 ms apart belong to one gesture. A mouse notch

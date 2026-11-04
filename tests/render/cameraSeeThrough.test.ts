@@ -55,6 +55,34 @@ describe('see-through walls', () => {
   });
 });
 
+describe('the boom and walls', () => {
+  const wall = new THREE.Box3(new THREE.Vector3(480, 0, 486), new THREE.Vector3(520, 14, 489));
+  const env = (inside: boolean) => {
+    const hit = new THREE.Vector3();
+    return { heightAt: () => 0, worldSize: 16000, insideBuilding: () => inside, raycastBuildings: (ray: THREE.Ray, max: number) => {
+      const p = ray.intersectBox(wall, hit);
+      const d = p ? p.distanceTo(ray.origin) : null;
+      return d !== null && d <= max ? d : null;
+    } };
+  };
+  const settle = (inside: boolean): number => {
+    const rig = new CameraRig(16 / 9, env(inside));
+    rig.setViewDistance(9);
+    rig.yaw = 0; rig.pitch = 0.2;
+    const p = new THREE.Vector3(500, 0, 492); // the wall stands 3 m behind the player, on the camera's side
+    for (let i = 0; i < 120; i++) rig.update(1 / 30, p);
+    return rig.camera.position.distanceTo(new THREE.Vector3(500, 1.55, 492));
+  };
+
+  it('outside, the boom goes on past the wall (which fades) instead of crowding the player', () => {
+    expect(settle(false)).toBeGreaterThan(5); // (3 m to the wall + WALL_PASS)
+  });
+
+  it('inside a building the walls stop it as before', () => {
+    expect(settle(true)).toBeLessThan(4);
+  });
+});
+
 describe('the head in first person', () => {
   it('is left out of the camera pass only: the shadow (depth) materials do not discard it', () => {
     const crowd = new SkinnedCrowd({ name: 't' });

@@ -11,6 +11,8 @@ export interface CameraEnv {
   heightAt(x: number, z: number): number;
   /** Distance along the ray to the first building box, or null. */
   raycastBuildings?(ray: THREE.Ray, maxDist: number, pad?: number): number | null;
+  /** The player is inside a building: its walls stop the boom as before. Outside (or when this is missing) the boom may pass a wall, which fades. */
+  insideBuilding?(): boolean;
   worldSize: number;
 }
 
@@ -23,6 +25,8 @@ const TP_NEAR = 3.4, FP_FOV = 68, FP_NEAR = 0.07, STAGE_COOLDOWN = 0.45;
 const FP_PITCH = 1.5;
 /** Eaves, bulging thatch and jetties overhang a building's footprint box by this much (m); the boom keeps clear of it. */
 const EAVE_PAD = 0.6;
+/** The boom goes this far (m) past the near face of a building outside it, through the wall that fades. */
+const WALL_PASS = 2.6;
 const FOLLOW_MAX = 140;
 const MAP_MIN = 450;
 /** Aiming: shoulder offset to the right (m) and boom length. */
@@ -390,6 +394,7 @@ export class CameraRig {
       }
       prev = d;
     }
+    const passWalls = !!this.env.insideBuilding && !this.env.insideBuilding() && this.seeThroughOn();
     if (this.env.raycastBuildings && want > 1.5) {
       // centre, left, right and above: the camera's near plane is ~0.3 m wide at its distance
       const side = this.side.set(-dir.z, 0, dir.x);
@@ -402,11 +407,16 @@ export class CameraRig {
         this.ray.origin.copy(o);
         this.ray.direction.copy(dir);
         const hit = this.env.raycastBuildings(this.ray, want, EAVE_PAD);
-        if (hit !== null) allowed = Math.min(allowed, Math.max(1.2, hit - 0.45));
+        // outside, a wall or roof in the way is no reason to crowd the player: the boom may go on through it (up to WALL_PASS past
+        // its face) and the building fades along the line of sight (assets/core/seeThrough.ts); inside, the walls stop it as before
+        if (hit !== null) allowed = Math.min(allowed, Math.max(1.2, passWalls ? hit + WALL_PASS : hit - 0.45));
       }
     }
     return allowed;
   }
+
+  /** The see-through walls are on for this camera (third person, near enough to matter). */
+  private seeThroughOn(): boolean { return this.mode === 'follow' && !this.ov && this.distance < 45; }
 
   private boomDir(pitch: number, out: THREE.Vector3): THREE.Vector3 {
     const cp = Math.cos(pitch), sp = Math.sin(pitch);

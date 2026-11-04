@@ -146,6 +146,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     heightAt,
     worldSize: world.size,
     raycastBuildings: (ray, maxDist, pad) => buildings.raycast(ray, maxDist, pad)?.distance ?? null,
+    insideBuilding: () => buildings.isInside(), // J2: outside, the boom may pass a wall (it fades, assets/core/seeThrough.ts)
   });
   rig.autoMapZoom = opts.autoMapZoom !== false;
   const camera = rig.camera;
