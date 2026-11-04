@@ -215,9 +215,9 @@ export function wallTower(ctx: Ctx, def: BuildingDef): void {
   const H = q >= 2 ? 14 : 11;
   const round = s.towerShape === 'round';
   if (s.id === 'norse' && q === 1) {
-    // Timber tower with a shingled hood.
+    // Timber tower with a plank-parapeted fighting platform on top (a place to stand: no hood; docs/INTERIORS.md).
     const S1 = def.w - 1.2;
-    squareTower(ctx, 0, 0, S1, 9.5, { wall: 'planks', crenel: false, spire: 'pyramid', belfry: true });
+    squareTower(ctx, 0, 0, S1, 11, { wall: 'planks', crenel: true, spire: 'none', belfry: false });
     // the door into the tower, whose ladders go up to the fighting floor under the hood (docs/INTERIORS.md)
     b.push(); b.translate(0, 0.5, S1 / 2);
     opening(ctx, { side: 'pz', u: 0, w: 0.9, h: 1.95, y: 0, kind: 'door', frame: 'timber' });
@@ -228,7 +228,8 @@ export function wallTower(ctx: Ctx, def: BuildingDef): void {
   let top: number;
   if (round) {
     const R = def.w / 2 - 0.55;
-    top = roundTower(ctx, 0, 0, R, H, col, { batter: 0.4, crenel: q < 2 || s.towerRoof === 'none', roof: q >= 2 && s.towerRoof === 'cone' ? s.churchRoof === 'stoneslate' ? 'slate' : s.churchRoof === 'lead' ? 'slate' : s.churchRoof : 'none', roofH: R * 2.6 });
+    // the top is the wall-walk's floor: open and crenellated, whatever the roofs of the place (docs/INTERIORS.md)
+    top = roundTower(ctx, 0, 0, R, H, col, { batter: 0.4, crenel: true, roof: 'none', roofH: R * 2.6 });
     // The door (a real one: inside, ladders go up round the walls to the top, the wall-walk's floor; docs/INTERIORS.md) and loops.
     b.push(); b.translate(0, 0, R + 0.01);
     opening(ctx, { side: 'pz', u: 0, w: 0.85, h: 2.25, y: 0.1, kind: 'door', frame: 'stone', shape: 'pointed', color: s.doors[0] });
@@ -239,7 +240,7 @@ export function wallTower(ctx: Ctx, def: BuildingDef): void {
     ctx.out.doors.push({ x: 0, z: R + 0.6 });
   } else {
     const S = def.w - 1.5;
-    top = squareTower(ctx, 0, 0, S, H, { wall: castleWall(ctx), crenel: q < 2 || s.towerRoof === 'none', spire: q >= 2 && s.towerRoof === 'pyramid' ? 'pyramid' : 'none', belfry: false, pinnacles: false });
+    top = squareTower(ctx, 0, 0, S, H, { wall: castleWall(ctx), crenel: true, spire: 'none', belfry: false, pinnacles: false });
     b.push(); b.translate(0, 0.5, S / 2);
     opening(ctx, { side: 'pz', u: 0, w: 0.9, h: 2.35, y: 0, kind: 'door', frame: 'stone', shape: 'pointed', color: s.doors[0] });
     if (lod === 0) { loop(b, -1.2, 3.5); loop(b, 1.2, 6.3); }
@@ -259,25 +260,34 @@ export function gatehouse(ctx: Ctx, def: BuildingDef): void {
     for (const sd of [-1, 1]) {
       const rc: Rect = { x0: sd < 0 ? -W / 2 + 0.6 : pw / 2, x1: sd < 0 ? -pw / 2 : W / 2 - 0.6, z0: -D / 2 + 1.2, z1: D / 2 - 1.2 };
       // the left tower is the way up: a door from the passage near the back, ladders inside to the top (docs/INTERIORS.md)
-      const ops: Opening[] = [{ side: 'pz', u: 0, w: 0.4, h: 0.5, y: 4.4, kind: 'slit', frame: 'timber' }];
+      const ops: Opening[] = [{ side: 'pz', u: 0, w: 0.4, h: 0.5, y: 5.4, kind: 'slit', frame: 'timber' }];
       if (sd < 0) ops.push({ side: 'px', u: (rc.z1 - rc.z0) / 2 - 1.0, w: 0.85, h: 1.9, y: 0, kind: 'door', frame: 'timber' });
       house(ctx, { rect: rc, plinthH: 0.2, role: sd < 0 ? 'tower' : '', storeys: [{ h: 6.4, wall: 'planks', frame: 'none', openings: ops }], roof: null });
       void tw;
     }
-    // Bridge room above the passage, jettied hoarding all round, and a shingled/thatched roof.
-    const br: Rect = { x0: -W / 2 + 0.6, x1: W / 2 - 0.6, z0: -D / 2 + 1.3, z1: D / 2 - 1.3 };
+    // The room over the passage (the winch room: the portcullis rises into it), between the towers; over both a plank deck at the
+    // height of the towers' tops with a plank parapet all round: the fighting top, where the wall-walk goes (no roof over it).
+    const top = 6.6;
+    const br: Rect = { x0: -pw / 2, x1: pw / 2, z0: -D / 2 + 1.3, z1: D / 2 - 1.3 };
     b.push(); b.translate(0, 4.4, 0);
-    const mat: RoofMat = s.id === 'norse' ? 'shingle' : s.id === 'anglo' ? 'thatch' : s.id === 'gael' ? 'heather' : 'shingle';
-    const res = house(ctx, {
+    house(ctx, {
       rect: br, plinthH: 0, noFloor: true,
-      storeys: [{ h: 2.6, wall: 'planks', frame: 'none', openings: [
+      storeys: [{ h: top - 4.4, wall: 'planks', frame: 'none', openings: [
         { side: 'pz', u: 0, w: 1.4, h: 0.7, y: 1.0, kind: 'window', frame: 'timber', shutters: true },
         { side: 'nz', u: 0, w: 1.0, h: 0.6, y: 1.0, kind: 'window', frame: 'timber', shutters: false },
       ] }],
-      roof: { type: 'hip', pitch: 46, mat, ov: 0.4, gov: 0.4, ridge: 'plain' },
+      roof: null,
     });
     b.pop();
-    void res;
+    const hx = W / 2 - 0.6, hz = D / 2 - 1.2;
+    b.state({ layer: Layer.Wall, flags: F.Snow | F.Burn }, () => b.box(-hx, top - 0.12, -hz, hx, top, hz, { top: 0x9a7a52, side: 0x7a5a3a }, 'b'));
+    const pcol = COL.plankTar;
+    crenelLine(ctx, -hx, hx, hz, top, pcol, { thick: 0.2, period: 1.3, merlon: 0.8, h: 0.55, phase: 0.25 });
+    crenelLine(ctx, -hx, hx, -hz + 0.2, top, pcol, { thick: 0.2, period: 1.3, merlon: 0.8, h: 0.55, phase: 0.25 });
+    b.push(); b.rotY(Math.PI / 2);
+    crenelLine(ctx, -hz, hz, hx, top, pcol, { thick: 0.2, period: 1.3, merlon: 0.8, h: 0.55, phase: 0.25 });
+    crenelLine(ctx, -hz, hz, -hx + 0.2, top, pcol, { thick: 0.2, period: 1.3, merlon: 0.8, h: 0.55, phase: 0.25 });
+    b.pop();
     // The gate leaves: open inwards, shut and barred, or battered in (FortView).
     gateLeaves(ctx, pw, -D / 2 + 1.5, 3.6, ctx.gate ?? 'open');
     ctx.out.doors.push({ x: 0, z: D / 2 + 0.3 }, { x: 0, z: -D / 2 - 0.3 });

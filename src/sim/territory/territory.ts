@@ -36,6 +36,9 @@ interface TerritorySave { v: 1; leave: Array<[PersonId, number, number]> }
 /** A founded outpost's claim on the land round it. */
 interface Claim { id: number; x: number; z: number; parent: number; name: string; owner: Owner }
 
+/** How far round a home raised in play its yard reaches, m. */
+const RAISED_YARD = 7;
+
 /** Footprints of buildings raised in play (BuildingState.plot < 0), indexed by 64 m cell. */
 class RaisedBuildings {
   private readonly cells = new Map<number, number[]>();
@@ -56,6 +59,20 @@ class RaisedBuildings {
       }
     }
     this.count++;
+  }
+  /** The building whose footprint, grown by `margin` m, holds the point (its yard), or -1. */
+  near(x: number, z: number, margin: number): number {
+    const cx = Math.floor(x / 64), cz = Math.floor(z / 64);
+    for (let j = cz - 1; j <= cz + 1; j++) for (let i = cx - 1; i <= cx + 1; i++) {
+      const a = this.cells.get(j * 4096 + i);
+      if (!a) continue;
+      for (const k of a) {
+        const o = k * 6, dx = x - this.c[o], dz = z - this.c[o + 1];
+        const lx = dx * this.c[o + 2] - dz * this.c[o + 3], lz = dx * this.c[o + 3] + dz * this.c[o + 2];
+        if (Math.abs(lx) <= this.c[o + 4] + margin && Math.abs(lz) <= this.c[o + 5] + margin) return this.ids[k];
+      }
+    }
+    return -1;
   }
   at(x: number, z: number): number {
     const a = this.cells.get(Math.floor(z / 64) * 4096 + Math.floor(x / 64));
@@ -437,6 +454,12 @@ export class Territory implements TerritoryRuntime {
         const castle = this.parkAt(x, z, settlement);
         if (castle >= 0) { kind = 'park'; settlement = castle; owner = null; claimed = false; } else kind = 'forest';
       } else kind = claimed ? 'wild' : 'pasture';
+    }
+    // the yard of a home raised in play is its household's, as a croft garden is (J1: docs/AGENTS.md; construction/check.ts ownLand)
+    if (settlement >= 0 && this.raised.count > 0 && info.household === NONE && (kind === 'town' || kind === 'pasture' || kind === 'meadow' || kind === 'garden')) {
+      const yb = this.raised.near(x, z, RAISED_YARD);
+      const hb = yb >= 0 ? state.buildings.get(yb) : undefined;
+      if (hb && hb.household && hb.construction >= 1 && BUILDINGS[hb.kind].cat === 'home') { kind = 'garden'; info.household = hb.household; }
     }
     info.kind = kind;
     info.settlement = settlement;

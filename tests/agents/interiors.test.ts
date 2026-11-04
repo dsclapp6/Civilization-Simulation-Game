@@ -20,7 +20,7 @@ function rig(time = 0.45): Rig {
   const economy = installEconomy(sim, { social });
   const zone = installAgents(sim, { economy, social });
   const player = installPlayer(sim, { zone, economy, social });
-  zone.nav.setInteriorSource(interiorSource(sim.world));
+  zone.nav.setInteriorSource(interiorSource(sim.world, () => sim.state.buildings.values()));
   sim.state.clock.absDay = Math.floor(sim.absDay) + time;
   sim.step(0.05);
   return { sim, zone, player };

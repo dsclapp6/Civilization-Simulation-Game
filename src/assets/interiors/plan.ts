@@ -145,6 +145,7 @@ export function makePlan(kind: BuildingKind, level: number, culture: CultureId, 
     spots: [], lights: [], outside: [], partitions: [], rails: [], bounds: { x0: 0, x1: 0, z0: 0, z1: 0 }, main: -1,
   };
   const pc: PlanCtx = { kind, level, culture, plan, blocks, out, clear: [], seed, attempt };
+  gateBridge(pc);
   towerFloors(pc);
   doorFloors(pc, doorways);
   makeLevels(pc);
@@ -208,6 +209,25 @@ function innerRect(r: PRect, t: number, open: readonly Side[]): PRect {
   };
 }
 
+/**
+ * A gatehouse's room over the passage (the winch room, where the portcullis rises into) is the block `noFloor` between the
+ * towers. A timber gatehouse's is drawn across both towers: its room is the part over the passage. Its floor is made level with a
+ * floor of the left tower (towerFloors) so a door joins them: the way in is the stair inside the tower.
+ */
+function gateBridge(pc: PlanCtx): void {
+  if (pc.kind !== 'gatehouse') return;
+  const bridge = pc.blocks.find((q) => q.shell.noFloor && q.role !== 'tower' && q.ys[0] > 3);
+  const tower = pc.blocks.find((q) => q.role === 'tower');
+  const other = pc.blocks.find((q) => q !== bridge && q !== tower && q.rects[0].x0 > (tower?.rects[0].x1 ?? 0));
+  if (!bridge || !tower || !other) return;
+  const r = bridge.rects[0];
+  const x0 = tower.rects[0].x1, x1 = other.rects[0].x0;
+  if (r.x0 < x0 - 0.2 && r.x1 > x1 + 0.2) {
+    bridge.rects = [{ ...r, x0, x1 }];
+    bridge.inner = bridge.rects.map((q) => innerRect(q, bridge.t, bridge.open[0] ?? []));
+  }
+}
+
 /** Towers and keeps are one tall storey to the house kit: floors are put in every few metres, under the windows. */
 function towerFloors(pc: PlanCtx): void {
   for (const b of pc.blocks) {
@@ -224,6 +244,16 @@ function towerFloors(pc: PlanCtx): void {
       if (f - last >= minGap && top - f >= 2.6) { want.push(f); last = f; }
     }
     while (top - last > 2 * minGap + 0.5) { last += Math.min(4.4, (top - last) / 2); want.push(last); }
+    // a gatehouse's tower has a floor level with the room over the passage, and nothing taller than a ladder above it
+    const bridge = pc.kind === 'gatehouse' && b.role === 'tower' ? pc.blocks.find((q) => q !== b && q.shell.noFloor && q.role !== 'tower' && q.ys[0] > y0 + 2) : undefined;
+    if (bridge) {
+      const by = bridge.ys[0];
+      let bi = -1, bd = 1.4;
+      want.forEach((w, i) => { if (Math.abs(w - by) < bd) { bd = Math.abs(w - by); bi = i; } });
+      if (bi >= 0) want[bi] = by; else want.push(by);
+      const up = Math.max(...want);
+      if (top - up > 7.5) want.push((up + top) / 2);
+    }
     // no flight longer than a man climbs in one go: split any rise over 4.6 m evenly
     want.sort((a, c) => a - c);
     for (let i = -1; i < want.length - 1; i++) {
@@ -534,11 +564,42 @@ function placeWindows(pc: PlanCtx): void {
 // stairs and ladders between the storeys of a block
 
 /**
+ * The room of a tower less the thick walls of the blocks built against it: a church's 0.7 m aisle wall runs on into a planks
+ * tower's room, and a flight along that edge would stand in the masonry. Used from the fifth try on (interiorPlan retries).
+ */
+function towerRoom(pc: PlanCtx, b: Block): PRect {
+  const r = { ...b.inner[0] };
+  if ((pc.attempt ?? 0) < 4) return r;
+  const ylo = b.ys[0], yhi = b.ys[b.ys.length - 1];
+  for (const ob of pc.blocks) {
+    if (ob === b || ob.round) continue;
+    ob.rects.forEach((o, k) => {
+      if (ob.ys[k] + ob.hs[k] < ylo || ob.ys[k] > yhi) return;
+      const t = ob.t;
+      // the band of each wall of the other block that lies across a whole edge of this room
+      const bands: PRect[] = [
+        { x0: o.x0, x1: o.x1, z0: o.z0, z1: o.z0 + t }, { x0: o.x0, x1: o.x1, z0: o.z1 - t, z1: o.z1 },
+        { x0: o.x0, x1: o.x0 + t, z0: o.z0, z1: o.z1 }, { x0: o.x1 - t, x1: o.x1, z0: o.z0, z1: o.z1 },
+      ];
+      for (const q of bands) {
+        if (q.x1 <= r.x0 + 0.05 || q.x0 >= r.x1 - 0.05 || q.z1 <= r.z0 + 0.05 || q.z0 >= r.z1 - 0.05) continue;
+        const spansX = q.x0 <= r.x0 + 0.05 && q.x1 >= r.x1 - 0.05, spansZ = q.z0 <= r.z0 + 0.05 && q.z1 >= r.z1 - 0.05;
+        if (spansX && q.z0 <= r.z0 + 0.05) r.z0 = Math.max(r.z0, q.z1);
+        else if (spansX && q.z1 >= r.z1 - 0.05) r.z1 = Math.min(r.z1, q.z0);
+        else if (spansZ && q.x0 <= r.x0 + 0.05) r.x0 = Math.max(r.x0, q.x1);
+        else if (spansZ && q.x1 >= r.x1 - 0.05) r.x1 = Math.min(r.x1, q.x0);
+      }
+    });
+  }
+  return r;
+}
+
+/**
  * A tower's ladders go round its walls like a square spiral: each flight along the next wall, its head at the corner where the
  * next one starts. Tried from each corner and both ways round, the first arrangement clear of the doorways wins.
  */
 function towerFlights(pc: PlanCtx, b: Block): boolean {
-  const r = b.inner[0];
+  const r = towerRoom(pc, b);
   const L = Math.min(r.x1 - r.x0, r.z1 - r.z0);
   const n = b.ys.length - 1;
   if (n < 1) return true;

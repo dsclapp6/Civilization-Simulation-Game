@@ -9,6 +9,7 @@ import type { BuildingKind } from '../../content/types';
 import type { BuildingState, GameState } from '../../sim/state';
 import type { WorldModel } from '../../world/types';
 import { walkHeight } from '../stations';
+import { towerTurn, WALL_PIECES, type WallPiece } from '../../assets/buildings/placement';
 
 /** The most a stair or a ladder joins: the walk of a tower is entered from the wall's, a few metres lower. */
 export const STAIR_RISE = 4.8;
@@ -35,6 +36,7 @@ const PARAPET = 0.3;
 export class WallWalk {
   private rects: WalkRect[] = [];
   private flights: Stair[] = [];
+  private pieces: WallPiece[] = [];
   private revision = -2;
   private count = -1;
 
@@ -48,6 +50,9 @@ export class WallWalk {
     this.count = st.buildings.size;
     const rects: WalkRect[] = [];
     const flights: Stair[] = [];
+    // lengths of wall a tower stands against (its door is not turned into them: placement.ts towerTurn)
+    this.pieces = [];
+    for (const b of st.buildings.values()) if (WALL_PIECES.has(b.kind)) this.pieces.push(b);
     for (const b of st.buildings.values()) {
       if (b.kind !== 'wall' && b.kind !== 'tower' && b.kind !== 'gatehouse' && b.kind !== 'palisade') continue;
       if (b.construction < 1) continue;
@@ -90,7 +95,8 @@ export class WallWalk {
       // before its door, which faces the middle of the place (the model is turned by quarter turns to face it: assets/buildings/
       // placement.ts towerTurn); "Climb the stairs" is the shortcut of the ladders inside up to its top
       const s = this.world.settlements.find((q) => q.id === b.settlement);
-      const dx = (s?.x ?? b.x) - b.x, dz = (s?.z ?? b.z) - b.z;
+      const face = s ? towerTurn(b.rot, b.x, b.z, s.x, s.z, this.pieces) : b.rot;
+      const dx = Math.sin(face), dz = Math.cos(face);
       const ax = dx * r.c - dz * r.s, az = dx * r.s + dz * r.c;
       const l = Math.hypot(ax, az) || 1;
       lx = (ax / l) * (def.w / 2 + 1.5); lz = (az / l) * (def.d / 2 + 1.5);

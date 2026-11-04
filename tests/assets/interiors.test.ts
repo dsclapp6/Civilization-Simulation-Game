@@ -10,8 +10,6 @@ import { buildInterior } from '../../src/assets/interiors/model';
 import { generateBuilding, normalizeRequest } from '../../src/assets/buildings/index';
 
 const CULTURES: CultureId[] = ['anglo', 'norse', 'franc', 'teuton', 'gael', 'cymric'];
-/** Known: the planks towers of the norse abbey church and cathedral (tall, thin-walled) — see docs/INTERIORS.md, open points. */
-const KNOWN = new Set(['norse abbey_church2', 'norse cathedral1', 'norse cathedral2']);
 
 describe('interior plans', () => {
   it('every inside is reached from its doors', () => {
@@ -23,7 +21,7 @@ describe('interior plans', () => {
         if (!p) continue;
         n++;
         const v = validatePlan(p);
-        if (v.problems.length && !KNOWN.has(`${c} ${kind}${lv}`)) bad.push(`${c} ${kind}${lv}: ${v.problems.slice(0, 3).join('; ')}`);
+        if (v.problems.length) bad.push(`${c} ${kind}${lv}: ${v.problems.slice(0, 3).join('; ')}`);
       }
     }
     expect(n).toBeGreaterThan(450);
@@ -43,6 +41,27 @@ describe('interior plans', () => {
       expect(m.body.triCount).toBeGreaterThan(100);
       // a storey above one's head has its stair
       if (p.levels.length > 1) expect(p.stairs.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('the room over a gatehouse passage is reached by a door from the tower stair, and is furnished (the winch room)', () => {
+    for (const c of CULTURES) for (const lv of [1, 2]) {
+      const p = interiorPlan('gatehouse', lv, c, 0)!;
+      const winch = p.rooms.find((r) => r.name === 'the winch room');
+      expect(winch, `${c} gatehouse${lv} rooms: ${p.rooms.map((r) => r.name).join()}`).toBeTruthy();
+      // a door at the winch room's level joins it to the tower, and the winch's wheel stands in it
+      expect(p.doors.some((d) => !d.outer && d.level === winch!.level), `${c} gatehouse${lv} door`).toBe(true);
+      expect(p.furniture.some((f) => f.kind === 'gearwheel'), `${c} gatehouse${lv} winch`).toBe(true);
+      expect(p.spots.some((s) => s.room === p.rooms.indexOf(winch!) && s.use === 'work'), `${c} gatehouse${lv} spot`).toBe(true);
+      expect(validatePlan(p).problems).toEqual([]);
+    }
+  });
+
+  it('the tall planks towers of the norse abbey church and cathedral are reached to the top', () => {
+    for (const [kind, lv] of [['abbey_church', 2], ['cathedral', 1], ['cathedral', 2]] as Array<[BuildingKind, number]>) {
+      const p = interiorPlan(kind, lv, 'norse', 0)!;
+      expect(p.levels.length, kind).toBeGreaterThan(4);
+      expect(validatePlan(p).problems, `${kind}${lv}`).toEqual([]);
     }
   });
 

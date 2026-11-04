@@ -132,6 +132,11 @@ strip · stubble", "Common pasture", "Oak".
   is nailed, thatch and timber carried up and doors fitted; repairs hammer or saw; demolition picks and hammers and carries off the rubble.
   Haulers walk back and forth between the pile in front of the site and the work with the load in their arms (`Mode.Errand`), hammering
   between trips. The same person does the same work all day (by a hash of person, site and day).
+* **Yards and homes raised in play**: the ground within 7 m of the walls of a finished home raised in play (`plot` −1, a household living
+  in it) is that household's own, as a croft garden is: `territory.landAt` reports `kind: 'garden'` and its `household`, so
+  `construction/check.ts ownLand` lets the household build a shed or a fence there (`tests/agents/yard.test.ts`). A home still going up is
+  nobody's to move into: `succession.pickHome` and `family.HomeAllocator` skip buildings with `construction < 1` (the construction
+  module no longer holds the unfinished home in its payer's name to keep families out; `economy/obligations.ts` checks it too).
 * **Buildings raised in play** (`plot` −1) are used by the zone like the others: the navigation sees them put up or pulled down —
   footprints are compared by a hash when the revision *or the number of buildings* changes — a site is solid from the first stake,
   `Places` (homes, workshops, alehouses, the church, stalls…) lists a building only when it is finished (`construction` 1; an upgrade of
@@ -151,6 +156,10 @@ strip · stubble", "Common pasture", "Oak".
   leader is out of sight (in at a door, left the zone) it waits where it is, and is let go after 90 s; if it is left more than 30 m
   behind for 10 s the halter slips (a notice). A released animal stays about where it is and goes back to its routine (and home at dusk).
   A led horse that the player mounts is released.
+* **Across a zone change** (the player set down elsewhere — a move, the Go-to skip, a load — which re-places everyone, `Zone.resync`): the
+  animals on a halter are kept (`AnimalSystem.clear` keeps those with a leader as it keeps summoned and claimed ones, and the leave radius
+  does not drop them) and `bringLed()` puts each behind its leader in its place in the line (the player's body as drawn, a nearby
+  walkable spot), so Go-to needs no hook of its own; tested in `tests/agents/lead.test.ts` (a few kilometres off, still led, follows on).
 * **The herd follows the household's stock**: `livestockOf` keeps the day's list of a household's beasts unless its stock of animals
   changes (`animalSignature`, a cheap look at the stores), and `reconcile()` — every 1.5 s — compares each household's drawn beasts of a
   kind with what it keeps and lets the surplus go (the led one first, then the farthest from the player); those that left are not put
@@ -224,6 +233,12 @@ recipes' interior plans) the buildings within 42 m are not boxes to a moving bod
 doors, furniture, floors, stairs and steps; `doorOf` is the real main door (placed as the model is), else `doorTable.ts`. The door book
 opens and shuts every door's leaf (people passing, the habit of the place, the player), locks homes and shut-up places at night; the
 people whose day has them inside the rooms drawn near the player are there at their places (`Zone.indoors`, drawn with the agents).
+They climb as the player does: paths through the plan join the levels at the stairs and ladders, a flight is walked at the pace of the
+height climbed with the feet on its surface (`indoorPath.ts flightY`, the `climb` animation on a ladder), they get up and walk to the
+new place when the day changes inside a room (bed → table, the loom upstairs), and a place is offered only if a path leads to it from
+an outer door (`pathExists`): nobody is put on a floor they could not reach (docs/INTERIORS.md, People inside; `tests/agents/stairs.test.ts`).
+Corner towers: `agents/nav/walls.ts` puts the stair foot where the model's door is, turned off the ends of the curtain walls
+(`placement.ts towerTurn`).
 
 ## Behaviour, animals, interaction
 
@@ -251,4 +266,4 @@ garrison and the militia on the walls and towers), 0.96 under assault (everyone 
 and out of the same windows: +0.03 to +0.05 ms per sub-step (1.50 → 1.53, 1.51 → 1.53, 0.97 → 1.02 ms). The sight test of the watch is a
 walk of 0.6 m steps along the line against the building boxes and trunks, for at most ten candidates twice a second while someone
 trespasses. `tests/agents/agents.perf.test.ts` (run with `PERF=1`) prints these.
-Tests: `tests/agents/` (schedule, nav, zone, pace, walking, walkcheck, sites, lead, plates, patrol, alert, horse, prisoner, lawzone, perf).
+Tests: `tests/agents/` (schedule, nav, zone, pace, walking, walkcheck, sites, lead, plates, patrol, alert, horse, prisoner, lawzone, perf, stairs, yard, interiors, doorTable). Live: `node tools/interiors-live.mjs` (docs/INTERIORS.md).
