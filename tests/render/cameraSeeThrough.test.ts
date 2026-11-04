@@ -83,6 +83,32 @@ describe('the boom and walls', () => {
   });
 });
 
+describe('the look down at ground work', () => {
+  const run = (rig: CameraRig, n: number): void => { for (let i = 0; i < n; i++) rig.update(1 / 30, new THREE.Vector3(500, 0, 500)); };
+  const mk = (): CameraRig => { const rig = new CameraRig(16 / 9, flat); rig.setEye(500, 1.6, 500); rig.setViewDistance(0); run(rig, 10); return rig; };
+
+  it('eases down to 0.8 rad in about 0.4 s and back to the old pitch when the work ends', () => {
+    const rig = mk(); rig.orbit(0, 0.1); run(rig, 2);
+    rig.setWorkLook(true); run(rig, 6);
+    expect(rig.pitch).toBeGreaterThan(0.3); expect(rig.pitch).toBeLessThan(0.8);
+    run(rig, 10);
+    expect(rig.pitch).toBeCloseTo(0.8, 2);
+    rig.setWorkLook(false); run(rig, 20);
+    expect(rig.pitch).toBeCloseTo(0.15, 2); // (the 0.05 of the first-person start plus the 0.1 turned)
+  });
+
+  it('any mouse movement takes the view back and the tilt is not undone', () => {
+    const rig = mk();
+    rig.setWorkLook(true); run(rig, 6);
+    rig.orbit(0.1, 0.05);
+    const p = rig.pitch; run(rig, 20);
+    expect(rig.pitch).toBeCloseTo(p, 6);
+    rig.orbit(0, -0.2); expect(rig.pitch).toBeCloseTo(p - 0.2, 6); // mouse-look still works during the action
+    rig.setWorkLook(false); run(rig, 20);
+    expect(rig.pitch).toBeCloseTo(p - 0.2, 6);
+  });
+});
+
 describe('the head in first person', () => {
   it('is left out of the camera pass only: the shadow (depth) materials do not discard it', () => {
     const crowd = new SkinnedCrowd({ name: 't' });

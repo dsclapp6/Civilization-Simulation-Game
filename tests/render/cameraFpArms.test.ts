@@ -64,6 +64,31 @@ function workPoints(anim: string, main: HeldItem, len: number): { hands: number[
 }
 
 describe('first-person arms', () => {
+  it('dig: tilted down to the work, the blade end at the push key is in the frame and at ground height, and the handle is above it', () => {
+    const st = createAnimState(7, dims); st.fp = true;
+    const place = new Float32Array(12); setIdentity(place, 0);
+    const it: CharacterDrawItem = { id: 1, x: 0, y: 0, z: 0, yaw: 0, look, lookVersion: 1, mainHand: 'spade', offHand: 'none', back: 'none', carry: 'none', anim: 'work_dig', animTime: 0, moveSpeed: 0, highlight: 0 };
+    const ctx: AnimContext = { place, saddle: null, stand: null, horsePhase: 0, horseBob: 0, dt: 1 / 30, time: 0 };
+    const bones = new Float32Array(HUMAN_BONES * 12);
+    let deepest = 0, ahead = 0;
+    for (let f = 0; f < 90; f++) {
+      it.animTime += 1 / 30; ctx.time += 1 / 30; evaluatePose(st, it, ctx); poseToBones(st, it, ctx, bones, 0);
+      const W = st.world, e = HB.eyes * 12, o = HB.itemR * 12, len = 1.1;
+      const eyeH = W[e + 7] - 0; // (the feet are at y 0)
+      const end = [W[o + 3] + W[o + 2] * len - W[e + 3], W[o + 7] + W[o + 6] * len - W[e + 7], W[o + 11] + W[o + 10] * len - W[e + 11]];
+      const q = project(end, 0.8);
+      expect(q).not.toBeNull(); expect(Math.abs(q![0])).toBeLessThan(1); expect(Math.abs(q![1])).toBeLessThan(1);
+      const grip = W[o + 7] - W[e + 7];
+      expect(grip).toBeGreaterThan(end[1]); // the handle end stays above the blade
+      if (-end[1] > deepest) { deepest = -end[1]; ahead = end[2]; }
+      void eyeH;
+    }
+    // at the push key the blade end reaches the ground (eye height below the eyes, within 0.2 m) 0.5 to 1.0 m ahead
+    const eyeHeight = new Float32Array(1); void eyeHeight;
+    expect(deepest).toBeGreaterThan(1.2); expect(deepest).toBeLessThan(1.5);
+    expect(ahead).toBeGreaterThan(0.6); expect(ahead).toBeLessThan(1.05);
+  });
+
   it('the view-model shoulders sit just below the eyes, 0.14 m either side, so the arms rise from the bottom of the view', () => {
     const st = createAnimState(7, dims); st.fp = true;
     const place = new Float32Array(12); setIdentity(place, 0);
@@ -84,9 +109,9 @@ describe('first-person arms', () => {
   for (const [anim, main, len] of [['work_axe', 'axe', 0.8], ['work_hammer', 'hammer', 0.4], ['work_dig', 'spade', 1.0], ['idle', 'sword', 0.9], ['idle', 'hoe', 1.4], ['idle', 'torch', 0.6]] as const) {
     it(`${anim} with ${main}: hands and tool inside the frame, hands in the lower half, arms rising from below the eyes`, () => {
       const pts = workPoints(anim, main, len);
-      for (const h of pts.hands) { const q = project(h); const q4 = project(h, 0.4); expect(q).not.toBeNull(); expect(Math.abs(q![0])).toBeLessThan(0.9); expect(q![1]).toBeLessThan(0); expect(q4![1]).toBeGreaterThan(-1); }
+      for (const h of pts.hands) { const q = project(h); const q4 = project(h, anim === 'work_dig' ? 0.8 : 0.4); expect(q).not.toBeNull(); expect(Math.abs(q![0])).toBeLessThan(0.9); expect(q![1]).toBeLessThan(0); expect(q4![1]).toBeGreaterThan(-1); }
       // (the work is seen with the view tipped 0.4 rad down, as in play; the blade of a spade goes into the ground below the frame's middle)
-      for (const h of pts.head) { const q = project(h, anim === 'work_dig' ? 0.4 : 0); expect(q).not.toBeNull(); expect(Math.abs(q![0])).toBeLessThan(1); expect(Math.abs(q![1])).toBeLessThan(anim === 'idle' && main === 'sword' ? 9 : 1); }
+      for (const h of pts.head) { const q = project(h, anim === 'work_dig' ? 0.8 : 0); expect(q).not.toBeNull(); expect(Math.abs(q![0])).toBeLessThan(1); expect(Math.abs(q![1])).toBeLessThan(anim === 'idle' && main === 'sword' ? 9 : 1); }
       for (const r of pts.roots) { expect(r[1]).toBeLessThan(-0.15); expect(Math.abs(r[0])).toBeLessThan(0.25); }
     });
   }

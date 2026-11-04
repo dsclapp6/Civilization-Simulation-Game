@@ -281,6 +281,7 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
   const ALL_BONES = Array.from({ length: 32 }, (_, i) => i);
   /** The camera's look-down angle (radians), set each update. */
   let fpDown = 0;
+  let fpYaw = 0;
   const ctx: AnimContext = { place: _place, saddle: null, stand: null, horsePhase: 0, horseBob: 0, dt: 0, time: 0 };
 
   function animateOne(st: CharState, item: CharacterDrawItem, dt: number): void {
@@ -309,6 +310,7 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
     }
     a.fp = fpId >= 0 && item.id === fpId + VM_OFF; // (the view-model clone is the one posed for the camera; the real body keeps its normal clips)
     a.fpDown = fpDown;
+    a.fpYaw = fpYaw;
     evaluatePose(a, item, ctx);
     poseToBones(a, item, ctx, crowd.bones, crowd.boneOffset(st.slot, 0));
     // first person (src/render/firstPerson.ts, docs/CLARITY.md): the real body is posed by its own clips and left out of the camera's pass
@@ -401,6 +403,7 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
     camera.updateMatrixWorld();
     camera.getWorldDirection(_v);
     fpDown = Math.asin(Math.max(-1, Math.min(1, -_v.y)));
+    fpYaw = Math.atan2(_v.x, _v.z);
     camera.getWorldPosition(_v);
     _projScreen.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     _frustum.setFromProjectionMatrix(_projScreen);

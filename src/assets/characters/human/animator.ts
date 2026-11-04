@@ -60,6 +60,8 @@ export interface HumanAnimState {
   fpW: number;
   /** How far the camera looks down (radians, 0 level): the arms drop to the sides as you look down, so you see your body and feet. */
   fpDown: number;
+  /** The camera's yaw (rad, 0 faces +z) in first person. */
+  fpYaw: number;
   /** First-person work: the slow average of the hands (world, between them), so the work's own motion stays and its place moves into view. */
   fpMean: Float32Array;
   fpMeanOk: boolean;
@@ -74,7 +76,7 @@ export function createAnimState(seed: number, dims: HumanDims): HumanAnimState {
     loco: { phase: (seed % 97) / 97, bob: 0, seed }, idle: { t: (seed % 61) * 0.37, seed, weight: 0 },
     world: new Float32Array(HUMAN_BONES * 12), cloakAng: 0, cloakVel: 0,
     blinkT: 0, nextBlink: 1 + (seed % 13) * 0.3, lookSm: 0, aimSm: 0, prevYaw: NaN, lean: 0, flash: 0,
-    lastAnimTime: 0, ownTime: 0, itemFrame: new Float32Array(12), top: dims.H, cx: 0, cy: 0, cz: 0, fp: false, fpW: 0, fpDown: 0, fpMean: new Float32Array(3), fpMeanOk: false, fpHold: 0,
+    lastAnimTime: 0, ownTime: 0, itemFrame: new Float32Array(12), top: dims.H, cx: 0, cy: 0, cz: 0, fp: false, fpW: 0, fpDown: 0, fpYaw: 0, fpMean: new Float32Array(3), fpMeanOk: false, fpHold: 0,
   };
 }
 
@@ -431,13 +433,17 @@ export function poseToBones(st: HumanAnimState, item: CharacterDrawItem, ctx: An
     const e = item.anim.startsWith('work_') ? Math.min(1, st.ownTime / 0.3) : st.fpW;
     xformPoint(W, HB.head * 12, d.bind[HB.eyes * 3] - d.bind[HB.head * 3], d.bind[HB.eyes * 3 + 1] - d.bind[HB.head * 3 + 1], d.bind[HB.eyes * 3 + 2] - d.bind[HB.head * 3 + 2], _q);
     const pl = ctx.place;
-    const fwdX = pl[2], fwdZ = pl[10], rtX = -pl[0], rtZ = -pl[8]; // forward and the body's right (+x of the body is its left)
+    // forward and right are the CAMERA's (a work clip may turn the body to the workpiece while the view keeps its yaw)
+    const fwdX = Math.sin(st.fpYaw), fwdZ = Math.cos(st.fpYaw), rtX = -fwdZ, rtZ = fwdX;
+    void pl;
     // the view-model's shoulders: just below and a little behind the eye, 0.14 m either side
     for (const side of ['L', 'R'] as const) {
       if (!(st.fpHold & (side === 'L' ? 1 : 2))) continue;
       const sg = side === 'L' ? -1 : 1;
       const ua0 = (side === 'L' ? HB.uaL : HB.uaR) * 12;
-      const ddx = _q[0] + rtX * 0.14 * sg - fwdX * 0.05 - W[ua0 + 3], ddy = _q[1] - 0.25 - W[ua0 + 7], ddz = _q[2] + rtZ * 0.14 * sg - fwdZ * 0.05 - W[ua0 + 11];
+      // looking down (the view tips to ground work): the shoulders go back behind the lens, so the arms still come up from the bottom of the view
+      const back = 0.05 + 0.12 * Math.max(0, Math.min(1, (st.fpDown - 0.45) / 0.35));
+      const ddx = _q[0] + rtX * 0.14 * sg - fwdX * back - W[ua0 + 3], ddy = _q[1] - 0.25 - W[ua0 + 7], ddz = _q[2] + rtZ * 0.14 * sg - fwdZ * back - W[ua0 + 11];
       for (const bn of side === 'L' ? [HB.uaL, HB.faL, HB.handL] : [HB.uaR, HB.faR, HB.handR]) { const o = bn * 12; W[o + 3] += ddx; W[o + 7] += ddy; W[o + 11] += ddz; }
     }
     const mainSide: ArmSide = mainDef !== null && mainDef.hand !== 'R' ? 'L' : 'R';
@@ -768,8 +774,9 @@ const VM_CARRY: VmPose = { x: 0.17, y: -0.19, z: 0.55, pitch: 0.5 };
 const VM_CLASSES: Record<string, { period: number; keys: VmPose[] }> = {
   chop: { period: 1.4, keys: [{ x: 0.14, y: -0.19, z: 0.55, pitch: 0.32 }, { x: 0.12, y: -0.11, z: 0.55, pitch: 0.42 }, { x: 0.12, y: -0.25, z: 0.62, pitch: -0.05 }, { x: 0.14, y: -0.19, z: 0.56, pitch: 0.3 }] },
   hammer: { period: 0.9, keys: [{ x: 0.17, y: -0.2, z: 0.55, pitch: 0.5 }, { x: 0.14, y: -0.01, z: 0.5, pitch: 1.0 }, { x: 0.15, y: -0.36, z: 0.66, pitch: -0.25 }, { x: 0.17, y: -0.2, z: 0.55, pitch: 0.4 }] },
-  // dig: the push key tips the shaft steeply forward and down, so the blade goes into the ground well ahead of the feet (about 1.1 m)
-  dig: { period: 1.3, keys: [{ x: 0.1, y: -0.17, z: 0.55, pitch: 0.1 }, { x: 0.1, y: -0.17, z: 0.58, pitch: 0.2 }, { x: 0.1, y: -0.36, z: 0.7, pitch: -1.05 }, { x: 0.1, y: -0.24, z: 0.6, pitch: -0.3 }] },
+  // dig (ground work, seen with the view tipped down to 0.8 rad): the tool is upright, the handle at the hands and the blade end down; the push key
+  // puts the blade end in the soil about 0.8 m ahead of the feet, the lever key pulls the handle back towards the chest
+  dig: { period: 1.3, keys: [{ x: 0.1, y: -0.28, z: 0.42, pitch: -0.9 }, { x: 0.1, y: -0.22, z: 0.4, pitch: -0.7 }, { x: 0.1, y: -0.34, z: 0.52, pitch: -1.2 }, { x: 0.1, y: -0.3, z: 0.34, pitch: -0.85 }] },
 };
 const VM_OUT: VmPose = { x: 0, y: 0, z: 0, pitch: 0 };
 
