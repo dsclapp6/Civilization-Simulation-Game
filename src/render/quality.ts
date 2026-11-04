@@ -52,7 +52,7 @@ const BASE: Omit<QualitySettings, 'level'> = {
   shadows: true,
   shadowMapSize: 2048,
   shadowDistance: 110,
-  shadowRadius: 2.5,
+  shadowRadius: 1, // (three r186 PCF: a radius of 2.5-3 texels at these map sizes wipes every shadow out; 1 is soft and whole)
   postFx: false,
   terrainMaxLevel: 9,
   terrainSplit: 1.55,
@@ -88,7 +88,7 @@ export const QUALITY: Record<QualityLevel, QualitySettings> = {
   medium: { ...BASE, level: 'medium' },
   high: {
     ...BASE, level: 'high',
-    pixelRatioCap: 2, shadowMapSize: 4096, shadowDistance: 190, shadowRadius: 3, postFx: true,
+    pixelRatioCap: 2, shadowMapSize: 4096, shadowDistance: 190, shadowRadius: 1, postFx: true,
     terrainSplit: 2.0, terrainDistance: 9500, terrainCacheNodes: 900, generationBudgetMs: 5,
     vegNear: 160, vegMid: 650, vegFar: 2400, vegGrass: 70, vegMaxPerKind: 120000, vegKindTris: 500000,
     buildingDetail: 2200, buildingDrawBudget: 380, cropRadius: 100, cropMax: 40000, cropTris: 1100000, stripDistance: 4500, roadRadius: 450,

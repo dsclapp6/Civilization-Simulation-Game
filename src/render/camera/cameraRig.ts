@@ -23,6 +23,8 @@ const FOLLOW_MIN = 2.4;
 const TP_NEAR = 3.4, FP_FOV = 68, FP_NEAR = 0.07, STAGE_COOLDOWN = 0.45;
 /** First-person look: pitch is positive looking DOWN (as the orbit boom is positive above), so this is the whole sky and the whole ground. */
 const FP_PITCH = 1.5;
+/** First-person look down at ground work (rad). */
+const WORK_PITCH = 0.8;
 /** Eaves, bulging thatch and jetties overhang a building's footprint box by this much (m); the boom keeps clear of it. */
 const EAVE_PAD = 0.6;
 /** The boom goes this far (m) past the near face of a building outside it, through the wall that fades. */
@@ -140,7 +142,34 @@ export class CameraRig {
     this.mode = mode;
   }
 
+  /**
+   * First person, work done to the ground (dig, hoe, sow, reap): the view eases down to WORK_PITCH over about 0.4 s while it runs, and back to
+   * the pitch it had when it ends. Any mouse movement hands the view back to the player at once (and the tilt is not undone afterwards).
+   */
+  setWorkLook(on: boolean): void { this.workWant = on; }
+  private workWant = false;
+  private workK = 0;
+  private workBase = 0;
+  private workApplied = 0;
+  private workUser = false;
+  private stepWorkLook(dt: number): void {
+    const active = this.workWant && this.firstPerson && !this.workUser;
+    if (!this.workWant) this.workUser = false;
+    if (active && this.workK === 0) { this.workBase = this.pitch; this.workApplied = 0; }
+    if (!active && this.workK === 0) return;
+    if (this.workUser) { this.workK = 0; this.workApplied = 0; return; }
+    const rate = dt > 0 ? dt / 0.4 : 1;
+    this.workK = clamp(this.workK + (active ? rate : -rate), 0, 1);
+    const e = this.workK * this.workK * (3 - 2 * this.workK);
+    const want = Math.max(0, WORK_PITCH - this.workBase) * e;
+    this.pitch += want - this.workApplied;
+    this.workApplied = want;
+    if (this.workK === 0) this.workApplied = 0;
+  }
+
   orbit(dYaw: number, dPitch: number): void {
+    // the mouse takes the view back from the work look at once
+    if ((dYaw !== 0 || dPitch !== 0) && this.workK > 0 && this.mode === 'follow') { this.workUser = true; this.workK = 0; this.workApplied = 0; }
     if (this.ov) {
       this.ov.yaw += dYaw;
       this.ov.pitch = clamp(this.ov.pitch + dPitch, OV_PITCH_MIN, OV_PITCH_MAX);
@@ -458,6 +487,7 @@ export class CameraRig {
     const fpWant = this.firstPerson && this.eyeValid ? 1 : 0;
     this.fpK += (fpWant - this.fpK) * (dt > 0 ? 1 - Math.exp(-dt * 9) : 1);
     if (Math.abs(this.fpK - fpWant) < 0.002) this.fpK = fpWant;
+    this.stepWorkLook(dt);
     if (this.fpK > 0) this.computeEyes(this.fpPose, dt);
     if (this.fpK >= 1) { out.pos.copy(this.fpPose.pos); out.quat.copy(this.fpPose.quat); out.fov = this.fpPose.fov; return; }
     const head = this.tmp2.copy(this.target);

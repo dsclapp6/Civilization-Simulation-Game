@@ -115,6 +115,13 @@ under the tracked steps, dangers first, each opening the page where it is decide
   bottom corners of the view, a tool or weapon held in them (`fpArms` in `assets/characters/human/animator.ts`, eased in and out
   with `fpW`; the stride still swings them, a third as much). Clips that already work the arms (strike, draw, work, aim, carry a load) keep
   their own poses, which are in view. Riding keeps the reins.
+- **Empty hands hang at the sides** (out of view, standing or walking, the swing damped, the wrist straight); only an arm that holds something (tool, weapon, torch, bow) comes up into the low carry, the hand curled on the grip. The shoulders and upper chest are left out of the camera's view above 0.36 m under the eyes (`crowd.setHiddenAbove`), the inside faces of your own body are not drawn, and the camera sits 0.22 m ahead of the head.
+- **The view-model.** In first person the real body is posed by its normal clips and drawn only in the shadow pass (and third person); a clone of it (`id + 0x40000000` in `assets/characters/layer.ts`) is posed for the eyes and drawn in the camera pass only, showing just the arms that hold something and what they hold, with no shadow (`crowdHideB`). Its shoulders sit 0.14 m either side of and 0.25 m below the eye; its hands follow small camera-space keyframe sets per motion class (carry, chop, hammer, dig; `viewModel` in `animator.ts`) driven by the clip's time. `tests/render/cameraFpArms.test.ts` projects the hands and the tool's far end through the camera at every keyframe.
+- **Looking down.** The arms drop to the sides as the camera looks down (`fpDown`), so you see chest, legs and feet; your own selection ring is not drawn in first person (`DynamicLayers.hideOwnRing`) and the shadow slice is 45 m there. The neck is left out of the camera's view with the head, and the camera sits 0.08 m ahead of the head (`EYE_AHEAD` in
+  `render/firstPerson.ts`), so looking down shows the chest and the arms from the front, never the inside of the collar. The arms at rest
+  are raised forearms-forward (`fpArms`), held tools keep their own forward bend.
+- **Shadows.** three r186's PCF filter with a radius of 2.5-3 texels (the old `shadowRadius`) washed every shadow out of the 4096 / 2048 maps,
+  so the game drew none; `quality.ts` now uses a radius of 1 (soft, whole shadows of buildings, trees and people).
 - **Your shadow has a head.** The head, eyes and mouth are left out of the camera's pass only (`crowdHide` in the crowd shader, a
   per-fragment discard); the depth and distance materials that cast shadows do not discard, so the shadow on the ground is whole.
 - **Third person: walls fade, the player never hides.** `assets/core/seeThrough.ts` holds the eye (camera) and the focus (the player's

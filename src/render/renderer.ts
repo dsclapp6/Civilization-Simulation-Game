@@ -47,6 +47,8 @@ const NO_MARKERS: readonly WorldMarker[] = [];
 const NO_FORTS: readonly FortView[] = [];
 const NO_WORKS: readonly SiegeWorkDrawItem[] = [];
 
+/** Work that is done to the ground: the first-person view tips down to it while it runs (camera/cameraRig.ts setWorkLook). */
+const GROUND_WORK = new Set<string>(['work_dig', 'work_hoe', 'work_sow', 'work_sickle', 'work_scythe']);
 const AIM_ANIMS = new Set<string>(['draw_bow', 'aim_bow', 'shoot_bow', 'aim_crossbow', 'shoot_crossbow', 'reload_crossbow']);
 const VIEW_TO_CAMERA: Record<ViewMode, CameraMode> = { street: 'follow', map: 'map', travel: 'map', cinematic: 'cinematic' };
 
@@ -257,11 +259,12 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     // aiming a bow or crossbow: over-the-shoulder camera (the reticle must not sit on the head)
     {
       const pl = view.player();
-      let aiming = false, held = 0;
+      let aiming = false, held = 0, ground = false;
       if (pl && pl.alive && vm === 'street') {
-        for (const c of view.characters()) if (c.id === pl.personId) { aiming = AIM_ANIMS.has(c.anim); held = c.anim === 'draw_bow' ? c.animTime : 1; break; }
+        for (const c of view.characters()) if (c.id === pl.personId) { aiming = AIM_ANIMS.has(c.anim); held = c.anim === 'draw_bow' ? c.animTime : 1; ground = GROUND_WORK.has(c.anim); break; }
       }
       rig.setAim(aiming, held);
+      rig.setWorkLook(ground); // J2: first person looks down at ground work (dig, hoe, sow, reap)
     }
     fpv.update(rig, dynamic.characters as EyeLayer, view.player(), vm === 'street');
     rig.update(dt, focusFor(view));
@@ -298,7 +301,8 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     // lights
     const shadowsOn = quality.shadows && above < 600;
     lighting.update(atmo, shadowsOn);
-    if (quality.shadows) lighting.fitShadow(camera, atmo.lightDir, quality.shadowDistance);
+    // first person: a tighter shadow slice (J2) so your own shadow has a readable head
+    if (quality.shadows) lighting.fitShadow(camera, atmo.lightDir, rig.inFirstPerson ? Math.min(quality.shadowDistance, 45) : quality.shadowDistance);
     renderer.toneMappingExposure = atmo.exposure;
     wind.set(weather.windX, weather.windZ);
     const fogOut = tmpColor;
@@ -370,6 +374,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     dynamic.root.visible = streetView;
     siege.root.visible = streetView;
     const sfx = siege.update(streetView ? view.siegeWorks?.() ?? NO_WORKS : NO_WORKS, dt);
+    dynamic.hideOwnRing = rig.inFirstPerson;
     dynamic.update(streetView ? chars : [], streetView ? animals : [], view.projectiles(), view.drainFx(), sfx.length ? [...bfx, ...sfx] : bfx, camera, dt);
 
     // results of work, beacons, floating gains, nameplates, hover outline
