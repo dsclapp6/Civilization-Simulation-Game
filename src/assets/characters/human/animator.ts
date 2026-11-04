@@ -442,8 +442,8 @@ export function poseToBones(st: HumanAnimState, item: CharacterDrawItem, ctx: An
       const sg = side === 'L' ? -1 : 1;
       const ua0 = (side === 'L' ? HB.uaL : HB.uaR) * 12;
       // looking down (the view tips to ground work): the shoulders go back behind the lens, so the arms still come up from the bottom of the view
-      const back = vm.d !== undefined ? 0.02 : 0.05 + 0.12 * Math.max(0, Math.min(1, (st.fpDown - 0.45) / 0.35));
-      const ddx = _q[0] + rtX * 0.14 * sg - fwdX * back - W[ua0 + 3], ddy = _q[1] - (vm.d !== undefined ? 0.55 : 0.25) - W[ua0 + 7], ddz = _q[2] + rtZ * 0.14 * sg - fwdZ * back - W[ua0 + 11];
+      const back = vm.d !== undefined ? -0.15 : 0.05 + 0.12 * Math.max(0, Math.min(1, (st.fpDown - 0.45) / 0.35));
+      const ddx = _q[0] + rtX * (vm.d !== undefined ? 0.08 : 0.14) * sg - fwdX * back - W[ua0 + 3], ddy = _q[1] - (vm.d !== undefined ? 0.55 : 0.25) - W[ua0 + 7], ddz = _q[2] + rtZ * (vm.d !== undefined ? 0.08 : 0.14) * sg - fwdZ * back - W[ua0 + 11];
       for (const bn of side === 'L' ? [HB.uaL, HB.faL, HB.handL] : [HB.uaR, HB.faR, HB.handR]) { const o = bn * 12; W[o + 3] += ddx; W[o + 7] += ddy; W[o + 11] += ddz; }
     }
     const mainSide: ArmSide = mainDef !== null && mainDef.hand !== 'R' ? 'L' : 'R';
@@ -474,7 +474,7 @@ export function poseToBones(st: HumanAnimState, item: CharacterDrawItem, ctx: An
         // the second hand on the shaft, on the same line: a spade's lower hand is down the shaft towards the blade; the other long tools'
         // is a forearm's length from the first towards the butt
         const dn = vm.d !== undefined ? 0.25 : -0.3;
-        put(other, -Math.abs(vm.x) * (vm.d !== undefined ? 1 : 0.9), mainY + sp * dn, vm.z + cp * dn, false);
+        put(other, -Math.abs(vm.x) * (vm.d !== undefined ? 1 : 0.9), mainY + sp * dn, vm.z + cp * dn, true); // (same orientation as the first hand: the palm centre is then on the shaft line too)
       } else if (offDef !== null) put(other, 0.17, -0.27, 0.55, false);
     }
   }

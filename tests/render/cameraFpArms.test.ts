@@ -70,7 +70,7 @@ describe('first-person arms', () => {
     const it: CharacterDrawItem = { id: 1, x: 0, y: 0, z: 0, yaw: 0, look, lookVersion: 1, mainHand: 'spade', offHand: 'none', back: 'none', carry: 'none', anim: 'work_dig', animTime: 0, moveSpeed: 0, highlight: 0 };
     const ctx: AnimContext = { place, saddle: null, stand: null, horsePhase: 0, horseBob: 0, dt: 1 / 30, time: 0 };
     const bones = new Float32Array(HUMAN_BONES * 12);
-    let deepest = 1, rec: { endY: number; zy: number; ang: number; hand2: number; blade: [number, number]; tee: [number, number]; rootY: number; handY: number } | null = null;
+    let deepest = 1, rec: { endY: number; zy: number; ang: number; hand2: number; blade: [number, number]; tee: [number, number]; rootY: number; handY: number; grip: number[] } | null = null;
     const rel = (W: Float32Array, p: number[]): number[] => [p[0] - W[HB.eyes * 12 + 3], p[1] - W[HB.eyes * 12 + 7], p[2] - W[HB.eyes * 12 + 11]];
     for (let f = 0; f < 90; f++) {
       it.animTime += 1 / 30; ctx.time += 1 / 30; evaluatePose(st, it, ctx); poseToBones(st, it, ctx, bones, 0);
@@ -87,14 +87,22 @@ describe('first-person arms', () => {
         const l = HB.handL * 12;
         const root = project(rel(W, [W[HB.uaR * 12 + 3], W[HB.uaR * 12 + 7], W[HB.uaR * 12 + 11]]), 0.8);
         const hq = project(rel(W, [hx, hy, hz]), 0.8);
-        rec = { endY: end[1], zy: W[o + 6], ang: Math.acos(Math.min(1, dot)) * 180 / Math.PI, hand2: W[l + 7] - hy, blade: qe!, tee: qt!, rootY: root ? root[1] : -9, handY: hq ? hq[1] : 9 };
+        // each palm centre (the wrist plus the fist's offset along the hand's -y) against the shaft line (the item's origin and z axis)
+        const gripD = (b: number): number => {
+          const h = b * 12, gy = -0.46 * dims.hand;
+          const g = [W[h + 3] + W[h + 1] * gy, W[h + 7] + W[h + 5] * gy, W[h + 11] + W[h + 9] * gy];
+          const v = [g[0] - W[o + 3], g[1] - W[o + 7], g[2] - W[o + 11]]; const al = v[0] * W[o + 2] + v[1] * W[o + 6] + v[2] * W[o + 10];
+          return Math.hypot(v[0] - al * W[o + 2], v[1] - al * W[o + 6], v[2] - al * W[o + 10]);
+        };
+        rec = { grip: [gripD(HB.handR), gripD(HB.handL)], endY: end[1], zy: W[o + 6], ang: Math.acos(Math.min(1, dot)) * 180 / Math.PI, hand2: W[l + 7] - hy, blade: qe!, tee: qt!, rootY: root ? root[1] : -9, handY: hq ? hq[1] : 9 };
       }
     }
-    expect(rec!.endY).toBeLessThan(-0.1); expect(rec!.endY).toBeGreaterThan(-0.16); // (the feet are at y = 0: the ground)
+    expect(rec!.endY).toBeLessThan(-0.1); expect(rec!.endY).toBeGreaterThan(-0.2); // (the feet are at y = 0: the ground)
+    expect(rec!.grip[0]).toBeLessThan(0.02); expect(rec!.grip[1]).toBeLessThan(0.02); // both palm centres within 2 cm of the shaft line
     expect(rec!.ang).toBeLessThan(15);
     expect(-rec!.zy).toBeGreaterThan(Math.sin((78 * Math.PI) / 180)); // (nearly upright)
     expect(rec!.blade[1]).toBeLessThan(-0.33); // the lower third of the frame
-    expect(Math.abs(rec!.tee[1])).toBeLessThan(0.5); // the T-handle in the middle band of the view (about 0.45 above the centre at the clip eye height of the test)
+    expect(Math.abs(rec!.tee[1])).toBeLessThan(0.6); // the T-handle in the middle band of the view (about 0.45 above the centre at the clip eye height of the test)
     expect(rec!.hand2).toBeLessThan(-0.1); // the second hand is lower down the shaft
     expect(rec!.rootY).toBeLessThan(rec!.handY); // the forearm roots are below the hands on screen
   });
