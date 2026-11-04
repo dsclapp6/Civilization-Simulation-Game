@@ -15,7 +15,7 @@ const D = Math.PI / 180;
 /** First-person viewmodel: where the holding hand's wrist sits relative to the eyes (m): ahead and down. */
 const FP_FWD = 0.5, FP_DOWN = 0.3;
 /** The direction (ahead, up) the hand's z axis takes for a long tool in first person. */
-const FP_TOOL_Z = [1.0, 0.4];
+const FP_TOOL_Z = [1.0, 0.22];
 const FADE = 0.15;
 
 /** Optional extra the sim may set on a draw item (seat height for 'sit', metres above the feet). */
@@ -63,6 +63,8 @@ export interface HumanAnimState {
   /** First-person work: the slow average of the hands (world, between them), so the work's own motion stays and its place moves into view. */
   fpMean: Float32Array;
   fpMeanOk: boolean;
+  /** Which hands hold something this frame (bit 0 left, bit 1 right): the free arms are left out of the view when looking down. */
+  fpHold: number;
 }
 
 export function createAnimState(seed: number, dims: HumanDims): HumanAnimState {
@@ -72,7 +74,7 @@ export function createAnimState(seed: number, dims: HumanDims): HumanAnimState {
     loco: { phase: (seed % 97) / 97, bob: 0, seed }, idle: { t: (seed % 61) * 0.37, seed, weight: 0 },
     world: new Float32Array(HUMAN_BONES * 12), cloakAng: 0, cloakVel: 0,
     blinkT: 0, nextBlink: 1 + (seed % 13) * 0.3, lookSm: 0, aimSm: 0, prevYaw: NaN, lean: 0, flash: 0,
-    lastAnimTime: 0, ownTime: 0, itemFrame: new Float32Array(12), top: dims.H, cx: 0, cy: 0, cz: 0, fp: false, fpW: 0, fpDown: 0, fpMean: new Float32Array(3), fpMeanOk: false,
+    lastAnimTime: 0, ownTime: 0, itemFrame: new Float32Array(12), top: dims.H, cx: 0, cy: 0, cz: 0, fp: false, fpW: 0, fpDown: 0, fpMean: new Float32Array(3), fpMeanOk: false, fpHold: 0,
   };
 }
 
@@ -259,6 +261,7 @@ export function evaluatePose(st: HumanAnimState, item: CharacterDrawItem, ctx: A
   // (only an arm that holds something comes up: empty hands hang at the sides, out of view, standing or walking)
   const fpRest = st.fp && armsFree && !riding && item.carry === 'none' && item.anim !== 'carry_walk';
   const fpHolds = mainDef !== null || offDef !== null;
+  st.fpHold = (mainDef !== null ? (mainDef.hand === 'R' ? 2 : 1) : 0) | (offDef !== null ? 1 : 0) | (item.anim.startsWith('work_') || item.anim.startsWith('attack_') || item.anim.includes('bow') || item.anim.startsWith('block') ? 3 : 0);
   const lowered = 1; // (the arms stay in front of you looking down too: the body is not drawn, only the arms and what they hold)
   st.fpW += ((fpRest && fpHolds ? lowered : 0) - st.fpW) * (dt > 0 ? 1 - Math.exp(-dt * 7) : 1);
   if (st.fpW < 0.002) st.fpW = 0;
@@ -499,7 +502,17 @@ export function poseToBones(st: HumanAnimState, item: CharacterDrawItem, ctx: An
     xformPoint(W, HB.head * 12, d.bind[HB.eyes * 3] - d.bind[HB.head * 3], d.bind[HB.eyes * 3 + 1] - d.bind[HB.head * 3 + 1], d.bind[HB.eyes * 3 + 2] - d.bind[HB.head * 3 + 2], _q);
     const pl = ctx.place;
     const e = Math.min(1, st.ownTime / 0.35); // eased in as the clip starts
-    const ox = (_q[0] + pl[2] * 0.5 - m[0]) * e, oy = (_q[1] - 0.42 - m[1]) * e, oz = (_q[2] + pl[10] * 0.5 - m[2]) * e;
+    let ox = (_q[0] + pl[2] * 0.5 - m[0]) * e, oy = (_q[1] - 0.42 - m[1]) * e, oz = (_q[2] + pl[10] * 0.5 - m[2]) * e;
+    // the swing of a clip may carry a hand up to the face (a wind-up over the head): the nearer hand is kept at least 0.42 m ahead of the eyes
+    // and 0.22 m below them (the whole arm moves with it), so a hand is never at the lens
+    let ahead = Infinity, below = Infinity;
+    for (const hb of [HB.handL, HB.handR]) {
+      const hx = W[hb * 12 + 3] + ox - _q[0], hy = W[hb * 12 + 7] + oy - _q[1], hz = W[hb * 12 + 11] + oz - _q[2];
+      ahead = Math.min(ahead, hx * pl[2] + hz * pl[10]);
+      below = Math.min(below, -hy);
+    }
+    if (ahead < 0.42) { ox += pl[2] * (0.42 - ahead); oz += pl[10] * (0.42 - ahead); }
+    if (below < 0.22) oy -= 0.22 - below;
     for (const side of ['R', 'L'] as const) {
       const hd = side === 'L' ? HB.handL : HB.handR;
       copy12(_hand, 0, W, hd * 12);

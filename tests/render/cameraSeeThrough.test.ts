@@ -95,7 +95,7 @@ describe('the head in first person', () => {
     expect(ds.fragmentShader).not.toContain('vCrowdHide');
     // the hide uniform: a slot and the bones of the head
     crowd.setHidden(3, 4, 20, 21);
-    expect((fs.uniforms.crowdHide.value as THREE.Vector4).toArray()).toEqual([3, (1 << 4) | (1 << 20) | (1 << 21), 0, 0]);
+    expect((fs.uniforms.crowdHide.value as THREE.Vector4).toArray()).toEqual([3, 1 << 4, (1 << 4) | (1 << 5), 0]);
     crowd.setHidden(-1);
     expect((fs.uniforms.crowdHide.value as THREE.Vector4).x).toBe(-1);
   });

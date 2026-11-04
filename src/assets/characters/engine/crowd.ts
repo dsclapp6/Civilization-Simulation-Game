@@ -96,13 +96,13 @@ const VERT_SKIN = /* glsl */`
     crowdM += ( crowdB - crowdM ) * ( skin.z / 255.0 );
   }
   vCrowdFlag = skin.w;
-  // first person: the head of the one whose eyes the camera is at (crowdHide.x = its slot, .y = a bit mask of the bones left out: the head, neck, upper chest and shoulders, eyes and mouth) is
+  // first person: the head of the one whose eyes the camera is at (crowdHide.x = its slot, .y = a two 16-bit halves of a mask of the bones left out of the view) is
   // left out of the view but stays in the shadow pass, so the player's shadow has a head
   int crowdSk = int( skin.x + 0.5 );
   // the bones in crowdLimit.y (the upper chest and the shoulders) lose what is above the height crowdLimit.x: the camera's view only
   vCrowdLow = ( crowdHide.x >= 0.0 && crowdSlot == int( crowdHide.x + 0.5 ) && ( ( int( crowdLimit.y + 0.5 ) >> crowdSk ) & 1 ) == 1 ) ? crowdLimit.x : -1e5;
   vCrowdFp = ( crowdHide.x >= 0.0 && crowdSlot == int( crowdHide.x + 0.5 ) ) ? 1.0 : 0.0;
-  vCrowdHide = ( crowdHide.x >= 0.0 && crowdSlot == int( crowdHide.x + 0.5 ) && ( ( int( crowdHide.y + 0.5 ) >> crowdSk ) & 1 ) == 1 ) ? 1.0 : 0.0;
+  vCrowdHide = ( crowdHide.x >= 0.0 && crowdSlot == int( crowdHide.x + 0.5 ) && ( ( ( crowdSk < 16 ? int( crowdHide.y + 0.5 ) >> crowdSk : int( crowdHide.z + 0.5 ) >> ( crowdSk - 16 ) ) & 1 ) == 1 ) ) ? 1.0 : 0.0;
   vCrowdParams = texelFetch( crowdBones, ivec2( ${PARAM_TEXEL}, crowdSlot ), 0 );
 `;
 
@@ -357,9 +357,9 @@ export class SkinnedCrowd {
    * draws them. A slot of -1 shows everyone whole.
    */
   setHidden(slot: number, ...bones: number[]): void {
-    let mask = 0;
-    for (const b of bones) mask |= 1 << b; // (bone ids below 22: exact in a float)
-    this.hideUniform.value.set(slot, mask, 0, 0);
+    let lo = 0, hi = 0; // (two 16-bit halves: exact in a float)
+    for (const b of bones) { if (b < 16) lo |= 1 << b; else hi |= 1 << (b - 16); }
+    this.hideUniform.value.set(slot, lo, hi, 0);
   }
 
   /** First person: these bones (the upper chest, the shoulders) lose what lies above `y` (metres) in the camera's view. */
