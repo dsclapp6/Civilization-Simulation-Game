@@ -13,7 +13,7 @@ import { HB, HUMAN_BONES, type HumanDims, POSE_BONES, POSE_PARENT } from './skel
 
 const D = Math.PI / 180;
 /** First-person viewmodel: where the holding hand's wrist sits relative to the eyes (m): ahead and down. */
-const FP_FWD = 0.5, FP_DOWN = 0.3;
+const FP_FWD = 0.5, FP_DOWN = 0.3, FP_SIDE = 0.13;
 /** The direction (ahead, up) the hand's z axis takes for a long tool in first person. */
 const FP_TOOL_Z = [1.0, 0.22];
 const FADE = 0.15;
@@ -427,7 +427,7 @@ export function poseToBones(st: HumanAnimState, item: CharacterDrawItem, ctx: An
       const held = (side === 'R' ? mainDef?.hand === 'R' : mainDef?.hand !== 'R') ? mainDef : (side === 'L' ? offDef : null);
       if (!held) continue;
       const hd = side === 'L' ? HB.handL : HB.handR;
-      const sd = side === 'L' ? 0.2 : -0.2; // +x is the body's left
+      const sd = side === 'L' ? FP_SIDE : -FP_SIDE; // +x is the body's left
       copy12(_hand, 0, W, hd * 12);
       _hand[3] = _q[0] + pl[2] * FP_FWD + pl[0] * sd;
       _hand[7] = _q[1] - FP_DOWN;
@@ -502,7 +502,7 @@ export function poseToBones(st: HumanAnimState, item: CharacterDrawItem, ctx: An
     xformPoint(W, HB.head * 12, d.bind[HB.eyes * 3] - d.bind[HB.head * 3], d.bind[HB.eyes * 3 + 1] - d.bind[HB.head * 3 + 1], d.bind[HB.eyes * 3 + 2] - d.bind[HB.head * 3 + 2], _q);
     const pl = ctx.place;
     const e = Math.min(1, st.ownTime / 0.35); // eased in as the clip starts
-    let ox = (_q[0] + pl[2] * 0.5 - m[0]) * e, oy = (_q[1] - 0.42 - m[1]) * e, oz = (_q[2] + pl[10] * 0.5 - m[2]) * e;
+    let ox = (_q[0] + pl[2] * 0.46 - m[0]) * e, oy = (_q[1] - 0.46 - m[1]) * e, oz = (_q[2] + pl[10] * 0.46 - m[2]) * e;
     // the swing of a clip may carry a hand up to the face (a wind-up over the head): the nearer hand is kept at least 0.42 m ahead of the eyes
     // and 0.22 m below them (the whole arm moves with it), so a hand is never at the lens
     let ahead = Infinity, below = Infinity;
@@ -511,15 +511,21 @@ export function poseToBones(st: HumanAnimState, item: CharacterDrawItem, ctx: An
       ahead = Math.min(ahead, hx * pl[2] + hz * pl[10]);
       below = Math.min(below, -hy);
     }
-    if (ahead < 0.42) { ox += pl[2] * (0.42 - ahead); oz += pl[10] * (0.42 - ahead); }
-    if (below < 0.22) oy -= 0.22 - below;
-    for (const side of ['R', 'L'] as const) {
+    if (ahead < 0.4) { ox += pl[2] * (0.4 - ahead); oz += pl[10] * (0.4 - ahead); }
+    if (below < 0.3) oy -= 0.3 - below;
+    // the hand that holds the tool goes first; the tool follows where that hand ACTUALLY got to (the arm may not reach the whole shift),
+    // and the other hand follows the tool by the same step, so both stay on the haft
+    const first: ArmSide = mainDef !== null && mainDef.hand !== 'R' ? 'L' : 'R';
+    let dx = ox, dy = oy, dz = oz;
+    for (const side of [first, first === 'R' ? 'L' : 'R'] as const) {
       const hd = side === 'L' ? HB.handL : HB.handR;
+      const x0 = W[hd * 12 + 3], y0 = W[hd * 12 + 7], z0 = W[hd * 12 + 11];
       copy12(_hand, 0, W, hd * 12);
-      _hand[3] += ox; _hand[7] += oy; _hand[11] += oz;
+      _hand[3] += dx; _hand[7] += dy; _hand[11] += dz;
       armIK(st, side, _hand, 1, null);
+      if (side === first) { dx = W[hd * 12 + 3] - x0; dy = W[hd * 12 + 7] - y0; dz = W[hd * 12 + 11] - z0; }
     }
-    for (const b of [HB.itemR, HB.itemL, HB.prop, HB.prop2]) { const o = b * 12; if (W[o] !== 0 || W[o + 5] !== 0) { W[o + 3] += ox; W[o + 7] += oy; W[o + 11] += oz; } }
+    { const o = HB.itemR * 12; if (W[o] !== 0 || W[o + 5] !== 0) { W[o + 3] += dx; W[o + 7] += dy; W[o + 11] += dz; } }
   } else st.fpMeanOk = false;
 
   // ---- secondary bones ----
@@ -635,6 +641,15 @@ export function poseToBones(st: HumanAnimState, item: CharacterDrawItem, ctx: An
   // ---- picking/culling info ----
   st.cx = W[3]; st.cy = W[7]; st.cz = W[11];
   st.top = W[HB.head * 12 + 7] + 0.1 * H - ctx.place[7];
+
+  // ---- first person: the arms are drawn slimmer (the view-model's arms are close to the lens: full size they fill a third of the frame) ----
+  if (st.fp) {
+    for (const [b, k] of [[HB.uaL, 0.5], [HB.uaR, 0.5], [HB.faL, 0.5], [HB.faR, 0.5], [HB.handL, 0.8], [HB.handR, 0.8]] as const) {
+      const o = b * 12;
+      W[o] *= k; W[o + 4] *= k; W[o + 8] *= k;      // x axis (across the arm)
+      W[o + 2] *= k; W[o + 6] *= k; W[o + 10] *= k; // z axis (front to back)
+    }
+  }
 
   // ---- skinning matrices: S = W × T(-bind) ----
   for (let b = 0; b < HUMAN_BONES; b++) {
