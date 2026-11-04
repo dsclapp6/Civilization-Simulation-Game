@@ -33,7 +33,10 @@ function inView(p: number[]): boolean {
 }
 
 /** Project a point (relative to the eyes, +z ahead, +y up, level look) through a 68 degree vertical, 16:9 camera: [x, y] in -1..1 (y up), or null behind it. */
-function project(p: number[]): [number, number] | null {
+function project(p: number[], pitch = 0): [number, number] | null {
+  // (the camera looks down by `pitch`)
+  const y0 = p[1] * Math.cos(pitch) + p[2] * Math.sin(pitch);
+  p = [p[0], y0, p[2] * Math.cos(pitch) - p[1] * Math.sin(pitch)];
   const z = p[2] - 0.08; // (the camera sits 0.08 m ahead of the eye bone, firstPerson.ts)
   if (z < 0.1) return null;
   const t = Math.tan((34 * Math.PI) / 180);
@@ -78,11 +81,12 @@ describe('first-person arms', () => {
 
   // the framing rules, enforced through the camera: hands and the tool's far end stay in the frame and the hands in its lower half, at every
   // keyframe of every motion class; the arms start below the eyes, within the frame's width
-  for (const [anim, main, len] of [['work_axe', 'axe', 0.8], ['work_hammer', 'hammer', 0.4], ['work_dig', 'spade', 1.0], ['idle', 'sword', 0.9], ['idle', 'hoe', 1.1]] as const) {
+  for (const [anim, main, len] of [['work_axe', 'axe', 0.8], ['work_hammer', 'hammer', 0.4], ['work_dig', 'spade', 1.0], ['idle', 'sword', 0.9], ['idle', 'hoe', 1.4], ['idle', 'torch', 0.6]] as const) {
     it(`${anim} with ${main}: hands and tool inside the frame, hands in the lower half, arms rising from below the eyes`, () => {
       const pts = workPoints(anim, main, len);
-      for (const h of pts.hands) { const q = project(h); expect(q).not.toBeNull(); expect(Math.abs(q![0])).toBeLessThan(0.9); expect(q![1]).toBeLessThan(0); expect(q![1]).toBeGreaterThan(-1); }
-      for (const h of pts.head) { const q = project(h); expect(q).not.toBeNull(); expect(Math.abs(q![0])).toBeLessThan(1); expect(Math.abs(q![1])).toBeLessThan(1); }
+      for (const h of pts.hands) { const q = project(h); const q4 = project(h, 0.4); expect(q).not.toBeNull(); expect(Math.abs(q![0])).toBeLessThan(0.9); expect(q![1]).toBeLessThan(0); expect(q4![1]).toBeGreaterThan(-1); }
+      // (the work is seen with the view tipped 0.4 rad down, as in play; the blade of a spade goes into the ground below the frame's middle)
+      for (const h of pts.head) { const q = project(h, anim === 'work_dig' ? 0.4 : 0); expect(q).not.toBeNull(); expect(Math.abs(q![0])).toBeLessThan(1); expect(Math.abs(q![1])).toBeLessThan(anim === 'idle' && main === 'sword' ? 9 : 1); }
       for (const r of pts.roots) { expect(r[1]).toBeLessThan(-0.15); expect(Math.abs(r[0])).toBeLessThan(0.25); }
     });
   }

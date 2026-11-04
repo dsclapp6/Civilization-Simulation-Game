@@ -442,8 +442,12 @@ export function poseToBones(st: HumanAnimState, item: CharacterDrawItem, ctx: An
     }
     const mainSide: ArmSide = mainDef !== null && mainDef.hand !== 'R' ? 'L' : 'R';
     const other: ArmSide = mainSide === 'L' ? 'R' : 'L';
-    const longTool = mainDef !== null && (mainDef.grip === 'shoulder' || mainDef.grip === 'upright' || mainDef.grip === 'twohand');
-    const cp = Math.cos(vm.pitch), sp = Math.sin(vm.pitch);
+    const longTool = mainDef !== null && (mainDef.grip === 'shoulder' || mainDef.grip === 'upright' || mainDef.grip === 'twohand' || mainDef.grip === 'torch');
+    const toolLen = mainDef?.len ?? 1;
+    const torch = mainDef?.grip === 'torch' && vm.pitch === VM_CARRY.pitch; // (at rest: held lower, further out and slanting away, flame in the upper middle)
+    // a very long tool (the hoe) is carried flatter so its head stays in the frame
+    const vp = torch ? 0.25 : toolLen > 1.25 ? vm.pitch - 0.2 : vm.pitch;
+    const cp = Math.cos(vp), sp = Math.sin(vp);
     const put = (side: ArmSide, x: number, y: number, z: number, pitchTool: boolean): void => {
       const hd = side === 'L' ? HB.handL : HB.handR;
       const sx = side === 'L' ? -x : x; // x: right of centre; the left hand has its own sign
@@ -454,7 +458,7 @@ export function poseToBones(st: HumanAnimState, item: CharacterDrawItem, ctx: An
       if (pitchTool) setBasisZ(_hand, 0, cp * fwdX, sp, cp * fwdZ, 0, 1, 0, _hand[3], _hand[7], _hand[11]);
       armIK(st, side, _hand, e, null);
     };
-    if (st.fpHold & (mainSide === 'L' ? 1 : 2)) put(mainSide, mainSide === 'L' ? Math.abs(vm.x) : Math.abs(vm.x), vm.y, vm.z, longTool);
+    if (st.fpHold & (mainSide === 'L' ? 1 : 2)) put(mainSide, torch ? 0.24 : Math.abs(vm.x), torch ? vm.y - 0.08 : vm.y, torch ? 0.62 : vm.z, longTool);
     if (st.fpHold & (other === 'L' ? 1 : 2)) {
       if (longTool) {
         // the second hand on the shaft, a forearm's length down it towards the butt
@@ -625,7 +629,7 @@ export function poseToBones(st: HumanAnimState, item: CharacterDrawItem, ctx: An
 
   // ---- first person: the arms are drawn slimmer (the view-model's arms are close to the lens: full size they fill a third of the frame) ----
   if (st.fp) {
-    for (const [b, k] of [[HB.uaL, 0.5], [HB.uaR, 0.5], [HB.faL, 0.5], [HB.faR, 0.5], [HB.handL, 0.8], [HB.handR, 0.8]] as const) {
+    for (const [b, k] of [[HB.uaL, 0.34], [HB.uaR, 0.34], [HB.faL, 0.34], [HB.faR, 0.34], [HB.handL, 0.8], [HB.handR, 0.8]] as const) {
       const o = b * 12;
       W[o] *= k; W[o + 4] *= k; W[o + 8] *= k;      // x axis (across the arm)
       W[o + 2] *= k; W[o + 6] *= k; W[o + 10] *= k; // z axis (front to back)
@@ -763,8 +767,9 @@ const VM_CARRY: VmPose = { x: 0.17, y: -0.19, z: 0.55, pitch: 0.5 };
 /** The motion classes: keyframes (phase 0..1, looped) and the clip's period (s). The head of the tool stays in the frame at every key (tests/render/cameraFpArms.test.ts). */
 const VM_CLASSES: Record<string, { period: number; keys: VmPose[] }> = {
   chop: { period: 1.4, keys: [{ x: 0.14, y: -0.19, z: 0.55, pitch: 0.32 }, { x: 0.12, y: -0.11, z: 0.55, pitch: 0.42 }, { x: 0.12, y: -0.25, z: 0.62, pitch: -0.05 }, { x: 0.14, y: -0.19, z: 0.56, pitch: 0.3 }] },
-  hammer: { period: 0.9, keys: [{ x: 0.17, y: -0.17, z: 0.55, pitch: 0.7 }, { x: 0.15, y: -0.08, z: 0.52, pitch: 0.85 }, { x: 0.15, y: -0.26, z: 0.6, pitch: -0.1 }, { x: 0.17, y: -0.19, z: 0.55, pitch: 0.4 }] },
-  dig: { period: 1.3, keys: [{ x: 0.1, y: -0.17, z: 0.55, pitch: 0.1 }, { x: 0.1, y: -0.15, z: 0.55, pitch: 0.25 }, { x: 0.1, y: -0.27, z: 0.6, pitch: -0.4 }, { x: 0.1, y: -0.20, z: 0.56, pitch: -0.1 }] },
+  hammer: { period: 0.9, keys: [{ x: 0.17, y: -0.2, z: 0.55, pitch: 0.5 }, { x: 0.14, y: -0.01, z: 0.5, pitch: 1.0 }, { x: 0.15, y: -0.36, z: 0.66, pitch: -0.25 }, { x: 0.17, y: -0.2, z: 0.55, pitch: 0.4 }] },
+  // dig: the push key tips the shaft steeply forward and down, so the blade goes into the ground well ahead of the feet (about 1.1 m)
+  dig: { period: 1.3, keys: [{ x: 0.1, y: -0.17, z: 0.55, pitch: 0.1 }, { x: 0.1, y: -0.17, z: 0.58, pitch: 0.2 }, { x: 0.1, y: -0.36, z: 0.7, pitch: -1.05 }, { x: 0.1, y: -0.24, z: 0.6, pitch: -0.3 }] },
 };
 const VM_OUT: VmPose = { x: 0, y: 0, z: 0, pitch: 0 };
 
