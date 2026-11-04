@@ -32,17 +32,30 @@ function inView(p: number[]): boolean {
   return z > 0.05 && down > 0.1 && down < (62 * Math.PI) / 180 && side < (75 * Math.PI) / 180;
 }
 
-/** Hands (relative to the eyes) through the frames of a work clip. */
-function workHands(anim: string, main: HeldItem): number[][] {
+/** Project a point (relative to the eyes, +z ahead, +y up, level look) through a 68 degree vertical, 16:9 camera: [x, y] in -1..1 (y up), or null behind it. */
+function project(p: number[]): [number, number] | null {
+  const z = p[2] - 0.08; // (the camera sits 0.08 m ahead of the eye bone, firstPerson.ts)
+  if (z < 0.1) return null;
+  const t = Math.tan((34 * Math.PI) / 180);
+  return [p[0] / z / (t * (16 / 9)), p[1] / z / t];
+}
+
+/** The view-model's points (the hands, the item's grip and the far end of the tool) relative to the eyes, through the frames of a clip. */
+function workPoints(anim: string, main: HeldItem, len: number): { hands: number[][]; head: number[][]; roots: number[][] } {
   const st = createAnimState(7, dims); st.fp = true;
   const place = new Float32Array(12); setIdentity(place, 0);
   const it: CharacterDrawItem = { id: 1, x: 0, y: 0, z: 0, yaw: 0, look, lookVersion: 1, mainHand: main, offHand: 'none', back: 'none', carry: 'none', anim: anim as CharacterDrawItem['anim'], animTime: 0, moveSpeed: 0, highlight: 0 };
   const ctx: AnimContext = { place, saddle: null, stand: null, horsePhase: 0, horseBob: 0, dt: 1 / 30, time: 0 };
   const bones = new Float32Array(HUMAN_BONES * 12);
-  const out: number[][] = [];
-  for (let f = 0; f < 90; f++) {
+  const out = { hands: [] as number[][], head: [] as number[][], roots: [] as number[][] };
+  for (let f = 0; f < 120; f++) {
     it.animTime += 1 / 30; ctx.time += 1 / 30; evaluatePose(st, it, ctx); poseToBones(st, it, ctx, bones, 0);
-    if (f > 30 && f % 10 === 0) { const W = st.world, e = HB.eyes * 12, h = HB.handR * 12; out.push([W[h + 3] - W[e + 3], W[h + 7] - W[e + 7], W[h + 11] - W[e + 11]]); }
+    if (f < 20 || f % 4 !== 0) continue;
+    const W = st.world, e = HB.eyes * 12;
+    const rel = (o: number, k = 0): number[] => [W[o + 3] + W[o + 2] * k - W[e + 3], W[o + 7] + W[o + 6] * k - W[e + 7], W[o + 11] + W[o + 10] * k - W[e + 11]];
+    out.hands.push(rel(HB.handR * 12));
+    out.head.push(rel(HB.itemR * 12, len));
+    out.roots.push(rel(HB.uaR * 12)); // (the arm that holds; a free arm is not drawn)
   }
   return out;
 }
@@ -63,17 +76,16 @@ describe('first-person arms', () => {
     }
   });
 
-  for (const [anim, main] of [['work_dig', 'spade'], ['work_hammer', 'hammer'], ['work_axe', 'axe']] as const) {
-    it(`${anim}: the working hand stays in the lower half of the view through the motion`, () => {
-      // the working hands stay ahead of the eyes and in the lower half of the view through the whole motion
-      for (const h of workHands(anim, main)) { expect(h[2]).toBeGreaterThan(0.3); expect(h[1]).toBeLessThan(-0.2); expect(Math.abs(h[0])).toBeLessThan(0.5); }
+  // the framing rules, enforced through the camera: hands and the tool's far end stay in the frame and the hands in its lower half, at every
+  // keyframe of every motion class; the arms start below the eyes, within the frame's width
+  for (const [anim, main, len] of [['work_axe', 'axe', 0.8], ['work_hammer', 'hammer', 0.4], ['work_dig', 'spade', 1.0], ['idle', 'sword', 0.9], ['idle', 'hoe', 1.1]] as const) {
+    it(`${anim} with ${main}: hands and tool inside the frame, hands in the lower half, arms rising from below the eyes`, () => {
+      const pts = workPoints(anim, main, len);
+      for (const h of pts.hands) { const q = project(h); expect(q).not.toBeNull(); expect(Math.abs(q![0])).toBeLessThan(0.9); expect(q![1]).toBeLessThan(0); expect(q![1]).toBeGreaterThan(-1); }
+      for (const h of pts.head) { const q = project(h); expect(q).not.toBeNull(); expect(Math.abs(q![0])).toBeLessThan(1); expect(Math.abs(q![1])).toBeLessThan(1); }
+      for (const r of pts.roots) { expect(r[1]).toBeLessThan(-0.15); expect(Math.abs(r[0])).toBeLessThan(0.25); }
     });
   }
-
-  it('without the camera at the eyes the arms hang at the sides, out of the view', () => {
-    const h = hands(false, 'none', 'idle');
-    expect(inView(h.l) && inView(h.r)).toBe(false);
-  });
 
   it('empty hands hang at the sides, out of view, standing and walking', () => {
     for (const anim of ['idle', 'walk'] as const) {

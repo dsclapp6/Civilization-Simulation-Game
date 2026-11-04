@@ -417,22 +417,6 @@ export function poseToBones(st: HumanAnimState, item: CharacterDrawItem, ctx: An
     for (let b = 0; b < POSE_BONES; b++) W[b * 12 + 7] += shift;
   }
 
-  // ---- first person: the view-model's shoulders (the hands' arms in the camera pass) ----
-  // The arms that hold something rise from just below and a little behind the eye, 0.14 m either side of centre, so in the view they come
-  // up from the bottom edge towards the hands instead of crossing the frame from the real shoulders (the body itself is not drawn there).
-  if (st.fp && (st.fpHold & 3) !== 0 && (st.fpW > 0.002 || item.anim.startsWith('work_'))) {
-    xformPoint(W, HB.head * 12, d.bind[HB.eyes * 3] - d.bind[HB.head * 3], d.bind[HB.eyes * 3 + 1] - d.bind[HB.head * 3 + 1], d.bind[HB.eyes * 3 + 2] - d.bind[HB.head * 3 + 2], _q);
-    const pl0 = ctx.place;
-    for (const side of ['L', 'R'] as const) {
-      if (!(st.fpHold & (side === 'L' ? 1 : 2))) continue;
-      const sg = side === 'L' ? 1 : -1; // +x is the body's left
-      const tx = _q[0] + pl0[0] * 0.14 * sg - pl0[2] * 0.05, ty = _q[1] - 0.25, tz = _q[2] + pl0[8] * 0.14 * sg - pl0[10] * 0.05;
-      const ua0 = (side === 'L' ? HB.uaL : HB.uaR) * 12;
-      const ddx = tx - W[ua0 + 3], ddy = ty - W[ua0 + 7], ddz = tz - W[ua0 + 11];
-      for (const b of side === 'L' ? [HB.uaL, HB.faL, HB.handL] : [HB.uaR, HB.faR, HB.handR]) { const o = b * 12; W[o + 3] += ddx; W[o + 7] += ddy; W[o + 11] += ddz; }
-    }
-  }
-
   // ---- item frames (item-first) and arm IK ----
   const def = st.clipDef;
   const mainDef = itemDef(item.mainHand);
@@ -440,33 +424,47 @@ export function poseToBones(st: HumanAnimState, item: CharacterDrawItem, ctx: An
   const gripY = -0.46 * d.hand;
   const ifw = Math.max(0, Math.min(1, q[CH.ifw]));
   const mainInR = mainDef !== null && mainDef.hand === 'R';
-  // first person: the hand that holds something is brought to a viewmodel spot in front of the eyes (about 0.55 m ahead, 0.28 m down,
-  // 0.2 m to its side), whatever the arm's own proportions, keeping the wrist's orientation from the arm pose
-  if (st.fp && st.fpW > 0.002) {
+  // first person: this is the view-model clone (the real body is posed by its clips and never touched, it feeds the shadow and third person).
+  // The arms that hold something are posed in camera space from small keyframe sets, one per motion class, driven by the clip's own time
+  const vm = st.fp ? viewModel(item, mainDef, offDef, st.fpHold, st.loco.phase) : null;
+  if (vm) {
+    const e = item.anim.startsWith('work_') ? Math.min(1, st.ownTime / 0.3) : st.fpW;
     xformPoint(W, HB.head * 12, d.bind[HB.eyes * 3] - d.bind[HB.head * 3], d.bind[HB.eyes * 3 + 1] - d.bind[HB.head * 3 + 1], d.bind[HB.eyes * 3 + 2] - d.bind[HB.head * 3 + 2], _q);
     const pl = ctx.place;
-    for (const side of ['R', 'L'] as const) {
-      const held = (side === 'R' ? mainDef?.hand === 'R' : mainDef?.hand !== 'R') ? mainDef : (side === 'L' ? offDef : null);
-      if (!held) continue;
+    const fwdX = pl[2], fwdZ = pl[10], rtX = -pl[0], rtZ = -pl[8]; // forward and the body's right (+x of the body is its left)
+    // the view-model's shoulders: just below and a little behind the eye, 0.14 m either side
+    for (const side of ['L', 'R'] as const) {
+      if (!(st.fpHold & (side === 'L' ? 1 : 2))) continue;
+      const sg = side === 'L' ? -1 : 1;
+      const ua0 = (side === 'L' ? HB.uaL : HB.uaR) * 12;
+      const ddx = _q[0] + rtX * 0.14 * sg - fwdX * 0.05 - W[ua0 + 3], ddy = _q[1] - 0.25 - W[ua0 + 7], ddz = _q[2] + rtZ * 0.14 * sg - fwdZ * 0.05 - W[ua0 + 11];
+      for (const bn of side === 'L' ? [HB.uaL, HB.faL, HB.handL] : [HB.uaR, HB.faR, HB.handR]) { const o = bn * 12; W[o + 3] += ddx; W[o + 7] += ddy; W[o + 11] += ddz; }
+    }
+    const mainSide: ArmSide = mainDef !== null && mainDef.hand !== 'R' ? 'L' : 'R';
+    const other: ArmSide = mainSide === 'L' ? 'R' : 'L';
+    const longTool = mainDef !== null && (mainDef.grip === 'shoulder' || mainDef.grip === 'upright' || mainDef.grip === 'twohand');
+    const cp = Math.cos(vm.pitch), sp = Math.sin(vm.pitch);
+    const put = (side: ArmSide, x: number, y: number, z: number, pitchTool: boolean): void => {
       const hd = side === 'L' ? HB.handL : HB.handR;
-      const sd = side === 'L' ? FP_SIDE : -FP_SIDE; // +x is the body's left
+      const sx = side === 'L' ? -x : x; // x: right of centre; the left hand has its own sign
       copy12(_hand, 0, W, hd * 12);
-      _hand[3] = _q[0] + pl[2] * FP_FWD + pl[0] * sd;
-      _hand[7] = _q[1] - FP_DOWN;
-      _hand[11] = _q[2] + pl[10] * FP_FWD + pl[8] * sd;
-      // a long tool is carried pointing forward and up (not across the screen): turn the hand about the arm's line
-      const g = held.grip;
-      if (g === 'shoulder' || g === 'upright' || g === 'twohand') {
-        const fx = pl[2], fz = pl[10];
-        // hand's -y (the fist's line to the grip) points down-back; its +y (towards the tool's head) up and a little forward
-        setBasisZ(_hand, 0, FP_TOOL_Z[0] * fx - 0.0, FP_TOOL_Z[1], FP_TOOL_Z[0] * fz, 0, 1, 0, _hand[3], _hand[7], _hand[11]);
-      }
-      armIK(st, side, _hand, st.fpW, null);
+      _hand[3] = _q[0] + rtX * sx + fwdX * z;
+      _hand[7] = _q[1] + y;
+      _hand[11] = _q[2] + rtZ * sx + fwdZ * z;
+      if (pitchTool) setBasisZ(_hand, 0, cp * fwdX, sp, cp * fwdZ, 0, 1, 0, _hand[3], _hand[7], _hand[11]);
+      armIK(st, side, _hand, e, null);
+    };
+    if (st.fpHold & (mainSide === 'L' ? 1 : 2)) put(mainSide, mainSide === 'L' ? Math.abs(vm.x) : Math.abs(vm.x), vm.y, vm.z, longTool);
+    if (st.fpHold & (other === 'L' ? 1 : 2)) {
+      if (longTool) {
+        // the second hand on the shaft, a forearm's length down it towards the butt
+        put(other, -Math.abs(vm.x) * 0.9, vm.y - sp * 0.3, vm.z - cp * 0.3, false); // (the same side of the centre as the shaft)
+      } else if (offDef !== null) put(other, 0.17, -0.27, 0.55, false);
     }
   }
   // default: item in the right fist
   mulEulerT(W, HB.itemR * 12, W, HB.handR * 12, 0, 0, 0, 0, gripY, 0.0);
-  if (ifw > 0.001 && def?.ispace) {
+  if (!vm && ifw > 0.001 && def?.ispace) {
     const space = def.ispace === 'chest' ? W.subarray(HB.chest * 12, HB.chest * 12 + 12) : (riding ? W.subarray(0, 12) : ctx.place);
     let pit = q[CH.ipit];
     if (def.special === 'xbowAim') pit -= st.aimSm;
@@ -490,13 +488,13 @@ export function poseToBones(st: HumanAnimState, item: CharacterDrawItem, ctx: An
     }
   }
   // archery: right hand on the string, drawing to the anchor
-  if (isBow(item.mainHand) && q[CH.ikR] > 0.001 && def?.special === 'bow') {
+  if (!vm && isBow(item.mainHand) && q[CH.ikR] > 0.001 && def?.special === 'bow') {
     bowDrawIK(st, item, q[CH.ikR], q[CH.draw]);
   }
   // off-hand IK onto the main item's second grip
   let ikL = Math.max(0, Math.min(1, q[CH.ikL]));
   if (def?.ikLAuto) ikL = mainDef?.grip2 && item.offHand === 'none' && mainInR ? 1 : 0;
-  if (ikL > 0.001 && mainDef?.grip2 && mainInR && !isShield(item.offHand)) {
+  if (!vm && ikL > 0.001 && mainDef?.grip2 && mainInR && !isShield(item.offHand)) {
     const g2 = mainDef.grip2;
     // closest point on the shaft to the left shoulder, within the slide range
     const it = HB.itemR * 12;
@@ -510,57 +508,6 @@ export function poseToBones(st: HumanAnimState, item: CharacterDrawItem, ctx: An
     _hand[3] = _p[0] - _r[0]; _hand[7] = _p[1] - _r[1]; _hand[11] = _p[2] - _r[2];
     armIK(st, 'L', _hand, ikL, isReload(st) ? reloadTarget(st, 'L', W) : null);
   }
-
-  // ---- first person, work clips that move the arms: bring the motion into the lower half of the view ----
-  // The hands keep the clip's own movement; everything is shifted by the difference between a viewmodel spot (0.5 m ahead, 0.3 m down)
-  // and where the hands are on average (a slow average, so the swing itself is kept), and the held items go with them.
-  if (st.fp && def && !def.riding && !riding && item.anim.startsWith('work_')) {
-    const hands: number[] = [];
-    if (st.fpHold & 1) hands.push(HB.handL * 12);
-    if (st.fpHold & 2) hands.push(HB.handR * 12);
-    if (hands.length === 0) hands.push(HB.handR * 12);
-    let mx = 0, my = 0, mz = 0;
-    for (const o of hands) { mx += W[o + 3] / hands.length; my += W[o + 7] / hands.length; mz += W[o + 11] / hands.length; }
-    const m = st.fpMean;
-    if (!st.fpMeanOk) { m[0] = mx; m[1] = my; m[2] = mz; st.fpMeanOk = true; }
-    const k = dt > 0 ? 1 - Math.exp(-dt * 1.2) : 1;
-    m[0] += (mx - m[0]) * k; m[1] += (my - m[1]) * k; m[2] += (mz - m[2]) * k;
-    xformPoint(W, HB.head * 12, d.bind[HB.eyes * 3] - d.bind[HB.head * 3], d.bind[HB.eyes * 3 + 1] - d.bind[HB.head * 3 + 1], d.bind[HB.eyes * 3 + 2] - d.bind[HB.head * 3 + 2], _q);
-    const pl = ctx.place;
-    const e = Math.min(1, st.ownTime / 0.35); // eased in as the clip starts
-    let ox = (_q[0] + pl[2] * 0.46 - m[0]) * e, oy = (_q[1] - 0.46 - m[1]) * e, oz = (_q[2] + pl[10] * 0.46 - m[2]) * e;
-    // the swing of a clip may carry a hand up to the face (a wind-up over the head): the nearer hand is kept at least 0.42 m ahead of the eyes
-    // and 0.22 m below them (the whole arm moves with it), so a hand is never at the lens
-    let ahead = Infinity, high = -Infinity;
-    for (const o of hands) {
-      const hx = W[o + 3] + ox - _q[0], hy = W[o + 7] + oy - _q[1], hz = W[o + 11] + oz - _q[2];
-      ahead = Math.min(ahead, hx * pl[2] + hz * pl[10]);
-      high = Math.max(high, hy);
-    }
-    if (ahead < 0.55) { ox += pl[2] * (0.55 - ahead); oz += pl[10] * (0.55 - ahead); }
-    // the rise is capped in camera space: a wind-up never takes the tool's head out of the top of the frame
-    if (high > -0.34) oy -= high + 0.34;
-    // the hand that holds the tool goes first; the tool follows where that hand ACTUALLY got to (the arm may not reach the whole shift),
-    // and the other hand follows the tool by the same step, so both stay on the haft
-    const first: ArmSide = mainDef !== null && mainDef.hand !== 'R' ? 'L' : 'R';
-    let dx = ox, dy = oy, dz = oz;
-    for (const side of [first, first === 'R' ? 'L' : 'R'] as const) {
-      if (!(st.fpHold & (side === 'L' ? 1 : 2))) continue;
-      const hd = side === 'L' ? HB.handL : HB.handR;
-      const x0 = W[hd * 12 + 3], y0 = W[hd * 12 + 7], z0 = W[hd * 12 + 11];
-      copy12(_hand, 0, W, hd * 12);
-      _hand[3] += dx; _hand[7] += dy; _hand[11] += dz;
-      // a long tool's swing is turned most of the way to the carry (pointing forward and up), so its head stays in the frame through a wind-up
-      const hg = (side === 'L' ? offDef ?? mainDef : mainDef)?.grip;
-      if (hg === 'shoulder' || hg === 'upright' || hg === 'twohand') {
-        setBasisZ(_m2, 0, FP_TOOL_Z[0] * pl[2], FP_TOOL_Z[1], FP_TOOL_Z[0] * pl[10], 0, 1, 0, _hand[3], _hand[7], _hand[11]);
-        lerp12(_hand, 0, _hand, 0, _m2, 0, 0.7);
-      }
-      armIK(st, side, _hand, 1, null);
-      if (side === first) { dx = W[hd * 12 + 3] - x0; dy = W[hd * 12 + 7] - y0; dz = W[hd * 12 + 11] - z0; }
-    }
-    { const o = HB.itemR * 12; if (W[o] !== 0 || W[o + 5] !== 0) { W[o + 3] += dx; W[o + 7] += dy; W[o + 11] += dz; } }
-  } else st.fpMeanOk = false;
 
   // ---- secondary bones ----
   // skirts follow the thighs, damped
@@ -808,3 +755,40 @@ function carryFrame(st: HumanAnimState, item: CharacterDrawItem, W: Float32Array
 
 export { type Clip };
 void mul;
+
+
+/** One pose of the view-model's main hand in camera space: right of centre, up (negative = below the eye), ahead (m), and the tool's elevation (rad). */
+interface VmPose { x: number; y: number; z: number; pitch: number }
+const VM_CARRY: VmPose = { x: 0.17, y: -0.19, z: 0.55, pitch: 0.5 };
+/** The motion classes: keyframes (phase 0..1, looped) and the clip's period (s). The head of the tool stays in the frame at every key (tests/render/cameraFpArms.test.ts). */
+const VM_CLASSES: Record<string, { period: number; keys: VmPose[] }> = {
+  chop: { period: 1.4, keys: [{ x: 0.14, y: -0.19, z: 0.55, pitch: 0.32 }, { x: 0.12, y: -0.11, z: 0.55, pitch: 0.42 }, { x: 0.12, y: -0.25, z: 0.62, pitch: -0.05 }, { x: 0.14, y: -0.19, z: 0.56, pitch: 0.3 }] },
+  hammer: { period: 0.9, keys: [{ x: 0.17, y: -0.17, z: 0.55, pitch: 0.7 }, { x: 0.15, y: -0.08, z: 0.52, pitch: 0.85 }, { x: 0.15, y: -0.26, z: 0.6, pitch: -0.1 }, { x: 0.17, y: -0.19, z: 0.55, pitch: 0.4 }] },
+  dig: { period: 1.3, keys: [{ x: 0.1, y: -0.17, z: 0.55, pitch: 0.1 }, { x: 0.1, y: -0.15, z: 0.55, pitch: 0.25 }, { x: 0.1, y: -0.27, z: 0.6, pitch: -0.4 }, { x: 0.1, y: -0.20, z: 0.56, pitch: -0.1 }] },
+};
+const VM_OUT: VmPose = { x: 0, y: 0, z: 0, pitch: 0 };
+
+/** The view-model's hand pose for this frame, or null when the clip's own arms should stand (combat, riding, climbing and the like). */
+function viewModel(item: CharacterDrawItem, mainDef: ItemDef | null, offDef: ItemDef | null, hold: number, walkPhase: number): VmPose | null {
+  if ((hold & 3) === 0) return null;
+  const a = item.anim;
+  let cls: string | null = null;
+  if (a.startsWith('work_')) {
+    if (a === 'work_axe' || a === 'work_saw') cls = 'chop';
+    else if (a === 'work_hammer' || a === 'work_pick') cls = 'hammer';
+    else cls = 'dig'; // hoe, scythe, sickle, sow, stir, milk ...: the nearest, a push and lever with the tool low in front
+  } else if (a === 'idle' || a === 'walk' || a === 'run' || a === 'sprint') {
+    const o = VM_OUT; Object.assign(o, VM_CARRY);
+    if (a !== 'idle') o.y += 0.02 * Math.sin(walkPhase * Math.PI * 4);
+    void mainDef; void offDef;
+    return o;
+  }
+  if (!cls) return null;
+  const c = VM_CLASSES[cls];
+  const u = ((((item.animTime % c.period) + c.period) % c.period) / c.period) * c.keys.length;
+  const i = Math.floor(u), f = u - i, k0 = c.keys[i % c.keys.length], k1 = c.keys[(i + 1) % c.keys.length];
+  const t = 0.5 - 0.5 * Math.cos(Math.PI * f);
+  const o = VM_OUT;
+  o.x = k0.x + (k1.x - k0.x) * t; o.y = k0.y + (k1.y - k0.y) * t; o.z = k0.z + (k1.z - k0.z) * t; o.pitch = k0.pitch + (k1.pitch - k0.pitch) * t;
+  return o;
+}

@@ -267,7 +267,7 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
 
   function newState(item: CharacterDrawItem): CharState {
     return {
-      id: item.id, seed: hash3(item.id, 7919) & 0x7fffffff, slot: -1, lookVersion: -1, lookRef: null,
+      id: item.id, seed: hash3(item.id >= 0x40000000 ? item.id - 0x40000000 : item.id, 7919) & 0x7fffffff, slot: -1, lookVersion: -1, lookRef: null,
       body: null, main: null, mainKey: '#', off: null, offKey: '#', back: null, backKey: '#', carry: null, carryKey: '#',
       lod: 0, eqMain: '', eqOff: '', eqBack: '', eqCarry: '', eqLook: -1, eqMount: -3, anim: null, horse: null, seen: frame, ready: false, hidden: true, lastFull: -999,
       lastX: 0, lastY: 0, lastZ: 0, fullX: 0, fullY: 0, fullZ: 0, px: 0, py: 0, pz: 0, top: 1.7, mounted: false, yaw: 0, radius: 0.3,
@@ -276,6 +276,9 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
 
   /** The person whose eyes the camera is at (-1: nobody), see setFirstPerson. */
   let fpId = -1;
+  /** The view-model clone of the player in first person has this id (the player's + VM_OFF). */
+  const VM_OFF = 0x40000000;
+  const ALL_BONES = Array.from({ length: 32 }, (_, i) => i);
   /** The camera's look-down angle (radians), set each update. */
   let fpDown = 0;
   const ctx: AnimContext = { place: _place, saddle: null, stand: null, horsePhase: 0, horseBob: 0, dt: 0, time: 0 };
@@ -304,16 +307,23 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
       ctx.saddle = _saddle;
       ctx.stand = _stand;
     }
-    a.fp = item.id === fpId;
+    a.fp = fpId >= 0 && item.id === fpId + VM_OFF; // (the view-model clone is the one posed for the camera; the real body keeps its normal clips)
     a.fpDown = fpDown;
     evaluatePose(a, item, ctx);
     poseToBones(a, item, ctx, crowd.bones, crowd.boneOffset(st.slot, 0));
-    // first person (src/render/firstPerson.ts): the camera is at the eyes, so the whole body but the arms and hands (and what they hold) is left out of the view
-    // (crowd.setHidden, in the camera's pass only: the player's shadow keeps its head); the body and arms stay, and so does the ring's absence
-    if (item.id === fpId) { setZero(crowd.bones, crowd.boneOffset(st.slot, 0) + HB.ring * 12); const free: number[] = [];
-      // looking down, an arm that holds nothing is left out of the view (hands at the lens read as giant fists)
-      { if (!(a.fpHold & 1)) free.push(HB.uaL, HB.faL, HB.handL); if (!(a.fpHold & 2)) free.push(HB.uaR, HB.faR, HB.handR); }
-      crowd.setHidden(st.slot, HB.root, HB.spine, HB.chest, HB.neck, HB.head, HB.thL, HB.shL, HB.ftL, HB.thR, HB.shR, HB.ftR, HB.skirtL, HB.skirtR, HB.cloak, HB.back, HB.eyes, HB.mouth, ...free); }
+    // first person (src/render/firstPerson.ts, docs/CLARITY.md): the real body is posed by its own clips and left out of the camera's pass
+    // entirely (it still casts the shadow); a clone of it, posed for the eyes (arms from below the eyes, the held thing in a low carry), shows
+    // only its arms, hands and held items in the camera's pass and casts no shadow
+    if (fpId >= 0 && item.id === fpId) {
+      setZero(crowd.bones, crowd.boneOffset(st.slot, 0) + HB.ring * 12);
+      crowd.setHidden(st.slot, ...ALL_BONES);
+    } else if (a.fp) {
+      const hide: number[] = [HB.root, HB.spine, HB.chest, HB.neck, HB.head, HB.thL, HB.shL, HB.ftL, HB.thR, HB.shR, HB.ftR, HB.skirtL, HB.skirtR, HB.cloak, HB.back, HB.carry, HB.ring, HB.eyes, HB.mouth];
+      // an arm that holds nothing is left out of the view
+      if (!(a.fpHold & 1)) hide.push(HB.uaL, HB.faL, HB.handL);
+      if (!(a.fpHold & 2)) hide.push(HB.uaR, HB.faR, HB.handR);
+      crowd.setHiddenB(st.slot, ...hide);
+    }
     crowd.setParams(st.slot, item.highlight, a.flash);
     if (horse) {
       // reins to the rider's hands, stirrups to the feet
@@ -396,7 +406,9 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
     _frustum.setFromProjectionMatrix(_projScreen);
     let animated = 0, culled = 0, built = 0;
     const buildBudget = options.buildBudgetMs; // ms per frame for new appearances
-    for (const item of items) {
+    let list = items;
+    if (fpId >= 0) { const real = items.find((i) => i.id === fpId); if (real) list = [...items, { ...real, id: fpId + VM_OFF, highlight: 0, label: undefined, sublabel: undefined, mark: undefined }]; }
+    for (const item of list) {
       let st = states.get(item.id);
       if (!st) { st = newState(item); states.set(item.id, st); }
       st.seen = frame;
@@ -461,7 +473,7 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
     _ro.copy(raycaster.ray.origin); _rd.copy(raycaster.ray.direction);
     let best = -1, bestT = Infinity;
     for (const st of states.values()) {
-      if (st.hidden || !st.ready || st.id === fpId) continue; // (not the body the camera looks out of)
+      if (st.hidden || !st.ready || st.id === fpId || st.id >= VM_OFF) continue; // (not the body the camera looks out of)
       // person capsule
       const r = st.mounted ? 0.32 : Math.max(0.22, st.radius);
       const y0 = st.py + (st.mounted ? 1.0 : r * 0.8), y1 = st.py + st.top;
@@ -498,7 +510,7 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
   }
 
   /** Hide this person's head (the camera is in it); -1 shows everyone whole. */
-  function setFirstPerson(id: number): void { fpId = id; if (id < 0) crowd.setHidden(-1); }
+  function setFirstPerson(id: number): void { fpId = id; if (id < 0) { crowd.setHidden(-1); crowd.setHiddenB(-1); } }
   /** World position of a person's eyes this frame (from the last animation), false when not drawn. */
   function eyePos(id: number, out: THREE.Vector3): boolean {
     const st = states.get(id);
