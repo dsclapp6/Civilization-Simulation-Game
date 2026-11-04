@@ -249,12 +249,14 @@ export function evaluatePose(st: HumanAnimState, item: CharacterDrawItem, ctx: A
   // With the arms hanging at the sides they are out of the view; brought up into a natural low carry (elbows bent, hands ahead
   // and low, the tool or weapon held in them) they sit at the bottom of the screen. Clips that already work the arms (striking,
   // drawing, working, aiming) keep their own poses; the walk's swing is kept, smaller, so the hands move with the stride.
+  // (only an arm that holds something comes up: empty hands hang at the sides, out of view, standing or walking)
   const fpRest = st.fp && armsFree && !riding && item.carry === 'none' && item.anim !== 'carry_walk';
+  const fpHolds = mainDef !== null || offDef !== null;
   const sm = Math.max(0, Math.min(1, (st.fpDown - 0.35) / 0.5));
   const lowered = 1 - sm * sm * (3 - 2 * sm);
-  st.fpW += ((fpRest ? lowered : 0) - st.fpW) * (dt > 0 ? 1 - Math.exp(-dt * 7) : 1);
+  st.fpW += ((fpRest && fpHolds ? lowered : 0) - st.fpW) * (dt > 0 ? 1 - Math.exp(-dt * 7) : 1);
   if (st.fpW < 0.002) st.fpW = 0;
-  if (st.fpW > 0) fpArms(out, st.fpW, mainDef, offDef, gait ? Math.min(1, item.moveSpeed / 3) : 0);
+  if (fpRest) fpArms(out, st.fpW, mainDef, offDef, gait ? Math.min(1, item.moveSpeed / 3) : 0);
 
   // ---- cross-fade ----
   if (st.fade < 1) {
@@ -276,23 +278,30 @@ function fpArms(out: Float32Array, w: number, mainDef: ItemDef | null, offDef: I
     const s = side === 'L' ? -1 : 1;
     const u = side === 'L' ? HB.uaL : HB.uaR, f = side === 'L' ? HB.faL : HB.faR, h = side === 'L' ? HB.handL : HB.handR;
     const held = (side === 'R' ? mainDef?.hand === 'R' : mainDef?.hand !== 'R') ? mainDef : (side === 'L' ? offDef : null);
+    if (!held) {
+      // the free arm hangs at the side, its stride swing small and the wrist straight: out of view, never an arm across the screen
+      out[u * 3] *= 0.3; out[f * 3] = Math.max(out[f * 3] * 0.4, -0.07); out[h * 3] = 0;
+      continue;
+    }
     const ux = out[u * 3], fx = out[f * 3], hx = out[h * 3];
     // targets (right arm convention; the left mirrors Y and Z): upper arm, forearm, how far the wrist turns back, the swing inward
-    let tu = -54 * D, tf = -64 * D, tz = 8 * D, th = 0.5;
+    let tu = -62 * D, tf = -66 * D, tz = 8 * D, th = 0;
     if (held) {
       // what is held is carried where the arm now is: a blade or tool tilted forward rather than straight up, a torch and a bow raised
-      const g = held.grip; th = 0;
-      if (g === 'light') { tu = -44 * D; tf = -70 * D; th = -hx * 0.26; }
+      const g = held.grip;
+      if (g === 'light') { tu = -60 * D; tf = -62 * D; }
       else if (g === 'torch') { tu = -52 * D; tf = -70 * D; }
       else if (g === 'bow') { tu = -50 * D; tf = -60 * D; }
-      else if (g === 'shoulder' || g === 'twohand' || g === 'crossbow' || g === 'upright') { tu = -30 * D; tf = -88 * D; tz = 0; } // (already held forward: a tool's head stays down and clear of the eyes)
+      else if (g === 'shoulder' || g === 'twohand' || g === 'crossbow' || g === 'upright') { tu = -44 * D; tf = -78 * D; tz = 0; } // (already held forward: a tool's head stays down and clear of the eyes)
     }
     const swing = ux * 0.35 * walk; // the stride's swing, a third of it
     // never lower than the hold already is
     const ux2 = Math.min(ux * 0.2, tu) + swing, fx2 = Math.min(fx, tf);
     out[u * 3] = ux + (ux2 - ux) * w;
     out[f * 3] = fx + (fx2 - fx) * w;
-    out[h * 3] = hx + th * w;
+    // the wrist is never bent up like a paddle: straight with the forearm's line (a blade keeps three quarters of its own bend)
+    const hT = held.grip === 'light' ? hx * 0.74 : th;
+    out[h * 3] = hx + (hT - hx) * w;
     // the upper arm swings in, so the hands are ahead of the chest, not at the hips
     const uz = out[u * 3 + 2];
     out[u * 3 + 2] = uz + (s * tz - uz) * w * (held && (held.grip === 'twohand' || held.grip === 'crossbow') ? 0.18 : 0.6);

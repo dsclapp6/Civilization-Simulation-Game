@@ -70,10 +70,14 @@ class RangeAllocator {
 const VERT_PARS = /* glsl */`
 uniform highp sampler2D crowdBones;
 uniform vec4 crowdHide;
+uniform vec2 crowdLimit;
 attribute vec4 skin;
 attribute float slot;
 varying float vCrowdFlag;
 varying float vCrowdHide;
+varying float vCrowdFp;
+varying float vCrowdLow;
+varying float vCrowdY;
 varying vec4 vCrowdParams;
 mat4 crowdBone( const in int s, const in int b ) {
   int x = b * 3;
@@ -92,15 +96,21 @@ const VERT_SKIN = /* glsl */`
     crowdM += ( crowdB - crowdM ) * ( skin.z / 255.0 );
   }
   vCrowdFlag = skin.w;
-  // first person: the head of the one whose eyes the camera is at (crowdHide.x = its slot, .y = a bit mask of the bones left out: the head, neck, eyes and mouth) is
+  // first person: the head of the one whose eyes the camera is at (crowdHide.x = its slot, .y = a bit mask of the bones left out: the head, neck, upper chest and shoulders, eyes and mouth) is
   // left out of the view but stays in the shadow pass, so the player's shadow has a head
   int crowdSk = int( skin.x + 0.5 );
+  // the bones in crowdLimit.y (the upper chest and the shoulders) lose what is above the height crowdLimit.x: the camera's view only
+  vCrowdLow = ( crowdHide.x >= 0.0 && crowdSlot == int( crowdHide.x + 0.5 ) && ( ( int( crowdLimit.y + 0.5 ) >> crowdSk ) & 1 ) == 1 ) ? crowdLimit.x : -1e5;
+  vCrowdFp = ( crowdHide.x >= 0.0 && crowdSlot == int( crowdHide.x + 0.5 ) ) ? 1.0 : 0.0;
   vCrowdHide = ( crowdHide.x >= 0.0 && crowdSlot == int( crowdHide.x + 0.5 ) && ( ( int( crowdHide.y + 0.5 ) >> crowdSk ) & 1 ) == 1 ) ? 1.0 : 0.0;
   vCrowdParams = texelFetch( crowdBones, ivec2( ${PARAM_TEXEL}, crowdSlot ), 0 );
 `;
 
 const FRAG_PARS = /* glsl */`
 varying float vCrowdHide;
+varying float vCrowdFp;
+varying float vCrowdLow;
+varying float vCrowdY;
 varying float vCrowdFlag;
 varying vec4 vCrowdParams;
 `;
@@ -149,9 +159,9 @@ function patchVertex(src: string, withNormal: boolean): string {
   // Skin before anything consumes position/normal.
   if (withNormal) {
     s = s.replace('#include <beginnormal_vertex>', `${VERT_SKIN}\n  vec3 objectNormal = mat3( crowdM ) * vec3( normal );\n#ifdef USE_TANGENT\n  vec3 objectTangent = vec3( tangent.xyz );\n#endif`);
-    s = s.replace('#include <begin_vertex>', 'vec3 transformed = ( crowdM * vec4( position, 1.0 ) ).xyz;');
+    s = s.replace('#include <begin_vertex>', 'vec3 transformed = ( crowdM * vec4( position, 1.0 ) ).xyz;\n  vCrowdY = transformed.y;');
   } else {
-    s = s.replace('#include <begin_vertex>', `${VERT_SKIN}\n  vec3 transformed = ( crowdM * vec4( position, 1.0 ) ).xyz;`);
+    s = s.replace('#include <begin_vertex>', `${VERT_SKIN}\n  vec3 transformed = ( crowdM * vec4( position, 1.0 ) ).xyz;\n  vCrowdY = transformed.y;`);
   }
   s = s.replace('#include <color_vertex>', `#include <color_vertex>\n${SRGB_DECODE}`);
   return s;
@@ -180,6 +190,7 @@ export class SkinnedCrowd {
   private index!: THREE.BufferAttribute;
   private boneUniform: { value: THREE.DataTexture };
   private readonly hideUniform: { value: THREE.Vector4 };
+  private readonly limitUniform: { value: THREE.Vector2 };
   /** Raw bone texture data: slotCapacity rows × SLOT_TEXELS texels × 4 floats. */
   bones: Float32Array;
   private boneTex: THREE.DataTexture;
@@ -202,6 +213,7 @@ export class SkinnedCrowd {
     this.boneTex = this.makeBoneTexture();
     this.boneUniform = { value: this.boneTex };
     this.hideUniform = { value: new THREE.Vector4(-1, 0, 0, 0) };
+    this.limitUniform = { value: new THREE.Vector2(0, 0) };
 
     this.material = new THREE.MeshStandardMaterial({
       vertexColors: true, flatShading: true, roughness: 0.86, metalness: 0, side: THREE.DoubleSide,
@@ -209,15 +221,17 @@ export class SkinnedCrowd {
     this.material.name = `${opts.name}-crowd`;
     const uniform = this.boneUniform;
     const hide = this.hideUniform;
+    const limit = this.limitUniform;
     this.material.onBeforeCompile = (shader) => {
       shader.uniforms.crowdBones = uniform;
       shader.uniforms.crowdHide = hide;
+      shader.uniforms.crowdLimit = limit;
       shader.uniforms.uILight = INDOOR_LIGHTS.pos;
       shader.uniforms.uILightCol = INDOOR_LIGHTS.col;
       shader.vertexShader = patchVertex(shader.vertexShader, true);
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', `#include <common>\n${FRAG_PARS}\n${GLSL_INDOOR}`)
-        .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n  if ( vCrowdHide > 0.5 ) discard;')
+        .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n  if ( vCrowdHide > 0.5 ) discard;\n  if ( vCrowdFp > 0.5 && !gl_FrontFacing ) discard;\n  if ( vCrowdY > vCrowdLow && vCrowdLow > -1e4 ) discard; // (your own body is seen from inside it when you look down: no insides)')
         // the hearth and the candles of the room one is in light the people too (docs/INTERIORS.md)
         .replace('#include <opaque_fragment>', 'outgoingLight += mlIndoor(diffuseColor.rgb, normal, -vViewPosition);\n#include <opaque_fragment>')
         .replace('#include <roughnessmap_fragment>', FRAG_ROUGH)
@@ -230,6 +244,7 @@ export class SkinnedCrowd {
     this.depthMat.onBeforeCompile = (shader) => {
       shader.uniforms.crowdBones = uniform;
       shader.uniforms.crowdHide = hide;
+      shader.uniforms.crowdLimit = limit;
       shader.vertexShader = patchVertex(shader.vertexShader, false);
     };
     this.depthMat.customProgramCacheKey = () => 'millennia-crowd-depth-v2';
@@ -237,6 +252,7 @@ export class SkinnedCrowd {
     this.distMat.onBeforeCompile = (shader) => {
       shader.uniforms.crowdBones = uniform;
       shader.uniforms.crowdHide = hide;
+      shader.uniforms.crowdLimit = limit;
       shader.vertexShader = patchVertex(shader.vertexShader, false);
     };
     this.distMat.customProgramCacheKey = () => 'millennia-crowd-dist-v2';
@@ -344,6 +360,13 @@ export class SkinnedCrowd {
     let mask = 0;
     for (const b of bones) mask |= 1 << b; // (bone ids below 22: exact in a float)
     this.hideUniform.value.set(slot, mask, 0, 0);
+  }
+
+  /** First person: these bones (the upper chest, the shoulders) lose what lies above `y` (metres) in the camera's view. */
+  setHiddenAbove(y: number, ...bones: number[]): void {
+    let mask = 0;
+    for (const b of bones) mask |= 1 << b;
+    this.limitUniform.value.set(y, mask);
   }
 
   /** Collapse every bone of a slot (actor invisible). */

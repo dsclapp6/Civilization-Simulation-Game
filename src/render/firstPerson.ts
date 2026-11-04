@@ -13,7 +13,7 @@ export interface EyeLayer {
 }
 
 /** How far (m) the camera sits in front of the head's own position. */
-const EYE_AHEAD = 0.08;
+const EYE_AHEAD = 0.22;
 
 export class FirstPerson {
   private readonly v = new THREE.Vector3();

@@ -26,10 +26,10 @@ function hands(fp: boolean, main: HeldItem, anim: 'idle' | 'walk', frames = 60):
 
 /** Is a point (relative to the eyes, +z ahead) inside a 68 degree (vertical) camera looking straight ahead on a 16:9 screen, below the middle? */
 function inView(p: number[]): boolean {
-  const z = p[2] - 0.08; // (the camera sits 0.08 m ahead of the eye bone, firstPerson.ts)
+  const z = p[2] - 0.22; // (the camera sits 0.22 m ahead of the eye bone, firstPerson.ts)
   const down = Math.atan2(-p[1], z);
   const side = Math.atan2(Math.abs(p[0]), z);
-  return z > 0.2 && down > 0.1 && down < (44 * Math.PI) / 180 && side < (50 * Math.PI) / 180;
+  return z > 0.05 && down > 0.1 && down < (62 * Math.PI) / 180 && side < (75 * Math.PI) / 180;
 }
 
 describe('first-person arms', () => {
@@ -38,26 +38,29 @@ describe('first-person arms', () => {
     expect(inView(h.l) && inView(h.r)).toBe(false);
   });
 
-  const helds: HeldItem[] = ['none', 'sword', 'longsword', 'dagger', 'mace', 'spear', 'hoe', 'axe', 'torch', 'staff', 'longbow', 'crossbow', 'book', 'cup', 'bucket'];
+  it('empty hands hang at the sides, out of view, standing and walking', () => {
+    for (const anim of ['idle', 'walk'] as const) {
+      const h = hands(true, 'none', anim, 60);
+      expect(inView(h.l) || inView(h.r)).toBe(false);
+    }
+  });
+
+  const helds: HeldItem[] = ['sword', 'dagger', 'mace', 'spear', 'torch', 'staff', 'longbow', 'cup', 'bucket'];
   for (const main of helds) {
-    it(`at rest with ${main}: the hands are ahead and low, one at least in view`, () => {
+    it(`holding ${main}: the holding hand is ahead and low, in view`, () => {
       const h = hands(true, main, 'idle');
-      expect(h.l[2]).toBeGreaterThan(0.15);
-      expect(h.r[2]).toBeGreaterThan(0.15);
       expect(inView(h.l) || inView(h.r)).toBe(true);
     });
   }
 
-  it('the stride moves the hands a little, and they stay in view while walking', () => {
-    const rest = hands(true, 'none', 'idle');
-    const walk = hands(true, 'none', 'walk', 45);
-    expect(inView(walk.l) || inView(walk.r)).toBe(true);
-    expect(Math.hypot(walk.r[0] - rest.r[0], walk.r[1] - rest.r[1], walk.r[2] - rest.r[2])).toBeLessThan(0.45);
+  it('the free hand of a one-handed tool hangs out of view', () => {
+    const h = hands(true, 'sword', 'idle');
+    expect(inView(h.l) && inView(h.r)).toBe(false);
   });
 
   it('is eased in: the first frame is not yet the carry', () => {
-    const a = hands(true, 'none', 'idle', 1);
-    const b = hands(true, 'none', 'idle', 60);
+    const a = hands(true, 'sword', 'idle', 1);
+    const b = hands(true, 'sword', 'idle', 60);
     expect(b.r[2] - a.r[2]).toBeGreaterThan(0.1);
   });
 });

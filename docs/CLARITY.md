@@ -115,6 +115,7 @@ under the tracked steps, dangers first, each opening the page where it is decide
   bottom corners of the view, a tool or weapon held in them (`fpArms` in `assets/characters/human/animator.ts`, eased in and out
   with `fpW`; the stride still swings them, a third as much). Clips that already work the arms (strike, draw, work, aim, carry a load) keep
   their own poses, which are in view. Riding keeps the reins.
+- **Empty hands hang at the sides** (out of view, standing or walking, the swing damped, the wrist straight); only an arm that holds something (tool, weapon, torch, bow) comes up into the low carry, the hand curled on the grip. The shoulders and upper chest are left out of the camera's view above 0.36 m under the eyes (`crowd.setHiddenAbove`), the inside faces of your own body are not drawn, and the camera sits 0.22 m ahead of the head.
 - **Looking down.** The arms drop to the sides as the camera looks down (`fpDown`), so you see chest, legs and feet; your own selection ring is not drawn in first person (`DynamicLayers.hideOwnRing`) and the shadow slice is 45 m there. The neck is left out of the camera's view with the head, and the camera sits 0.08 m ahead of the head (`EYE_AHEAD` in
   `render/firstPerson.ts`), so looking down shows the chest and the arms from the front, never the inside of the collar. The arms at rest
   are raised forearms-forward (`fpArms`), held tools keep their own forward bend.
