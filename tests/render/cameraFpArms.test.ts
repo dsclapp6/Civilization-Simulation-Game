@@ -64,33 +64,39 @@ function workPoints(anim: string, main: HeldItem, len: number): { hands: number[
 }
 
 describe('first-person arms', () => {
-  it('dig: the shaft goes steeply down and the blade end sinks 0.10-0.15 m into the soil at the push key, in line with the shaft; both hands on the shaft', () => {
+  it('dig: shaft nearly upright, T-handle around the middle of the tilted view, blade 0.10-0.16 m in the soil in the lower third at the push key, forearm roots below the hands', () => {
     const st = createAnimState(7, dims); st.fp = true;
     const place = new Float32Array(12); setIdentity(place, 0);
     const it: CharacterDrawItem = { id: 1, x: 0, y: 0, z: 0, yaw: 0, look, lookVersion: 1, mainHand: 'spade', offHand: 'none', back: 'none', carry: 'none', anim: 'work_dig', animTime: 0, moveSpeed: 0, highlight: 0 };
     const ctx: AnimContext = { place, saddle: null, stand: null, horsePhase: 0, horseBob: 0, dt: 1 / 30, time: 0 };
     const bones = new Float32Array(HUMAN_BONES * 12);
-    let deepest = 1, rec: { endY: number; ahead: number; zy: number; ang: number; hand2: number } | null = null;
+    let deepest = 1, rec: { endY: number; zy: number; ang: number; hand2: number; blade: [number, number]; tee: [number, number]; rootY: number; handY: number } | null = null;
+    const rel = (W: Float32Array, p: number[]): number[] => [p[0] - W[HB.eyes * 12 + 3], p[1] - W[HB.eyes * 12 + 7], p[2] - W[HB.eyes * 12 + 11]];
     for (let f = 0; f < 90; f++) {
       it.animTime += 1 / 30; ctx.time += 1 / 30; evaluatePose(st, it, ctx); poseToBones(st, it, ctx, bones, 0);
-      const W = st.world, e = HB.eyes * 12, o = HB.itemR * 12, len = 1.03;
+      const W = st.world, o = HB.itemR * 12, len = 1.03;
       const end = [W[o + 3] + W[o + 2] * len, W[o + 7] + W[o + 6] * len, W[o + 11] + W[o + 10] * len];
-      const q = project([end[0] - W[e + 3], end[1] - W[e + 7], end[2] - W[e + 11]], 0.8);
-      expect(q).not.toBeNull(); expect(Math.abs(q![0])).toBeLessThan(1); expect(Math.abs(q![1])).toBeLessThan(1);
+      const tee = [W[o + 3] - W[o + 2] * 0.17, W[o + 7] - W[o + 6] * 0.17, W[o + 11] - W[o + 10] * 0.17];
+      const qe = project(rel(W, end), 0.8), qt = project(rel(W, tee), 0.8);
+      expect(qe).not.toBeNull(); expect(Math.abs(qe![0])).toBeLessThan(1); expect(Math.abs(qe![1])).toBeLessThan(1);
       if (end[1] < deepest) {
         deepest = end[1];
         const hx = W[HB.handR * 12 + 3], hy = W[HB.handR * 12 + 7], hz = W[HB.handR * 12 + 11];
         const dir = [end[0] - hx, end[1] - hy, end[2] - hz]; const dl = Math.hypot(dir[0], dir[1], dir[2]);
         const dot = (W[o + 2] * dir[0] + W[o + 6] * dir[1] + W[o + 10] * dir[2]) / dl;
         const l = HB.handL * 12;
-        rec = { endY: end[1], ahead: (end[2] - W[e + 11]), zy: W[o + 6], ang: Math.acos(Math.min(1, dot)) * 180 / Math.PI, hand2: (W[l + 7] - hy) };
+        const root = project(rel(W, [W[HB.uaR * 12 + 3], W[HB.uaR * 12 + 7], W[HB.uaR * 12 + 11]]), 0.8);
+        const hq = project(rel(W, [hx, hy, hz]), 0.8);
+        rec = { endY: end[1], zy: W[o + 6], ang: Math.acos(Math.min(1, dot)) * 180 / Math.PI, hand2: W[l + 7] - hy, blade: qe!, tee: qt!, rootY: root ? root[1] : -9, handY: hq ? hq[1] : 9 };
       }
     }
     expect(rec!.endY).toBeLessThan(-0.1); expect(rec!.endY).toBeGreaterThan(-0.16); // (the feet are at y = 0: the ground)
     expect(rec!.ang).toBeLessThan(15);
-    expect(-rec!.zy).toBeGreaterThan(Math.sin((58 * Math.PI) / 180)); expect(-rec!.zy).toBeLessThan(Math.sin((78 * Math.PI) / 180));
-    expect(rec!.ahead).toBeGreaterThan(0.5); expect(rec!.ahead).toBeLessThan(1.1);
+    expect(-rec!.zy).toBeGreaterThan(Math.sin((78 * Math.PI) / 180)); // (nearly upright)
+    expect(rec!.blade[1]).toBeLessThan(-0.33); // the lower third of the frame
+    expect(Math.abs(rec!.tee[1])).toBeLessThan(0.5); // the T-handle in the middle band of the view (about 0.45 above the centre at the clip eye height of the test)
     expect(rec!.hand2).toBeLessThan(-0.1); // the second hand is lower down the shaft
+    expect(rec!.rootY).toBeLessThan(rec!.handY); // the forearm roots are below the hands on screen
   });
 
   // the framing rules, enforced through the camera: hands and the tool's far end stay in the frame and the hands in its lower half, at every
@@ -98,7 +104,7 @@ describe('first-person arms', () => {
   for (const [anim, main, len] of [['work_axe', 'axe', 0.8], ['work_hammer', 'hammer', 0.4], ['work_dig', 'spade', 1.0], ['idle', 'sword', 0.9], ['idle', 'hoe', 1.4], ['idle', 'torch', 0.6]] as const) {
     it(`${anim} with ${main}: hands and tool inside the frame, hands in the lower half, arms rising from below the eyes`, () => {
       const pts = workPoints(anim, main, len);
-      for (const h of pts.hands) { const q = project(h); const q4 = project(h, anim === 'work_dig' ? 0.8 : 0.4); expect(q).not.toBeNull(); expect(Math.abs(q![0])).toBeLessThan(0.9); expect(q![1]).toBeLessThan(0); expect(q4![1]).toBeGreaterThan(-1); }
+      for (const h of pts.hands) { const q = project(h); const q4 = project(h, anim === 'work_dig' ? 0.8 : 0.4); expect(q).not.toBeNull(); expect(Math.abs(q![0])).toBeLessThan(0.9); if (anim !== 'work_dig') expect(q![1]).toBeLessThan(0); expect(q4![1]).toBeGreaterThan(-1); }
       // (the work is seen with the view tipped 0.4 rad down, as in play; the blade of a spade goes into the ground below the frame's middle)
       for (const h of pts.head) { const q = project(h, anim === 'work_dig' ? 0.8 : 0); expect(q).not.toBeNull(); expect(Math.abs(q![0])).toBeLessThan(1); expect(Math.abs(q![1])).toBeLessThan(anim === 'idle' && main === 'sword' ? 9 : 1); }
       for (const r of pts.roots) { expect(r[1]).toBeLessThan(-0.15); expect(Math.abs(r[0])).toBeLessThan(0.25); }

@@ -442,8 +442,8 @@ export function poseToBones(st: HumanAnimState, item: CharacterDrawItem, ctx: An
       const sg = side === 'L' ? -1 : 1;
       const ua0 = (side === 'L' ? HB.uaL : HB.uaR) * 12;
       // looking down (the view tips to ground work): the shoulders go back behind the lens, so the arms still come up from the bottom of the view
-      const back = 0.05 + 0.12 * Math.max(0, Math.min(1, (st.fpDown - 0.45) / 0.35));
-      const ddx = _q[0] + rtX * 0.14 * sg - fwdX * back - W[ua0 + 3], ddy = _q[1] - (vm.d !== undefined ? 0.4 : 0.25) - W[ua0 + 7], ddz = _q[2] + rtZ * 0.14 * sg - fwdZ * back - W[ua0 + 11];
+      const back = vm.d !== undefined ? 0.02 : 0.05 + 0.12 * Math.max(0, Math.min(1, (st.fpDown - 0.45) / 0.35));
+      const ddx = _q[0] + rtX * 0.14 * sg - fwdX * back - W[ua0 + 3], ddy = _q[1] - (vm.d !== undefined ? 0.55 : 0.25) - W[ua0 + 7], ddz = _q[2] + rtZ * 0.14 * sg - fwdZ * back - W[ua0 + 11];
       for (const bn of side === 'L' ? [HB.uaL, HB.faL, HB.handL] : [HB.uaR, HB.faR, HB.handR]) { const o = bn * 12; W[o + 3] += ddx; W[o + 7] += ddy; W[o + 11] += ddz; }
     }
     const mainSide: ArmSide = mainDef !== null && mainDef.hand !== 'R' ? 'L' : 'R';
@@ -473,7 +473,7 @@ export function poseToBones(st: HumanAnimState, item: CharacterDrawItem, ctx: An
         // the second hand on the shaft, a forearm's length down it towards the butt
         // the second hand on the shaft, on the same line: a spade's lower hand is down the shaft towards the blade; the other long tools'
         // is a forearm's length from the first towards the butt
-        const dn = vm.d !== undefined ? 0.38 : -0.3;
+        const dn = vm.d !== undefined ? 0.25 : -0.3;
         put(other, -Math.abs(vm.x) * (vm.d !== undefined ? 1 : 0.9), mainY + sp * dn, vm.z + cp * dn, false);
       } else if (offDef !== null) put(other, 0.17, -0.27, 0.55, false);
     }
@@ -782,9 +782,10 @@ const VM_CLASSES: Record<string, { period: number; keys: VmPose[] }> = {
   hammer: { period: 0.9, keys: [{ x: 0.17, y: -0.2, z: 0.55, pitch: 0.5 }, { x: 0.14, y: -0.01, z: 0.5, pitch: 1.0 }, { x: 0.15, y: -0.36, z: 0.66, pitch: -0.25 }, { x: 0.17, y: -0.2, z: 0.55, pitch: 0.4 }] },
   // dig (ground work, seen with the view tipped down to 0.8 rad): the tool is upright, the handle at the hands and the blade end down; the push key
   // puts the blade end in the soil about 0.8 m ahead of the feet, the lever key pulls the handle back towards the chest
-  // (the spade's blade is a plate in line with the shaft: the shaft goes steeply down, 60 to 75 degrees, and the blade enters edge-first;
-  // `d` is how deep its end is: above the ground (negative) in the ready and lift keys, 0.12 m in the soil at the push key)
-  dig: { period: 1.3, keys: [{ x: 0.1, y: 0, z: 0.4, pitch: -1.1, d: -0.15 }, { x: 0.1, y: 0, z: 0.38, pitch: -0.95, d: -0.4 }, { x: 0.1, y: 0, z: 0.46, pitch: -1.3, d: 0.15 }, { x: 0.1, y: 0, z: 0.34, pitch: -1.05, d: -0.05 }] },
+  // (a spade: the shaft stands almost upright about 0.6 m ahead, tipped a little forward at the top, the T-handle at about waist-to-chest height, both
+  // hands on the upper shaft; `d` is how deep the blade's end is: 0.12 m in the soil at the push key, above it in the others; the lever key pulls
+  // the handle back 0.2 m and tips the blade up out of the soil)
+  dig: { period: 1.3, keys: [{ x: 0.08, y: 0, z: 0.6, pitch: -1.65, d: -0.15 }, { x: 0.08, y: 0, z: 0.6, pitch: -1.65, d: 0.12 }, { x: 0.08, y: 0, z: 0.4, pitch: -1.45, d: -0.04 }, { x: 0.08, y: 0, z: 0.55, pitch: -1.6, d: -0.1 }] },
 };
 /** Where the spade's blade ends along the tool from the grip (m): the item frame's z of the plate's far edge. */
 const BLADE_END = 1.03;
