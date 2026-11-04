@@ -14,7 +14,7 @@ export function castleScenario(s: Pick<Session, 'sim' | 'campaign'>): { ok: bool
   const M = militaryContext(sim);
   const castles = sim.world.settlements.filter((x) => x.kind === 'castle');
   // a lord with a castle of his own, and the nearest castle of another line (a rival realm) to march on
-  let best: { lord: number; target: number; d: number } | null = null;
+  let best: { lord: number; target: number; d: number; stone: boolean } | null = null;
   for (const mine of castles) {
     const house = M.realm.holderOf(mine.id);
     const head = house ? sim.state.persons.get(sim.state.houses.get(house)?.head ?? 0) : undefined;
@@ -24,9 +24,10 @@ export function castleScenario(s: Pick<Session, 'sim' | 'campaign'>): { ok: bool
       if (!theirs || theirs === house || M.realm.root(theirs) === M.realm.root(house)) continue;
       const d = Math.hypot(other.x - mine.x, other.z - mine.z);
       if (d < 1500) continue;
-      // a castle with a curtain of stone (a raised wall-walk to come up onto by ladder), not a timber bailey of stakes
-      if (!(sim.state.buildingsAt.get(other.id) ?? []).some((b) => b.kind === 'wall' && b.construction >= 1)) continue;
-      if (!best || d < best.d) best = { lord: head.id, target: other.id, d };
+
+      // a castle with a curtain of stone is preferred (a raised wall-walk to come up onto by ladder, not a timber bailey of stakes)
+      const stone = (sim.state.buildingsAt.get(other.id) ?? []).some((b) => b.kind === 'wall' && b.construction >= 1);
+      if (!best || (stone && !best.stone) || (stone === best.stone && d < best.d)) best = { lord: head.id, target: other.id, d, stone };
     }
   }
   if (!best) return { ok: false, reason: 'No lord with a rival castle in this world' };
