@@ -294,7 +294,18 @@ deposit of that kind is in reach** of the market's lands (deposits from the terr
 The census of works is rebuilt when a building is added or a `construction` event (`placed`, `done`, `cancelled`) arrives — the
 day a kiln is done it counts — and never otherwise (a family moving house changes no stock). A material a market is out of is not on
 its board unless you hold some to sell. Price gossip ignores the materials' standing premiums (only shifts of 60 % or more).
-Silver and gold ore stay index-priced (the mint's demand is unbounded; a glut sags the price as for any manufacture).
+Silver and gold ore are stock-and-flow goods too (fourteen materials in all): a market holds `cover` days (60 and 90) of what its
+hinterland uses (`use` 0.0002 and 0.00004 a head a day: the mint and the goldsmiths) with a slow `relax`, merchants carry them between
+markets, and a market with no silver or gold seam known in reach of its lands pays a fifth more for it.
+
+### Home upkeep (`upkeep.ts`)
+
+The macro households do not build, but a roof wants thatching and a frame planks and nails: each family household in a home of its own
+(not the player's) keeps its house once a year on its own day (`(day + id) mod 365`). It uses the materials laid in (hovel: straw 4,
+nails; cottage: straw 6, planks 0.3, nails 1; longhouse: straw 12, planks 0.6, nails 2; townhouse: planks 1.5, nails 3; manor: stone,
+planks 3, nails 5; times 1 + 0.4 a level and times 1 + 3 × the damage), which mends 0.14 of the home's damage in proportion to what
+was covered, and then orders next year's through `procure` from its market: never from a market under three fifths of its target
+stock, never more than a twentieth of the stock at a time, and only as far as its purse goes. No random draws.
 
 ### Household trade (`trade-house.ts`; `EconomyApi.procure?`, `sell?`, `deliveries?`, `stockAt?`)
 
@@ -369,6 +380,7 @@ the ground and the forest factor of timber) and do not move without the works or
 Animal-targeted work uses buildings and parcels rather than zone animals (leading a beast to the slaughterhouse is the
 agents' *Lead*: the household's beasts are counted, not placed); boon-work and tolls are listed but simplified; NPC clothing is
 not modelled (`dressTierHook` falls back to rank); a village without a market sells through the nearest market town only. The
-macro households neither use nor make the building materials (the markets' supply model stands for them), and cull sheep and pigs
-for meat and hides only (no tallow). The new works (clay pit, salt pans, lumber camp, slaughterhouse, quarry, mine) are not on any
+macro households do not make the building materials (the markets' supply model stands for them; they do use them for their homes'
+upkeep, see above), and the autumn cull renders tallow with the meat and hide (the carcass table's tallow scaled to the meat taken;
+tallow is no food, so the diet is as it was). The new works (clay pit, salt pans, lumber camp, slaughterhouse, quarry, mine) are not on any
 generated plot: they come into play by building them or with the territory module's deposits.

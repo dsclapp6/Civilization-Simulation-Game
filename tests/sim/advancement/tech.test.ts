@@ -303,6 +303,7 @@ describe('study', () => {
     for (let i = 0; i < 40 && !adv.knows(player.id, 'parish_school'); i++) {
       const o = sim.actions.list(player.id, target).find((x) => x.id === 'tech.study.parish_school');
       expect(o, 'study option').toBeDefined();
+      expect(o!.bouts, 'study is a counted job (J3)').toBeGreaterThanOrEqual(1);
       expect(o!.enabled).toBe(true);
       sim.actions.start(player.id, o!);
       for (let t = 0; t < 40 * 20 && sim.actions.active(player.id); t++) sim.step(1 / 20);

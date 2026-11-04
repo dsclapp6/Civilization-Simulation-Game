@@ -161,7 +161,7 @@ export function woundsView(ctx: PanelCtx, id: number, onTitle?: (title: string, 
     if (p.traits.includes('scarred')) marks.push('scars that will not fade');
     const bleeding = wounds.some((w) => w.bleeding && (w.care ?? 0) === 0);
     const lines: string[] = [];
-    const boundWhere = (Object.keys(bound) as HitLocation[]).map((k) => LOCATION_NAMES[k]);
+    const boundWhere = (Object.keys(bound) as HitLocation[]).map((k) => LOCATION_NAMES[k].toLowerCase());
     if (boundWhere.length > 0) {
       const all = wounds.every((w) => (w.care ?? 0) >= 1);
       lines.push(all ? `${id === ctx.playerId() ? 'Your wounds are' : 'Their wounds are'} bound: linen shows on the ${boundWhere.join(', ')}.`
