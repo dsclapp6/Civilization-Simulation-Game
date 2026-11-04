@@ -24,6 +24,8 @@ export function castleScenario(s: Pick<Session, 'sim' | 'campaign'>): { ok: bool
       if (!theirs || theirs === house || M.realm.root(theirs) === M.realm.root(house)) continue;
       const d = Math.hypot(other.x - mine.x, other.z - mine.z);
       if (d < 1500) continue;
+      // a castle with a curtain of stone (a raised wall-walk to come up onto by ladder), not a timber bailey of stakes
+      if (!(sim.state.buildingsAt.get(other.id) ?? []).some((b) => b.kind === 'wall' && b.construction >= 1)) continue;
       if (!best || d < best.d) best = { lord: head.id, target: other.id, d };
     }
   }

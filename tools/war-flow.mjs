@@ -96,7 +96,7 @@ const facts = () => ev(() => {
   const sim = s.sim, c = s.services.campaign, mil = sim.services.military;
   const b = s.services.player.body();
   return {
-    phase: c?.phase() ?? null, skip: !!sim.clock.skip, hour: +((sim.absDay % 1) * 24).toFixed(1),
+    phase: c?.phase() ?? null, skip: !!sim.clock.skip, paused: !!sim.clock.paused, spd: sim.clock.speed, actionTime: !!sim.state.clock.actionTime, day: +sim.absDay.toFixed(4), hour: +((sim.absDay % 1) * 24).toFixed(1),
     body: b ? { x: +b.x.toFixed(1), y: +b.y.toFixed(2), z: +b.z.toFixed(1) } : null,
     battles: mil ? mil.battles().length : 0, heap: Math.round((performance.memory?.usedJSHeapSize ?? 0) / 1048576),
     men: c && c.army() ? (mil.armies().find((a) => a.id === c.army())?.men ?? null) : null,
@@ -155,6 +155,7 @@ async function partA() {
   await btn.click();
   await page.waitForFunction(() => window.__game.session !== null && window.__game.session !== undefined, null, { timeout: 300000, polling: 500 });
   await ev(() => window.__game.ready());
+  await lightStorm();
   await tick(0.3);
   let f = await facts();
   note(JSON.stringify(f) + ``);
@@ -177,6 +178,7 @@ async function partA() {
     for (let i = 0; i < 400; i++) {
       f = await facts();
       if (f.phase === 'storm') break;
+      if (f.paused) await ev(() => window.__game.session.sim.clock.resume()); // (the clock was left stopped by the end of the skip)
       await tick(1);
       if (i % 4 === 0) note(`.. ${JSON.stringify(f)} rss=${rssMB()}MB`);
     }
@@ -210,7 +212,6 @@ async function stormVerbs() {
     const se = window.__game.session, a = se.sim.services.combat.arena;
     return { day: +se.sim.absDay.toFixed(4), skip: !!se.sim.clock.skip, speed: se.sim.clock.state?.speed, paused: se.sim.clock.state?.paused, fights: [...a.fights.values()].map((f) => ({ id: f.id, t: f.time ?? f.t, works: f.scene?.works.length, sides: f.sides.map((x) => x.members.filter((m) => m.active).length), quiet: f.quiet })), player: !!a.player };
   })));
-  let planted = false;
   let ladder = await waitFor(() => ev(() => {
     const arena = window.__game.session.sim.services.combat.arena;
     for (const fight of arena.fights.values()) {
@@ -218,43 +219,11 @@ async function stormVerbs() {
       if (w) return { id: w.id, fx: w.footX, fz: w.footZ, yaw: w.yaw };
     }
     return null;
-  }), 3);
-  if (!ladder) {
-    // the bearers of the ladders are cut down under the bows before they reach the wall (60 against 57 on the walls, in the open):
-    // so that the player's own verbs can be tried, a ladder that has been carried to its station is planted, as the war-shots tool does
-    note('the ladder bearers did not get through: a carried ladder is planted at its foot');
-    ladder = await ev(() => {
-      const se = window.__game.session, arena = se.sim.services.combat.arena, nav = se.services.zone.nav;
-      for (const fight of arena.fights.values()) {
-        const sc = fight.scene;
-        const pl = se.services.player;
-        const st = sc.stations.find((q) => { if (!Number.isFinite(nav.walkTopAt(q.x, q.z, q.y))) return false; pl.placeAt(q.x, q.z, q.yaw, q.y); const bd = pl.body(); return !!bd.walk && Math.abs(bd.y - q.y) < 1.4; });
-        const w = sc.works.find((x) => x.kind === 'ladder');
-        if (!st || !w) continue;
-        // (some of the stations the ladders are sent to lie where the navigation has no wall-walk: the flow sets one on a station that has)
-        const out = { x: Math.sin(st.yaw), z: Math.cos(st.yaw) };
-        w.station = st; w.footX = st.x + out.x * 2.6; w.footZ = st.z + out.z * 2.6; w.goalX = w.footX; w.goalZ = w.footZ;
-        w.x = w.footX; w.z = w.footZ; w.y = arena.groundY(w.x, w.z); w.yaw = Math.atan2(-out.x, -out.z); w.length = Math.max(4, st.y - w.y + 1.1);
-        w.phase = 'up'; w.cool = 0;
-        return { id: w.id, fx: w.footX, fz: w.footZ, yaw: w.yaw };
-      }
-      return null;
-    });
-    if (!ladder) note('stations: ' + JSON.stringify(await ev(() => {
-      const se = window.__game.session, a = se.sim.services.combat.arena, nav = se.services.zone.nav;
-      const out = [];
-      for (const fight of a.fights.values()) for (const st of fight.scene.stations.slice(0, 6)) {
-        let near = 1e9; for (const q of nav.walls.rects) near = Math.min(near, Math.hypot(q.cx - st.x, q.cz - st.z));
-        out.push([+st.x.toFixed(1), +st.z.toFixed(1), +st.y.toFixed(1), nav.walkTopAt(st.x, st.z, st.y), +near.toFixed(1)]);
-      }
-      return { rects: nav.walls.rects.length, out };
-    })));
-    planted = !!ladder;
-  }
+  }), 240);
   const kinds = await ev(() => { const a = window.__game.session.sim.services.combat.arena; const k = {}; for (const fight of a.fights.values()) for (const w of fight.scene?.works ?? []) k[`${w.kind}:${w.phase}`] = (k[`${w.kind}:${w.phase}`] ?? 0) + 1; return k; });
   note(`works: ${JSON.stringify(kinds)}`);
   note('storm after: ' + JSON.stringify(await ev(() => { const se = window.__game.session, a = se.sim.services.combat.arena; return { day: +se.sim.absDay.toFixed(4), fights: [...a.fights.values()].map((f) => ({ t: f.time ?? f.t, works: f.scene?.works.map((w) => w.kind + ':' + w.phase), sides: f.sides.map((x) => x.members.filter((m) => m.active).length) })) }; })));
-  check(`the assault brings a ram and ladders to the walls${planted ? ' (a ladder planted by the flow: the bearers were cut down)' : ', and a ladder goes up'}`, !!ladder && Object.keys(kinds).some((k) => k.startsWith('ram')), JSON.stringify({ ladder, kinds }));
+  check(`the assault brings a ram and ladders to the wallsand one of the army's own ladders goes up`, !!ladder && Object.keys(kinds).some((k) => k.startsWith('ram')), JSON.stringify({ ladder, kinds }));
   if (!ladder) return;
   // stand at the ladder's foot; the wheel's verb is "Climb the ladder"
   const opts = await ev((l) => {
@@ -313,9 +282,14 @@ async function stormVerbs() {
   await shot('a-fight-on-wall');
 }
 
+/** A storm of 24 a side instead of 60 (CFG.detailMax): the browser of a shared box is not killed for memory by the crowd; the verbs are the same. */
+async function lightStorm() {
+  await ev(async () => { const m = await import('/src/sim/military/config.ts'); m.CFG.detailMax = 24; });
+}
+
 /** The night in camp passes to just before first light (the sleep skip is the real loop's, and the frozen loop of this flow does not run it). */
 async function passTheNight() {
-  await ev(() => { const c = window.__game.session.sim.state.clock; const h = (c.absDay % 1) * 24; c.absDay = Math.floor(c.absDay) + (h >= 12 ? 1 : 0) + 5.45 / 24; c.firedHour = Math.floor(c.absDay * 24); const sim = window.__game.session.sim; if (sim.clock.skip) sim.dispatch({ type: 'cancelSkip' }); });
+  await ev(() => { const c = window.__game.session.sim.state.clock; const h = (c.absDay % 1) * 24; c.absDay = Math.floor(c.absDay) + (h >= 12 ? 1 : 0) + 5.45 / 24; c.firedHour = Math.floor(c.absDay * 24); const sim = window.__game.session.sim; if (sim.clock.skip) sim.dispatch({ type: 'cancelSkip' }); sim.clock.resume(); });
 }
 
 /** In peace: a flight of stairs up to a wall-walk (the wheel's "Climb the stairs"), the walk, and "Go down the stairs". The stairs of the storm's own castle are inside its shut gatehouse. */
@@ -414,6 +388,7 @@ async function partB() {
   console.log("-- B: Plan an attack from the ruler's Military page");
   await load('autostart=1&time=0.3');
   await ev(() => window.__game.ready());
+  await lightStorm();
   await tick(0.5);
   const lord = await becomeLord();
   note(JSON.stringify(lord));
