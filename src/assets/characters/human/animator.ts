@@ -274,13 +274,14 @@ function fpArms(out: Float32Array, w: number, mainDef: ItemDef | null, offDef: I
     const held = (side === 'R' ? mainDef?.hand === 'R' : mainDef?.hand !== 'R') ? mainDef : (side === 'L' ? offDef : null);
     const ux = out[u * 3], fx = out[f * 3], hx = out[h * 3];
     // targets (right arm convention; the left mirrors Y and Z): upper arm, forearm, how far the wrist turns back, the swing inward
-    let tu = -50 * D, tf = -78 * D, tz = 5 * D, th = 0;
+    let tu = -60 * D, tf = -84 * D, tz = 5 * D, th = 0;
     if (held) {
       // what is held is carried where the arm now is: a blade or tool tilted forward rather than straight up, a torch and a bow raised
       const g = held.grip;
       if (g === 'light') { tu = -44 * D; tf = -70 * D; th = -hx * 0.26; }
       else if (g === 'torch') { tu = -52 * D; tf = -70 * D; }
       else if (g === 'bow') { tu = -50 * D; tf = -60 * D; }
+      else if (g === 'shoulder' || g === 'twohand' || g === 'crossbow' || g === 'upright') { tu = -30 * D; tf = -88 * D; tz = 0; } // (already held forward: a tool's head stays down and clear of the eyes)
     }
     const swing = ux * 0.35 * walk; // the stride's swing, a third of it
     // never lower than the hold already is

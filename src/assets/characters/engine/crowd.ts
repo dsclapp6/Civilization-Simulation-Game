@@ -92,10 +92,10 @@ const VERT_SKIN = /* glsl */`
     crowdM += ( crowdB - crowdM ) * ( skin.z / 255.0 );
   }
   vCrowdFlag = skin.w;
-  // first person: the head of the one whose eyes the camera is at (crowdHide.x = its slot, .yzw = the head, eyes and mouth bones) is
+  // first person: the head of the one whose eyes the camera is at (crowdHide.x = its slot, .y = a bit mask of the bones left out: the head, neck, eyes and mouth) is
   // left out of the view but stays in the shadow pass, so the player's shadow has a head
   int crowdSk = int( skin.x + 0.5 );
-  vCrowdHide = ( crowdHide.x >= 0.0 && crowdSlot == int( crowdHide.x + 0.5 ) && ( crowdSk == int( crowdHide.y + 0.5 ) || crowdSk == int( crowdHide.z + 0.5 ) || crowdSk == int( crowdHide.w + 0.5 ) ) ) ? 1.0 : 0.0;
+  vCrowdHide = ( crowdHide.x >= 0.0 && crowdSlot == int( crowdHide.x + 0.5 ) && ( ( int( crowdHide.y + 0.5 ) >> crowdSk ) & 1 ) == 1 ) ? 1.0 : 0.0;
   vCrowdParams = texelFetch( crowdBones, ivec2( ${PARAM_TEXEL}, crowdSlot ), 0 );
 `;
 
@@ -341,7 +341,9 @@ export class SkinnedCrowd {
    * draws them. A slot of -1 shows everyone whole.
    */
   setHidden(slot: number, ...bones: number[]): void {
-    this.hideUniform.value.set(slot, bones[0] ?? 0, bones[1] ?? bones[0] ?? 0, bones[2] ?? bones[0] ?? 0);
+    let mask = 0;
+    for (const b of bones) mask |= 1 << b; // (bone ids below 22: exact in a float)
+    this.hideUniform.value.set(slot, mask, 0, 0);
   }
 
   /** Collapse every bone of a slot (actor invisible). */

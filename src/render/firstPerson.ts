@@ -12,6 +12,9 @@ export interface EyeLayer {
   eyePos?(id: number, out: THREE.Vector3): boolean;
 }
 
+/** How far (m) the camera sits in front of the head's own position. */
+const EYE_AHEAD = 0.13;
+
 export class FirstPerson {
   private readonly v = new THREE.Vector3();
   private hidden = -1;
@@ -24,7 +27,9 @@ export class FirstPerson {
     if (layer.eyePos(pl.personId, this.v)) this.off = this.v.y - pl.y;
     const y = pl.y + (this.off > 0.3 && this.off < 3 ? this.off : 1.6);
     // the body is where the eyes are: x and z are the body's (steady), the height is the animation's (sitting, riding)
-    rig.setEye(pl.x, y, pl.z, pl.mounted ? 0 : 1);
+    // the eyes sit a little ahead of the neck (the neck and collar are not drawn; looking down you see the chest from the front, not the inside of the collar)
+    const ahead = pl.mounted ? 0.04 : EYE_AHEAD;
+    rig.setEye(pl.x + Math.sin(rig.yaw) * ahead, y, pl.z + Math.cos(rig.yaw) * ahead, pl.mounted ? 0 : 1);
     const want = rig.inFirstPerson ? pl.personId : -1;
     if (want !== this.hidden) { layer.setFirstPerson?.(want); this.hidden = want; }
   }
