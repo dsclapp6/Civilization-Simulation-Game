@@ -803,7 +803,7 @@ export class SiegeScene {
       if (f.onWall && f.role === R.Wall) {
         f.jobT += dt;
         if (f.jobT > DROP_AFTER && !this.enemyOnWallNear(f, 4)) this.dropInside(f);
-      } else if (g && !f.onWall && dist(f.x, f.z, g.x - g.ox * 5, g.z - g.oz * 5) < 12 && f.role === R.None) inside++;
+      } else if (g && !f.onWall && f.role === R.None && this.insideTheGate(f, g)) inside++;
     }
     if (g && !this.gateOpened && !this.gateBroken() && inside >= 3) {
       this.openT += dt;
@@ -814,6 +814,16 @@ export class SiegeScene {
         this.arena.env.notify('warn', 'The gate is thrown open from within!', this.arena.env.ctx.state.run.playerId);
       }
     } else if (inside < 3) this.openT = Math.max(0, this.openT - dt);
+  }
+
+  /**
+   * A man of the host stands inside the gate: near the foot of the stairs behind it AND on the inner side of the gate's plane. The
+   * radius alone reached out through the leaves, so three men waiting in front of a shut gate "threw it open from within" after a
+   * few seconds and the ram never had a gate to batter (J3 live check: the push job's blows left ended after one blow).
+   */
+  private insideTheGate(f: Fighter, g: { x: number; z: number; ox: number; oz: number }): boolean {
+    const behind = (f.x - g.x) * g.ox + (f.z - g.z) * g.oz; // along the outward normal: < 0 is inside
+    return behind < 0 && dist(f.x, f.z, g.x - g.ox * 5, g.z - g.oz * 5) < 12;
   }
 
   private enemyOnWallNear(f: Fighter, r: number): boolean {

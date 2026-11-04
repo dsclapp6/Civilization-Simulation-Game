@@ -121,6 +121,30 @@ describe('the assault', () => {
     expect(steps * SIM_DT).toBeLessThan(180);
   });
 
+  it('men waiting in front of a shut gate do not throw it open from within (J3 live check); men who are inside it do', () => {
+    const t = storm('st-wait', { archers: 0, foot: 12 }, { archers: 0, foot: 2 }, { ladders: 0, rams: 0 });
+    const arena = t.r.combat.arena;
+    const scene = arena.fights.get(t.id)!.scene!;
+    const sim = t.r.sim;
+    const three = t.attackers.slice(0, 3).map((id) => arena.fighterOf(id)!);
+    // the two defenders stand where they are and do nothing (they would cut down the three who come in)
+    for (const id of t.defenders) { const d = arena.fighterOf(id)!; d.think = 1e9; d.wantSpeed = 0; }
+    const park = (z: number): void => {
+      three.forEach((f, i) => {
+        f.role = R.None; f.work = null; f.dMode = 0; f.think = 1e9; f.wantSpeed = 0; f.onWall = false;
+        f.x = f.px = t.fort.cx - 3 + i * 3; f.z = f.pz = z;
+      });
+    };
+    // three men a few metres in front of the leaves, within the old twelve-metre reach of the stairs' foot behind them
+    for (let i = 0; i < 40 * 20; i++) { if (i % 20 === 0) park(t.fort.cz + t.fort.half + 4); sim.step(SIM_DT); }
+    expect(scene.gateOpen()).toBe(false);
+    expect(scene.status().gate).toBe('shut');
+    // the same three inside the walls, at the foot of the stairs behind the gate: it is thrown open after a few seconds
+    for (let i = 0; i < 12 * 20; i++) { if (i % 20 === 0) park(t.fort.cz + t.fort.half - 6); sim.step(SIM_DT); }
+    expect(scene.gateOpen()).toBe(true);
+    expect(['open', 'broken']).toContain(scene.status().gate);
+  });
+
   it('the attackers pour in through a broken gate and win against a handful', () => {
     const t = storm('st-pour', { archers: 2, foot: 26 }, { archers: 2, foot: 5 }, { ladders: 0 });
     const results: FightResult[] = [];
