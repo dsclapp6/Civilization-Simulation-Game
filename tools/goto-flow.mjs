@@ -74,7 +74,8 @@ try {
   // ---- breath after a sprint
   if (ONLY !== 'host') {
   await load('autostart=1&time=0.42');
-  await ev(() => window.__game.freeze(false));
+  // (the flow's own steps move the world; the real-time loop would draw every frame in software GL and take gigabytes)
+  await ev(() => window.__game.freeze(true));
   await ev(() => window.__game.host.setSettings({ labels: false }));
   await page.keyboard.down('KeyW');
   await page.keyboard.down('ShiftLeft');
