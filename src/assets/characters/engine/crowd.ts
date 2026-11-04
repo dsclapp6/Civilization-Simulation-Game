@@ -231,7 +231,7 @@ export class SkinnedCrowd {
       shader.vertexShader = patchVertex(shader.vertexShader, true);
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', `#include <common>\n${FRAG_PARS}\n${GLSL_INDOOR}`)
-        .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n  if ( vCrowdHide > 0.5 ) discard;\n  if ( vCrowdFp > 0.5 && !gl_FrontFacing ) discard;\n  if ( vCrowdY > vCrowdLow && vCrowdLow > -1e4 ) discard; // (your own body is seen from inside it when you look down: no insides)')
+        .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n  if ( vCrowdHide > 0.5 ) discard;')
         // the hearth and the candles of the room one is in light the people too (docs/INTERIORS.md)
         .replace('#include <opaque_fragment>', 'outgoingLight += mlIndoor(diffuseColor.rgb, normal, -vViewPosition);\n#include <opaque_fragment>')
         .replace('#include <roughnessmap_fragment>', FRAG_ROUGH)

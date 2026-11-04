@@ -308,9 +308,9 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
     a.fpDown = fpDown;
     evaluatePose(a, item, ctx);
     poseToBones(a, item, ctx, crowd.bones, crowd.boneOffset(st.slot, 0));
-    // first person (src/render/firstPerson.ts): the camera is inside the head, so the head, eyes and mouth are left out of the view
+    // first person (src/render/firstPerson.ts): the camera is at the eyes, so the whole body but the arms and hands (and what they hold) is left out of the view
     // (crowd.setHidden, in the camera's pass only: the player's shadow keeps its head); the body and arms stay, and so does the ring's absence
-    if (item.id === fpId) { setZero(crowd.bones, crowd.boneOffset(st.slot, 0) + HB.ring * 12); crowd.setHidden(st.slot, HB.head, HB.neck, HB.eyes, HB.mouth); crowd.setHiddenAbove(a.world[HB.eyes * 12 + 7] - 0.36, HB.chest, HB.uaL, HB.uaR, HB.spine); }
+    if (item.id === fpId) { setZero(crowd.bones, crowd.boneOffset(st.slot, 0) + HB.ring * 12); crowd.setHidden(st.slot, HB.root, HB.spine, HB.chest, HB.neck, HB.head, HB.thL, HB.shL, HB.ftL, HB.thR, HB.shR, HB.ftR, HB.skirtL, HB.skirtR, HB.cloak, HB.back, HB.eyes, HB.mouth); }
     crowd.setParams(st.slot, item.highlight, a.flash);
     if (horse) {
       // reins to the rider's hands, stirrups to the feet

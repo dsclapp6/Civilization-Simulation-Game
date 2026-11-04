@@ -26,13 +26,34 @@ function hands(fp: boolean, main: HeldItem, anim: 'idle' | 'walk', frames = 60):
 
 /** Is a point (relative to the eyes, +z ahead) inside a 68 degree (vertical) camera looking straight ahead on a 16:9 screen, below the middle? */
 function inView(p: number[]): boolean {
-  const z = p[2] - 0.22; // (the camera sits 0.22 m ahead of the eye bone, firstPerson.ts)
+  const z = p[2] - 0.08; // (the camera sits 0.08 m ahead of the eye bone, firstPerson.ts)
   const down = Math.atan2(-p[1], z);
   const side = Math.atan2(Math.abs(p[0]), z);
   return z > 0.05 && down > 0.1 && down < (62 * Math.PI) / 180 && side < (75 * Math.PI) / 180;
 }
 
+/** Hands (relative to the eyes) through the frames of a work clip. */
+function workHands(anim: string, main: HeldItem): number[][] {
+  const st = createAnimState(7, dims); st.fp = true;
+  const place = new Float32Array(12); setIdentity(place, 0);
+  const it: CharacterDrawItem = { id: 1, x: 0, y: 0, z: 0, yaw: 0, look, lookVersion: 1, mainHand: main, offHand: 'none', back: 'none', carry: 'none', anim: anim as CharacterDrawItem['anim'], animTime: 0, moveSpeed: 0, highlight: 0 };
+  const ctx: AnimContext = { place, saddle: null, stand: null, horsePhase: 0, horseBob: 0, dt: 1 / 30, time: 0 };
+  const bones = new Float32Array(HUMAN_BONES * 12);
+  const out: number[][] = [];
+  for (let f = 0; f < 90; f++) {
+    it.animTime += 1 / 30; ctx.time += 1 / 30; evaluatePose(st, it, ctx); poseToBones(st, it, ctx, bones, 0);
+    if (f > 30 && f % 10 === 0) { const W = st.world, e = HB.eyes * 12, h = HB.handR * 12; out.push([W[h + 3] - W[e + 3], W[h + 7] - W[e + 7], W[h + 11] - W[e + 11]]); }
+  }
+  return out;
+}
+
 describe('first-person arms', () => {
+  for (const [anim, main] of [['work_dig', 'spade'], ['work_hammer', 'hammer'], ['work_axe', 'axe']] as const) {
+    it(`${anim}: the working hand stays in the lower half of the view through the motion`, () => {
+      for (const h of workHands(anim, main)) expect(inView(h)).toBe(true);
+    });
+  }
+
   it('without the camera at the eyes the arms hang at the sides, out of the view', () => {
     const h = hands(false, 'none', 'idle');
     expect(inView(h.l) && inView(h.r)).toBe(false);
@@ -45,7 +66,7 @@ describe('first-person arms', () => {
     }
   });
 
-  const helds: HeldItem[] = ['sword', 'dagger', 'mace', 'spear', 'torch', 'staff', 'longbow', 'cup', 'bucket'];
+  const helds: HeldItem[] = ['sword', 'dagger', 'mace', 'spear', 'hoe', 'axe', 'spade', 'hammer', 'torch', 'staff', 'longbow', 'cup', 'bucket'];
   for (const main of helds) {
     it(`holding ${main}: the holding hand is ahead and low, in view`, () => {
       const h = hands(true, main, 'idle');
