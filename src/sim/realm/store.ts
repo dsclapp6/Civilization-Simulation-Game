@@ -137,12 +137,14 @@ export interface RealmSave {
   books: Record<string, BookRec>;
   /** Settlement → population at the last turn of the year (growth news). */
   pop: Record<string, number>;
+  /** Treasury households of AI rulers whose purse is below comfort: they keep a thrifty table (the economy spends less on luxuries there). */
+  thrift: Record<string, 1>;
 }
 
 export function emptySave(): RealmSave {
   return {
     v: VERSION, seq: { project: 1, order: 1, news: 1 }, projects: [], orders: [], plans: {}, troops: [], arrears: {}, behind: {},
-    gar: {}, news: [], seen: [], outs: [], ctr: {}, books: {}, pop: {},
+    gar: {}, news: [], seen: [], outs: [], ctr: {}, books: {}, pop: {}, thrift: {},
   };
 }
 

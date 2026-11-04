@@ -13,7 +13,7 @@ export function freshMen(M: Mil, house: HouseId, sid: number, counts: Partial<Re
   const rng = M.sim.rng('military.muster');
   const hh = st.addHousehold({ id: st.households.alloc(), kind: 'garrison', head: NONE, members: [], home: -1, settlement: sid, purse: 0, stores: {} });
   const CAREER: Record<UnitKind, Person['career']> = {
-    levy: 'soldier', archer: 'archer', crossbow: 'archer', man_at_arms: 'man_at_arms', sergeant: 'sergeant', knight: 'knight', mercenary: 'man_at_arms',
+    levy: 'soldier', archer: 'archer', crossbow: 'crossbowman', man_at_arms: 'man_at_arms', sergeant: 'sergeant', knight: 'knight', mercenary: 'man_at_arms',
   };
   const out: Array<{ person: Person; kind: UnitKind }> = [];
   for (const [kind, n] of Object.entries(counts) as Array<[UnitKind, number]>) {

@@ -236,8 +236,11 @@ export function viewOf(R: Rlm, personId: PersonId): RealmView | null {
   const strength = R.military?.strength?.(sc.house) ?? R.politics?.strength(sc.house) ?? 0;
   const stores: Record<string, number> = sc.role === 'reeve' ? {} : poolOf(R, sc).stock();
   const role = sc.role;
+  const me = R.alive(personId);
+  const ownHouse = me?.house ?? 0;
   return {
     person: personId, house: sc.house,
+    houseName: R.state.houses.get(sc.house)?.name ?? '', ownHouse, ownHouseName: R.state.houses.get(ownHouse)?.name ?? '',
     titles: sc.titles.slice().sort((a, b) => TITLE_RANK[b.kind] - TITLE_RANK[a.kind] || a.id - b.id).map((t) => t.id),
     name: role === 'steward' ? `Steward of ${top?.name ?? 'the realm'}` : role === 'reeve' ? `Reeve of ${R.placeName(sc.direct[0] ?? -1)}` : role === 'regent' ? `Regent of ${top?.name ?? 'the realm'}` : (top?.name ?? 'the realm'),
     settlements: sc.direct, vassalSettlements: sc.vassal,

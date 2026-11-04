@@ -45,7 +45,7 @@ describe('ransom', () => {
   });
 
   it('a prisoner nobody can pay for is let go in the end; a commoner sooner', () => {
-    const { sim, mil } = milSim({ seed: 'ransom-poor' });
+    const { sim, mil } = milSim({ seed: 'ransom-poor-b' });
     const M = militaryContext(sim);
     const hh = mkHousehold(sim);
     hh.purse = 0;

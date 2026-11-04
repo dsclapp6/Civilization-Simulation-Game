@@ -42,6 +42,15 @@ export function bookOut(R: Rlm, hhId: number, pence: number, label: string): voi
   R.touch();
 }
 
+/**
+ * A signed movement of a treasury's purse that another module made (the army's wages, plunder shared, ransoms, a raid's toll), entered
+ * under its label so the books do not show it as "other". Call after the purse has changed; ignores households that keep no book.
+ */
+export function bookNote(R: Rlm, hhId: number, pence: number, label: string): void {
+  if (!R.data.books[String(hhId)]) return;
+  if (pence > 0) bookIn(R, hhId, pence, label); else bookOut(R, hhId, -pence, label);
+}
+
 /** The treasury households of everyone who rules: the purses worth keeping books for (ids, sorted). */
 export function treasuries(R: Rlm): number[] {
   const set = new Set<number>();
@@ -108,7 +117,7 @@ export function yearOf(R: Rlm, hhId: number): { income: number; spending: number
   }
   const restIn = round(income - ownIn), restOut = round(spending - ownOut);
   if (restIn > 0.005) lines.push({ label: 'Rents, dues and other receipts', pence: restIn });
-  if (restOut > 0.005) lines.push({ label: 'Household, works and other costs', pence: -restOut });
+  if (restOut > 0.005) lines.push({ label: 'The household\'s keep and the works', pence: -restOut });
   lines.sort((a, b) => Math.abs(b.pence) - Math.abs(a.pence) || (a.label < b.label ? -1 : 1));
   return { income: round(income), spending: round(spending), lines };
 }

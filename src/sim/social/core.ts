@@ -22,7 +22,7 @@ import type { SocialHooks } from './types';
 import { TIER_MONEY, TIER_PURSE } from '../people';
 
 const WATCH_CAREERS: ReadonlySet<string> = new Set([
-  'man_at_arms', 'sergeant', 'soldier', 'archer', 'monk', 'nun', 'prior', 'abbot', 'beggar', 'outlaw', 'midwife', 'healer',
+  'man_at_arms', 'sergeant', 'soldier', 'archer', 'crossbowman', 'monk', 'nun', 'prior', 'abbot', 'beggar', 'outlaw', 'midwife', 'healer',
 ]);
 
 /** Things worth knowing about a settlement for a day: refreshed once per game day. */

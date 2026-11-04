@@ -239,8 +239,7 @@ function nearestOwnCastle(M: Mil, a: Army): number | undefined {
 
 /** Men of garrison households living at a settlement (a cheap measure of how well it is held); cached for the day. */
 function garrisonAt(M: Mil, sid: number): number {
-  const day = Math.floor(M.day);
-  if (garrisonDay !== day) { garrisonCache.clear(); garrisonDay = day; }
+  const garrisonCache = dayCache(M, 'g');
   let n = garrisonCache.get(sid);
   if (n === undefined) {
     n = 0;
@@ -249,17 +248,24 @@ function garrisonAt(M: Mil, sid: number): number {
   }
   return n;
 }
-const garrisonCache = new Map<number, number>();
-let garrisonDay = -1;
+/**
+ * Per-Mil caches of the campaign's look at places, valid for one game hour (J5): they used to be module-level and keyed by the day, so
+ * a second simulation in the same page (a load) read the first one's numbers, and a loaded game, starting with empty caches
+ * mid-day, saw the state of a later hour than the original had cached - the round trip then went a different way.
+ */
+const dayCaches = new WeakMap<Mil, { hour: number; maps: Record<string, Map<number, number>> }>();
+function dayCache(M: Mil, which: 'g' | 'd'): Map<number, number> {
+  const hour = Math.floor(M.day * 24);
+  let c = dayCaches.get(M);
+  if (!c || c.hour !== hour) { c = { hour, maps: { g: new Map(), d: new Map() } }; dayCaches.set(M, c); }
+  return c.maps[which];
+}
 
 function fortified(M: Mil, sid: number): boolean { return fortifications(M, sid).length > 0; }
 
-const defenceCache = new Map<number, number>();
-let defenceDay = -1;
 /** Fighting weight of a strong place's defenders times its walls, cached for the day (the assault would meet exactly this). */
 function defenceOf(M: Mil, sid: number, lord: number): number {
-  const day = Math.floor(M.day);
-  if (defenceDay !== day) { defenceCache.clear(); defenceDay = day; }
+  const defenceCache = dayCache(M, 'd');
   let v = defenceCache.get(sid);
   if (v === undefined) {
     v = Math.max(6, defendersOf(M, sid, lord).total * fortBonus(M, sid));

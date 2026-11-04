@@ -107,6 +107,7 @@
     "_doc": "Default kit by career for people without equipment slots (NPCs): main weapon, off-hand shield, ranged weapon. 'rank' lists tier-based fallbacks; everyone else (peasants, outlaws) gets an improvised weapon picked from 'improvised' by a stable hash.",
     "soldier": { "main": "spear", "off": null },
     "archer": { "main": "dagger", "off": null, "ranged": "longbow" },
+    "crossbowman": { "main": "dagger", "off": null, "ranged": "crossbow" },
     "man_at_arms": { "main": "sword", "off": "shield_heater", "alt": ["bill", "mace", "war_axe"] },
     "sergeant": { "main": "sword", "off": "shield_kite" },
     "knight": { "main": "sword", "off": "shield_heater", "alt": ["mace", "war_axe"] },

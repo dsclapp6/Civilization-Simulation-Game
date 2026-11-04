@@ -38,6 +38,12 @@ export interface RealmView {
   seat?: number;
   /** Settlements of the realm with a market (trade orders and procurement go there). */
   markets?: readonly number[];
+  // ---- additive (J5) ----
+  /** The House the person is ruling for: `house` is that of the realm (the holder's), so a regent or steward sees the lord's here. */
+  houseName?: string;
+  /** The person's own House (what he is born or sworn to), which differs from `house` for a regent or steward acting for another's. */
+  ownHouse?: HouseId;
+  ownHouseName?: string;
 }
 
 /** How a person comes to rule (docs/REALM.md): the title's holder, the regent of a minor holder, the holder's steward, a village's reeve. */
@@ -240,6 +246,10 @@ export interface RealmApi {
   dubCandidates?(person: PersonId, max?: number): DubCandidate[];
   /** The treasury's year in lines (rents and dues, sales, wages, research, troops, purchases…): what `view().income/spending` are made of. */
   accounts?(person: PersonId): AccountLine[];
+  /** Other modules enter a movement of a treasury's purse by label (army wages, plunder, ransoms, raids): `pence` is signed. */
+  /** Is this treasury household thrifty (its AI ruler's purse is below comfort)? The economy cuts the household's luxuries by it. */
+  thrifty?(household: HouseholdId): boolean;
+  note?(household: HouseholdId, pence: number, label: string): void;
 }
 
 /** A man who could be given the accolade, and why he is put forward. */

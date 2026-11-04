@@ -16,6 +16,9 @@ export const AI = {
   committedShare: 0.8,
   /** The comfortable purse, as a share of what a head of that rank usually holds (TIER_PURSE): below it the ruler saves. */
   comfort: 0.3,
+  /** A ruler whose purse is under comfort x thriftOn keeps a plain table (fewer luxuries) until it is over comfort x thriftOff. */
+  thriftOn: 1.6,
+  thriftOff: 2,
   /** A purse below this many days of the men's wages is thin: no new men are raised, works wait. */
   wageReserveDays: 40,
   /** A ruler keeps this much in hand for the first days' wages: no site is staked out below it. */
@@ -95,6 +98,9 @@ export const TROOPS_AI = {
   /** Never more than this many raised in one call, nor kept in all by class. */
   batch: 10,
   cap: { manor: 14, abbey: 4, barony: 30, county: 70, kingdom: 140 } as Readonly<Record<RealmClass, number>>,
+  /** A ruler whose purse is below comfort discharges up to this many of the dearest men each round, at most once in this many days. */
+  trimPerRound: 2,
+  trimGapDays: 4,
   /** Shares of the standing troop by kind (crossbowmen replace archers once the House has the technique). */
   mix: { archer: 0.45, man_at_arms: 0.35, sergeant: 0.14, crossbow: 0.06 } as Readonly<Record<string, number>>,
   /** Days between one call to raise men and the next, for a House. */

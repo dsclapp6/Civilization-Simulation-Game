@@ -115,8 +115,8 @@ export class RaidSystem {
         st.touchHousehold(hh);
       }
       // a purse of coin changes hands
-      const coin = Math.floor(hh.purse * (0.15 + rng.next() * 0.25));
-      if (coin > 0) { hh.purse -= coin; r.loot += coin; st.touchHousehold(hh); }
+      const coin = Math.floor(hh.purse * (0.15 + rng.next() * 0.25) * strongbox(st, hh));
+      if (coin > 0) { hh.purse -= coin; r.loot += coin; st.touchHousehold(hh); M.sim.services.realm?.note?.(hh.id, -coin, 'Raided'); }
       // stored food feeds the raiders
       for (const key of Object.keys(hh.stores)) {
         if (key.startsWith('wheat') || key.startsWith('rye') || key.startsWith('barley') || key.startsWith('bread') || key.startsWith('cheese')) {
@@ -208,8 +208,8 @@ export class RaidSystem {
       burned++;
     }
     for (const hh of st.householdList(sid)) {
-      const coin = Math.floor(hh.purse * intensity * 0.6);
-      if (coin > 0) { hh.purse -= coin; loot += coin; st.touchHousehold(hh); }
+      const coin = Math.floor(hh.purse * intensity * 0.6 * strongbox(st, hh));
+      if (coin > 0) { hh.purse -= coin; loot += coin; st.touchHousehold(hh); M.sim.services.realm?.note?.(hh.id, -coin, 'Raided'); }
       for (const key of livestockKeys(M, hh.stores)) {
         const have = hh.stores[key] ?? 0;
         const take = Math.round(have * intensity * 0.8);
@@ -226,4 +226,13 @@ export class RaidSystem {
     M.sim.events.emit('raid', { settlement: sid, raider: a.house, burned, stolen, captives });
     void nearestSettlementId;
   }
+}
+
+/**
+ * How much of a household's coin raiders can lay hands on (J5): a lord's or knight's treasury is behind the hall's doors and the
+ * castle's walls, so a village raid carries off a small part of it (a tenth); the purses of commoners lie in the house.
+ */
+function strongbox(st: { persons: { get(id: number): { rankTier: number } | undefined } }, hh: { head: number }): number {
+  const head = st.persons.get(hh.head);
+  return head && head.rankTier >= 4 ? 0.1 : 1;
 }

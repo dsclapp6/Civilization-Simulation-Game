@@ -82,7 +82,7 @@ export function defendersOf(M: Mil, sid: number, house: HouseId): Fighters {
     if (hh.kind !== 'garrison') continue;
     for (const id of hh.members) {
       const p = M.alive(id);
-      if (p && p.sex === 'm' && p.health.hp > 0.4) add(p, p.career === 'sergeant' ? 'sergeant' : p.career === 'archer' ? 'archer' : 'man_at_arms');
+      if (p && p.sex === 'm' && p.health.hp > 0.4) add(p, p.career === 'sergeant' ? 'sergeant' : p.career === 'archer' ? 'archer' : p.career === 'crossbowman' ? 'crossbow' : 'man_at_arms');
     }
   }
   const lord = house ? M.state.houses.get(house) : undefined;
@@ -91,8 +91,8 @@ export function defendersOf(M: Mil, sid: number, house: HouseId): Fighters {
       if (p.settlement !== sid || p.sex !== 'm' || p.health.hp < 0.4) continue;
       const age = (M.day - p.birthDay) / 16;
       if (age < 17 || age > 58 || p.estate === 'clergy') continue;
-      if (p.career === 'knight' || p.career === 'man_at_arms' || p.career === 'sergeant' || p.career === 'archer' || p.career === 'squire') {
-        add(p, p.career === 'knight' ? 'knight' : p.career === 'sergeant' ? 'sergeant' : p.career === 'archer' ? 'archer' : 'man_at_arms');
+      if (p.career === 'knight' || p.career === 'man_at_arms' || p.career === 'sergeant' || p.career === 'archer' || p.career === 'crossbowman' || p.career === 'squire') {
+        add(p, p.career === 'knight' ? 'knight' : p.career === 'sergeant' ? 'sergeant' : p.career === 'archer' ? 'archer' : p.career === 'crossbowman' ? 'crossbow' : 'man_at_arms');
       }
     }
   }
@@ -102,7 +102,7 @@ export function defendersOf(M: Mil, sid: number, house: HouseId): Fighters {
   const me = M.alive(M.playerId);
   if (me && me.settlement === sid && !seen.has(me.id) && me.sex === 'm' && me.estate !== 'clergy' && !me.flags.captive && me.health.hp > 0.4) {
     const age = (M.day - me.birthDay) / 16;
-    if (age >= 15 && age <= 60) add(me, me.career === 'archer' ? 'archer' : 'levy');
+    if (age >= 15 && age <= 60) add(me, me.career === 'archer' ? 'archer' : me.career === 'crossbowman' ? 'crossbow' : 'levy');
   }
   // townsfolk and villagers: a tenth to a sixth of the able men take up what arms they have
   const share = town ? 0.14 : 0.08;

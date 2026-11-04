@@ -207,6 +207,10 @@ export interface ForceSummary {
   house: HouseId;
   /** Household knights, men-at-arms, sergeants and archers of the House (excluding the garrisons). */
   retinue: number;
+  /** Of the retinue, the knights (household knights and those dubbed or recruited), counted apart: they are not only "retinue". */
+  knights: number;
+  /** Crossbowmen of the retinue and the garrisons (a career of their own), apart from the town militia. */
+  crossbowmen: number;
   /** Men of garrison households (they hold the castle). */
   garrison: number;
   /** Men 15–60 in the House's own manors (the levy pool). */

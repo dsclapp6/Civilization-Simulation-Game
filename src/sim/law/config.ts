@@ -94,9 +94,9 @@ export const LAW = {
 } as const;
 
 /** Careers that are the lord's armed men (leaders and patrol men come from them). */
-export const ARMED_CAREERS: ReadonlySet<string> = new Set(['knight', 'sergeant', 'man_at_arms', 'soldier', 'archer', 'squire']);
+export const ARMED_CAREERS: ReadonlySet<string> = new Set(['knight', 'sergeant', 'man_at_arms', 'soldier', 'archer', 'crossbowman', 'squire']);
 /** Careers that give orders: patrol leaders by preference. */
-export const LEADER_ORDER: readonly string[] = ['knight', 'sergeant', 'man_at_arms', 'soldier', 'archer', 'squire'];
+export const LEADER_ORDER: readonly string[] = ['knight', 'sergeant', 'man_at_arms', 'soldier', 'archer', 'crossbowman', 'squire'];
 /** Offices that send men after a trespasser when the lord keeps no soldiers. */
 export const LAW_OFFICES: ReadonlySet<string> = new Set(['sheriff', 'bailiff', 'reeve', 'steward', 'marshal']);
 

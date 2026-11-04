@@ -325,7 +325,7 @@ const MONASTIC: ReadonlySet<CareerId> = new Set<CareerId>(['monk', 'nun', 'prior
 const MARKET_SELLERS: ReadonlySet<CareerId> = new Set<CareerId>([
   'merchant', 'shopkeeper', 'peddler', 'baker', 'butcher', 'weaver', 'tailor', 'cobbler', 'potter', 'chandler', 'cooper', 'tanner', 'saddler',
 ]);
-const ARMS: ReadonlySet<CareerId> = new Set<CareerId>(['soldier', 'archer', 'man_at_arms', 'sergeant']);
+const ARMS: ReadonlySet<CareerId> = new Set<CareerId>(['soldier', 'archer', 'crossbowman', 'man_at_arms', 'sergeant']);
 const EMPTY_POSTS: readonly WallStation[] = [];
 const POST_SPLIT = new WeakMap<readonly WallStation[], { high: WallStation[]; low: WallStation[] }>();
 
@@ -813,7 +813,7 @@ export class Schedule {
 
   /** Puts a man on his post: archers and crossbowmen on towers and over the gate, the rest along the wall-walks. */
   private post(p: Person, o: Intent, posts: readonly WallStation[], militia: boolean): void {
-    const archer = p.career === 'archer' || (militia && hash01(p.id, 94) < 0.35);
+    const archer = p.career === 'archer' || p.career === 'crossbowman' || (militia && hash01(p.id, 94) < 0.35);
     // (the partition of a settlement's posts is made once per list)
     let split = POST_SPLIT.get(posts);
     if (!split) {
@@ -827,7 +827,7 @@ export class Schedule {
     o.x = s.x; o.z = s.z; o.yaw = s.yaw; o.building = -1; o.indoors = false;
     o.elev = Math.max(0, s.y - this.world.heightAt(s.x, s.z));
     o.anim = 'idle'; o.mode = Mode.Stay;
-    o.main = archer ? (p.career === 'archer' ? 'longbow' : 'crossbow') : 'spear';
+    o.main = archer ? (p.career === 'archer' ? 'longbow' : 'crossbow') : 'spear'; // (a crossbowman career and the militia carry the crossbow)
     o.off = archer ? 'none' : 'shield_heater'; o.back = archer ? 'quiver' : 'none';
     o.group = -1;
   }

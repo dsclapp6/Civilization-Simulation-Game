@@ -14,7 +14,7 @@ import { enabledOption } from './roles';
 
 type Step = NewObjective['steps'][number];
 
-const ARMS = new Set(['knight', 'squire', 'man_at_arms', 'soldier', 'sergeant', 'archer']);
+const ARMS = new Set(['knight', 'squire', 'man_at_arms', 'soldier', 'sergeant', 'archer', 'crossbowman']);
 const CRAFT: Partial<Record<string, readonly BuildingKind[]>> = {
   smith: ['smithy'], carpenter: ['carpenter', 'sawpit'], weaver: ['weaver'], baker: ['bakehouse'], tanner: ['tannery'],
   alewife: ['brewhouse', 'alehouse'], miller: ['watermill', 'windmill'], cooper: ['carpenter'], wheelwright: ['carpenter'],

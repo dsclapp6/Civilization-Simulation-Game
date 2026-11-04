@@ -18,7 +18,7 @@ function opt(p: Pick<ActionOption, 'id' | 'label' | 'category' | 'target' | 'pri
   return { provider: PROVIDER_ID, enabled: true, seconds: 0, range: 3, ...p };
 }
 
-const SOLDIER_CAREERS: ReadonlySet<string> = new Set(['soldier', 'man_at_arms', 'sergeant', 'squire', 'knight', 'archer']);
+const SOLDIER_CAREERS: ReadonlySet<string> = new Set(['soldier', 'man_at_arms', 'sergeant', 'squire', 'knight', 'archer', 'crossbowman']);
 
 /** The steady hand in the binding mini-game counts like a few levels of Medicine (−3 … +3); unplayed, none. */
 function handedWith(perf: number, skill: number): number { return perf < 0 ? skill : Math.max(0, Math.min(20, skill + (perf - 0.5) * 6)); }
@@ -94,7 +94,7 @@ export function createCombatProvider(sv: Services): ActionProvider {
           else if (q.flags.captive) { atk.enabled = false; atk.reason = 'They are a prisoner'; }
           out.push(atk);
           // single combat, to the yield: for a man of arms against a man of arms
-          if (q.sex === 'm' && age >= 16 && SOLDIER_CAREERS.has(q.career) && q.career !== 'archer'
+          if (q.sex === 'm' && age >= 16 && SOLDIER_CAREERS.has(q.career) && q.career !== 'archer' && q.career !== 'crossbowman'
             && (SOLDIER_CAREERS.has(me.career) || me.rankTier >= 4)) {
             const d = opt({ id: 'duel', label: `Challenge ${q.first} to a duel`, category: 'combat', target, priority: 4, range: 6, preview: 'Single combat until one yields. Honourable: no crime, and the victor wins renown' });
             if (sv.arena.inFight(q.id)) { d.enabled = false; d.reason = 'They are already fighting'; }

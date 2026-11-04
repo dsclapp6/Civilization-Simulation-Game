@@ -81,7 +81,7 @@ export function buildOverview(env: RulerEnv): HTMLElement {
   const forces = (sim.services.military as MilitaryRuntime | undefined)?.forces?.(v.house);
   const troopsCard = section('Forces', 'swords',
     h('div.mu-row.mu-wrap.mu-gap-6', null,
-      forces ? [chip(`${forces.retinue} retinue`, '', 'helm'), chip(`${forces.garrison} garrison`, '', 'shield'), chip(`${forces.levyPool} liable to the levy`, '', 'users'), chip(`${forces.militia} militia`, '', 'archery'), forces.mercenaries ? chip(`${forces.mercenaries} hired`, '', 'coin') : null, forces.afield ? chip(`${forces.afield} afield`, 'lapis', 'flag') : null] : null,
+      forces ? [chip(`${forces.retinue} retinue`, '', 'helm'), chip(`${forces.knights} knights`, '', 'helm'), chip(`${forces.garrison} garrison`, '', 'shield'), chip(`${forces.levyPool} liable to the levy`, '', 'users'), chip(`${forces.militia} militia`, '', 'archery'), forces.mercenaries ? chip(`${forces.mercenaries} hired`, '', 'coin') : null, forces.afield ? chip(`${forces.afield} afield`, 'lapis', 'flag') : null] : null,
       counts.map((c) => chip(`${c.n} ${kindName(c.kind, c.n)} on your pay`, 'gold'))),
     !forces && !counts.length ? line('No men are on your pay.') : null,
     h('div.mu-row.mu-gap-6', { style: { marginTop: '8px' } }, button('Military', { size: 'small', icon: 'swords', onClick: () => env.go('military') })));

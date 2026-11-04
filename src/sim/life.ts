@@ -327,7 +327,7 @@ function onBirthday(ctx: SimContext, rng: Rng, p: Person, age: number, now: numb
     if (age >= 22 && p.careerStage === 0 && p.career === 'servant' && state.houses.get(p.house)?.sworn.includes(p.id) && !p.flags.player && rng.chance(0.3)) {
       leaveInstitution(ctx, rng, p);
     }
-    if (age >= 34 && (p.career === 'man_at_arms' || p.career === 'sergeant') && state.households.get(p.household)?.kind === 'garrison' && rng.chance(0.3)) {
+    if (age >= 34 && (p.career === 'man_at_arms' || p.career === 'crossbowman' || p.career === 'sergeant') && state.households.get(p.household)?.kind === 'garrison' && rng.chance(0.3)) {
       leaveInstitution(ctx, rng, p);
     }
   }
@@ -482,7 +482,7 @@ function isMarriageable(state: GameState, p: Person, now: number): boolean {
   if (p.sex === 'f' ? age < 16 : age < 19) return false;
   if (p.career === 'page' || p.career === 'squire') return false;
   // soldiers of a garrison do not marry while they serve; they are discharged around 35
-  if (p.career === 'man_at_arms' || p.career === 'sergeant') {
+  if (p.career === 'man_at_arms' || p.career === 'crossbowman' || p.career === 'sergeant') {
     const hh = state.households.get(p.household);
     if (hh && hh.kind === 'garrison') return false;
   }

@@ -132,6 +132,7 @@ export class PatrolSystem {
       case 'man_at_arms': return 'Man-at-arms';
       case 'soldier': return 'Soldier';
       case 'archer': return 'Archer';
+      case 'crossbowman': return 'Crossbowman';
       case 'bailiff': return 'Bailiff';
       case 'steward': return 'Steward';
       default: return '';

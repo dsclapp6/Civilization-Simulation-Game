@@ -14,7 +14,7 @@ export type CareerId =
   | 'smith' | 'carpenter' | 'mason' | 'tanner' | 'weaver' | 'tailor' | 'baker' | 'miller' | 'butcher'
   | 'cooper' | 'cobbler' | 'potter' | 'fuller' | 'chandler' | 'wheelwright' | 'saddler' | 'fisher'
   | 'merchant' | 'peddler' | 'shopkeeper'
-  | 'soldier' | 'archer' | 'man_at_arms' | 'sergeant' | 'squire' | 'page' | 'knight'
+  | 'soldier' | 'archer' | 'crossbowman' | 'man_at_arms' | 'sergeant' | 'squire' | 'page' | 'knight'
   | 'priest' | 'monk' | 'nun' | 'prior' | 'abbot' | 'bishop' | 'clerk'
   | 'servant' | 'steward' | 'bailiff'
   | 'healer' | 'midwife'
@@ -73,6 +73,7 @@ export const CAREERS: Record<CareerId, CareerDef> = {
   shopkeeper: D('Shopkeeper', 'trade', ['trade', 'persuasion'], ['int', 'cha'], [2, 3], 16),
   soldier: D('Soldier', 'arms', ['melee', 'archery'], ['str', 'end'], [2], 16, 'm'),
   archer: D('Archer', 'arms', ['archery', 'melee'], ['str', 'per'], [2], 15, 'm'),
+  crossbowman: D('Crossbowman', 'arms', ['archery', 'melee'], ['str', 'per'], [2], 15, 'm'),
   man_at_arms: D('Man-at-arms', 'arms', ['melee', 'riding'], ['str', 'end'], [2, 2, 3], 16, 'm'),
   sergeant: D('Sergeant', 'arms', ['melee', 'leadership', 'riding'], ['str', 'end'], [3], 20, 'm'),
   squire: D('Squire', 'knighthood', ['melee', 'riding', 'leadership'], ['str', 'agi'], [4], 14, 'm'),

@@ -60,7 +60,7 @@ export const RECRUIT: Readonly<Record<RecruitKind, RecruitSpec>> = {
   },
   crossbow: {
     label: 'Crossbowman', plural: 'crossbowmen', gear: { crossbow: 1, bolt: 20, padded_armour: 1 }, buyTier: {}, fee: 8, upkeep: 3, tech: 'crossbows', minAge: 15, maxAge: 45,
-    minStat: { str: 8, per: 8 }, drill: { archery: 3 }, career: 'archer', stage: 1, rank: 2,
+    minStat: { str: 8, per: 8 }, drill: { archery: 3 }, career: 'crossbowman', stage: 1, rank: 2,
   },
   man_at_arms: {
     label: 'Man-at-arms', plural: 'men-at-arms', gear: { sword: 1, shield: 1, spear: 1, padded_armour: 1, cap_helmet: 1 }, buyTier: {}, fee: 12, upkeep: 5, minAge: 16, maxAge: 45,
@@ -93,7 +93,7 @@ export const TROOPS = {
   patienceDays: 6,
   desertChance: 0.12,
   /** Careers of men who already serve (they are not raised again as new recruits). */
-  serving: ['soldier', 'archer', 'man_at_arms', 'sergeant', 'knight', 'squire', 'page'] as readonly CareerId[],
+  serving: ['soldier', 'archer', 'crossbowman', 'man_at_arms', 'sergeant', 'knight', 'squire', 'page'] as readonly CareerId[],
   /** Mercenary hiring reaches this far from the seat (metres), as in the military module. */
   mercRadius: 5500,
   /** The accolade: a vigil, a feast and a gift (pence), on top of the gear. */

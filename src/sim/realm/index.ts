@@ -6,7 +6,7 @@
 import type { Simulation } from '../sim';
 import type { Wave3Deps } from '../wave3deps';
 import { installAi, type Ai, type RealmAi } from './ai';
-import { closeBooks, yearOf } from './books';
+import { bookNote, closeBooks, yearOf } from './books';
 import { HOURS } from './config';
 import { installNews, newsDaily, newsList, newsYearly, outpostsDaily, rivalsOf } from './news';
 import { cropPlan, cropPlanView, setCropPlan, setWorksShare, worksShare } from './plans';
@@ -112,6 +112,8 @@ export function installRealm(sim: Simulation, deps: Wave3Deps, opts: RealmOption
 
     news: (limit) => newsList(R, limit),
     rivals: (person) => rivalsOf(R, person),
+    thrifty: (household) => R.data.thrift[household] === 1,
+    note: (household, pence, label) => bookNote(R, household, Math.round(pence * 100) / 100, label),
     accounts: (person) => {
       const sc = scopeOf(R, person);
       return sc && sc.treasury ? yearOf(R, sc.treasury.id).lines : [];

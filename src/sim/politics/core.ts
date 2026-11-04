@@ -46,7 +46,7 @@ export const clamp = (v: number, lo: number, hi: number): number => (v < lo ? lo
 const LEVY_PER_HEAD = 1.4; // tenths of a man per resident (about 14% of the people can be called up and armed)
 const KIND_BONUS: Record<string, number> = { castle: 250, city: 120, town: 60, abbey: 0, priory: 0, nunnery: 0, village: 0, hamlet: 0 };
 const CAREER_WEIGHT: Record<string, number> = {
-  knight: 60, squire: 25, man_at_arms: 30, sergeant: 30, archer: 20, soldier: 15, lord: 40,
+  knight: 60, squire: 25, man_at_arms: 30, sergeant: 30, archer: 20, crossbowman: 20, soldier: 15, lord: 40,
 };
 
 export interface Snapshot {
@@ -614,6 +614,8 @@ export class PoliticsCore {
     hb.purse += take;
     this.state.touchHousehold(ha);
     this.state.touchHousehold(hb);
+    this.sim.services.realm?.note?.(ha.id, -take, 'Tribute and indemnities paid'); // (J5: the books name it)
+    this.sim.services.realm?.note?.(hb.id, take, 'Tribute and indemnities received');
     return take;
   }
 }

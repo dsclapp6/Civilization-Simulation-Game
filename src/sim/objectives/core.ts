@@ -283,7 +283,7 @@ export class Obj {
     if (!me) return null;
     const c = me.career;
     if (['knight', 'squire', 'man_at_arms', 'sergeant', 'soldier'].includes(c)) return 'melee';
-    if (c === 'archer') return 'archery';
+    if (c === 'archer' || c === 'crossbowman') return 'archery';
     if (c === 'smith') return 'smithing';
     if (c === 'carpenter') return 'carpentry';
     if (c === 'merchant' || c === 'shopkeeper') return 'trade';

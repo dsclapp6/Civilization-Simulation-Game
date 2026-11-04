@@ -8,7 +8,7 @@ import { ARMS_GOODS, CFG, UNIT_POWER } from './config';
 import type { Mil } from './store';
 import type { ForceSummary, RaiseReason, UnitKind } from './types';
 
-const ARMS_CAREERS: ReadonlySet<string> = new Set(['soldier', 'archer', 'man_at_arms', 'sergeant', 'knight', 'squire']);
+const ARMS_CAREERS: ReadonlySet<string> = new Set(['soldier', 'archer', 'crossbowman', 'man_at_arms', 'sergeant', 'knight', 'squire']);
 const CIVIL_ESTATE_EXEMPT = 'clergy';
 
 // ---------------------------------------------------------------------------------------------
@@ -132,6 +132,7 @@ export function unitKindOf(M: Mil, p: Person, ctx: { levy: boolean; town?: boole
   if (p.career === 'sergeant') return 'sergeant';
   if (p.career === 'man_at_arms') return 'man_at_arms';
   if (p.career === 'archer') return 'archer';
+  if (p.career === 'crossbowman') return 'crossbow'; // a crossbow career of its own (garrison men, the retinue, recruits)
   if (p.career === 'soldier') return skillLevel(p.skills.archery) > skillLevel(p.skills.melee) ? 'archer' : 'man_at_arms';
   // levy men: the better-trained and better-armed are drawn out of the ranks (the recruiter's tests, SPEC §13)
   const th = thresholds(M);
@@ -264,6 +265,8 @@ export class ForceCache {
     const retinue = retinueOf(M, house);
     const garrison = garrisonOf(M, house);
     const levy = levyMen(M, house);
+    const knights = retinue.filter((p) => unitKindOf(M, p, { levy: false }) === 'knight').length;
+    const crossbowmen = [...retinue, ...garrison].filter((p) => p.career === 'crossbowman').length;
     let militia = 0;
     for (const sid of M.realm.settlementsOf(house)) {
       const k = M.settlementById.get(sid)?.kind;
@@ -274,7 +277,7 @@ export class ForceCache {
     let afield = 0;
     for (const a of M.allArmies()) if (a.house === house) afield += a.men.length;
     const strength = retinue.length * 2.6 + garrison.length * 2.2 + levy.length * CFG.levyFraction.war * 0.95 + militia * 1.1 + mercs * 2;
-    return { house, retinue: retinue.length, garrison: garrison.length, levyPool: levy.length, militia, mercenaries: mercs, afield, strength: Math.round(strength * 10) / 10 };
+    return { house, retinue: retinue.length, knights, crossbowmen, garrison: garrison.length, levyPool: levy.length, militia, mercenaries: mercs, afield, strength: Math.round(strength * 10) / 10 };
   }
 }
 

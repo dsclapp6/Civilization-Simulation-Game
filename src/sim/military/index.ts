@@ -314,7 +314,7 @@ function hire(M: Mil, house: HouseId, count: number, kind: 'archer' | 'man_at_ar
       const age = ageYears(p, M.day);
       if (age < 18 || age > 42 || p.health.hp < 0.8) continue;
       if (p.house === house || p.id === M.playerId) continue;
-      const free = p.career === 'labourer' || p.career === 'soldier' || p.career === 'cottar' || p.career === 'none' || p.career === 'outlaw' || p.career === 'archer' || p.career === 'man_at_arms';
+      const free = p.career === 'labourer' || p.career === 'soldier' || p.career === 'cottar' || p.career === 'none' || p.career === 'outlaw' || p.career === 'archer' || p.career === 'crossbowman' || p.career === 'man_at_arms';
       if (!free) continue;
       const score = p.trained.str + p.trained.end + (kind === 'archer' || kind === 'crossbow' ? (p.skills.archery / 40) : (p.skills.melee / 40)) + (p.career === 'soldier' ? 6 : 0) + (p.id % 7) * 0.01;
       cands.push({ p, score });
@@ -326,7 +326,7 @@ function hire(M: Mil, house: HouseId, count: number, kind: 'archer' | 'man_at_ar
   let n = 0;
   for (const c of cands) {
     if (n >= count) break;
-    if (M.realm.debit(house, fee) < fee - 0.01) break;
+    if (M.realm.debit(house, fee, 'Mercenaries hired') < fee - 0.01) break;
     c.p.money = Math.round((c.p.money + fee) * 100) / 100;
     M.state.touch(c.p);
     M.data.hired[c.p.id] = { h: house, w: wage, u: M.day + 32, k: kind === 'archer' ? 'a' : kind === 'crossbow' ? 'x' : 'm' };

@@ -47,6 +47,7 @@
     "shopkeeper": { "skill": "trade", "workplace": ["market_stall", "market_hall"], "anim": "talk", "held": "none", "wage": [1.0, 1.8, 2.5, 3.0], "income": [1.4, 2.4, 3.0, 3.4], "minAge": 16, "sells": ["bread", "cheese", "salt", "candle", "pot", "basket", "sack", "bucket", "vegetables", "eggs", "fish", "meat", "firewood"], "buys": ["eggs", "vegetables", "cheese", "fish", "meat", "firewood"] },
     "soldier":  { "skill": "melee", "workplace": ["barracks", "training_yard"], "anim": "idle", "held": "spear", "wage": [2.0, 2.5, 3.0, 3.0], "income": [1.8, 2.2, 2.5, 2.5], "minAge": 16 },
     "archer":   { "skill": "archery", "workplace": ["archery_butts", "barracks"], "anim": "aim_bow", "held": "longbow", "wage": [2.5, 2.5, 3.0, 3.0], "income": [2.2, 2.4, 2.6, 2.6], "minAge": 15 },
+    "crossbowman": { "skill": "archery", "workplace": ["archery_butts", "barracks"], "anim": "aim_crossbow", "held": "crossbow", "wage": [3.0, 3.0, 3.5, 3.5], "income": [2.6, 2.8, 3.0, 3.0], "minAge": 15 },
     "man_at_arms": { "skill": "melee", "workplace": ["barracks", "training_yard"], "anim": "idle", "held": "sword", "wage": [5.0, 5.0, 6.0, 6.0], "income": [4.0, 4.4, 5.0, 5.0], "minAge": 16 },
     "sergeant": { "skill": "melee", "workplace": ["barracks", "training_yard"], "anim": "idle", "held": "sword", "wage": [8.0, 8.0, 9.0, 10.0], "income": [6.0, 6.5, 7.0, 7.5], "minAge": 20 },
     "squire":   { "skill": "riding", "workplace": ["training_yard", "stable"], "anim": "idle", "held": "sword", "wage": [0, 0, 0, 0], "income": [0, 0, 0, 0], "minAge": 14 },

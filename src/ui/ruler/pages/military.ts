@@ -27,7 +27,7 @@ export function buildMilitary(env: RulerEnv): HTMLElement {
   const f = mil?.forces?.(v.house);
   if (f) {
     wrap.append(h('div.mu-grid.mu-rul-stats', null,
-      statCard('Retinue', f.retinue, 'knights, men-at-arms, archers', '', 'helm'), statCard('Garrison', f.garrison, 'hold the castles', '', 'shield'),
+      statCard('Retinue', f.retinue, `${f.knights} knights among men-at-arms, archers, crossbowmen`, '', 'helm'), statCard('Knights', f.knights, 'dubbed, recruited and of the House', '', 'helm'), statCard('Garrison', f.garrison, 'hold the castles', '', 'shield'),
       statCard('Levy pool', f.levyPool, 'men of 15 to 60 on your manors', '', 'users'), statCard('Militia', f.militia, 'the towns’ crossbowmen', '', 'archery'),
       statCard('Hired', f.mercenaries, 'free swords on contract', '', 'coin'), statCard('In the field', f.afield, 'with the armies', f.afield ? 'gold' : '', 'flag'), statCard('Strength', Math.round(f.strength), 'the House’s weight', '', 'swords')));
   }

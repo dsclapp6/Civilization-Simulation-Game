@@ -568,7 +568,7 @@ export function escapeChoice(kind: EncounterKind, choices: readonly ChoiceDef[])
 // Who is there: real people from the nearest settlements, for zones that can summon them
 // ---------------------------------------------------------------------------------------------
 
-const SOLDIERS: ReadonlySet<string> = new Set(['soldier', 'archer', 'man_at_arms', 'sergeant']);
+const SOLDIERS: ReadonlySet<string> = new Set(['soldier', 'archer', 'crossbowman', 'man_at_arms', 'sergeant']);
 const WANDERERS: ReadonlySet<string> = new Set(['peddler', 'merchant', 'beggar', 'outlaw']);
 
 /** How many people an encounter puts in the 3D view (wolves are animals, see `wolfCount`). */

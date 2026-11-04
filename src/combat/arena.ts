@@ -178,7 +178,7 @@ export class Arena {
     f.aggression = clamp(0.55 + 0.03 * (f.melee - 3) + (p.traits.includes('hot_tempered') ? 0.18 : 0) + (p.traits.includes('brave') ? 0.1 : 0)
       - (p.traits.includes('craven') ? 0.25 : 0) + (p.rankTier >= 5 ? 0.08 : 0), 0.25, 1.1);
     f.strafe = hash3(p.id, 3) % 2 === 0 ? 1 : -1;
-    f.preferRanged = !!gear.ranged && gear.ammo > 0 && (gear.rangedMain || p.career === 'archer' || gear.weapon === WEAPONS.fists);
+    f.preferRanged = !!gear.ranged && gear.ammo > 0 && (gear.rangedMain || p.career === 'archer' || p.career === 'crossbowman' || gear.weapon === WEAPONS.fists);
     f.shotsLeft = gear.ammo;
     return f;
   }

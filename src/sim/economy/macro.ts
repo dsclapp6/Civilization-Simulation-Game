@@ -164,7 +164,8 @@ function householdDay(
     if (!playerHere) { hh.purse = Math.round((hh.purse + inc) * 100) / 100; E.probe?.('income', tier, inc); }
   }
   if (units > 0.01) {
-    const misc = Math.min(hh.purse * 0.05, units * dt * MISC[Math.min(8, tier)]);
+    // (a ruler whose purse is below comfort keeps a thrifty table: J5)
+    const misc = Math.min(hh.purse * 0.05, units * dt * MISC[Math.min(8, tier)] * (E.sim.services.realm?.thrifty?.(hh.id) ? 0.2 : 1));
     if (misc > 0) { hh.purse = Math.round((hh.purse - misc) * 100) / 100; E.probe?.('misc', tier, -misc); }
   }
   const pRent = hh.purse;

@@ -26,6 +26,7 @@ export function arm(p: Person): string {
     case 'man_at_arms': return 'man-at-arms';
     case 'soldier': return 'soldier';
     case 'archer': return 'archer';
+    case 'crossbowman': return 'crossbowman';
     case 'squire': return 'squire';
     case 'bailiff': return 'bailiff';
     case 'steward': return 'steward';
@@ -88,7 +89,7 @@ export class Law {
 
   /** Is the person one of the lord's armed men (or an officer who may send them)? */
   armed(p: Person): boolean {
-    return p.career === 'knight' || p.career === 'sergeant' || p.career === 'man_at_arms' || p.career === 'soldier' || p.career === 'archer' || p.career === 'squire';
+    return p.career === 'knight' || p.career === 'sergeant' || p.career === 'man_at_arms' || p.career === 'soldier' || p.career === 'archer' || p.career === 'crossbowman' || p.career === 'squire';
   }
 
   /** The settlement nearest a point (id). */
