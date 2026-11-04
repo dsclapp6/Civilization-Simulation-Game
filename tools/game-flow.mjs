@@ -449,21 +449,12 @@ try {
   {
   // ---- the dock has the builder's and the ruler's buttons; the settings carry the live-as switch
   check('the dock has Builder (B) and Ruler (U) buttons and no Wounds button', (await page.locator('.mu-dockbtn[aria-label^="Builder mode"]').count()) === 1 && (await page.locator('.mu-dockbtn[aria-label^="Ruler mode"]').count()) === 1 && (await page.locator('.mu-dockbtn[aria-label="Wounds"]').count()) === 0);
-  // J4: the dock keeps to two rows on 1280x720 and 1920x1080, and builder mode's window ends above it on a low screen
+  // J4: the dock keeps to two rows on 1280x720 and 1920x1080 (builder mode's window above it is checked in tools/war-flow.mjs, as a lord)
   for (const [vw, vh] of [[1280, 720], [1280, 760], [1920, 1080]]) {
     await page.setViewportSize({ width: vw, height: vh });
     await tick(0.3);
     const rows = await page.evaluate(() => new Set([...document.querySelectorAll('.mu-dockbtn')].map((e) => Math.round(e.getBoundingClientRect().top))).size);
     check(`the dock fits in two rows at ${vw}x${vh}`, rows <= 2, `${rows} rows`);
-    await sim(() => window.__ui.openPanel({ panel: 'ext', name: 'builder' }));
-    await tick(0.4);
-    const geo = await page.evaluate(() => {
-      const w = document.querySelector('.mu-bld-win'), d = document.querySelector('.mu-dock');
-      return w && d ? { winBottom: w.getBoundingClientRect().bottom, dockTop: d.getBoundingClientRect().top } : null;
-    });
-    check(`builder mode's window does not cover the dock at ${vw}x${vh}`, !!geo && geo.winBottom <= geo.dockTop + 1, JSON.stringify(geo));
-    await page.evaluate(() => window.__ui.closePanel('builder'));
-    await tick(0.2);
   }
   await page.setViewportSize({ width: 1280, height: 720 });
   await tick(0.2);

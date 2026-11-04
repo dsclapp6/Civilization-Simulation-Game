@@ -499,4 +499,20 @@ async function partC() {
   note(JSON.stringify(items));
   check('the tracker card shows the danger: raiders on the lands, glowing', items.some((t) => /Raiders/.test(t)), JSON.stringify(items));
   await shot('c-agenda-danger');
+  // builder mode's window ends above the dock (two rows) on low and high screens
+  for (const [vw, vh] of [[1280, 720], [1280, 760], [1920, 1080]]) {
+    await page.setViewportSize({ width: vw, height: vh });
+    await tick(0.3);
+    await ev(() => window.__ui.openPanel({ panel: 'ext', name: 'builder' }));
+    await tick(0.5);
+    const geo = await page.evaluate(() => {
+      const w = document.querySelector('.mu-bld-win'), d = document.querySelector('.mu-dock');
+      const rows = new Set([...document.querySelectorAll('.mu-dockbtn')].map((e) => Math.round(e.getBoundingClientRect().top))).size;
+      return w && d ? { winBottom: Math.round(w.getBoundingClientRect().bottom), dockTop: Math.round(d.getBoundingClientRect().top), rows } : null;
+    });
+    check(`builder mode's window ends above the dock, which has two rows, at ${vw}x${vh}`, !!geo && geo.winBottom <= geo.dockTop + 1 && geo.rows <= 2, JSON.stringify(geo));
+    await ev(() => window.__ui.closePanel('builder'));
+    await tick(0.2);
+  }
+  await page.setViewportSize({ width: 800, height: 450 });
 }
