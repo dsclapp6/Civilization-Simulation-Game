@@ -64,6 +64,24 @@ function workPoints(anim: string, main: HeldItem, len: number): { hands: number[
 }
 
 describe('first-person arms', () => {
+  it('dig: at pitch 0.8 both arm roots project below the bottom edge of the frame at the ready, push, lever and raise keys', () => {
+    const st = createAnimState(7, dims); st.fp = true;
+    const place = new Float32Array(12); setIdentity(place, 0);
+    const it: CharacterDrawItem = { id: 1, x: 0, y: 0, z: 0, yaw: 0, look, lookVersion: 1, mainHand: 'spade', offHand: 'none', back: 'none', carry: 'none', anim: 'work_dig', animTime: 0, moveSpeed: 0, highlight: 0 };
+    const ctx: AnimContext = { place, saddle: null, stand: null, horsePhase: 0, horseBob: 0, dt: 1 / 30, time: 0 };
+    const bones = new Float32Array(HUMAN_BONES * 12);
+    for (let f = 0; f < 80; f++) {
+      it.animTime += 1 / 30; ctx.time += 1 / 30; evaluatePose(st, it, ctx); poseToBones(st, it, ctx, bones, 0);
+      if (f < 10) continue;
+      const W = st.world, e = HB.eyes * 12;
+      for (const b of [HB.uaL, HB.uaR]) {
+        const q = project([W[b * 12 + 3] - W[e + 3], W[b * 12 + 7] - W[e + 7], W[b * 12 + 11] - W[e + 11]], 0.8);
+        // (behind the lens counts as off the frame too)
+        if (q) expect(q[1]).toBeLessThan(-1);
+      }
+    }
+  });
+
   it('dig: shaft nearly upright, T-handle around the middle of the tilted view, blade 0.10-0.16 m in the soil in the lower third at the push key, forearm roots below the hands', () => {
     const st = createAnimState(7, dims); st.fp = true;
     const place = new Float32Array(12); setIdentity(place, 0);

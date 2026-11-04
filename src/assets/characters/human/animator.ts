@@ -442,8 +442,8 @@ export function poseToBones(st: HumanAnimState, item: CharacterDrawItem, ctx: An
       const sg = side === 'L' ? -1 : 1;
       const ua0 = (side === 'L' ? HB.uaL : HB.uaR) * 12;
       // looking down (the view tips to ground work): the shoulders go back behind the lens, so the arms still come up from the bottom of the view
-      const back = vm.d !== undefined ? -0.15 : 0.05 + 0.12 * Math.max(0, Math.min(1, (st.fpDown - 0.45) / 0.35));
-      const ddx = _q[0] + rtX * (vm.d !== undefined ? 0.08 : 0.14) * sg - fwdX * back - W[ua0 + 3], ddy = _q[1] - (vm.d !== undefined ? 0.55 : 0.25) - W[ua0 + 7], ddz = _q[2] + rtZ * (vm.d !== undefined ? 0.08 : 0.14) * sg - fwdZ * back - W[ua0 + 11];
+      const back = vm.d !== undefined ? 0.22 : 0.05 + 0.12 * Math.max(0, Math.min(1, (st.fpDown - 0.45) / 0.35));
+      const ddx = _q[0] + rtX * (vm.d !== undefined ? 0.08 : 0.14) * sg - fwdX * back - W[ua0 + 3], ddy = _q[1] - (vm.d !== undefined ? 0.3 : 0.25) - W[ua0 + 7], ddz = _q[2] + rtZ * (vm.d !== undefined ? 0.08 : 0.14) * sg - fwdZ * back - W[ua0 + 11];
       for (const bn of side === 'L' ? [HB.uaL, HB.faL, HB.handL] : [HB.uaR, HB.faR, HB.handR]) { const o = bn * 12; W[o + 3] += ddx; W[o + 7] += ddy; W[o + 11] += ddz; }
     }
     const mainSide: ArmSide = mainDef !== null && mainDef.hand !== 'R' ? 'L' : 'R';
@@ -462,7 +462,7 @@ export function poseToBones(st: HumanAnimState, item: CharacterDrawItem, ctx: An
       _hand[7] = _q[1] + y;
       _hand[11] = _q[2] + rtZ * sx + fwdZ * z;
       if (pitchTool) setBasisZ(_hand, 0, cp * fwdX, sp, cp * fwdZ, 0, 1, 0, _hand[3], _hand[7], _hand[11]);
-      armIK(st, side, _hand, e, null);
+      armIK(st, side, _hand, e, null, vm.d !== undefined ? -1 : 1, vm.d !== undefined ? [rtX * (side === 'L' ? -1 : 1) * 0.8, -0.6, rtZ * (side === 'L' ? -1 : 1) * 0.8] : undefined);
     };
     // dig: the hand's height follows from where the blade end must be (BLADE_END from the grip along the tool) relative to the ground at the feet
     let mainY = vm.y;
@@ -680,7 +680,7 @@ function reloadTarget(st: HumanAnimState, side: ArmSide, W: Float32Array): Float
 
 const _pole = [0, 0, 0];
 /** Two-bone IK for an arm to a desired hand matrix (blended with FK by weight). */
-function armIK(st: HumanAnimState, side: ArmSide, handTarget: Float32Array, w: number, override: Float32Array | null): void {
+function armIK(st: HumanAnimState, side: ArmSide, handTarget: Float32Array, w: number, override: Float32Array | null, ls = 1, pole?: readonly number[]): void {
   const d = st.dims;
   const W = st.world;
   const ua = side === 'L' ? HB.uaL : HB.uaR, fa = side === 'L' ? HB.faL : HB.faR, hd = side === 'L' ? HB.handL : HB.handR;
@@ -692,8 +692,11 @@ function armIK(st: HumanAnimState, side: ArmSide, handTarget: Float32Array, w: n
   const fx = W[hd * 12 + 3], fy = W[hd * 12 + 7], fz = W[hd * 12 + 11];
   const tx = fx + (tgt[3] - fx) * w, ty = fy + (tgt[7] - fy) * w, tz = fz + (tgt[11] - fz) * w;
   // pole: elbows out, down and back (chest frame)
-  xformDir(W, HB.chest * 12, s * 0.75, -0.55, -0.45, _pole);
-  solveTwoBone(W, ua * 12, W, fa * 12, sx, sy, sz, tx, ty, tz, _pole[0], _pole[1], _pole[2], d.upperArm, d.foreArm, -1);
+  // the drawn arm is as long as the reach (a little more: a gentle bend outward, never a sharp elbow): ls < 0 asks for that
+  if (ls < 0) ls = Math.max(1, Math.hypot(tx - sx, ty - sy, tz - sz) * 1.004 / (d.upperArm + d.foreArm));
+  if (pole) { _pole[0] = pole[0]; _pole[1] = pole[1]; _pole[2] = pole[2]; } else xformDir(W, HB.chest * 12, s * 0.75, -0.55, -0.45, _pole);
+  solveTwoBone(W, ua * 12, W, fa * 12, sx, sy, sz, tx, ty, tz, _pole[0], _pole[1], _pole[2], d.upperArm * ls, d.foreArm * ls, -1);
+  if (ls !== 1) for (const b of [ua, fa]) { const o = b * 12; W[o + 1] *= ls; W[o + 5] *= ls; W[o + 9] *= ls; } // (the drawn arm is as long as the reach: the mesh stretches with it)
   const end = lastIkEnd();
   if (w >= 0.999) {
     copy12(W, hd * 12, tgt, 0);
