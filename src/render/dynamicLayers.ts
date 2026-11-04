@@ -26,6 +26,8 @@ export class DynamicLayers {
   private readonly m = new THREE.Matrix4();
   private readonly c = new THREE.Color();
   private adopted = false;
+  /** First person (J2): the player's own ring (highlight 3) is not drawn: it would circle the camera's own feet. */
+  hideOwnRing = false;
   /** A person or animal the UI marks as hovered (renderer.setHover): ringed like highlight 1. */
   hoverPerson = -1;
   hoverAnimal = -1;
@@ -167,6 +169,7 @@ export class DynamicLayers {
     for (const it of chars) {
       const hl = it.highlight || (it.id === this.hoverPerson ? 1 : 0);
       if (!hl || n >= MAX_RINGS) continue;
+      if (hl === 3 && this.hideOwnRing) continue;
       if (Math.abs(it.x - cp.x) > 200 || Math.abs(it.z - cp.z) > 200) continue;
       const s = hl === 3 ? 0.9 : hl === 2 ? 1.15 : 1.0;
       const y = Math.max(it.y, this.heightAt(it.x, it.z)) + 0.04;

@@ -115,7 +115,7 @@ under the tracked steps, dangers first, each opening the page where it is decide
   bottom corners of the view, a tool or weapon held in them (`fpArms` in `assets/characters/human/animator.ts`, eased in and out
   with `fpW`; the stride still swings them, a third as much). Clips that already work the arms (strike, draw, work, aim, carry a load) keep
   their own poses, which are in view. Riding keeps the reins.
-- **Looking down.** The neck is left out of the camera's view with the head, and the camera sits 0.13 m ahead of the head (`EYE_AHEAD` in
+- **Looking down.** The arms drop to the sides as the camera looks down (`fpDown`), so you see chest, legs and feet; your own selection ring is not drawn in first person (`DynamicLayers.hideOwnRing`) and the shadow slice is 45 m there. The neck is left out of the camera's view with the head, and the camera sits 0.08 m ahead of the head (`EYE_AHEAD` in
   `render/firstPerson.ts`), so looking down shows the chest and the arms from the front, never the inside of the collar. The arms at rest
   are raised forearms-forward (`fpArms`), held tools keep their own forward bend.
 - **Shadows.** three r186's PCF filter with a radius of 2.5-3 texels (the old `shadowRadius`) washed every shadow out of the 4096 / 2048 maps,

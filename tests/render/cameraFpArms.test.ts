@@ -26,10 +26,10 @@ function hands(fp: boolean, main: HeldItem, anim: 'idle' | 'walk', frames = 60):
 
 /** Is a point (relative to the eyes, +z ahead) inside a 68 degree (vertical) camera looking straight ahead on a 16:9 screen, below the middle? */
 function inView(p: number[]): boolean {
-  const z = p[2] - 0.13; // (the camera sits 0.13 m ahead of the eye bone, firstPerson.ts)
+  const z = p[2] - 0.08; // (the camera sits 0.08 m ahead of the eye bone, firstPerson.ts)
   const down = Math.atan2(-p[1], z);
   const side = Math.atan2(Math.abs(p[0]), z);
-  return z > 0.2 && down > 0.1 && down < (40 * Math.PI) / 180 && side < (50 * Math.PI) / 180;
+  return z > 0.2 && down > 0.1 && down < (44 * Math.PI) / 180 && side < (50 * Math.PI) / 180;
 }
 
 describe('first-person arms', () => {

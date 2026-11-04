@@ -54,6 +54,8 @@ export interface HumanAnimState {
   fp: boolean;
   /** How far the first-person arms have come up into view (0 hanging at the sides … 1 the low carry), eased. */
   fpW: number;
+  /** How far the camera looks down (radians, 0 level): the arms drop to the sides as you look down, so you see your body and feet. */
+  fpDown: number;
 }
 
 export function createAnimState(seed: number, dims: HumanDims): HumanAnimState {
@@ -63,7 +65,7 @@ export function createAnimState(seed: number, dims: HumanDims): HumanAnimState {
     loco: { phase: (seed % 97) / 97, bob: 0, seed }, idle: { t: (seed % 61) * 0.37, seed, weight: 0 },
     world: new Float32Array(HUMAN_BONES * 12), cloakAng: 0, cloakVel: 0,
     blinkT: 0, nextBlink: 1 + (seed % 13) * 0.3, lookSm: 0, aimSm: 0, prevYaw: NaN, lean: 0, flash: 0,
-    lastAnimTime: 0, ownTime: 0, itemFrame: new Float32Array(12), top: dims.H, cx: 0, cy: 0, cz: 0, fp: false, fpW: 0,
+    lastAnimTime: 0, ownTime: 0, itemFrame: new Float32Array(12), top: dims.H, cx: 0, cy: 0, cz: 0, fp: false, fpW: 0, fpDown: 0,
   };
 }
 
@@ -248,7 +250,9 @@ export function evaluatePose(st: HumanAnimState, item: CharacterDrawItem, ctx: A
   // and low, the tool or weapon held in them) they sit at the bottom of the screen. Clips that already work the arms (striking,
   // drawing, working, aiming) keep their own poses; the walk's swing is kept, smaller, so the hands move with the stride.
   const fpRest = st.fp && armsFree && !riding && item.carry === 'none' && item.anim !== 'carry_walk';
-  st.fpW += ((fpRest ? 1 : 0) - st.fpW) * (dt > 0 ? 1 - Math.exp(-dt * 7) : 1);
+  const sm = Math.max(0, Math.min(1, (st.fpDown - 0.35) / 0.5));
+  const lowered = 1 - sm * sm * (3 - 2 * sm);
+  st.fpW += ((fpRest ? lowered : 0) - st.fpW) * (dt > 0 ? 1 - Math.exp(-dt * 7) : 1);
   if (st.fpW < 0.002) st.fpW = 0;
   if (st.fpW > 0) fpArms(out, st.fpW, mainDef, offDef, gait ? Math.min(1, item.moveSpeed / 3) : 0);
 
@@ -274,10 +278,10 @@ function fpArms(out: Float32Array, w: number, mainDef: ItemDef | null, offDef: I
     const held = (side === 'R' ? mainDef?.hand === 'R' : mainDef?.hand !== 'R') ? mainDef : (side === 'L' ? offDef : null);
     const ux = out[u * 3], fx = out[f * 3], hx = out[h * 3];
     // targets (right arm convention; the left mirrors Y and Z): upper arm, forearm, how far the wrist turns back, the swing inward
-    let tu = -60 * D, tf = -84 * D, tz = 5 * D, th = 0;
+    let tu = -54 * D, tf = -64 * D, tz = 8 * D, th = 0.5;
     if (held) {
       // what is held is carried where the arm now is: a blade or tool tilted forward rather than straight up, a torch and a bow raised
-      const g = held.grip;
+      const g = held.grip; th = 0;
       if (g === 'light') { tu = -44 * D; tf = -70 * D; th = -hx * 0.26; }
       else if (g === 'torch') { tu = -52 * D; tf = -70 * D; }
       else if (g === 'bow') { tu = -50 * D; tf = -60 * D; }

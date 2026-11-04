@@ -298,7 +298,8 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     // lights
     const shadowsOn = quality.shadows && above < 600;
     lighting.update(atmo, shadowsOn);
-    if (quality.shadows) lighting.fitShadow(camera, atmo.lightDir, quality.shadowDistance);
+    // first person: a tighter shadow slice (J2) so your own shadow has a readable head
+    if (quality.shadows) lighting.fitShadow(camera, atmo.lightDir, rig.inFirstPerson ? Math.min(quality.shadowDistance, 45) : quality.shadowDistance);
     renderer.toneMappingExposure = atmo.exposure;
     wind.set(weather.windX, weather.windZ);
     const fogOut = tmpColor;
@@ -370,6 +371,7 @@ export function createRenderer(container: HTMLElement, world: WorldModel, assets
     dynamic.root.visible = streetView;
     siege.root.visible = streetView;
     const sfx = siege.update(streetView ? view.siegeWorks?.() ?? NO_WORKS : NO_WORKS, dt);
+    dynamic.hideOwnRing = rig.inFirstPerson;
     dynamic.update(streetView ? chars : [], streetView ? animals : [], view.projectiles(), view.drainFx(), sfx.length ? [...bfx, ...sfx] : bfx, camera, dt);
 
     // results of work, beacons, floating gains, nameplates, hover outline

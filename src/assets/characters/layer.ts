@@ -276,6 +276,8 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
 
   /** The person whose eyes the camera is at (-1: nobody), see setFirstPerson. */
   let fpId = -1;
+  /** The camera's look-down angle (radians), set each update. */
+  let fpDown = 0;
   const ctx: AnimContext = { place: _place, saddle: null, stand: null, horsePhase: 0, horseBob: 0, dt: 0, time: 0 };
 
   function animateOne(st: CharState, item: CharacterDrawItem, dt: number): void {
@@ -303,6 +305,7 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
       ctx.stand = _stand;
     }
     a.fp = item.id === fpId;
+    a.fpDown = fpDown;
     evaluatePose(a, item, ctx);
     poseToBones(a, item, ctx, crowd.bones, crowd.boneOffset(st.slot, 0));
     // first person (src/render/firstPerson.ts): the camera is inside the head, so the head, eyes and mouth are left out of the view
@@ -383,6 +386,9 @@ export function createCharacterLayer(palette: Palette): CharacterLayer {
       forceFull = true;
     }
     camera.updateMatrixWorld();
+    camera.getWorldDirection(_v);
+    fpDown = Math.asin(Math.max(-1, Math.min(1, -_v.y)));
+    camera.getWorldPosition(_v);
     _projScreen.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     _frustum.setFromProjectionMatrix(_projScreen);
     let animated = 0, culled = 0, built = 0;
