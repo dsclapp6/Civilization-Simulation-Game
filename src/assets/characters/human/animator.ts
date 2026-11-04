@@ -443,7 +443,7 @@ export function poseToBones(st: HumanAnimState, item: CharacterDrawItem, ctx: An
       const ua0 = (side === 'L' ? HB.uaL : HB.uaR) * 12;
       // looking down (the view tips to ground work): the shoulders go back behind the lens, so the arms still come up from the bottom of the view
       const back = 0.05 + 0.12 * Math.max(0, Math.min(1, (st.fpDown - 0.45) / 0.35));
-      const ddx = _q[0] + rtX * 0.14 * sg - fwdX * back - W[ua0 + 3], ddy = _q[1] - 0.25 - W[ua0 + 7], ddz = _q[2] + rtZ * 0.14 * sg - fwdZ * back - W[ua0 + 11];
+      const ddx = _q[0] + rtX * 0.14 * sg - fwdX * back - W[ua0 + 3], ddy = _q[1] - (vm.d !== undefined ? 0.4 : 0.25) - W[ua0 + 7], ddz = _q[2] + rtZ * 0.14 * sg - fwdZ * back - W[ua0 + 11];
       for (const bn of side === 'L' ? [HB.uaL, HB.faL, HB.handL] : [HB.uaR, HB.faR, HB.handR]) { const o = bn * 12; W[o + 3] += ddx; W[o + 7] += ddy; W[o + 11] += ddz; }
     }
     const mainSide: ArmSide = mainDef !== null && mainDef.hand !== 'R' ? 'L' : 'R';
@@ -464,11 +464,17 @@ export function poseToBones(st: HumanAnimState, item: CharacterDrawItem, ctx: An
       if (pitchTool) setBasisZ(_hand, 0, cp * fwdX, sp, cp * fwdZ, 0, 1, 0, _hand[3], _hand[7], _hand[11]);
       armIK(st, side, _hand, e, null);
     };
-    if (st.fpHold & (mainSide === 'L' ? 1 : 2)) put(mainSide, torch ? 0.24 : Math.abs(vm.x), torch ? vm.y - 0.08 : vm.y, torch ? 0.62 : vm.z, longTool);
+    // dig: the hand's height follows from where the blade end must be (BLADE_END from the grip along the tool) relative to the ground at the feet
+    let mainY = vm.y;
+    if (vm.d !== undefined) mainY = (pl[7] - vm.d - sp * BLADE_END) - _q[1];
+    if (st.fpHold & (mainSide === 'L' ? 1 : 2)) put(mainSide, torch ? 0.24 : Math.abs(vm.x), torch ? vm.y - 0.08 : mainY, torch ? 0.62 : vm.z, longTool);
     if (st.fpHold & (other === 'L' ? 1 : 2)) {
       if (longTool) {
         // the second hand on the shaft, a forearm's length down it towards the butt
-        put(other, -Math.abs(vm.x) * 0.9, vm.y - sp * 0.3, vm.z - cp * 0.3, false); // (the same side of the centre as the shaft)
+        // the second hand on the shaft, on the same line: a spade's lower hand is down the shaft towards the blade; the other long tools'
+        // is a forearm's length from the first towards the butt
+        const dn = vm.d !== undefined ? 0.38 : -0.3;
+        put(other, -Math.abs(vm.x) * (vm.d !== undefined ? 1 : 0.9), mainY + sp * dn, vm.z + cp * dn, false);
       } else if (offDef !== null) put(other, 0.17, -0.27, 0.55, false);
     }
   }
@@ -768,7 +774,7 @@ void mul;
 
 
 /** One pose of the view-model's main hand in camera space: right of centre, up (negative = below the eye), ahead (m), and the tool's elevation (rad). */
-interface VmPose { x: number; y: number; z: number; pitch: number }
+interface VmPose { x: number; y: number; z: number; pitch: number; /** dig: the blade end's depth below the ground (m, negative above); then `y` is derived from it */ d?: number }
 const VM_CARRY: VmPose = { x: 0.17, y: -0.19, z: 0.55, pitch: 0.5 };
 /** The motion classes: keyframes (phase 0..1, looped) and the clip's period (s). The head of the tool stays in the frame at every key (tests/render/cameraFpArms.test.ts). */
 const VM_CLASSES: Record<string, { period: number; keys: VmPose[] }> = {
@@ -776,8 +782,12 @@ const VM_CLASSES: Record<string, { period: number; keys: VmPose[] }> = {
   hammer: { period: 0.9, keys: [{ x: 0.17, y: -0.2, z: 0.55, pitch: 0.5 }, { x: 0.14, y: -0.01, z: 0.5, pitch: 1.0 }, { x: 0.15, y: -0.36, z: 0.66, pitch: -0.25 }, { x: 0.17, y: -0.2, z: 0.55, pitch: 0.4 }] },
   // dig (ground work, seen with the view tipped down to 0.8 rad): the tool is upright, the handle at the hands and the blade end down; the push key
   // puts the blade end in the soil about 0.8 m ahead of the feet, the lever key pulls the handle back towards the chest
-  dig: { period: 1.3, keys: [{ x: 0.1, y: -0.28, z: 0.42, pitch: -0.9 }, { x: 0.1, y: -0.22, z: 0.4, pitch: -0.7 }, { x: 0.1, y: -0.34, z: 0.52, pitch: -1.2 }, { x: 0.1, y: -0.3, z: 0.34, pitch: -0.85 }] },
+  // (the spade's blade is a plate in line with the shaft: the shaft goes steeply down, 60 to 75 degrees, and the blade enters edge-first;
+  // `d` is how deep its end is: above the ground (negative) in the ready and lift keys, 0.12 m in the soil at the push key)
+  dig: { period: 1.3, keys: [{ x: 0.1, y: 0, z: 0.4, pitch: -1.1, d: -0.15 }, { x: 0.1, y: 0, z: 0.38, pitch: -0.95, d: -0.4 }, { x: 0.1, y: 0, z: 0.46, pitch: -1.3, d: 0.15 }, { x: 0.1, y: 0, z: 0.34, pitch: -1.05, d: -0.05 }] },
 };
+/** Where the spade's blade ends along the tool from the grip (m): the item frame's z of the plate's far edge. */
+const BLADE_END = 1.03;
 const VM_OUT: VmPose = { x: 0, y: 0, z: 0, pitch: 0 };
 
 /** The view-model's hand pose for this frame, or null when the clip's own arms should stand (combat, riding, climbing and the like). */
@@ -790,7 +800,7 @@ function viewModel(item: CharacterDrawItem, mainDef: ItemDef | null, offDef: Ite
     else if (a === 'work_hammer' || a === 'work_pick') cls = 'hammer';
     else cls = 'dig'; // hoe, scythe, sickle, sow, stir, milk ...: the nearest, a push and lever with the tool low in front
   } else if (a === 'idle' || a === 'walk' || a === 'run' || a === 'sprint') {
-    const o = VM_OUT; Object.assign(o, VM_CARRY);
+    const o = VM_OUT; Object.assign(o, VM_CARRY); delete o.d;
     if (a !== 'idle') o.y += 0.02 * Math.sin(walkPhase * Math.PI * 4);
     void mainDef; void offDef;
     return o;
@@ -802,5 +812,6 @@ function viewModel(item: CharacterDrawItem, mainDef: ItemDef | null, offDef: Ite
   const t = 0.5 - 0.5 * Math.cos(Math.PI * f);
   const o = VM_OUT;
   o.x = k0.x + (k1.x - k0.x) * t; o.y = k0.y + (k1.y - k0.y) * t; o.z = k0.z + (k1.z - k0.z) * t; o.pitch = k0.pitch + (k1.pitch - k0.pitch) * t;
+  if (k0.d !== undefined && k1.d !== undefined) o.d = k0.d + (k1.d - k0.d) * t; else delete o.d;
   return o;
 }
