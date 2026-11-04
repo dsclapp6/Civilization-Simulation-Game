@@ -199,9 +199,9 @@ and runs before and without it).
 
 * **Territory (A1):** the module asks `landAt` at a footprint's centre and corners (kind, settlement, `title`, `household` of a
   garden or town plot), `depositAt(x, z, kind)`, and reads `version()`; it reads `construction.outposts()` (now with `house`).
-  A1 gives `household` only to garden parcels (from the household of the parcel's home plot) and to strips; town streets and the
-  ground round homes raised in play carry household 0, so a household in such a home has no "own plot" and nothing to tint (if
-  they should be able to raise a shed in their yard, `ownLand` in `check.ts` is the one function to widen).
+  A1 gives `household` only to garden parcels (from the household of the parcel's home plot) and to strips; town streets carry household 0.
+  Since wave J (J1) the ground within 7 m of a finished home raised in play reads as that household's yard (territory), so
+  `ownLand` in `check.ts` passes there and a household can raise a shed in its yard.
   `buildArea` uses `landsPolygon?(settlement)` (one `P2[]` as A1 gives it, or a list of them) when it is there and `landsRadius`
   when not; a castle that shares its village's outline (the same array) is listed once. Outposts: A1's `outpostPolygons()` claims
   about 600 m round an outpost and construction lets the founder raise within `OUTPOST_REACH` = 600 m of it (`check.ts`; the same
