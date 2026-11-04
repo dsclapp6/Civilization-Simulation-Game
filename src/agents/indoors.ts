@@ -184,8 +184,14 @@ export class Indoors {
     const taken = new Set<string>();
     for (const p of this.occ.values()) if (p !== o && p.spot >= 0) taken.add(`${p.building}:${p.spot}`);
     const spot = this.pickSpot(room, q, act, taken);
-    if (spot < 0 || spot === o.spot) return;
     const plan = room.loaded.plan;
+    if (spot < 0) {
+      // nothing in the room for what the day is now: one who was asleep gets up and stands there
+      const cur = o.spot >= 0 ? plan.spots[o.spot] : null;
+      if (cur && cur.use === 'sleep' && act !== 'sleep') { o.spot = -1; o.seat = undefined; o.anim = 'idle'; }
+      return;
+    }
+    if (spot === o.spot) return;
     const s = plan.spots[spot];
     o.spot = spot;
     o.seat = undefined;

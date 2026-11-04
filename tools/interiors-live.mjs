@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = process.env.GAME_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT ?? 5295);
 const wanted = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const want = (n) => wanted.length === 0 || wanted.includes(n);
@@ -237,6 +237,10 @@ try {
       return { ok: false };
     });
     check('yard: the ground by a home raised in play is its household\'s garden, and not further off', r.ok && r.near.kind === 'garden' && r.near.household === r.hh && r.far.household !== r.hh, r);
+  }
+  if (wanted.includes('dbgtick')) {
+    await load(0.45);
+    for (let i = 0; i < 40; i++) { await ev(() => window.__game.tick(1)); if (i % 5 === 0) console.log('tick', i, JSON.stringify(await ev(() => ({ heap: Math.round(performance.memory.usedJSHeapSize / 1e6), day: window.__game.session.sim.absDay })))); }
   }
   if (wanted.includes('dbgperf')) {
     await load(0.45);
